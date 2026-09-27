@@ -108,6 +108,72 @@ export type AcceptanceView = {
   diagnostics: AcceptanceDiagnostic[];
   reports: AcceptanceReportVersion[];
 };
+/**
+ * How a run is doing, orthogonal to its lifecycle status. `waiting`: someone or
+ * something identified is expected to move it; `suspected_stall`: nothing
+ * observed for a long while, which is a doubt and never a verdict; `stalled`:
+ * an incident is open; `interrupted`: the session went away before the
+ * workflow reached a result. See server/run-health.ts.
+ */
+export type RunHealth = "healthy" | "waiting" | "suspected_stall" | "stalled" | "interrupted";
+export type WaitReason = "user_question" | "permission" | "terminal_interaction" | "agent" | "tool" | "dependency" | "unknown";
+/** `on`: who or what is expected (an agent, a command, the user); `liftedBy`: the event that ends the wait. */
+export type RunWait = { reason: WaitReason; since: string; on?: string; liftedBy?: string };
+export type IncidentKind = "no_next_action" | "lost_session" | "missing_result" | "unresolvable_dependency";
+export type IncidentStatus = "open" | "resolved" | "dismissed";
+/** Actions the interface may offer on an incident. Only the last three have an effect on the server. */
+export type IncidentAction = "answer" | "open_terminal" | "view_diagnostic" | "request_continuation" | "stop" | "dismiss";
+/**
+ * One decision taken on an incident, written before its effect: after a crash
+ * between the two, `pending` becomes `unknown`, and nothing is ever replayed,
+ * since a write into a terminal is not a transaction.
+ */
+export type IncidentDecision = { requestId: string; action: IncidentAction; at: string; outcome: "pending" | "done" | "refused" | "unknown"; detail?: string };
+export type IncidentObservation = { kind: string; at?: string; detail: string };
+export type RunIncident = {
+  id: string;
+  runId: string;
+  kind: IncidentKind;
+  status: IncidentStatus;
+  /** Moves on every change, so an action decided on an older state is refused. */
+  revision: number;
+  detectedAt: string;
+  updatedAt: string;
+  /** Same cause, same fingerprint: one incident and one notification per stable cause. */
+  fingerprint: string;
+  /** The factual title and the cause in one sentence, as the interface shows them. */
+  title: string;
+  reason: string;
+  observations: IncidentObservation[];
+  expectedNextAction?: string;
+  suggestedActions: IncidentAction[];
+  /** Set once the user asked the live session to go on; resolved only when it visibly does. */
+  continuation?: { requestedAt: string; requestId: string };
+  decisions: IncidentDecision[];
+  resolution?: { at: string; outcome: string; detail?: string };
+};
+/** What the run view and the list read: the classification, and the sentence that explains it. */
+export type RunHealthView = {
+  health: RunHealth;
+  wait?: RunWait;
+  /** Set for everything but a plain `healthy`: a short factual title and one sentence. */
+  title?: string;
+  detail?: string;
+  /** The contract the workflow declares about itself, or why it is not read. */
+  workflow?: { state: WorkflowStateName; revision: number; nextAction?: string; receivedAt: string } | { missing: true };
+  evaluatedAt: string;
+};
+export type WorkflowStateName = "working" | "waiting" | "completed" | "blocked";
+/** `workflow-state.json` as read: what the pilot says it is doing and what comes next. See server/workflow-state.ts. */
+export type WorkflowState = {
+  schemaVersion: 1;
+  revision: number;
+  state: WorkflowStateName;
+  step?: string;
+  nextAction?: { kind: string; taskIds: string[]; agents: string[]; expectedArtifact?: string; description?: string };
+  result?: { delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; blockers: string[] };
+  receivedAt: string;
+};
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 export type RunState = {
@@ -127,6 +193,16 @@ export type RunState = {
   planDelegations?: PlanDelegation[];
   /** Acceptance coverage in figures; the full view is served by /api/runs/<id>/acceptance. */
   acceptance?: AcceptanceDigest;
+  /** Absent on archives written before run health existed, and on runs never evaluated. */
+  health?: RunHealthView;
+  /** Every incident of the run, open or not, oldest first. */
+  incidents?: RunIncident[];
+  /** The last valid `workflow-state.json`, when the workflow writes one. */
+  workflow?: WorkflowState;
+  /** Set on an archive the console reads back after a restart: the run has no session and takes no instruction. */
+  archived?: boolean;
+  /** The format of run.json, absent before version 2. */
+  schemaVersion?: number;
 };
 
 /**
@@ -154,6 +230,11 @@ export type RunSummary = {
   acceptance?: AcceptanceCounts;
   /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
   holdsRepository: boolean;
+  health?: RunHealth;
+  /** The open incident, as little of it as a row and a notification need. */
+  incident?: { id: string; kind: IncidentKind; title: string; revision: number };
+  /** A run read back from its archive after a restart: no session, no slot, no checkout. */
+  archived?: boolean;
 };
 
 /** A launch the console accepted but has not started yet, kept in the order it was asked. */
@@ -165,7 +246,8 @@ export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction
 export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
 
 /** Everything every open page is told about, whichever run it has opened. */
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number };
+/** `archived`: runs of an earlier process left with an open incident, readable but not live. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[] };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
@@ -184,11 +266,18 @@ export type ClientMessage =
   | { type: "run.stop"; runId: string }
   | { type: "run.close"; runId: string }
   | { type: "queue.cancel"; queuedId: string }
-  | { type: "demo.start" }
+  /** `scenario`: the regular workflow, or the pilot handing back with nothing next. */
+  | { type: "demo.start"; scenario?: "workflow" | "incident" }
   | { type: "feedback.submit"; runId: string; body: string }
   | { type: "question.answer"; runId: string; answers: Record<string, string> }
   | { type: "selfImprovement.approve"; worktreeName: string }
-  | { type: "selfImprovement.reject"; worktreeName: string };
+  | { type: "selfImprovement.reject"; worktreeName: string }
+  /**
+   * An action on an incident, taken on the state the page was shown: the server
+   * refuses it when `expectedRevision` is no longer the incident's, and a
+   * `requestId` seen before is answered without acting twice.
+   */
+  | { type: "incident.action"; runId: string; incidentId: string; expectedRevision: number; requestId: string; action: IncidentAction; reason?: string };
 
 export type ServerMessage =
   /** The list of runs and the queue, sent to every page on every change. */
@@ -205,4 +294,6 @@ export type ServerMessage =
    */
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
-  | { type: "error"; message: string; runId?: string };
+  | { type: "error"; message: string; runId?: string }
+  /** What became of an incident action, answered to the page that asked. */
+  | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };

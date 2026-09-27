@@ -62,11 +62,25 @@ export type EngineEvent =
    * a host) for the interface to say what the agent is doing right now.
    * `planTaskIds`: the tasks of the plan a delegation was handed, if any.
    */
-  | { kind: "tool.start"; tool: string; command?: string; target?: string; planTaskIds?: string[] }
-  | { kind: "tool.end"; command?: string; response: unknown }
+  | {
+    kind: "tool.start"; tool: string; command?: string; target?: string; planTaskIds?: string[];
+    /** Pairs this start with its end, when the agent reports both. */
+    toolUseId?: string;
+    /** The subagent that made the call; absent when the pilot itself did. */
+    agentId?: string;
+    /** The call hands back at once and keeps working, and the pilot is woken up when it is done: a wait, not an action. */
+    background?: boolean;
+    /** Whether an end event will follow for this call. Without one, the call ends with its caller's turn. */
+    endReported?: boolean;
+  }
+  | { kind: "tool.end"; command?: string; response: unknown; toolUseId?: string; agentId?: string }
   | { kind: "question"; id?: string; questions: Question[]; input: Record<string, unknown> }
-  | { kind: "attention"; message?: string }
-  /** The agent handed control back, which does not mean the workflow is over. */
+  /**
+   * The agent calls for the user. `cause`: a permission prompt, another
+   * interaction only the terminal can answer, or nothing the agent said.
+   */
+  | { kind: "attention"; message?: string; cause: "permission" | "terminal_interaction" | "unknown" }
+  /** The pilot handed control back, which does not mean the workflow is over. A subagent's end is `agent.stop`. */
   | { kind: "turn.end" };
 
 export type Engine = {

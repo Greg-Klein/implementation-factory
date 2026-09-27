@@ -3,6 +3,7 @@ import { now } from "./context.js";
 import { demoAcceptance, demoArtifactContents, DEMO_SNAPSHOTS } from "./demo-data.js";
 import { ingestAcceptanceInput, refreshAcceptance } from "./acceptance-runtime.js";
 import { agentIdentity, agentRole, pairDelegation, plannedTasks } from "./domain.js";
+import { pilotActs } from "./run-health.js";
 import type { RunSession } from "./run-session.js";
 import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
@@ -61,13 +62,95 @@ export function acknowledgeDemoInstruction(session: RunSession) {
  * far as the repository lock is concerned.
  */
 export const DEMO_CWD = "~/workspace/acme-dashboard";
+/** The incident scenario runs on a checkout of its own, so it can play beside the main demonstration. */
+export const INCIDENT_DEMO_CWD = "~/workspace/acme-exports";
 
-export function demoLaunchState() {
+export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") {
+  if (scenario === "incident") return {
+    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: "Exporter le tableau des factures en CSV",
+    instruction: "Démonstration d'incident : aucun dépôt ne sera modifié.", startedAt: now(),
+    action: "Lecture du ticket GitLab",
+  };
   return {
     status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
     instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
     action: "Lecture du ticket GitLab",
   };
+}
+
+/**
+ * A pilot that hands control back halfway, with nothing running and nothing
+ * declared next: the case the health detector exists for. No incident is
+ * staged here; the detector finds it on its own, after its grace period.
+ */
+export function startIncidentDemoRun(session: RunSession) {
+  session.activity("system", "Ticket simulé chargé", "IH-57 · Exporter le tableau des factures en CSV");
+  session.publish();
+  demoTerminal(session, "Lecture du ticket GitLab simulé…");
+  scheduleDemo(session, demoStepDuration, () => {
+    pilotActs(session.signals, Date.now());
+    session.state.phase = 4;
+    session.state.branch = "feat/ih-57-export-csv";
+    session.state.artifacts = ["ticket-context.md", "implementation-plan.md"];
+    session.state.planTasks = [
+      { id: "T1", title: "Sérialiser les lignes du tableau", status: "todo" },
+      { id: "T2", title: "Ajouter le bouton d'export", status: "todo", dependencies: ["T1"] },
+    ];
+    session.state.action = "Délégation à developer";
+    delegateDemoTask(session, "T1");
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.publish();
+    session.signal();
+    demoTerminal(session, "Plan prêt. T1 confiée à un développeur.");
+  });
+  scheduleDemo(session, demoStepDuration * 2, () => {
+    finishDemoTask(session, "T1");
+    session.state.phase = 5;
+    session.state.action = undefined;
+    session.refreshPlanTasks();
+    session.markProgress();
+    // The pilot ends its turn here and launches nothing: T2 is left waiting.
+    session.signals.pilotIdleSince = Date.now();
+    session.activity("system", "Claude Code a rendu la main");
+    session.publish();
+    session.signal();
+    demoTerminal(session, "T1 terminée. (La session attend à son invite, sans lancer T2.)");
+  });
+  // The monitor ticks every fifteen seconds; the demonstration asks for a look right after its shortened grace.
+  scheduleDemo(session, demoStepDuration * 2 + demoHealthGraceMs() + 50, () => session.signal());
+}
+
+/** The grace of the incident demonstration: long enough to see the hand-back, short enough not to wait a minute. */
+export function demoHealthGraceMs() {
+  return demoStepDuration * 2;
+}
+
+/** What the simulated pilot does once the user asks it to go on: T2, then the end of the run. */
+export function resumeDemoAfterContinuation(session: RunSession) {
+  scheduleDemo(session, Math.max(200, demoStepDuration / 2), () => {
+    pilotActs(session.signals, Date.now());
+    session.state.action = "Délégation à developer";
+    delegateDemoTask(session, "T2");
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.publish();
+    session.signal();
+    demoTerminal(session, "Reprise : le plan indique T2 restante, délégation au développeur.");
+  });
+  scheduleDemo(session, demoStepDuration * 1.5, () => {
+    finishDemoTask(session, "T2");
+    session.state.phase = 10;
+    session.state.action = undefined;
+    session.state.status = "completed";
+    session.state.endedAt = now();
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.activity("system", "Démonstration d'incident terminée", "Aucun dépôt ni ticket n’a été modifié.");
+    session.publish();
+    session.signal();
+    demoTerminal(session, "T2 terminée. Fin de la démonstration d'incident.");
+  });
 }
 
 export function startDemoRun(session: RunSession) {

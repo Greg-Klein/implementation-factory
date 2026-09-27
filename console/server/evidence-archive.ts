@@ -218,6 +218,30 @@ export class EvidenceArchive {
     });
   }
 
+  /**
+   * Reads back what an earlier process archived, for a run consulted after a
+   * restart. Read only: nothing is ingested, and a missing or damaged index
+   * leaves the archive empty rather than failing.
+   */
+  async restore() {
+    const index = await this.storage.read(INDEX_PATH).catch(() => undefined);
+    if (!index) return false;
+    let parsed: { versions?: unknown; invalid?: unknown };
+    try { parsed = JSON.parse(index.toString("utf8")) as typeof parsed; } catch { return false; }
+    if (!Array.isArray(parsed.versions)) return false;
+    const versions: ArchivedVersion[] = [];
+    for (const version of parsed.versions as ArchivedVersion[]) {
+      if (!version || typeof version.archivePath !== "string" || typeof version.file !== "string") continue;
+      const data = await this.storage.read(version.archivePath).catch(() => undefined);
+      if (!data) continue;
+      try { this.raw.set(version.archivePath, JSON.parse(data.toString("utf8"))); } catch { continue; }
+      versions.push({ ...version, attachments: Array.isArray(version.attachments) ? version.attachments : [] });
+    }
+    this.versions = versions;
+    if (parsed.invalid && typeof parsed.invalid === "object") for (const [file, invalid] of Object.entries(parsed.invalid as Record<string, Invalid>)) this.invalid.set(file, invalid);
+    return true;
+  }
+
   private async persistIndex() {
     const index = { schemaVersion: 1, versions: this.versions, invalid: Object.fromEntries(this.invalid) };
     await this.storage.write(INDEX_PATH, JSON.stringify(index, null, 2));

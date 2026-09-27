@@ -6,6 +6,8 @@ import { dataRoot } from "./config.js";
 import { emptyState, planTaskBoard, runHoldsRepository, summarizeRun } from "./domain.js";
 import { engine, type EngineSession } from "./engine/index.js";
 import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
+import { createSignals, pilotActs, type RunSignals } from "./run-health.js";
+import { RUN_SCHEMA_VERSION } from "./run-incidents.js";
 import type { AcceptanceView, Activity, ConversationMessage, RunState } from "./types.js";
 
 /**
@@ -39,10 +41,18 @@ export class RunSession {
   pendingQuestionInput: Record<string, unknown> | null = null;
   /** Resolved with whatever the active engine expects back, which only that engine knows. */
   resolvePendingQuestion: ((output?: unknown) => void) | null = null;
-  /** When anything last came out of the session: a hook, the terminal, the transcript. */
-  lastActivityAt = Date.now();
-  /** Set while the run sits in "attention" because the console found it silent, not because the agent asked. */
-  stallFlagged = false;
+  /** What the console observed of the session beyond its state, read by the health monitor. See run-health.ts. */
+  readonly signals: RunSignals = createSignals(Date.now());
+  /** Set by the registry: something happened that may change who can move the run forward. */
+  onSignal: (() => void) | null = null;
+  /** Evaluations of this run's health one after another: a tick, a hook and a click never interleave. */
+  healthChain: Promise<void> = Promise.resolve();
+  /** Incident actions already answered, by request id, so a second window or a double click acts once. */
+  readonly answeredRequests = new Map<string, { outcome: "done" | "refused"; message: string }>();
+  /** Why the last `workflow-state.json` was not taken, until a valid one arrives. */
+  workflowDiagnostic: string | undefined;
+  /** Set once the run left the registry: nothing may evaluate or publish it any more. */
+  disposed = false;
   /** The hooks already applied, so one posted twice (a retry, a spool replay) counts once. */
   readonly seenHooks = new Set<string>();
   /** The replay of the hook spool in flight, so two never apply the same file. */
@@ -67,6 +77,11 @@ export class RunSession {
   constructor(id: string, state: Partial<RunState> = {}) {
     this.id = id;
     this.state = { ...emptyState(), ...state, id };
+    // A run read back from its archive keeps its whole history, not just the window pages receive.
+    if (state.activities?.length) {
+      this.archive = state.activities.slice(0, ARCHIVED_ACTIVITIES);
+      this.state.activities = this.archive.slice(0, BROADCAST_ACTIVITIES);
+    }
     this.evidence = new EvidenceArchive(this.demo
       ? memoryStorage((relativePath) => this.demoFiles.get(relativePath))
       : diskStorage(() => engine.taskDirectory(this.state.cwd), path.join(dataRoot, id)));
@@ -87,7 +102,7 @@ export class RunSession {
 
   /** The run as it is archived: the same state, with the history the pages never received. */
   archivedState(): RunState {
-    return { ...this.state, activities: this.archive };
+    return { ...this.state, activities: this.archive, schemaVersion: RUN_SCHEMA_VERSION };
   }
 
   /** Late transcript reads can repeat a message the input already showed, so the local echo is replaced rather than doubled. */
@@ -106,19 +121,39 @@ export class RunSession {
     this.state.planTasks = planTaskBoard(this.state.planTasks, this.state.planDelegations ?? [], this.state.agents, this.state.artifacts);
   }
 
+  /** The session executed something: a hook, the transcript growing. Terminal output is not execution. */
+  markExecution() {
+    this.signals.lastExecutionAt = Date.now();
+  }
+
+  /** The workflow produced something: an agent, a document, an answer, a merge request. */
+  markProgress() {
+    const now = Date.now();
+    this.signals.lastProgressAt = now;
+    this.signals.lastExecutionAt = Math.max(this.signals.lastExecutionAt, now);
+  }
+
   /**
-   * Something came out of the session. A run the console flagged as silent is
-   * given back to the agent: it was never the agent that asked for attention.
+   * A line of the dialogue landed. Written after the pilot's last turn ended,
+   * it means the pilot, or the user typing in the terminal, took the session
+   * up again: the transcript lags, so an older line proves nothing.
    */
-  touch() {
-    this.lastActivityAt = Date.now();
-    if (!this.stallFlagged) return;
-    this.stallFlagged = false;
-    if (this.state.status === "attention" && !this.state.pendingQuestion) {
-      this.state.status = "running";
-      this.activity("system", "Le run a repris");
-      this.publish();
-    }
+  noteDialogue(at: string) {
+    this.markExecution();
+    const written = new Date(at).getTime();
+    if (this.signals.pilotIdleSince !== undefined && Number.isFinite(written) && written > this.signals.pilotIdleSince) pilotActs(this.signals, Date.now());
+  }
+
+  /** Runs one step after every health evaluation or incident action already queued for this run. */
+  serializeHealth<T>(step: () => Promise<T> | T): Promise<T> {
+    const next = this.healthChain.then(step, step);
+    this.healthChain = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
+  /** Asks the health monitor to look at this run again, soon. */
+  signal() {
+    this.onSignal?.();
   }
 
   /** Whether this hook is seen for the first time. One without an identifier always is. */
@@ -132,7 +167,7 @@ export class RunSession {
   }
 
   appendTerminal(data: string) {
-    this.touch();
+    this.signals.lastOutputAt = Date.now();
     this.terminalBuffer = (this.terminalBuffer + data).slice(-TERMINAL_BUFFER);
     broadcastToViewers(this.id, { type: "terminal.output", runId: this.id, data });
   }
@@ -168,6 +203,7 @@ export class RunSession {
 
   /** Releases everything the run held. Called once, when the run leaves the registry. */
   async dispose() {
+    this.disposed = true;
     this.clearDemoTimers();
     this.resolvePendingQuestion?.();
     this.resolvePendingQuestion = null;

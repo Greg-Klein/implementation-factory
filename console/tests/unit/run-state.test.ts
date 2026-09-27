@@ -82,7 +82,9 @@ describe("run state selectors", () => {
   it("should mark an intentional terminal stop as stopped, never as completed or failed", () => {
     expect(terminalExitStatus(1, true)).toBe("stopped");
     expect(terminalExitStatus(0, true)).toBe("stopped");
-    expect(terminalExitStatus(0, false)).toBe("completed");
+    // A clean exit proves nothing: only a result the workflow reached is a completion.
+    expect(terminalExitStatus(0, false)).toBe("failed");
+    expect(terminalExitStatus(0, false, true)).toBe("completed");
     expect(terminalExitStatus(1, false)).toBe("failed");
   });
 });

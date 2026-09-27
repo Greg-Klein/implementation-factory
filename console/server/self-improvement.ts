@@ -137,6 +137,19 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
       artifacts: snapshot.artifacts,
       attentionEvents: snapshot.activities.filter((item) => item.kind === "attention").map((item) => item.title),
       error: snapshot.error,
+      // Where the run lost its way, as the health monitor diagnosed it, and what it closed with.
+      incidents: (snapshot.incidents ?? []).map((incident) => ({
+        kind: incident.kind, status: incident.status, reason: incident.reason,
+        ...(incident.resolution ? { resolution: incident.resolution.outcome } : {}),
+        continuationRequested: Boolean(incident.continuation),
+      })),
+      // What the run could not prove: criteria left unverified, blocked or failed.
+      evidenceGaps: snapshot.acceptance?.available ? {
+        total: snapshot.acceptance.counts.total, verified: snapshot.acceptance.counts.verified, unverified: snapshot.acceptance.counts.unverified,
+        blocked: snapshot.acceptance.counts.blocked, failed: snapshot.acceptance.counts.failed, stale: snapshot.acceptance.counts.stale,
+        diagnostics: snapshot.acceptance.diagnostics,
+      } : null,
+      workflowStateDeclared: Boolean(snapshot.workflow),
     },
   }, null, 2));
   session.activity("artifact", "Auto-audit mis en file", `${id}.json`);

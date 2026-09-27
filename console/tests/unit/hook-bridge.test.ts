@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runStalled, spooledHooks } from "../../server/domain";
+import { spooledHooks } from "../../server/domain";
 
 // The transcript follower is never reached here, and its watcher ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
@@ -54,44 +54,6 @@ describe("hooks a session could not post", () => {
     expect(session.state.agents[0]).toEqual(expect.objectContaining({ id: "a1", status: "completed" }));
     expect(existsSync(spool)).toBe(false);
     await expect(bridge.drainHookSpool(session)).resolves.toBeUndefined();
-  });
-});
-
-describe("a run gone silent", () => {
-  const quiet = { status: "running" as const, sessionActive: true, pendingQuestion: false, demo: false, flagged: false, lastActivityAt: 0, thresholdMs: 60_000 };
-
-  it("should flag a running session past the threshold, once", () => {
-    expect(runStalled({ ...quiet, now: 59_999 })).toBe(false);
-    expect(runStalled({ ...quiet, now: 60_000 })).toBe(true);
-    expect(runStalled({ ...quiet, now: 600_000, flagged: true })).toBe(false);
-  });
-
-  it("should leave alone a run that is quiet by design", () => {
-    const now = 600_000;
-    expect(runStalled({ ...quiet, now, pendingQuestion: true })).toBe(false);
-    expect(runStalled({ ...quiet, now, status: "attention" })).toBe(false);
-    expect(runStalled({ ...quiet, now, status: "completed" })).toBe(false);
-    expect(runStalled({ ...quiet, now, sessionActive: false })).toBe(false);
-    expect(runStalled({ ...quiet, now, demo: true })).toBe(false);
-  });
-
-  it("should call for attention, then hand the run back to the agent when it speaks again", () => {
-    const session = new RunSession("run-stall", { status: "running", phase: 5, sessionActive: true });
-    session.lastActivityAt = Date.now() - 60 * 60_000;
-    bridge.checkStall(session);
-    expect(session.state.status).toBe("attention");
-    expect(session.stallFlagged).toBe(true);
-    bridge.checkStall(session);
-    expect(session.state.activities.filter((entry) => entry.kind === "attention")).toHaveLength(1);
-    session.appendTerminal("output");
-    expect(session.state.status).toBe("running");
-    expect(session.stallFlagged).toBe(false);
-  });
-
-  it("should not hand back a run the agent itself put in attention", () => {
-    const session = new RunSession("run-attention", { status: "attention", phase: 5, sessionActive: true });
-    session.appendTerminal("output");
-    expect(session.state.status).toBe("attention");
   });
 });
 

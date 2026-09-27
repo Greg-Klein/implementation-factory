@@ -39,6 +39,31 @@ const TAGGED_INPUT = /^<[a-z][a-z-]*(?:\s[^>]*)?>/;
 const IDLE_NOTIFICATION = /waiting for your input/i;
 
 /**
+ * Notification types Claude Code names. `idle_prompt` repeats the Stop event;
+ * `auth_success` blocks nothing. A notification without a type falls back on
+ * its message.
+ */
+const NOTIFICATION_CAUSES: Record<string, "permission" | "terminal_interaction" | null> = {
+  permission_prompt: "permission",
+  elicitation_dialog: "terminal_interaction",
+  idle_prompt: null,
+  auth_success: null,
+};
+
+/**
+ * The tools whose end is reported by a PostToolUse hook: the matcher of
+ * hooks/hooks.json. Any other call ends, as far as the console can tell, with
+ * the turn of whoever made it.
+ */
+export const END_REPORTED_TOOLS = new Set(["Bash", "TaskStop"]);
+
+/** A call that returns at once and wakes the pilot up later: a command in the background, a monitor. */
+function backgroundCall(tool: string | undefined, input: Record<string, unknown> | undefined) {
+  if (tool === "Monitor") return true;
+  return tool === "Bash" && input?.run_in_background === true;
+}
+
+/**
  * The console submits an instruction as a bracketed paste, so Claude Code
  * records it wrapped in a paste marker. The dialogue shows what the user wrote,
  * not how it reached the session.
@@ -145,23 +170,35 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   }
   if (name === "Notification") {
     const message = normalizeText(payload.message);
+    const type = normalizeText(payload.notification_type);
     // Claude Code notifies a minute after the session last printed, background
-    // agent still working or not, so this one repeats what the Stop event
+    // agent still working or not, so the idle one repeats what the Stop event
     // already said, later and less accurately. Every other notification, a
     // permission request first of all, really does block on the user.
+    if (type && type in NOTIFICATION_CAUSES) {
+      const cause = NOTIFICATION_CAUSES[type];
+      return cause ? { kind: "attention", message, cause } : undefined;
+    }
     if (message && IDLE_NOTIFICATION.test(message)) return undefined;
-    return { kind: "attention", message };
+    return { kind: "attention", message, cause: message && /permission/i.test(message) ? "permission" : "unknown" };
   }
   if (name === "Stop") return { kind: "turn.end" };
   const input = payload.tool_input as Record<string, unknown> | undefined;
   // The command is passed whole: what is shown gets shortened, what is matched
   // against must not be.
   const command = typeof input?.command === "string" ? input.command : undefined;
+  // Filled only when the hook fired inside a subagent: the pilot's own calls carry none.
+  const caller = normalizeText(payload.agent_id);
+  const toolUseId = normalizeText(payload.tool_use_id);
   if (name === "PreToolUse") {
     const tool = normalizeText(payload.tool_name);
     if (tool === "AskUserQuestion") return questionEvent(payload);
     const planTaskIds = delegatedPlanTaskIds(tool, input);
-    return { kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input), ...(planTaskIds ? { planTaskIds } : {}) };
+    return {
+      kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input), ...(planTaskIds ? { planTaskIds } : {}),
+      ...(toolUseId ? { toolUseId } : {}), ...(caller ? { agentId: caller } : {}),
+      background: backgroundCall(tool, input), endReported: END_REPORTED_TOOLS.has(tool ?? ""),
+    };
   }
   if (name === "PostToolUse") {
     // Claude Code fires no SubagentStop for a background agent it kills.
@@ -169,7 +206,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
       const agentId = normalizeText(input?.task_id) ?? normalizeText(input?.shell_id);
       return agentId ? { kind: "agent.kill", agentId } : undefined;
     }
-    return { kind: "tool.end", command, response: payload.tool_response };
+    return { kind: "tool.end", command, response: payload.tool_response, ...(toolUseId ? { toolUseId } : {}), ...(caller ? { agentId: caller } : {}) };
   }
   return undefined;
 }

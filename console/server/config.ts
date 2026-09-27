@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { concurrencyLimit, permissionMode, positiveDuration } from "./domain.js";
+import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envFile = process.env.IMPL_ENV_FILE ?? path.resolve(consoleRoot, "..", ".env");
@@ -34,8 +35,18 @@ export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);
-/** How long a run in progress may stay silent before the console calls the user. */
-export const stallThresholdMs = positiveDuration(process.env.IMPL_STALL_MINUTES, 20) * 60_000;
+/**
+ * The thresholds of the run health monitor (see run-health.ts). Only the
+ * silence before a doubt is a user setting; the others are overridable for the
+ * integration suite, which cannot wait a minute per scenario.
+ */
+export const healthPolicy: HealthPolicy = {
+  tickMs: positiveDuration(process.env.IMPL_HEALTH_TICK_MS, DEFAULT_HEALTH_POLICY.tickMs),
+  turnEndGraceMs: positiveDuration(process.env.IMPL_HEALTH_TURN_GRACE_MS, DEFAULT_HEALTH_POLICY.turnEndGraceMs),
+  artifactGraceMs: positiveDuration(process.env.IMPL_HEALTH_ARTIFACT_GRACE_MS, DEFAULT_HEALTH_POLICY.artifactGraceMs),
+  suspicionMs: positiveDuration(process.env.IMPL_STALL_MINUTES, DEFAULT_HEALTH_POLICY.suspicionMs / 60_000) * 60_000,
+  resumeGraceMs: DEFAULT_HEALTH_POLICY.resumeGraceMs,
+};
 /**
  * The secret every hook posts back, drawn at each start. The integration suite
  * sets its own, being the only caller that posts hooks without a session.

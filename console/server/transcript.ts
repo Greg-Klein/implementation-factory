@@ -14,7 +14,7 @@ async function readNewMessages(session: RunSession, file: string) {
     const buffer = Buffer.alloc(size - follow.offset);
     await handle.read(buffer, 0, buffer.byteLength, follow.offset);
     follow.offset = size;
-    session.touch();
+    session.markExecution();
     const lines = (follow.carry + buffer.toString("utf8")).split("\n");
     follow.carry = lines.pop() ?? "";
     let published = false;
@@ -22,9 +22,10 @@ async function readNewMessages(session: RunSession, file: string) {
       const message = engine.conversationLine(line);
       if (!message || session.state.messages.some((entry) => entry.id === message.id)) continue;
       session.conversationMessage(message);
+      session.noteDialogue(message.at);
       published = true;
     }
-    if (published) session.publish();
+    if (published) { session.publish(); session.signal(); }
   } finally {
     await handle.close();
   }

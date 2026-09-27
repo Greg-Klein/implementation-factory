@@ -9,7 +9,7 @@ import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./conte
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
 import { answerQuestion } from "./hooks.js";
-import { checkStall, drainHookSpool, receiveHook } from "./hook-bridge.js";
+import { drainHookSpool, receiveHook } from "./hook-bridge.js";
 import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoState } from "./demo.js";
@@ -90,7 +90,8 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     const subscription = clients.get(socket);
     if (!subscription) return;
     subscription.runId = message.runId ?? undefined;
-    const session = registry.get(subscription.runId);
+    // An archived run is read like a live one, and has no terminal to replay.
+    const session = registry.readable(subscription.runId);
     if (!session) return;
     send(socket, { type: "run", state: session.state });
     if (session.terminalBuffer) send(socket, { type: "terminal.output", runId: session.id, data: session.terminalBuffer });
@@ -114,7 +115,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     return;
   }
   if (message.type === "demo.start") {
-    const session = registry.startDemo();
+    const session = registry.startDemo(message.scenario === "incident" ? "incident" : "workflow");
     const subscription = clients.get(socket);
     if (subscription) subscription.runId = session.id;
     send(socket, { type: "run", state: session.state });
@@ -138,6 +139,11 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     await saveFeedback(session, message.body);
     return;
   }
+  if (message.type === "incident.action") {
+    const result = await registry.incidentAction(message);
+    send(socket, { type: "incident.result", runId: message.runId, incidentId: message.incidentId, requestId: message.requestId, ...result });
+    return;
+  }
   if (message.type === "selfImprovement.approve") { await applySelfImprovementReview(message.worktreeName, true); return; }
   if (message.type === "selfImprovement.reject") { await applySelfImprovementReview(message.worktreeName, false); return; }
 }
@@ -148,6 +154,8 @@ await reconcileInterruptedRuns(dataRoot);
 // promotion does, and nothing would replay the waiting branches onto them.
 await realignPendingImprovements().catch(() => undefined);
 await registry.restoreQueue();
+// Runs an earlier process left with an open incident, read back for consultation only.
+await registry.archive.load(dataRoot);
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();
@@ -190,6 +198,29 @@ const server = createServer(async (request, response) => {
     const session = registry.get(decodeURIComponent(request.url.slice("/api/runs/".length).split("?")[0]));
     if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
     respond(response, 200, { state: session.state });
+    return;
+  }
+  // Archived runs have routes of their own: nothing here can reach a live session, a slot or a checkout.
+  const archiveAcceptance = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)\/acceptance$/) : null;
+  if (archiveAcceptance) {
+    const archived = registry.archive.get(decodeURIComponent(archiveAcceptance[1]));
+    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    respond(response, 200, archived.acceptanceView ?? archived.evidence.view());
+    return;
+  }
+  const archiveRun = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)$/) : null;
+  if (archiveRun) {
+    const archived = registry.archive.get(decodeURIComponent(archiveRun[1]));
+    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    respond(response, 200, { state: archived.state });
+    return;
+  }
+  if (request.method === "GET" && requestPath === "/api/archive/artifacts") {
+    const requestUrl = new URL(request.url ?? "", `http://${hostname}:${port}`);
+    const archived = registry.archive.get(requestUrl.searchParams.get("runId") ?? undefined);
+    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    try { respond(response, 200, await readArtifact(archived, requestUrl.searchParams.get("path") ?? "")); }
+    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document introuvable." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
@@ -281,22 +312,15 @@ const desktopParent = (process as typeof process & {
 desktopParent?.postMessage({ type: "ready", url });
 // Launches accepted before the last shutdown start now that the server is up.
 void registry.drain();
-// Hooks a session spooled while nothing else arrived, and runs gone silent,
-// would otherwise wait for an event that may never come.
-const watchdog = setInterval(() => {
-  for (const session of registry.all()) {
-    if (!session.state.sessionActive) continue;
-    void drainHookSpool(session).then(() => checkStall(session));
-  }
-}, 30_000);
-watchdog.unref();
+// Hooks a session spooled while nothing else arrived, and runs with nothing
+// next, would otherwise wait for an event that may never come.
+registry.monitor.start();
 
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const timeout = setTimeout(() => process.exit(1), 8_000).unref();
-  clearInterval(watchdog);
   for (const socket of wss.clients) socket.terminate();
   wss.close();
   server.close();

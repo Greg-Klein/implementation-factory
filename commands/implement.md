@@ -28,6 +28,8 @@ Two things, and only two, override that autonomy: a git state you do not underst
 
 Chaining shorter sleeps to get around the block does not work either. This has already cost a blocked turn in several runs.
 
+**Say where you stand in `.claude/tasks/workflow-state.json`, at every transition.** The console watches for runs where you handed control back and nothing is going to wake you up, and only this file tells it that you are legitimately waiting. Follow the "Workflow state" section below: write it when you start a step, right before you end a turn while an agent, a background command or a `Monitor` is still working for you, and once at the very end. Never end a turn mid-workflow without an agent running, a declared wait, or a question asked with `AskUserQuestion`: a hand-back with none of the three is reported to the user as a run with no next action.
+
 ---
 
 ## Step 1 - Read the ticket and collect every linked document
@@ -553,6 +555,8 @@ Print a short summary in chat:
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
 
+**Declare the end first.** Write `workflow-state.json` with `"state": "completed"` and its `result` (see "Workflow state"), before the archive sync below, so the console knows the run reached its end rather than lost its session.
+
 **Before cleaning, let the console archive what the run leaves behind.** When `IMPL_RUN_ID` is set, write a sync request with a fresh id, then wait for the console's answer carrying that same id, for up to two minutes, with `Monitor` and an until-loop rather than a `sleep`:
 
 ```bash
@@ -602,6 +606,39 @@ Every evidence file of the run (`dev-evidence-<suffix>.json` and its merge, `qa-
 - **A confirmation names what it checked.** `confirmed` always carries `confirms` with the id of the evidence inspected; it stays worth that evidence, on the code that evidence was taken on.
 - **The code version comes from the shared utility, never from you.** Run `node "$IMPL_CODE_SNAPSHOT"` right before the first measurement of a sequence and right after the last, and copy the `id` of its JSON output into `codeSnapshot.atStart` and `codeSnapshot.atEnd` (or `codeSnapshotId` / `codeSnapshotAtEnd` on each item, which is what developers do so a merge keeps them). Never type, shorten or edit an id. When `IMPL_CODE_SNAPSHOT` is unset or the command fails, leave the fields out: the console then shows "version inconnue", which is true. Two different ids around one measurement mean the code moved under it: that measurement is not conclusive, and it is redone rather than reported.
 - **Written whole, then renamed into place**: write `<name>.json.tmp`, then `mv` it over `<name>.json`. The console reads files as they land, and a file caught half written is counted as nothing.
+
+## Workflow state
+
+`.claude/tasks/workflow-state.json` says what you are doing and what comes next. The console reads it as data; hooks tell it what happened, only this file tells it what you expect to happen. Write it whole to `workflow-state.json.tmp`, then `mv` it into place, like every other file the console reads.
+
+```json
+{
+  "schemaVersion": 1,
+  "revision": 7,
+  "state": "working | waiting | completed | blocked",
+  "step": "5",
+  "nextAction": {
+    "kind": "run_step | await_agent | await_process | await_dependency | deliver",
+    "taskIds": ["T3"],
+    "agents": ["developer"],
+    "expectedArtifact": "qa-report.md",
+    "description": "string, in French: what happens next, in one sentence"
+  },
+  "result": {
+    "delivery": "merge_request | draft_merge_request | none",
+    "mergeRequestUrl": "https://…",
+    "blockers": ["string, in French"]
+  }
+}
+```
+
+- **`revision` starts at 1 and goes up by one on every write.** A lower revision is ignored.
+- **`working`** when you start a step (`step` is its number, `nextAction.kind` `run_step`).
+- **`waiting`** right before you end a turn while something works for you: `await_agent` with the `agents` and `taskIds` of the batch you launched in the background, `await_process` for a background command or a `Monitor` you are waiting on, `await_dependency` for anything else outside the session, with `expectedArtifact` when a file will mark the end. A declared wait never hides a run for long: with no agent actually running, `await_agent` is reported as no next action, and the others turn into a doubt after the silence threshold.
+- **`completed`** once, at step 10, before the archive sync: `result.delivery` is `merge_request` or `draft_merge_request` with the `mergeRequestUrl` you opened, or `none` with every reason in `blockers`. A draft merge request with known blockers is a correct end: list them. The console checks the end against the merge request it saw; an end it cannot confirm does not close the run.
+- **`blocked`** when you stop for one of the two reasons "Never invent" allows, with `nextAction.description` naming what would unblock the run.
+
+Without `IMPL_RUN_ID` there is no console reading it; write it anyway, it costs nothing.
 
 ## Specification precedence
 

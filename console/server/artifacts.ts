@@ -8,6 +8,8 @@ import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
 import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
+import { closeWorkflowIfDone } from "./hooks.js";
+import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
@@ -99,10 +101,34 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   session.refreshPlanTasks();
   if (acceptanceInputKind(relative)) await ingestAcceptanceInput(session, relative);
   if (relative === SYNC_REQUEST_FILE) await confirmArchiveSync(session, source);
+  if (relative === WORKFLOW_STATE_FILE) readWorkflowState(session, await readFile(source, "utf8").catch(() => ""));
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) session.state.phase = Math.max(session.state.phase, completedPhase + 1);
+  // A document is progress of the workflow, whatever the terminal shows.
+  session.markProgress();
   session.publish();
+  session.signal();
+}
+
+/**
+ * What the workflow says about itself. A malformed or older revision leaves
+ * the last valid one in force; a declared end closes the run only once it
+ * holds against the deliverable (see closeWorkflowIfDone).
+ */
+function readWorkflowState(session: RunSession, content: string) {
+  const reading = parseWorkflowState(content, new Date().toISOString());
+  if ("error" in reading) {
+    if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignoré", reading.error);
+    session.workflowDiagnostic = reading.error;
+    return;
+  }
+  session.workflowDiagnostic = undefined;
+  const previous = session.state.workflow;
+  if (previous && reading.state.revision < previous.revision) return;
+  session.state.workflow = reading.state;
+  if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow : ${reading.state.state}${reading.state.step ? `, étape ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
+  closeWorkflowIfDone(session);
 }
 
 /**

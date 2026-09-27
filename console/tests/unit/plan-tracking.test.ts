@@ -19,7 +19,7 @@ describe("plan task ids read from a delegation", () => {
 
   it("should read the task id from the report file the developer is told to write", () => {
     expect(delegate("Agent", { subagent_type: "implementation-harness:developer", description: "Implement T2", prompt: "Task T2. Write .claude/tasks/developer-report-T2.md and dev-evidence-T2.json." }))
-      .toEqual({ kind: "tool.start", tool: "Agent", target: "implementation-harness:developer", planTaskIds: ["T2"] });
+      .toMatchObject({ kind: "tool.start", tool: "Agent", target: "implementation-harness:developer", planTaskIds: ["T2"] });
   });
 
   it("should read it from the legacy Task tool and count a repeated id once", () => {

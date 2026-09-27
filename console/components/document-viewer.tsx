@@ -2,10 +2,10 @@
 
 import { CircleNotchIcon, FileTextIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import { pendingAnswerLabel } from "@/lib/run-state";
+import { artifactUrl, pendingAnswerLabel } from "@/lib/run-state";
 import type { ArtifactResponse } from "@/lib/types";
 
-export function DocumentViewer({ runId, documents, workflowActive, pendingQuestionCount, onClose, onAnswer }: { runId: string; documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void; onAnswer: () => void }) {
+export function DocumentViewer({ runId, archived = false, documents, workflowActive, pendingQuestionCount, onClose, onAnswer }: { runId: string; archived?: boolean; documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void; onAnswer: () => void }) {
   const [selected, setSelected] = useState(() => documents.at(-1) ?? "");
   const [document, setDocument] = useState<ArtifactResponse>();
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,7 @@ export function DocumentViewer({ runId, documents, workflowActive, pendingQuesti
     const controller = new AbortController();
     setLoading(true);
     setDocument(undefined);
-    fetch(`/api/artifacts?runId=${encodeURIComponent(runId)}&path=${encodeURIComponent(selected)}`, { signal: controller.signal })
+    fetch(artifactUrl({ id: runId, archived }, selected), { signal: controller.signal })
       .then(async (response) => {
         const result = await response.json() as ArtifactResponse;
         if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
@@ -23,7 +23,7 @@ export function DocumentViewer({ runId, documents, workflowActive, pendingQuesti
       .catch((error) => { if (!controller.signal.aborted) setDocument({ path: selected, content: error instanceof Error ? error.message : "Impossible de charger ce document." }); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [runId, selected]);
+  }, [runId, selected, archived]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };

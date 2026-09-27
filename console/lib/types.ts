@@ -30,6 +30,11 @@ export type RunState = {
   planDelegations?: PlanDelegation[];
   /** Acceptance coverage in figures; the full view comes from /api/runs/<id>/acceptance. */
   acceptance?: AcceptanceDigest;
+  /** Who can move the run forward, as the health monitor sees it. See server/run-health.ts. */
+  health?: RunHealthView;
+  incidents?: RunIncident[];
+  /** A run read back from its archive after a restart: no session, nothing to act on but its incident. */
+  archived?: boolean;
 };
 /**
  * A run as the side list sees it. Mirrors RunSummary in server/types.ts: the
@@ -51,10 +56,14 @@ export type RunSummary = {
   acceptance?: AcceptanceCounts;
   /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
   holdsRepository: boolean;
+  health?: RunHealth;
+  incident?: { id: string; kind: IncidentKind; title: string; revision: number };
+  archived?: boolean;
 };
 export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
 export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number };
+/** `archived`: runs of an earlier process left with an open incident, readable but not live. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
 export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string };
 export type ServerMessage =
@@ -62,7 +71,8 @@ export type ServerMessage =
   | { type: "run"; state: RunState }
   | { type: "terminal.output"; runId: string; data: string }
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
-  | { type: "error"; message: string; runId?: string };
+  | { type: "error"; message: string; runId?: string }
+  | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {
@@ -104,3 +114,23 @@ export type AcceptanceView = {
   available: boolean; registryRevision?: number; updatedAt: string; counts: AcceptanceCounts; sentence: string; currentSnapshot?: { id: string; capturedAt: string };
   criteria: AcceptanceCriterionView[]; general: EvidenceView[]; generalHistory: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[];
 };
+
+/** Mirrors the run health types of server/types.ts. */
+export type RunHealth = "healthy" | "waiting" | "suspected_stall" | "stalled" | "interrupted";
+export type WaitReason = "user_question" | "permission" | "terminal_interaction" | "agent" | "tool" | "dependency" | "unknown";
+export type RunWait = { reason: WaitReason; since: string; on?: string; liftedBy?: string };
+export type IncidentKind = "no_next_action" | "lost_session" | "missing_result" | "unresolvable_dependency";
+export type IncidentAction = "answer" | "open_terminal" | "view_diagnostic" | "request_continuation" | "stop" | "dismiss";
+export type IncidentDecision = { requestId: string; action: IncidentAction; at: string; outcome: "pending" | "done" | "refused" | "unknown"; detail?: string };
+export type RunIncident = {
+  id: string; runId: string; kind: IncidentKind; status: "open" | "resolved" | "dismissed"; revision: number; detectedAt: string; updatedAt: string; fingerprint: string;
+  title: string; reason: string; observations: { kind: string; at?: string; detail: string }[]; expectedNextAction?: string; suggestedActions: IncidentAction[];
+  continuation?: { requestedAt: string; requestId: string }; decisions: IncidentDecision[]; resolution?: { at: string; outcome: string; detail?: string };
+};
+export type RunHealthView = {
+  health: RunHealth; wait?: RunWait; title?: string; detail?: string;
+  workflow?: { state: string; revision: number; nextAction?: string; receivedAt: string } | { missing: true };
+  evaluatedAt: string;
+};
+/** What became of an incident action this page sent, shown next to the incident. */
+export type IncidentResult = { incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };

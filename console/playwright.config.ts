@@ -1,10 +1,12 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, hookToken } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, hookToken, prepareDataDirectory } from "./tests/fixtures";
 
 const port = 3211;
 
 createSampleCheckout();
+// The config is read again in every worker, after the console booted: only the main process prepares its data.
+if (process.env.TEST_WORKER_INDEX === undefined) prepareDataDirectory();
 
 export default defineConfig({
   testDir: "./tests/integration",
@@ -33,6 +35,11 @@ export default defineConfig({
       IMPL_HOOK_TOKEN: hookToken,
       // Runs the suite starts for real land here, not in the developer's own history.
       IMPL_DATA_DIR: dataDirectory,
+      // Short health graces, so an incident shows within seconds rather than a minute.
+      IMPL_HEALTH_TICK_MS: "400",
+      IMPL_HEALTH_TURN_GRACE_MS: "1500",
+      IMPL_HEALTH_ARTIFACT_GRACE_MS: "1000",
+      FAKE_CLAUDE_INPUT_DIR: fakeClaudeInputDirectory,
       // A launched run gets a stand-in session instead of a real Claude Code.
       PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },

@@ -134,7 +134,8 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     return;
   }
   if (message.type === "feedback.submit") {
-    const session = registry.get(message.runId);
+    // An archived run is worth learning from too: feedback only writes a file, it never reaches a session.
+    const session = registry.readable(message.runId);
     if (!session) throw new Error("Ce run n'existe plus.");
     await saveFeedback(session, message.body);
     return;

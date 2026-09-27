@@ -109,7 +109,34 @@ Le panneau de discussion est lu dans le transcript de la session, et Claude Code
 
 Le flux d’activité ne garde que les jalons du workflow : agents, documents, branche, merge request, décisions attendues. Le détail des commandes reste dans le terminal.
 
-Le harnais ne réclame l’attention que quand il est vraiment arrêté : une décision attendue, une demande de permission, un tour terminé sans agent en cours, la fin ou l’échec du run.
+Le harnais ne réclame l’attention que quand il est vraiment arrêté : une décision attendue, une demande de permission, un incident (plus aucune action en cours, résultat manquant, session interrompue), la fin ou l’échec du run. Un simple silence n’est qu’un doute, signalé une fois.
+
+## Qui peut faire avancer ce run ?
+
+La santé d’un run est une projection à part de son statut (`server/run-health.ts`, logique pure, horloge injectée). Elle ne lit que des signaux structurés : fin de tour du pilote (`Stop`), début et fin des sous-agents, appels d’outils appariés par `tool_use_id` et rattachés à leur agent (`agent_id`), type des notifications (`permission_prompt`, `elicitation_dialog`), appels en arrière-plan (`run_in_background`, `Monitor`), documents archivés, et `workflow-state.json`, que le pilote écrit à chaque transition pour dire ce qu’il attend (contrat dans `commands/implement.md`, section « Workflow state »). La sortie du terminal, un spinner compris, n’est jamais une progression.
+
+| Situation observée | Santé | Ce que montre la console |
+|---|---|---|
+| Question, permission ou saisie attendue | attente | le panneau de question, ou « Ouvrir le terminal » |
+| Agent, commande ou tâche de fond au travail | sain ou attente | rien ; au-delà du seuil de silence, un doute |
+| Silence prolongé (`IMPL_STALL_MINUTES`, 10 par défaut) | doute | « Aucune progression observée », sans rien arrêter ni relancer |
+| Le pilote a rendu la main, rien ne tourne, rien n’est attendu, workflow inachevé | incident après 60 s | « Plus aucune action en cours » |
+| Un agent a fini sans le fichier que son contrat exige, et personne n’a pris la suite | incident après 30 s | « Rapport QA attendu », « Rapport de T3 attendu »… |
+| Aucune tâche restante exécutable (dépendance absente ou circulaire) | incident | « Plan bloqué par ses dépendances » |
+| Session sortie avant un résultat, quel que soit son code | interruption | « Session interrompue » |
+
+Une attente déclarée dans `workflow-state.json` ne masque jamais un blocage longtemps : `await_agent` sans agent actif reste une absence de prochaine action, les autres attentes deviennent un doute au seuil de silence. Une fin déclarée n’est prise que si elle tient face au livrable (merge request vue, ou blocages écrits). Sans ce fichier (prompts anciens ou personnalisés), le détecteur s’en tient aux hooks et le dit dans son diagnostic. Après une mise en veille de la machine, toutes les grâces repartent du réveil.
+
+Un incident est unique par cause stable (empreinte), notifié une fois, enregistré dans `run.json` et clos seulement sur l’événement qui lève sa cause : le pilote agit de nouveau, le fichier arrive, ou l’utilisateur le classe. Les actions proposées sont seulement celles qui peuvent s’exécuter :
+
+- **Demander la continuation** : session active, pilote au repos, aucun agent, outil, question ni permission en cours. La console soumet à la session existante une instruction qui lui demande de relire le contexte, le plan, les rapports et l’état Git, de garder fichiers et commits, et de ne pas repartir de l’étape 1. L’incident reste ouvert, « continuation demandée », jusqu’à ce que la reprise soit observée.
+- **Ouvrir le terminal**, **Arrêter**, **Classer comme faux positif** (avec un motif), et le diagnostic repliable.
+
+Chaque action part avec la révision de l’incident affichée et un identifiant de requête : le serveur revérifie tout juste avant l’effet, refuse une action décidée sur un état qui a bougé, et n’exécute qu’une fois une requête envoyée par deux fenêtres. La décision est écrite avant l’effet ; après un arrêt entre les deux, elle reste « issue inconnue » et n’est jamais rejouée.
+
+Au redémarrage, un run trouvé en cours reçoit un incident d’interruption, une seule fois, et sa question sans session est gardée comme contexte. Les runs restés avec un incident ouvert apparaissent sous « Interrompus », en lecture seule, par des routes séparées (`/api/archive/…`) : ni session, ni place, ni dépôt tenu. Les classer les retire de la liste ; leur archive reste sur disque. `/?demo=incident` joue un run dont le pilote rend la main sans suite, pour voir le détecteur et la continuation sans dépôt.
+
+Limites : aucune reprise d’une session Claude Code perdue (le contrat moteur ne le permet pas encore), aucun superviseur LLM, aucun agent recréé automatiquement.
 
 ## Preuves par critère d’acceptation
 
@@ -150,6 +177,11 @@ Limites de cette version : aucune commande n’est encore corrélée à son rés
 | `server/acceptance.ts` | couverture des critères d’acceptation, logique pure, et synthèse de merge request |
 | `server/evidence-archive.ts` | versions immuables des registres, plans, preuves et captures d’un run |
 | `server/acceptance-runtime.ts` | ingestion, identification du code, recalcul et synthèse remise au workflow |
+| `server/run-health.ts` | qui peut faire avancer un run : signaux, matrice de détection, logique pure |
+| `server/run-incidents.ts` | vie d’un incident, validation des actions, lecture des archives, logique pure |
+| `server/run-monitor.ts` | ordonnanceur unique de la santé des runs vivants |
+| `server/run-archive.ts` | runs d’un processus précédent restés avec un incident, en lecture seule |
+| `server/workflow-state.ts` | lecture de `workflow-state.json` et vérification d’une fin déclarée |
 | `server/self-improvement.ts` | retours, auto-audit et boucle d’amélioration |
 | `server/domain.ts` | logique pure, sans agent ni système de fichiers |
 

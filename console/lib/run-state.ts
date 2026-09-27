@@ -1,4 +1,4 @@
-import type { Status } from "./types";
+import type { IncidentAction, RunIncident, RunState, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
   return agents.filter((agent) => agent.status === "running");
@@ -114,3 +114,53 @@ export function statusLabel(status: Status) {
   return "Disponible";
 }
 
+
+/** Where a run's documents are read from: an archived run has routes of its own, which never reach a live session. */
+export function artifactUrl(run: { id: string | null; archived?: boolean }, path: string) {
+  return `/api/${run.archived ? "archive/" : ""}artifacts?runId=${encodeURIComponent(run.id ?? "")}&path=${encodeURIComponent(path)}`;
+}
+
+export function acceptanceUrl(run: { id: string | null; archived?: boolean }) {
+  return `/api/${run.archived ? "archive/" : ""}runs/${encodeURIComponent(run.id ?? "")}/acceptance`;
+}
+
+export type HealthNotice = { title: string; detail: string; tone: "error" | "attention" | "doubt"; incident?: RunIncident; actions: IncidentAction[] };
+
+/** The waits worth a band of their own. A question has its panel, an agent at work needs nobody. */
+const SHOWN_WAITS = new Set(["permission", "terminal_interaction", "unknown"]);
+
+/**
+ * What the incident band says for a run, or nothing when the run is simply
+ * working. An open incident wins over the health it comes with; a doubt or a
+ * wait on the terminal is said without claiming anything broke.
+ */
+export function healthNotice(run: Pick<RunState, "health" | "incidents" | "archived" | "sessionActive">): HealthNotice | undefined {
+  const incident = run.incidents?.findLast((entry) => entry.status === "open");
+  if (incident) return { title: incident.title, detail: incident.reason, tone: incident.kind === "lost_session" ? "error" : "attention", incident, actions: [] };
+  const health = run.health;
+  if (!health || run.archived) return undefined;
+  const actions: IncidentAction[] = ["open_terminal"];
+  if (health.health === "suspected_stall") return { title: health.title ?? "Aucune progression observée", detail: health.detail ?? "", tone: "doubt", actions };
+  if (health.health === "waiting" && health.wait && SHOWN_WAITS.has(health.wait.reason)) return { title: health.title ?? "Claude Code demande ton attention", detail: health.detail ?? "", tone: "attention", actions };
+  return undefined;
+}
+
+/** The actions of an incident that can actually run on this run, now. */
+export function incidentActions(run: Pick<RunState, "id" | "status" | "sessionActive" | "archived" | "pendingQuestion">, incident: RunIncident): IncidentAction[] {
+  if (incident.status !== "open") return [];
+  // The simulated run has no session process, and is live for as long as it plays.
+  const live = !run.archived && (run.sessionActive === true || (isDemoRun(run.id) && runInProgress(run.status)));
+  return incident.suggestedActions.filter((action) => {
+    if (action === "request_continuation" || action === "stop") return live;
+    if (action === "open_terminal") return !run.archived;
+    if (action === "answer") return Boolean(run.pendingQuestion);
+    return action === "dismiss";
+  });
+}
+
+/** The compact word a row of the side list shows for a run's health, when there is one to show. */
+export function healthBadge(run: { health?: string; incident?: { title: string } }) {
+  if (run.incident) return { label: run.incident.title, tone: run.health === "interrupted" ? "error" as const : "attention" as const };
+  if (run.health === "suspected_stall") return { label: "Aucune progression observée", tone: "doubt" as const };
+  return undefined;
+}

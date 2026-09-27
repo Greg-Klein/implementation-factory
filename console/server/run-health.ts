@@ -212,7 +212,12 @@ export type HealthVerdict = { health: RunHealth; wait?: RunWait; title?: string;
 
 const clock = (at: number) => new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const iso = (at: number) => new Date(at).toISOString();
-const minutes = (ms: number) => Math.max(1, Math.round(ms / 60_000));
+/** "10 minutes", "1 minute", "40 secondes": the silence as a French duration. */
+function duration(ms: number) {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1_000))} seconde${ms >= 1_500 ? "s" : ""}`;
+  const count = Math.round(ms / 60_000);
+  return `${count} minute${count > 1 ? "s" : ""}`;
+}
 
 function waiting(reason: WaitReason, since: number, title: string, detail: string, on?: string, liftedBy?: string): HealthVerdict {
   return { health: "waiting", wait: { reason, since: iso(since), ...(on ? { on } : {}), ...(liftedBy ? { liftedBy } : {}) }, title, detail };
@@ -272,7 +277,7 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   if (signals.unexplainedAttention) return waiting("unknown", signals.unexplainedAttention.since, "Claude Code demande ton attention", signals.unexplainedAttention.message ?? "Le signal ne dit pas pourquoi : regarde le terminal.", "toi");
 
   const running = input.agents.filter((agent) => agent.status === "running");
-  const suspicion = (detail: string): HealthVerdict => ({ health: "suspected_stall", title: "Aucune progression observée", detail: `Aucune nouvelle progression observée depuis ${minutes(quietFor)} minutes. ${detail}` });
+  const suspicion = (detail: string): HealthVerdict => ({ health: "suspected_stall", title: "Aucune progression observée", detail: `Aucune nouvelle progression observée depuis ${duration(quietFor)}. ${detail}` });
 
   if (running.length > 0) {
     if (quietFor >= policy.suspicionMs) return suspicion(running.length > 1 ? `${running.length} agents sont toujours déclarés actifs.` : "Un agent est toujours déclaré actif.");
@@ -292,7 +297,9 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
 
   // The pilot handed control back, and no agent or command of its own is at work.
   const idleSince = signals.pilotIdleSince;
-  const idleFor = now - after(idleSince);
+  // An agent ending wakes the pilot up: the grace runs from the last thing that could have woken it.
+  const lastAgentEnd = Math.max(0, ...input.agents.flatMap((agent) => agent.endedAt ? [new Date(agent.endedAt).getTime()] : []));
+  const idleFor = now - after(Math.max(idleSince, lastAgentEnd));
   const workflow = input.workflow;
   const declared = workflow?.nextAction;
   if (signals.backgroundWaits.length > 0) {

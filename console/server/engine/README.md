@@ -62,11 +62,13 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 |---|---|
 | `agent.start` / `agent.stop` | met à jour la liste des agents, fait avancer la phase |
 | `agent.kill` | clôt un agent arrêté de l'extérieur (Claude Code n'émet pas de fin pour lui) |
-| `tool.start` | nomme l'action en cours dans l'interface, détecte la création de branche |
-| `tool.end` | y cherche l'adresse de la merge request |
+| `tool.start` | nomme l'action en cours dans l'interface, détecte la création de branche ; porte l'identifiant de l'appel (`toolUseId`), le sous-agent appelant (`agentId`, absent pour le pilote), si l'appel travaille en arrière-plan (`background`) et si une fin sera rapportée (`endReported`) |
+| `tool.end` | y cherche l'adresse de la merge request, et clôt l'appel de même `toolUseId` |
 | `question` | **bloque l'agent** jusqu'à la réponse de l'utilisateur |
-| `attention` | l'agent réclame la main |
-| `turn.end` | l'agent rend la main, ce qui ne veut pas dire que le workflow est fini |
+| `attention` | l'agent réclame la main, avec sa cause : `permission`, `terminal_interaction` ou `unknown` |
+| `turn.end` | le **pilote** rend la main, ce qui ne veut pas dire que le workflow est fini (la fin d'un sous-agent est `agent.stop`) |
+
+Ces champs ne sont remplis que quand Claude Code les fournit vraiment : `tool_use_id` et `agent_id` des hooks d'outils, `notification_type` des notifications. Un champ absent reste inconnu, et la santé du run (`server/run-health.ts`) s'en accommode. `END_REPORTED_TOOLS` doit rester égal au matcher `PostToolUse` de `hooks/hooks.json`, ce que vérifie un test.
 
 Deux détails qui comptent dans la traduction :
 

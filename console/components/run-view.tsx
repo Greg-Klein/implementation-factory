@@ -3,10 +3,11 @@
 import { ChatCircleDotsIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
-import type { RunState } from "@/lib/types";
+import type { IncidentAction, IncidentResult, RunIncident, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
 import { EvidencePanel } from "./evidence-panel";
+import { IncidentPanel } from "./incident-panel";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 import { TrackingPanel } from "./tracking-panel";
@@ -21,14 +22,16 @@ export type RunViewActions = {
   feedback: (body: string) => void;
   stop: () => void;
   close: () => void;
+  incident: (incident: RunIncident, action: IncidentAction, reason?: string) => void;
 };
 
-export function RunView({ run, connected, writing, terminalRef, actions }: {
+export function RunView({ run, connected, writing, terminalRef, actions, incidentResult }: {
   run: RunState;
   connected: boolean;
   writing: boolean;
   terminalRef: RefObject<TerminalHandle | null>;
   actions: RunViewActions;
+  incidentResult?: IncidentResult;
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
@@ -117,9 +120,11 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
             */}
             {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient ce dépôt. Elle se fermera d'elle-même si un run en file l'attend." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
             {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
-            {isClosable(run) && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-white hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
+            {run.archived && <span title="Run d’une session précédente, relu depuis son archive : il n’a plus de session et ne reçoit aucune instruction." className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">Archive</span>}
+            {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-white hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
           </div>
         </div>
+        <IncidentPanel run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
         </div>

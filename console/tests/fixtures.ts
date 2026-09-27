@@ -46,3 +46,30 @@ export function createGitCheckout(name: string) {
   git("commit", "-q", "-m", "init");
   return { directory, project: `group/${name}`, issueUrl: `https://gitlab.com/group/${name}/-/issues/1` };
 }
+
+/** Where the stand-in `claude` writes what it receives on its terminal, one file per run. */
+export const fakeClaudeInputDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "claude-input");
+
+/** The run a restart found in progress, seeded before the suite's console boots. */
+export const interruptedRunId = "2026-09-27T08-00-00-000Z-interrupt";
+
+/**
+ * Hands the suite's console a clean data directory, holding one run an earlier
+ * process left mid-flight: its boot has to reconcile it into a read-only
+ * archive with an interruption incident, which only a real start can show.
+ */
+export function prepareDataDirectory() {
+  rmSync(dataDirectory, { recursive: true, force: true });
+  rmSync(fakeClaudeInputDirectory, { recursive: true, force: true });
+  mkdirSync(fakeClaudeInputDirectory, { recursive: true });
+  const runDirectory = path.join(dataDirectory, "runs", interruptedRunId);
+  mkdirSync(runDirectory, { recursive: true });
+  writeFileSync(path.join(runDirectory, "run.json"), JSON.stringify({
+    id: interruptedRunId, status: "attention", phase: 6, cwd: path.join(checkoutsRoot, "interrupted"), issueUrl: "https://gitlab.com/group/interrupted/-/issues/7",
+    ticketTitle: "Corriger l’export des factures", instruction: "", startedAt: "2026-09-27T08:00:00.000Z", endedAt: null,
+    agents: [{ id: "a1", name: "implementation-harness:qa-reviewer", status: "running", startedAt: "2026-09-27T08:20:00.000Z" }],
+    activities: [{ id: "e1", at: "2026-09-27T08:20:00.000Z", kind: "agent", title: "qa-reviewer démarre" }],
+    messages: [], artifacts: ["ticket-context.md"], sessionActive: true,
+    pendingQuestion: { id: "q1", questions: [{ question: "Faut-il garder l’ancien format ?", header: "Format", options: [{ label: "Oui" }], multiSelect: false }] },
+  }, null, 2));
+}

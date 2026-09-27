@@ -92,6 +92,13 @@ describe("a pilot with nothing next", () => {
     expect(evaluateRunHealth(idle, T0 + minutes(5), policy).incident!.fingerprint).toBe(verdict.incident!.fingerprint);
   });
 
+  it("should give the pilot its whole grace to wake up after the last agent ends", () => {
+    const ended = agent({ status: "completed", endedAt: new Date(T0 + minutes(5)).toISOString(), name: "implementation-harness:senior-reviewer" });
+    const idle = input({ agents: [ended] }, { pilotIdleSince: T0 });
+    expect(evaluateRunHealth(idle, T0 + minutes(5) + seconds(10), policy).incident).toBeUndefined();
+    expect(evaluateRunHealth(idle, T0 + minutes(6) + seconds(1), policy).incident?.fingerprint).toBe(`no_next_action:${T0}`);
+  });
+
   it("should not let a declared wait on an agent hide that no agent is running", () => {
     const declared = workflow({ state: "waiting", nextAction: { kind: "await_agent", taskIds: ["T3"], agents: ["developer"] } });
     const verdict = evaluateRunHealth(input({ workflow: declared }, { pilotIdleSince: T0 }), T0 + minutes(2), policy);

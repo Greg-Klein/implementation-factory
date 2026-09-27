@@ -1,7 +1,8 @@
 "use client";
 
 import { CaretRightIcon, CheckCircleIcon, MinusCircleIcon, WarningCircleIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { acceptanceUrl, artifactUrl } from "@/lib/run-state";
 import type {
   AcceptanceCheckView, AcceptanceCriterionView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
   EvidenceItem, EvidenceReport, EvidenceVerdict, EvidenceView, RunState,
@@ -34,8 +35,11 @@ const SOURCE_LABEL: Record<EvidenceView["source"], string> = { qa: "QA", design:
 const METHOD_LABEL: Record<string, string> = { test: "test", browser: "navigateur", static_analysis: "analyse statique", manual: "manuel" };
 const IMAGE = /\.(?:png|jpe?g)$/i;
 
-async function fetchArtifact(runId: string, path: string): Promise<ArtifactResponse> {
-  const response = await fetch(`/api/artifacts?runId=${encodeURIComponent(runId)}&path=${encodeURIComponent(path)}`);
+/** Whether the run on screen is read back from its archive, whose documents have routes of their own. */
+const ArchivedRun = createContext(false);
+
+async function fetchArtifact(runId: string, path: string, archived: boolean): Promise<ArtifactResponse> {
+  const response = await fetch(artifactUrl({ id: runId, archived }, path));
   const result = await response.json() as ArtifactResponse;
   if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
   return result;
@@ -72,13 +76,14 @@ function Lightbox({ image, label, onClose }: { image: string; label: string; onC
 function Screenshot({ runId, path, label = path }: { runId: string; path: string; label?: string }) {
   const [image, setImage] = useState<string>();
   const [enlarged, setEnlarged] = useState(false);
+  const archived = useContext(ArchivedRun);
   useEffect(() => {
     let cancelled = false;
-    fetchArtifact(runId, path)
+    fetchArtifact(runId, path, archived)
       .then((result) => { if (!cancelled && result.encoding === "base64" && result.contentType) setImage(`data:${result.contentType};base64,${result.content}`); })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [runId, path]);
+  }, [runId, path, archived]);
   if (!image) return null;
   return (
     <>
@@ -231,18 +236,19 @@ function Section({ title, file, run }: { title: string; file: string; run: RunSt
   const [report, setReport] = useState<EvidenceReport>();
   const [error, setError] = useState<string>();
   const present = run.artifacts.includes(file);
+  const archived = Boolean(run.archived);
 
   useEffect(() => {
     if (!present) { setReport(undefined); setError(undefined); return; }
     let cancelled = false;
-    fetchArtifact(run.id ?? "", file)
+    fetchArtifact(run.id ?? "", file, archived)
       .then((result) => { if (cancelled) return; try { setReport(JSON.parse(result.content) as EvidenceReport); } catch { setError("Document illisible."); } })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Erreur."); });
     return () => { cancelled = true; };
     // evidenceUpdatedAt is what tells a rewrite: a later review round overwrites
     // the same file, so nothing else in the state moves and the tab would keep
     // showing the findings of the first round.
-  }, [file, present, run.id, run.evidenceUpdatedAt]);
+  }, [file, present, run.id, run.evidenceUpdatedAt, archived]);
 
   return (
     <section className="mb-6 last:mb-0">
@@ -265,7 +271,7 @@ function useAcceptance(run: RunState) {
   useEffect(() => {
     if (!run.id) return;
     let cancelled = false;
-    fetch(`/api/runs/${encodeURIComponent(run.id)}/acceptance`)
+    fetch(acceptanceUrl(run))
       .then(async (response) => {
         const body = await response.json() as AcceptanceView & { error?: string };
         if (cancelled) return;
@@ -275,7 +281,7 @@ function useAcceptance(run: RunState) {
       })
       .catch(() => { if (!cancelled) setError("Couverture indisponible."); });
     return () => { cancelled = true; };
-  }, [run.id, run.acceptance?.revision, run.evidenceUpdatedAt]);
+  }, [run.id, run.archived, run.acceptance?.revision, run.evidenceUpdatedAt]);
   return { view, error };
 }
 
@@ -311,6 +317,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
   const archivedReports = view?.reports ?? [];
 
   return (
+    <ArchivedRun.Provider value={Boolean(run.archived)}>
     <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-white p-5">
       <section aria-label="Couverture des critères" className="mb-6">
         {error && <p role="alert" className="mb-3 text-[11px] text-red-700">{error}</p>}
@@ -357,5 +364,6 @@ export function EvidencePanel({ run }: { run: RunState }) {
         </div>
       </details>
     </div>
+    </ArchivedRun.Provider>
   );
 }

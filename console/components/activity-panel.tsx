@@ -59,7 +59,7 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
       <section className="shrink-0 border-t border-[var(--line)] p-5">
         <button type="button" disabled={documents.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{documents.length}<ArrowRightIcon size={11} /></span></button>
       </section>
-      {documentsOpen && <DocumentViewer runId={run.id ?? ""} documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} onAnswer={() => { setDocumentsOpen(false); onShowQuestion(); }} />}
+      {documentsOpen && <DocumentViewer runId={run.id ?? ""} archived={Boolean(run.archived)} documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} onAnswer={() => { setDocumentsOpen(false); onShowQuestion(); }} />}
     </aside>
   );
 }

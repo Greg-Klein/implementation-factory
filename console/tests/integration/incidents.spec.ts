@@ -49,12 +49,11 @@ test("should find a pilot with nothing next, send one continuation for two windo
   // Nobody asked anything: the badge says the run is stuck, not that it is the user's turn.
   await expect(page.getByLabel("Progression du run").getByText("Sans suite", { exact: true })).toBeVisible();
 
-  // Two windows, one click each, at the same time. The second button may already be
-  // gone when its click lands: the first answer reaches every window.
-  await Promise.all([
-    page.getByRole("button", { name: "Demander la continuation" }).click(),
-    second.getByRole("button", { name: "Demander la continuation" }).click({ timeout: 3_000 }).catch(() => undefined),
-  ]);
+  // Two windows, one click each, at the same time. Whichever lands first, the other
+  // button may already be gone: the first answer reaches every window. The single
+  // submission checked below is what proves one click went through, and only one.
+  await Promise.all([page, second].map((window) =>
+    window.getByRole("button", { name: "Demander la continuation" }).click({ timeout: 3_000 }).catch(() => undefined)));
   await expect(second.getByText(/Continuation demandée à/)).toBeVisible();
   await expect(band.getByText(/Continuation demandée à/)).toBeVisible();
   await expect.poll(() => submissions(runId)).toBe(1);

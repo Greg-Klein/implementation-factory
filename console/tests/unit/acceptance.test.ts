@@ -271,6 +271,15 @@ describe("acceptance coverage", () => {
       expect(criterion(view, "AC1").status).toBe("verified");
     });
 
+    it("should keep a previous round's gates apart from the current ones", () => {
+      const gate = (round: number) => report("qa-evidence.json", qa([{ id: `QA-R${round}-1`, label: "Lint", verdict: "pass", command: "npm run lint" }], { round }), round);
+      const view = coverage({ reports: [gate(1), gate(2)] });
+      expect(view.general.map((entry) => entry.id)).toEqual(["QA-R2-1"]);
+      expect(view.generalHistory.map((entry) => entry.id)).toEqual(["QA-R1-1"]);
+      const withCopy = coverage({ reports: [gate(1), report("qa-evidence-round1.json", qa([{ id: "QA-R1-1", label: "Lint", verdict: "pass", command: "npm run lint" }], { round: 1 })), gate(2)] });
+      expect(withCopy.general.map((entry) => entry.id)).toEqual(["QA-R2-1"]);
+    });
+
     it("should keep every archived version in the report list, the latest marked current", () => {
       const view = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([]), 2)] });
       expect(view.reports.map((entry) => [entry.version, entry.current])).toEqual([[1, false], [2, true]]);

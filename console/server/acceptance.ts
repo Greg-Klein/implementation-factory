@@ -27,6 +27,7 @@ const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 const VERDICTS = new Set(["pass", "fail", "not_run", "measured", "confirmed", "unverified"]);
 const METHODS = new Set<EvidenceMethod>(["test", "browser", "static_analysis", "manual"]);
 const BASES = new Set<EvidenceBasis>(["observed", "reported", "confirmation"]);
+const ROUND_COPY = /-round\d+\.json$/;
 
 type Diagnostics = AcceptanceDiagnostic[];
 
@@ -348,6 +349,11 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   const unique = new Map<string, EvidenceRecord>();
   for (const { records } of input.reports) for (const entry of records) if (!unique.has(entry.identity)) unique.set(entry.identity, entry);
   const records = [...unique.values()].map((entry) => ({ ...entry, view: { ...entry.view, freshness: freshnessOf(entry, input) } }));
+  // What the latest version of some report still says, as opposed to what only an older version said.
+  // A `-roundN` copy is the orchestrator's archive of a finished round: history by construction.
+  const stillReported = new Set(input.reports
+    .filter(({ version }) => latestVersion.get(version.file) === version.version && !ROUND_COPY.test(version.file))
+    .flatMap(({ records: current }) => current.map((entry) => entry.identity)));
   const byId = new Map<string, typeof records>();
   for (const entry of records) if (entry.view.id) byId.set(entry.view.id, [...byId.get(entry.view.id) ?? [], entry]);
   for (const [id, sharing] of byId) {
@@ -500,9 +506,11 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     ...(input.registry ? { registryRevision: input.registry.revision } : {}),
     updatedAt: input.now,
     counts,
+    sentence: coverageSentence(counts),
     ...(input.currentSnapshot ? { currentSnapshot: input.currentSnapshot } : {}),
     criteria: shown,
-    general: finalRecords.filter((entry) => general.has(entry.identity)).map((entry) => entry.view),
+    general: finalRecords.filter((entry) => general.has(entry.identity) && stillReported.has(entry.identity)).map((entry) => entry.view),
+    generalHistory: finalRecords.filter((entry) => general.has(entry.identity) && !stillReported.has(entry.identity)).map((entry) => entry.view),
     diagnostics: dedupeDiagnostics(diagnostics),
     reports,
   };

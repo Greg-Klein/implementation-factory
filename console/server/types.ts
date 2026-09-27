@@ -97,10 +97,14 @@ export type AcceptanceView = {
   registryRevision?: number;
   updatedAt: string;
   counts: AcceptanceCounts;
+  /** "5 critères vérifiés sur 8 · 1 échec · …", the same sentence in the tab and in the merge request. */
+  sentence: string;
   currentSnapshot?: { id: string; capturedAt: string };
   criteria: AcceptanceCriterionView[];
   /** Gates that verify the change as a whole, lint or typecheck, never counted against a criterion. */
   general: EvidenceView[];
+  /** General checks only an earlier version of a report still carries, a previous round's lint for instance. */
+  generalHistory: EvidenceView[];
   diagnostics: AcceptanceDiagnostic[];
   reports: AcceptanceReportVersion[];
 };

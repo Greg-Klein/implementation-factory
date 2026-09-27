@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+// Stands in for Claude Code in the integration suite: a session that starts,
+// waits at its prompt and quits when the console stops it. The tests write the
+// workflow's documents themselves, so the real ingestion path runs without a model.
+process.stdout.write("fake claude ready\r\n");
+const quit = () => process.exit(0);
+process.on("SIGHUP", quit);
+process.on("SIGTERM", quit);
+setInterval(() => {}, 1 << 30);

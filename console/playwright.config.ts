@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, hookToken } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, hookToken } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -31,6 +31,10 @@ export default defineConfig({
       // start a real improvement session on this checkout.
       IMPL_SELF_IMPROVEMENT_AUTORUN: "false",
       IMPL_HOOK_TOKEN: hookToken,
+      // Runs the suite starts for real land here, not in the developer's own history.
+      IMPL_DATA_DIR: dataDirectory,
+      // A launched run gets a stand-in session instead of a real Claude Code.
+      PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

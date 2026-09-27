@@ -37,7 +37,7 @@ Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne l
 | `id`, `label` | identité du moteur | `label` apparaît dans les erreurs et le journal d'activité |
 | `locate()` | l'exécutable, ou `null` | nom du binaire |
 | `command(issueUrl, instruction)` | point d'entrée du workflow | forme de la commande, ici une commande slash |
-| `start(options)` | démarre la session, rend un `EngineSession` | arguments, variables d'environnement, transport |
+| `start(options)` | démarre la session, rend un `EngineSession`. `options.environment` porte les variables que le workflow lit (`IMPL_CODE_SNAPSHOT`, `IMPL_SNAPSHOT_LOG`, `IMPL_SNAPSHOT_EXCLUDE`), posées telles quelles | arguments, variables d'environnement, transport |
 | `taskDirectory(cwd)` | où le workflow dépose ses documents | `.claude/tasks` pour Claude Code |
 | `transcriptPath(payload)` | le fichier d'où se lit le dialogue | nommé par l'agent dans ses propres événements |
 | `conversationLine(line)` | une ligne de ce fichier | format JSONL propre à l'agent |

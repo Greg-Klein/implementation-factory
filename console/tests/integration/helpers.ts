@@ -89,3 +89,26 @@ export async function currentRunState(request: APIRequestContext) {
 export async function artifact(request: APIRequestContext, runId: string, path: string) {
   return request.get(`/api/artifacts?runId=${encodeURIComponent(runId)}&path=${encodeURIComponent(path)}`);
 }
+
+/**
+ * Launches a real run, with the stand-in `claude` of tests/fake-claude as its
+ * session, and returns its identifier once the console holds it.
+ */
+export async function startRun(page: Page, request: APIRequestContext, cwd: string, issueUrl: string) {
+  const before = new Set((await (await request.get("/api/runs")).json() as { runs: RunSummary[] }).runs.map((run) => run.id));
+  await page.evaluate(({ cwd: directory, issueUrl: url }) => new Promise<void>((resolve, reject) => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const timeout = window.setTimeout(() => { socket.close(); reject(new Error("run.start timeout")); }, 8_000);
+    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "run.start", cwd: directory, issueUrl: url })));
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data) as { type: string; message?: string };
+      if (message.type === "error") { window.clearTimeout(timeout); socket.close(); reject(new Error(message.message)); }
+      if (message.type === "run") { window.clearTimeout(timeout); socket.close(); resolve(); }
+    });
+  }), { cwd, issueUrl });
+  const snapshot = await (await request.get("/api/runs")).json() as { runs: RunSummary[] };
+  const started = snapshot.runs.find((run) => !before.has(run.id));
+  expect(started, "le run lancé doit apparaître").toBeDefined();
+  return started!.id;
+}

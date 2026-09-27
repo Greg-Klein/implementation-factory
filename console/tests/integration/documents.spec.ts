@@ -29,7 +29,8 @@ test("should keep the document reader open until clarification requires an answe
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
 
-  await expect(documents).toContainText("3");
+  // Ticket context, criteria registry, plan and planner output.
+  await expect(documents).toContainText("4");
   await documents.click();
   await reader.getByRole("button", { name: "implementation-plan.md" }).click();
   await expect(reader.getByText("Ajouter le modèle de préférences.")).toBeVisible();

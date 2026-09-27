@@ -101,6 +101,6 @@ export type AcceptanceCriterionView = {
 export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
 export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean };
 export type AcceptanceView = {
-  available: boolean; registryRevision?: number; updatedAt: string; counts: AcceptanceCounts; currentSnapshot?: { id: string; capturedAt: string };
-  criteria: AcceptanceCriterionView[]; general: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[];
+  available: boolean; registryRevision?: number; updatedAt: string; counts: AcceptanceCounts; sentence: string; currentSnapshot?: { id: string; capturedAt: string };
+  criteria: AcceptanceCriterionView[]; general: EvidenceView[]; generalHistory: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[];
 };

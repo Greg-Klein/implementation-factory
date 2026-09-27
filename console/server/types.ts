@@ -18,8 +18,92 @@ export type PendingSelfImprovementReview = { worktreeName: string; branch?: stri
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 /** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
-/** `assignee`: the agent that last took the task, by id and by the name and role the interface calls it. */
-export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string } };
+/**
+ * `assignee`: the agent that last took the task, by id and by the name and role the interface calls it.
+ * `criterionIds` and `dependencies` are kept as the plan wrote them. "done" means a report exists, never that a criterion is verified.
+ */
+export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[] };
+
+/** What the server concluded about one acceptance criterion, or one of its checks. See server/acceptance.ts. */
+export type AcceptanceStatus = "verified" | "unverified" | "blocked" | "failed";
+export type AcceptanceCounts = { total: number; verified: number; failed: number; blocked: number; unverified: number; stale: number };
+/**
+ * The compact side of the "Preuves" tab, carried by the run state and the side list.
+ * `available`: the run wrote a criteria registry; without one the tab falls back on the reports alone.
+ * `revision` moves every time the computation is redone with a different result.
+ */
+export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number };
+
+export type EvidenceSource = "qa" | "design" | "developer";
+export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
+/** `observed`: a measurement the producer made; `reported`: what an agent says of its own work; `confirmation`: a check of an earlier piece of evidence, named by `confirms`. */
+export type EvidenceBasis = "observed" | "reported" | "confirmation";
+/**
+ * Whether a piece of evidence describes the code as it stands: `stale` when the
+ * code changed since, `unknown` when its version cannot be established,
+ * `inconclusive` when the code moved while it was being measured.
+ */
+export type EvidenceFreshness = "current" | "stale" | "unknown" | "inconclusive";
+/** `path`: where the archived copy is read from (artifacts API); `source`: the file the producer named, relative to the task directory. */
+export type EvidenceAttachmentView = { source: string; path?: string; archived: boolean };
+export type EvidenceView = {
+  /** Unique within the run: the report file, its archived version and the item. */
+  key: string;
+  id?: string;
+  label: string;
+  verdict: string;
+  source: EvidenceSource;
+  file: string;
+  version: number;
+  receivedAt: string;
+  round?: number;
+  producer?: { role?: string; agentId?: string };
+  observedAt?: string;
+  method?: EvidenceMethod;
+  basis: EvidenceBasis;
+  expected?: string;
+  actual?: string;
+  command?: string;
+  note?: string;
+  criterionIds: string[];
+  checkIds: string[];
+  taskIds: string[];
+  snapshotId?: string;
+  freshness: EvidenceFreshness;
+  supersedes: string[];
+  supersededBy?: string;
+  confirms?: string;
+  blocker?: { reason: string; action?: string };
+  attachments: EvidenceAttachmentView[];
+};
+export type AcceptanceCheckView = { id: string; description: string; method?: EvidenceMethod; status: AcceptanceStatus; reasons: string[]; evidence: EvidenceView[]; history: EvidenceView[] };
+export type AcceptanceCriterionView = {
+  id: string; text: string; status: AcceptanceStatus;
+  source?: { kind: string; reference?: string; excerpt?: string };
+  expected?: string;
+  tasks: { id: string; title: string }[];
+  checks: AcceptanceCheckView[];
+  /** Evidence naming the criterion without saying which of its checks it covers: shown, never counted. */
+  unassigned: EvidenceView[];
+  reasons: string[];
+  /** Rebuilt from an older plan that had no identifiers: never verified. */
+  reconstructed?: boolean;
+};
+export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
+export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean };
+/** Everything the "Preuves" tab shows about one run, computed once on the server and reused by the merge request summary. */
+export type AcceptanceView = {
+  available: boolean;
+  registryRevision?: number;
+  updatedAt: string;
+  counts: AcceptanceCounts;
+  currentSnapshot?: { id: string; capturedAt: string };
+  criteria: AcceptanceCriterionView[];
+  /** Gates that verify the change as a whole, lint or typecheck, never counted against a criterion. */
+  general: EvidenceView[];
+  diagnostics: AcceptanceDiagnostic[];
+  reports: AcceptanceReportVersion[];
+};
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 export type RunState = {
@@ -37,6 +121,8 @@ export type RunState = {
   planTasks?: PlanTask[];
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
+  /** Acceptance coverage in figures; the full view is served by /api/runs/<id>/acceptance. */
+  acceptance?: AcceptanceDigest;
 };
 
 /**
@@ -60,6 +146,8 @@ export type RunSummary = {
   lastMessageId?: string;
   lastMessageAuthor?: ConversationMessage["author"];
   evidenceUpdatedAt?: string;
+  /** Acceptance figures only, and only once the run wrote a criteria registry. */
+  acceptance?: AcceptanceCounts;
   /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
   holdsRepository: boolean;
 };

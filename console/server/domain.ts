@@ -364,6 +364,10 @@ export function phaseForArtifact(relativePath: string) {
   return 0;
 }
 
+function identifierList(value: unknown) {
+  return Array.isArray(value) ? value.flatMap((entry) => normalizeText(entry) ?? []) : [];
+}
+
 /**
  * The tasks of a `planner-output.json`, or undefined when the file is not a
  * plan yet: the planner writes it in one go, but a half-written read must not
@@ -379,7 +383,9 @@ export function plannedTasks(content: string): PlanTask[] | undefined {
     if (!id) return [];
     const title = normalizeText((task as { title?: unknown }).title) ?? id;
     const complexity = normalizeText((task as { complexity?: unknown }).complexity);
-    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const }];
+    const criterionIds = identifierList((task as { criterion_ids?: unknown }).criterion_ids);
+    const dependencies = identifierList((task as { dependencies?: unknown }).dependencies);
+    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const, ...(criterionIds.length ? { criterionIds } : {}), ...(dependencies.length ? { dependencies } : {}) }];
   });
 }
 
@@ -523,6 +529,7 @@ export function summarizeRun(state: RunState): RunSummary {
     lastMessageId: lastMessage?.id,
     lastMessageAuthor: lastMessage?.author,
     evidenceUpdatedAt: state.evidenceUpdatedAt,
+    ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
     holdsRepository: runHoldsRepository(state),
   };
 }

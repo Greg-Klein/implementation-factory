@@ -118,6 +118,20 @@ function toolTarget(input: Record<string, unknown> | undefined) {
   return undefined;
 }
 
+/**
+ * The plan tasks a delegation is about. The workflow hands every developer the
+ * report file it must write, suffixed with its task id, and that suffix is the
+ * only link between an agent launch and the plan.
+ */
+const PLAN_TASK_REPORT = /developer-report-([A-Za-z0-9_.-]+?)\.md/g;
+
+function delegatedPlanTaskIds(tool: string | undefined, input: Record<string, unknown> | undefined) {
+  if (tool !== "Agent" && tool !== "Task") return undefined;
+  const text = [input?.description, input?.prompt].filter((value) => typeof value === "string").join("\n");
+  const ids = [...new Set([...text.matchAll(PLAN_TASK_REPORT)].map((match) => match[1]))];
+  return ids.length > 0 ? ids : undefined;
+}
+
 function event(payload: Record<string, unknown>): EngineEvent | undefined {
   const name = normalizeText(payload.hook_event_name) ?? "Hook";
   if (name === "SubagentStart" || name === "SubagentStop") {
@@ -146,7 +160,8 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   if (name === "PreToolUse") {
     const tool = normalizeText(payload.tool_name);
     if (tool === "AskUserQuestion") return questionEvent(payload);
-    return { kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input) };
+    const planTaskIds = delegatedPlanTaskIds(tool, input);
+    return { kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input), ...(planTaskIds ? { planTaskIds } : {}) };
   }
   if (name === "PostToolUse") {
     // Claude Code fires no SubagentStop for a background agent it kills.

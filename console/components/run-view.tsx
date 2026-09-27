@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatCircleDotsIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
 import type { RunState } from "@/lib/types";
@@ -9,8 +9,9 @@ import { ConversationPanel } from "./conversation-panel";
 import { EvidencePanel } from "./evidence-panel";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
+import { TrackingPanel } from "./tracking-panel";
 
-type Tab = "conversation" | "terminal" | "preuves";
+type Tab = "conversation" | "suivi" | "terminal" | "preuves";
 
 export type RunViewActions = {
   terminalInput: (data: string) => void;
@@ -96,11 +97,11 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2 sm:h-12 sm:flex-nowrap sm:py-0">
           <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
             {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
-            {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
+            {([["conversation", "Conversation"], ["suivi", "Suivi"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
               const fresh = unread[value];
               return (
                 <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
-                  {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
+                  {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "suivi" ? <KanbanIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
                   {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} depuis ta dernière visite de cet onglet`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                 </button>
               );
@@ -121,6 +122,9 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
         </div>
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
+        </div>
+        <div className={tab === "suivi" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+          <TrackingPanel run={run} />
         </div>
         <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
           <TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} />

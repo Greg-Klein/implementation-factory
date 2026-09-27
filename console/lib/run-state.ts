@@ -113,3 +113,4 @@ export function statusLabel(status: Status) {
   if (status === "failed") return "Erreur";
   return "Disponible";
 }
+

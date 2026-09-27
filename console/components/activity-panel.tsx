@@ -5,6 +5,7 @@ import { useState } from "react";
 import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
+import { AgentAvatar, AgentName } from "./agent-avatar";
 import { DocumentViewer } from "./document-viewer";
 
 export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => void; onShowQuestion: () => void }) {
@@ -40,8 +41,11 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
         <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
         {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :
           <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
-            <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsedLabel(agent.startedAt, agent.endedAt, now)}</p></div>
+            {agent.nickname ? <div className="relative">
+              <AgentAvatar nickname={agent.nickname} avatar={agent.avatar} />
+              <span className={`absolute -bottom-0.5 -right-0.5 grid size-3.5 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={9} /> : agent.status === "failed" ? <WarningIcon size={9} weight="fill" /> : <CheckIcon size={8} weight="bold" />}</span>
+            </div> : <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>}
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium" title={agent.name}><AgentName name={agent.name} nickname={agent.nickname} role={agent.role} /></p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsedLabel(agent.startedAt, agent.endedAt, now)}</p></div>
           </div>)}</div>}
       </section>}
       {/*

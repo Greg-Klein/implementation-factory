@@ -1,4 +1,4 @@
-import { actionLabel, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
+import { actionLabel, agentIdentity, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { now } from "./context.js";
 import { continueDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
@@ -88,7 +88,11 @@ export function clearPendingQuestion(session: RunSession) {
 
 function apply(session: RunSession, event: EngineEvent) {
   if (event.kind === "agent.start") {
-    session.state.agents = [{ id: event.agentId, name: event.agentName, status: "running", startedAt: now() }, ...session.state.agents.filter((agent) => agent.id !== event.agentId)];
+    const known = session.state.agents.find((agent) => agent.id === event.agentId);
+    const identity = known?.nickname ? { nickname: known.nickname, avatar: known.avatar } : agentIdentity(session.state.agents.length);
+    session.state.agents = [{ id: event.agentId, name: event.agentName, ...identity, role: agentRole(event.agentName), status: "running", startedAt: now() }, ...session.state.agents.filter((agent) => agent.id !== event.agentId)];
+    if (!known && session.state.planDelegations) session.state.planDelegations = pairDelegation(session.state.planDelegations, event.agentName, event.agentId);
+    session.refreshPlanTasks();
     session.activity("agent", `${event.agentName} démarre`);
     advancePhase(session, phaseForAgent(event.agentName));
     resumeFromAttention(session);
@@ -121,6 +125,10 @@ function apply(session: RunSession, event: EngineEvent) {
   // indicator, which holds one line and forgets it.
   if (event.kind === "tool.start") {
     session.state.action = actionLabel(event.tool, event.command, event.target);
+    if (event.planTaskIds && isDeveloperDelegation(event.target)) {
+      session.state.planDelegations = [...session.state.planDelegations ?? [], { agentType: event.target ?? "", taskIds: event.planTaskIds }];
+      session.refreshPlanTasks();
+    }
     if (createsBranch(event.command)) {
       advancePhase(session, 3);
       rememberBranch(session, event.command);

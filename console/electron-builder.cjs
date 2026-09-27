@@ -8,7 +8,7 @@ module.exports = {
   asar: false,
   npmRebuild: false, // node-pty 1.1 uses Node-API; its prebuild works in Node and Electron.
   files: [
-    "electron/**/*", ".desktop/**/*", ".next/**/*", "!.next/cache/**/*", "!.next/dev/**/*",
+    "electron/**/*", ".desktop/**/*", ".next/**/*", "public/**/*", "!.next/cache/**/*", "!.next/dev/**/*",
     "next.config.ts", "tsconfig.json", "package.json",
   ],
   extraResources: [{

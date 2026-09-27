@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { AgentState, QueuedRun, QueuedRunView, RunState, RunStatus, RunSummary } from "./types.js";
+import type { AgentState, PlanDelegation, PlanTask, QueuedRun, QueuedRunView, RunState, RunStatus, RunSummary } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -362,6 +362,95 @@ export function phaseForArtifact(relativePath: string) {
   if (name === "mr-description.md") return 8;
   if (name === "mr-review-comment.md") return 9;
   return 0;
+}
+
+/**
+ * The tasks of a `planner-output.json`, or undefined when the file is not a
+ * plan yet: the planner writes it in one go, but a half-written read must not
+ * wipe the board it already feeds.
+ */
+export function plannedTasks(content: string): PlanTask[] | undefined {
+  let plan: unknown;
+  try { plan = JSON.parse(content); } catch { return undefined; }
+  const tasks = (plan as { tasks?: unknown } | null)?.tasks;
+  if (!Array.isArray(tasks)) return undefined;
+  return tasks.flatMap((task) => {
+    const id = normalizeText((task as { id?: unknown } | null)?.id);
+    if (!id) return [];
+    const title = normalizeText((task as { title?: unknown }).title) ?? id;
+    const complexity = normalizeText((task as { complexity?: unknown }).complexity);
+    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const }];
+  });
+}
+
+function agentType(name: string) {
+  return name.slice(name.lastIndexOf(":") + 1);
+}
+
+/** Only a developer works a plan task: a reviewer handed the reports to read is not starting one. */
+export function isDeveloperDelegation(target: string | undefined) {
+  return target !== undefined && agentType(target) === "developer";
+}
+
+/** Women and men alternate so agents launched together look apart. Each name is bound to its own picture in public/avatars. */
+const NICKNAMES = [
+  { name: "Léa", avatar: "lea" }, { name: "Tom", avatar: "tom" },
+  { name: "Chloé", avatar: "chloe" }, { name: "Hugo", avatar: "hugo" },
+  { name: "Inès", avatar: "ines" }, { name: "Louis", avatar: "louis" },
+  { name: "Manon", avatar: "manon" }, { name: "Jules", avatar: "jules" },
+  { name: "Zoé", avatar: "zoe" }, { name: "Arthur", avatar: "arthur" },
+  { name: "Camille", avatar: "camille" }, { name: "Paul", avatar: "paul" },
+];
+
+const ROLES: Record<string, string> = {
+  developer: "Dev",
+  "ticket-planner": "Planif",
+  "senior-reviewer": "Revue",
+  "qa-reviewer": "QA",
+  "designer-reviewer-figma": "Design",
+  "review-orchestrator": "Orchestration",
+  Explore: "Exploration",
+};
+
+/** The short French role an agent type is shown under, or the bare type when it has none. */
+export function agentRole(name: string) {
+  const type = agentType(name);
+  return ROLES[type] ?? type;
+}
+
+/** The first name and picture of the agent started in that position of the run, the name numbered once the pool has gone round. */
+export function agentIdentity(index: number) {
+  const { name, avatar } = NICKNAMES[index % NICKNAMES.length];
+  const round = Math.floor(index / NICKNAMES.length);
+  return { nickname: round === 0 ? name : `${name} ${round + 1}`, avatar: `/avatars/${avatar}.webp` };
+}
+
+/**
+ * Pairs a starting agent with the oldest unpaired delegation of its type. The
+ * launch names the tasks but not the agent, the start names the agent but not
+ * the tasks, and Claude Code starts agents in the order it launched them.
+ */
+export function pairDelegation(delegations: PlanDelegation[], startedType: string, agentId: string) {
+  const index = delegations.findIndex((delegation) => !delegation.agentId && agentType(delegation.agentType) === agentType(startedType));
+  if (index === -1) return delegations;
+  return delegations.map((delegation, position) => position === index ? { ...delegation, agentId } : delegation);
+}
+
+/**
+ * Where each plan task stands: done once its report exists, whatever relaunch
+ * came after, in progress once a developer was handed it. The assignee is the
+ * agent of the latest paired delegation, so a reworked task follows its new agent.
+ */
+export function planTaskBoard(tasks: PlanTask[], delegations: PlanDelegation[], agents: AgentState[], artifacts: string[]): PlanTask[] {
+  const reports = new Set(artifacts.map((artifact) => path.basename(artifact)));
+  return tasks.map(({ assignee: _previous, ...task }) => {
+    const handed = delegations.filter((delegation) => delegation.taskIds.includes(task.id));
+    const agentId = handed.findLast((delegation) => delegation.agentId)?.agentId;
+    const agent = agentId ? agents.find((candidate) => candidate.id === agentId) : undefined;
+    const status = reports.has(`developer-report-${task.id}.md`) ? "done" as const : handed.length > 0 ? "in_progress" as const : "todo" as const;
+    if (!agentId) return { ...task, status };
+    return { ...task, status, assignee: { agentId, nickname: agent?.nickname, avatar: agent?.avatar, role: agent?.role } };
+  });
 }
 
 export function emptyState(): RunState {

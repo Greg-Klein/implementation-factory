@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
-import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, watchedForArtifacts } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -74,6 +74,11 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   // watcher firing twice on one write does not read as a second change.
   if (isPanelEvidence(relative)) session.state.evidenceUpdatedAt = new Date(writtenAt).toISOString();
   if (isEvidenceReport(relative)) await archiveEvidenceScreenshots(session, source, taskRoot);
+  if (relative === "planner-output.json") {
+    const tasks = plannedTasks(await readFile(source, "utf8").catch(() => ""));
+    if (tasks) session.state.planTasks = tasks;
+  }
+  session.refreshPlanTasks();
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) session.state.phase = Math.max(session.state.phase, completedPhase + 1);

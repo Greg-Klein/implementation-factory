@@ -1,7 +1,9 @@
 import { demoStepDuration } from "./config.js";
 import { now } from "./context.js";
+import { demoArtifactContents } from "./demo-data.js";
+import { agentIdentity, agentRole, pairDelegation, plannedTasks } from "./domain.js";
 import type { RunSession } from "./run-session.js";
-import type { PendingSelfImprovementReview } from "./types.js";
+import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
 /** The demo has no real worktree to list, so it fakes one entry alongside the real ones. */
 export const demoState: { pendingImprovement?: PendingSelfImprovementReview } = {};
@@ -15,6 +17,24 @@ function demoTerminal(session: RunSession, message: string) {
   session.appendTerminal(`\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`);
   session.conversationMessage({ id: `demo-${crypto.randomUUID()}`, at: now(), author: "claude", text: message });
   session.publish();
+}
+
+/** A developer handed one plan task, named and paired the way hooks.ts does it for a real run. */
+function delegateDemoTask(session: RunSession, taskId: string) {
+  const id = `demo-developer-${taskId}`;
+  const agent: AgentState = { id, name: "developer", ...agentIdentity(session.state.agents.length), role: agentRole("developer"), status: "running", startedAt: now() };
+  session.state.agents = [agent, ...session.state.agents];
+  session.state.planDelegations = pairDelegation([...session.state.planDelegations ?? [], { agentType: "developer", taskIds: [taskId] }], "developer", id);
+  session.activity("agent", `${agent.nickname} · ${agent.role} démarre`, taskId);
+}
+
+function finishDemoTask(session: RunSession, taskId: string) {
+  session.state.agents = session.state.agents.map((agent) => agent.id === `demo-developer-${taskId}` ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
+  session.state.artifacts = [...session.state.artifacts, `developer-report-${taskId}.md`];
+}
+
+function startDemoReviewer(session: RunSession) {
+  session.state.agents = [{ id: "demo-reviewer", name: "senior-reviewer", ...agentIdentity(session.state.agents.length), role: agentRole("senior-reviewer"), status: "running", startedAt: now() }, ...session.state.agents];
 }
 
 export function acknowledgeDemoInstruction(session: RunSession) {
@@ -90,26 +110,35 @@ export function continueDemoRun(session: RunSession) {
   });
   scheduleDemo(session, demoStepDuration, () => {
     session.state.phase = 4;
-    session.state.artifacts = [...session.state.artifacts, "implementation-plan.md"];
+    session.state.artifacts = [...session.state.artifacts, "implementation-plan.md", "planner-output.json"];
+    session.state.planTasks = plannedTasks(demoArtifactContents["planner-output.json"]);
     session.activity("artifact", "Plan d’implémentation validé", "implementation-plan.md");
+    session.refreshPlanTasks();
     session.publish();
     demoTerminal(session, "Plan découpé en composants, tests et migration de données.");
   });
   scheduleDemo(session, demoStepDuration * 2, () => {
     session.state.phase = 5;
     session.state.action = "Délégation à developer";
-    session.state.agents = [{ id: "demo-developer", name: "developer", status: "running", startedAt: now() }];
-    session.activity("agent", "developer démarre");
+    delegateDemoTask(session, "T1");
+    delegateDemoTask(session, "T2");
+    session.refreshPlanTasks();
     session.publish();
     demoTerminal(session, "Délégation de l'implémentation à l'agent developer…");
   });
+  scheduleDemo(session, demoStepDuration * 2.5, () => {
+    finishDemoTask(session, "T1");
+    delegateDemoTask(session, "T3");
+    session.refreshPlanTasks();
+    session.publish();
+  });
   scheduleDemo(session, demoStepDuration * 3, () => {
     session.state.phase = 6;
-    session.state.agents = [
-      ...session.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
-      { id: "demo-reviewer", name: "senior-reviewer", status: "running" as const, startedAt: now() },
-    ];
+    finishDemoTask(session, "T2");
+    finishDemoTask(session, "T3");
+    startDemoReviewer(session);
     session.state.action = "Exécution des tests";
+    session.refreshPlanTasks();
     session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
     session.state.evidenceUpdatedAt = now();
     session.activity("agent", "Implémentation terminée, vérifications en cours");
@@ -126,18 +155,17 @@ export function continueDemoRun(session: RunSession) {
   });
   scheduleDemo(session, demoStepDuration * 5, () => {
     session.state.phase = 5;
-    session.state.agents = session.state.agents.map((agent) => agent.id === "demo-developer" ? { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined } : agent);
+    delegateDemoTask(session, "T4");
+    session.refreshPlanTasks();
     session.activity("agent", "developer reprend l’implémentation", "Application des deux retours de review");
     session.publish();
     demoTerminal(session, "Boucle vers l’implémentation : correction du fallback et ajout du test manquant…");
   });
   scheduleDemo(session, demoStepDuration * 6, () => {
     session.state.phase = 6;
-    session.state.agents = session.state.agents.map((agent) => {
-      if (agent.id === "demo-developer") return { ...agent, status: "completed" as const, endedAt: now() };
-      if (agent.id === "demo-reviewer") return { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined };
-      return agent;
-    });
+    finishDemoTask(session, "T4");
+    session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined } : agent);
+    session.refreshPlanTasks();
     session.state.artifacts = [...session.state.artifacts, "test-report-round-2.json"];
     session.activity("agent", "Corrections vérifiées", "12 tests passent, dont le nouveau test de régression");
     session.publish();

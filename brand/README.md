@@ -96,6 +96,8 @@ La hiérarchie repose sur la graisse et la couleur plus que sur la taille : on r
 - **Alerte** : `rounded-lg`, bordure et fond de la couleur de statut, icône à gauche, action de reprise soulignée sous le texte.
 - **Pastille de statut** : `rounded-full`, `px-2 py-1`, `text-[10px] font-semibold`, couple fond et texte du statut.
 - **Navigation latérale** : élément actif en fond `--accent-soft` et texte `--accent`, inactif en `--muted` avec survol `white/60`.
+- **Agent** : photo ronde (`public/avatars/`, `object-cover`) liée à son prénom, suivie de « Prénom · Rôle », le prénom en `--ink`, le séparateur et le rôle en `--muted`. Sans photo, l’initiale sur fond `--accent-soft`. Ce sont les seules images de personnes de l’interface : elles distinguent les agents d’un même run, elles ne décorent pas.
+- **Carte de tâche (Suivi)** : fond blanc, bordure `--line`, `rounded-lg`, posée sur une colonne `--paper`. Cercle vide à faire, anneau ambre en cours, coche blanche sur `--accent` terminée ; complexité et identifiant en mono `--muted`.
 - **Terminal** : fond `--terminal`, barre de défilement fine `#47504b`. C’est la seule surface sombre de l’application.
 
 Tous les éléments interactifs ont un focus visible : `outline-2`, décalage 2 px, couleur `--accent`. Les actions appuyées descendent d’un pixel (`active:translate-y-px`).

@@ -125,6 +125,19 @@ Aucune.`,
     { "label": "Accessibilité du panneau de préférences", "verdict": "pass", "command": "axe sur le panneau", "actual": "0 violation" }
   ]
 }`,
+  "planner-output.json": JSON.stringify({
+    summary: "Préférences de notification par utilisateur, alertes critiques conservées.",
+    tasks: [
+      { id: "T1", title: "Ajouter le modèle de préférences", complexity: "S" },
+      { id: "T2", title: "Créer le panneau de réglages", complexity: "M" },
+      { id: "T3", title: "Connecter l’enregistrement optimiste", complexity: "M" },
+      { id: "T4", title: "Tester le fallback des alertes critiques", complexity: "S" },
+    ],
+  }, null, 2),
+  "developer-report-T1.md": "# T1 · Modèle de préférences\n\nModèle et migration ajoutés, 3 tests.",
+  "developer-report-T2.md": "# T2 · Panneau de réglages\n\nPanneau accessible au clavier, 4 tests.",
+  "developer-report-T3.md": "# T3 · Enregistrement optimiste\n\nMise à jour optimiste avec retour arrière en cas d’erreur, 3 tests.",
+  "developer-report-T4.md": "# T4 · Fallback des alertes critiques\n\nFuseau horaire pris en compte, test de régression ajouté.",
   "mr-description.md": `# IH-42 · Ajouter les préférences de notification
 
 ## Changements

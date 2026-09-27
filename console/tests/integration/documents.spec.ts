@@ -29,16 +29,16 @@ test("should keep the document reader open until clarification requires an answe
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
 
-  await expect(documents).toContainText("2");
+  await expect(documents).toContainText("3");
   await documents.click();
   await reader.getByRole("button", { name: "implementation-plan.md" }).click();
   await expect(reader.getByText("Ajouter le modèle de préférences.")).toBeVisible();
   await reader.getByRole("button", { name: "Fermer" }).click();
 
   const agents = page.getByRole("region", { name: "Agents" });
-  await expect(agents.getByText("developer", { exact: true })).toBeVisible();
-  await expect(agents.getByText("senior-reviewer", { exact: true })).toBeVisible();
-  await expect(agents.getByText("developer", { exact: true })).toHaveCount(0);
+  await expect(agents.getByText(/ · Dev$/).first()).toBeVisible();
+  await expect(agents.getByText(/ · Revue$/)).toBeVisible();
+  await expect(agents.getByText(/ · Dev$/)).toHaveCount(0);
   expect(browserErrors).toEqual([]);
 });
 

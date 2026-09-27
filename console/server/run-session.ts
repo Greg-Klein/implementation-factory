@@ -3,7 +3,7 @@ import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import { ARCHIVED_ACTIVITIES, broadcastToViewers, now } from "./context.js";
 import { dataRoot } from "./config.js";
-import { emptyState, runHoldsRepository, summarizeRun } from "./domain.js";
+import { emptyState, planTaskBoard, runHoldsRepository, summarizeRun } from "./domain.js";
 import type { EngineSession } from "./engine/index.js";
 import type { Activity, ConversationMessage, RunState } from "./types.js";
 
@@ -76,6 +76,12 @@ export class RunSession {
     this.state.messages = echoed
       ? this.state.messages.map((entry) => (entry === echoed ? message : entry))
       : [...this.state.messages, message].slice(-400);
+  }
+
+  /** Moves the cards of the "Suivi" board after anything they are read from changed: the plan, a delegation, an agent or a report. */
+  refreshPlanTasks() {
+    if (!this.state.planTasks) return;
+    this.state.planTasks = planTaskBoard(this.state.planTasks, this.state.planDelegations ?? [], this.state.agents, this.state.artifacts);
   }
 
   appendTerminal(data: string) {

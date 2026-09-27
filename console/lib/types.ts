@@ -1,12 +1,18 @@
 export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
-export type Agent = { id: string; name: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string };
+export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "orphaned" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
+/** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
+export type PlanTaskStatus = "todo" | "in_progress" | "done";
+/** `assignee`: the agent that last took the task, by id and by the name and role the interface calls it. */
+export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string } };
+/** A developer handed plan tasks, paired with the agent it became once that agent starts. */
+export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 export type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
@@ -18,6 +24,10 @@ export type RunState = {
   evidenceUpdatedAt?: string;
   /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
   ticketTitle?: string;
+  /** The tasks of the plan, absent until `planner-output.json` has been read. */
+  planTasks?: PlanTask[];
+  /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
+  planDelegations?: PlanDelegation[];
 };
 /**
  * A run as the side list sees it. Mirrors RunSummary in server/types.ts: the

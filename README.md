@@ -179,6 +179,8 @@ Un run terminé dont la session est encore ouverte garde sa place. Le bouton **L
 
 Les notifications, le titre de l’onglet et son icône parlent pour tous les runs à la fois, pas seulement pour celui qui est ouvert : le run qui réclame une réponse est rarement celui qu’on regarde. Les messages qui ne concernent aucun run en particulier (une demande mise en file, une amélioration rebasée) s’affichent dans un bandeau sous l’en-tête.
 
+L’onglet **Suivi** affiche les tâches du plan (`planner-output.json`) en trois colonnes, To Do, In Progress et Done. Une tâche passe en cours quand l’orchestrateur la confie à un agent `developer`, et terminée quand son rapport `developer-report-<id>.md` est écrit. Chaque agent d’un run reçoit un prénom et une photo, dans l’ordre où il démarre, et la carte montre l’agent qui porte la tâche, sous la forme « Tom · Dev ». Le même nom apparaît dans le panneau des agents.
+
 Le bouton **Documents générés** ouvre un lecteur intégré pour consulter le contexte du ticket, les plans, rapports de tests, reviews et descriptions de MR conservés pendant le run.
 
 Le lecteur n’interrompt pas l’exécution. Si Claude Code pose une question pendant sa consultation, un bandeau signale la décision attendue et le bouton **Répondre** referme le lecteur pour afficher la carte de clarification.

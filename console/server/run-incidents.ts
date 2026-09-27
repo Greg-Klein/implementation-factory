@@ -141,6 +141,23 @@ export const CONTINUATION_INSTRUCTION = [
 ].join(" ");
 
 /**
+ * When a run was last seen doing anything: its latest activity, message or
+ * agent event. A run whose session died with the server has no end of its own,
+ * and dating it at the restart would count the hours the console was down as
+ * time the run spent working.
+ */
+export function lastKnownActivityAt(state: Pick<Partial<RunState>, "startedAt" | "activities" | "messages" | "agents">): string | undefined {
+  const stamps = [
+    state.startedAt,
+    ...(state.activities ?? []).map((activity) => activity.at),
+    ...(state.messages ?? []).map((message) => message.at),
+    ...(state.agents ?? []).flatMap((agent) => [agent.startedAt, agent.endedAt]),
+  ].filter((value): value is string => typeof value === "string" && Number.isFinite(new Date(value).getTime()));
+  if (!stamps.length) return undefined;
+  return stamps.reduce((latest, value) => new Date(value).getTime() > new Date(latest).getTime() ? value : latest);
+}
+
+/**
  * An archive read back after a restart: every field it may lack filled, and
  * nothing claiming to be live. A decision that was written but never
  * confirmed has an unknown outcome, and stays that way.
@@ -159,7 +176,7 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
   })) : [];
   return {
     id: state.id ?? runId, status: state.status, phase: typeof state.phase === "number" ? state.phase : 0, cwd: state.cwd,
-    issueUrl: state.issueUrl ?? "", instruction: state.instruction ?? "", startedAt: state.startedAt ?? null, endedAt: state.endedAt ?? null,
+    issueUrl: state.issueUrl ?? "", instruction: state.instruction ?? "", startedAt: state.startedAt ?? null, endedAt: state.endedAt ?? lastKnownActivityAt(state) ?? null,
     agents: Array.isArray(state.agents) ? state.agents : [], activities: Array.isArray(state.activities) ? state.activities : [],
     messages: Array.isArray(state.messages) ? state.messages : [], artifacts: Array.isArray(state.artifacts) ? state.artifacts : [],
     ...(state.branch ? { branch: state.branch } : {}), ...(state.mergeRequestUrl ? { mergeRequestUrl: state.mergeRequestUrl } : {}),
@@ -201,7 +218,7 @@ export function interruptRun(state: RunState, now: string): RunState {
   return {
     ...state,
     status: runInProgress(state.status) ? "failed" : state.status,
-    endedAt: state.endedAt ?? now,
+    endedAt: state.endedAt ?? lastKnownActivityAt(state) ?? now,
     sessionActive: false,
     pendingQuestion: undefined,
     action: undefined,

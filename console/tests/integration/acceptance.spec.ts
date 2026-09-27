@@ -154,6 +154,10 @@ test("should show the demo's criteria in every state, with the replaced round in
   await page.getByRole("tab", { name: "Preuves" }).click();
 
   await expect(page.getByTestId("acceptance-sentence")).toHaveText("2 critères vérifiés sur 5 · 1 échec · 1 bloqué · 1 non vérifié");
+  // The row of the run carries the same figures, compact, with the detail in its label.
+  const row = page.getByRole("button", { name: /^Ouvrir le run acme-dashboard/ });
+  await expect(row.getByText("2/5 AC", { exact: true })).toBeVisible();
+  await expect(row.getByLabel("2 critères vérifiés sur 5 · 1 en échec · 1 bloqué · 1 non vérifié")).toBeVisible();
   for (const [id, label] of [["AC1", "Vérifié"], ["AC2", "Vérifié"], ["AC3", "Non vérifié"], ["AC4", "Échec"], ["AC5", "Bloqué"]]) {
     await expect(page.getByTestId(`criterion-${id}`).getByRole("button").first()).toContainText(label);
   }

@@ -468,14 +468,20 @@ Décision : corrections requises avant approbation.`,
   "failed": 0,
   "regressionTest": "critical-alert-timezone"
 }`,
-  "senior-review-round-2.md": `# Review 2/2 · Approuvée
+  "senior-review-round-2.md": `# Review 2/2 · Bloquée
 
 Les deux retours du premier passage sont résolus :
 
 - le fallback utilise désormais le fuseau horaire de l’utilisateur ;
 - un test de régression couvre ce comportement.
 
-Décision : approuvé.`,
+Reste ouvert :
+
+- **P0** : AC4 n’est pas tenu, un double clic sur Enregistrer envoie deux requêtes PATCH (\`settings/panel.tsx:88\`).
+
+Limite de deux passages atteinte.
+
+Décision : bloquée. La merge request est ouverte en draft, avec AC4 dans sa section Blocked.`,
   "qa-report.md": `# QA Report
 
 ## Verdict
@@ -512,7 +518,11 @@ PASS_WITH_WARNINGS
   "developer-report-T2.md": "# T2 · Panneau de réglages\n\nPanneau accessible au clavier, 4 tests.",
   "developer-report-T3.md": "# T3 · Enregistrement optimiste\n\nMise à jour optimiste avec retour arrière en cas d’erreur, 3 tests.",
   "developer-report-T4.md": "# T4 · Fallback des alertes critiques\n\nFuseau horaire pris en compte, test de régression ajouté.",
-  "mr-description.md": `# IH-42 · Ajouter les préférences de notification
+  "mr-description.md": `# Draft: IH-42 · Ajouter les préférences de notification
+
+## Blocked
+- AC4 : un double clic sur Enregistrer envoie deux requêtes PATCH. Toujours en échec après les deux passages de review.
+- AC5 : bloqué, l’environnement mobile de recette était inaccessible.
 
 ## Changements
 - Ajout du panneau de préférences.
@@ -522,7 +532,7 @@ PASS_WITH_WARNINGS
 
 ## Validation
 - 12 tests passent.
-- Review senior approuvée au second passage.
-- QA validée.`,
+- 2 critères vérifiés sur 5 : AC1 et AC2. AC3 reste non vérifié, sa seule mesure date d’avant la reprise.
+- Review senior bloquée au second passage sur AC4.`,
 };
 

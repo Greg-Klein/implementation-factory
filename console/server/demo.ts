@@ -289,23 +289,23 @@ export function continueDemoRun(session: RunSession) {
     writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundTwo, null, 2));
     // A second write, the way a review round overwrites the file: the badge has to light again.
     session.state.evidenceUpdatedAt = now();
-    session.activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
+    session.activity("agent", "Review 2/2 bloquée", "Retours du premier passage résolus, AC4 toujours en échec");
     session.publish();
-    demoTerminal(session, "Review 2/2 : approuvée. Les retours ont bien été pris en compte.");
+    demoTerminal(session, "Review 2/2 : les retours du premier passage sont résolus, mais AC4 reste en échec. Limite de boucle atteinte : la merge request partira en draft.");
   });
   scheduleDemo(session, demoStepDuration * 8, () => {
     session.state.phase = 8;
     session.state.artifacts = [...session.state.artifacts, "mr-description.md"];
-    session.activity("artifact", "Merge request préparée", "mr-description.md");
+    session.activity("artifact", "Merge request draft préparée", "mr-description.md");
     session.publish();
-    demoTerminal(session, "Description et checklist de merge request générées.");
+    demoTerminal(session, "Description de merge request générée, avec une section Blocked pour AC4.");
   });
   scheduleDemo(session, demoStepDuration * 9, () => {
     session.state.phase = 9;
     session.state.action = "Ouverture de la merge request";
     session.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
-    session.activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
-    session.activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
+    session.activity("system", "Merge request draft ouverte (démo)", "acme-dashboard/-/merge_requests/128");
+    session.activity("system", "Rapport de review publié", "Review 2/2 · bloquée sur AC4");
     session.publish();
     demoTerminal(session, "Rapport final publié dans la merge request simulée.");
   });
@@ -316,7 +316,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.endedAt = now();
     session.activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
     session.publish();
-    demoTerminal(session, "Merge request simulée prête. Fin de la démonstration.");
+    demoTerminal(session, "Merge request draft simulée prête. Fin de la démonstration.");
   });
   scheduleDemo(session, demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;

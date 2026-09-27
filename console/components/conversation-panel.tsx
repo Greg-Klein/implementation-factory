@@ -27,7 +27,7 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, pendingQuestion, writing, action, stalled, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; writing: boolean; action?: string; stalled: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, pendingQuestion, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
@@ -96,7 +96,9 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
         >
           {messages.length === 0 && !pendingQuestion ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
-            {stalled ? (
+            {!live ? (
+              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Aucun échange n’a été relu pour ce run. Sa session est fermée : ses documents et ses preuves restent consultables.</p>
+            ) : stalled ? (
               <>
                 <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Le run progresse mais aucun message n’a pu être lu depuis le transcript. La session peut attendre une confirmation invisible ici, comme la confiance du dossier.</p>
                 <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Vérifier l’onglet Terminal</button>

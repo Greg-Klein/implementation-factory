@@ -1,11 +1,14 @@
 "use client";
 
 import { ArchiveIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { healthBadge, holdsIdleSession, isClosable, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
+import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RunSummary } from "@/lib/types";
 
 const PHASES = 10;
+
+/** Status colours of brand/README.md, as text only: the chip sits in a line of muted text. */
+const CHIP_TONE = { error: "text-red-700", attention: "text-amber-800", verified: "text-[var(--accent)]", neutral: "text-[var(--muted)]" } as const;
 
 function Dot({ status, pulsing }: { status: RunSummary["status"]; pulsing: boolean }) {
   return <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${pulsing ? "status-breathe" : ""}`} style={{ background: statusColor(status) }} />;
@@ -53,6 +56,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
   const idle = holdsIdleSession(run);
   const badge = healthBadge(run);
   const closable = isClosable(run);
+  const coverage = acceptanceChip(run.acceptance);
   return (
     <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal group relative flex transition-colors duration-200 ${selected ? "bg-white" : "hover:bg-white/60"}`}>
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
@@ -77,6 +81,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
               ? <HealthMark badge={badge} />
               : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session ouverte" : run.action ?? statusLabel(run.status)}</span></>}
             {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
+            {coverage && <span title={coverage.title} aria-label={coverage.title} className={`ml-auto shrink-0 font-mono text-[9px] font-semibold ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
           </span>
           <PhaseBar phase={run.phase} status={run.status} />
         </span>

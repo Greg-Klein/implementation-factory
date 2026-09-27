@@ -228,6 +228,22 @@ describe("after a restart", () => {
     expect(state.incidents![0].observations.find((observation) => observation.kind === "question")?.detail).toMatch(/Quelle base/);
   });
 
+  it("should date an interrupted run at its last known activity, not at the restart that found it", async () => {
+    const lastSeen = new Date(T0 + 20 * 60_000).toISOString();
+    writeRun("run-dated", {
+      activities: [{ id: "a2", at: lastSeen, kind: "agent", title: "qa-reviewer démarre" }, { id: "a1", at: new Date(T0 + 60_000).toISOString(), kind: "system", title: "Session créée" }],
+      agents: [{ id: "qa", name: "qa-reviewer", status: "running", startedAt: new Date(T0 + 5 * 60_000).toISOString() }],
+    });
+    await reconcileInterruptedRuns(runsDirectory);
+    expect(read("run-dated").endedAt).toBe(lastSeen);
+  });
+
+  it("should give an archive without an end the time of its last activity", () => {
+    const state = incidents.normalizeArchivedRun({ status: "failed", cwd: "/w", startedAt: "2026-09-27T10:00:00.000Z", messages: [{ id: "m", at: "2026-09-27T10:12:00.000Z", author: "claude", text: "t" }] }, "r");
+    expect(state?.endedAt).toBe("2026-09-27T10:12:00.000Z");
+    expect(incidents.lastKnownActivityAt({})).toBeUndefined();
+  });
+
   it("should mark a decision left pending by a crash as an unknown outcome, never replay it", () => {
     const pending: RunIncident = {
       id: "i1", runId: "r", kind: "no_next_action", status: "open", revision: 2, detectedAt: "", updatedAt: "", fingerprint: "f", title: "t", reason: "r",

@@ -1,4 +1,4 @@
-import type { IncidentAction, RunIncident, RunState, Status } from "./types";
+import type { AcceptanceCounts, IncidentAction, RunIncident, RunState, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
   return agents.filter((agent) => agent.status === "running");
@@ -115,6 +115,28 @@ export function statusLabel(status: Status) {
 }
 
 
+export type StatusBadge = { label: string; tone: "decision" | "blocked" | "error" | "stopped" | "neutral" };
+
+/**
+ * The Progression badge of an open run. `attention` alone says someone should
+ * look, not who: "À toi de jouer" is kept for a real question or a prompt in
+ * the terminal, a run the monitor found with no next action reads as blocked
+ * without implying a question was asked, and a lost session reads as an
+ * interruption rather than an error of the workflow.
+ */
+export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "health" | "incidents">): StatusBadge {
+  const incident = run.incidents?.findLast((entry) => entry.status === "open");
+  if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: "Interrompu", tone: "error" };
+  if (run.status === "attention") {
+    const humanWait = Boolean(run.pendingQuestion) || (run.health?.health === "waiting" && (run.health.wait?.reason === "permission" || run.health.wait?.reason === "terminal_interaction"));
+    if (!humanWait && incident) return { label: "Sans suite", tone: "blocked" };
+    return { label: statusLabel(run.status), tone: "decision" };
+  }
+  if (run.status === "failed") return { label: statusLabel(run.status), tone: "error" };
+  if (run.status === "stopped") return { label: statusLabel(run.status), tone: "stopped" };
+  return { label: statusLabel(run.status), tone: "neutral" };
+}
+
 /** Where a run's documents are read from: an archived run has routes of its own, which never reach a live session. */
 export function artifactUrl(run: { id: string | null; archived?: boolean }, path: string) {
   return `/api/${run.archived ? "archive/" : ""}artifacts?runId=${encodeURIComponent(run.id ?? "")}&path=${encodeURIComponent(path)}`;
@@ -163,4 +185,19 @@ export function healthBadge(run: { health?: string; incident?: { title: string }
   if (run.incident) return { label: run.incident.title, tone: run.health === "interrupted" ? "error" as const : "attention" as const };
   if (run.health === "suspected_stall") return { label: "Aucune progression observée", tone: "doubt" as const };
   return undefined;
+}
+
+/**
+ * The acceptance figures a row of the side list can afford: verified over
+ * total, coloured by the worst state left, with the full count in the tooltip.
+ * Nothing without a registry: a run with no criteria is not "0/0 verified".
+ */
+export function acceptanceChip(counts: AcceptanceCounts | undefined) {
+  if (!counts || counts.total === 0) return undefined;
+  const parts = [`${counts.verified} critère${counts.verified > 1 ? "s" : ""} vérifié${counts.verified > 1 ? "s" : ""} sur ${counts.total}`];
+  if (counts.failed) parts.push(`${counts.failed} en échec`);
+  if (counts.blocked) parts.push(`${counts.blocked} bloqué${counts.blocked > 1 ? "s" : ""}`);
+  if (counts.unverified) parts.push(`${counts.unverified} non vérifié${counts.unverified > 1 ? "s" : ""}`);
+  const tone = counts.failed ? "error" as const : counts.blocked ? "attention" as const : counts.verified === counts.total ? "verified" as const : "neutral" as const;
+  return { label: `${counts.verified}/${counts.total} AC`, title: parts.join(" · "), tone };
 }

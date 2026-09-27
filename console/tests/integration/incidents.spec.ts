@@ -46,6 +46,8 @@ test("should find a pilot with nothing next, send one continuation for two windo
   await expect(second.getByRole("region", { name: "Plus aucune action en cours" })).toBeVisible();
   await expect(band.getByText(/sans agent actif, sans question/)).toBeVisible();
   await expect(page).toHaveTitle(/Attention requise/);
+  // Nobody asked anything: the badge says the run is stuck, not that it is the user's turn.
+  await expect(page.getByLabel("Progression du run").getByText("Sans suite", { exact: true })).toBeVisible();
 
   // Two windows, one click each, at the same time. The second button may already be
   // gone when its click lands: the first answer reaches every window.
@@ -113,6 +115,14 @@ test("should show a session lost to a restart as a read-only archive, and let th
   const band = page.getByRole("region", { name: "Session interrompue" });
   await expect(band).toBeVisible();
   await expect(page.getByText("Archive", { exact: true })).toBeVisible();
+  const progression = page.getByLabel("Progression du run");
+  await expect(progression.getByText("Interrompu", { exact: true })).toBeVisible();
+  // Dated at its last event (08:20), not at the restart that found it hours later.
+  await expect(progression.getByText("20 min 00 s", { exact: true })).toBeVisible();
+  // The band already says it: no second red panel, and no hint pointing at a terminal that is gone.
+  await expect(page.getByText(/a redémarré ou s'est arrêté pendant/)).toHaveCount(0);
+  await expect(page.getByText(/Sa session est fermée/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Vérifier l’onglet Terminal" })).toHaveCount(0);
   // Nothing live to act on: no continuation, no terminal, no stop.
   await expect(band.getByRole("button", { name: "Demander la continuation" })).toHaveCount(0);
   await expect(band.getByRole("button", { name: "Arrêter" })).toHaveCount(0);

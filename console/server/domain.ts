@@ -562,3 +562,43 @@ export function describeQueue(queue: QueuedRun[], holders: Map<string, string>):
     return blockedBy ? { ...entry, reason: "repository" as const, blockedBy } : { ...entry, reason: "slot" as const };
   });
 }
+
+/**
+ * The hook payloads a session could not post while the console was busy or
+ * down, in the order it wrote them. A line cut short by a crash is skipped,
+ * not allowed to take the rest of the file with it.
+ */
+export function spooledHooks(text: string) {
+  const bodies: Record<string, unknown>[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const body = JSON.parse(line) as unknown;
+      if (body && typeof body === "object" && !Array.isArray(body)) bodies.push(body as Record<string, unknown>);
+    } catch { /* a torn line */ }
+  }
+  return bodies;
+}
+
+export type StallInput = {
+  status: RunStatus;
+  sessionActive?: boolean;
+  pendingQuestion: boolean;
+  demo: boolean;
+  /** Already called for this silence: the user is told once, and activity clears it. */
+  flagged: boolean;
+  lastActivityAt: number;
+  now: number;
+  thresholdMs: number;
+};
+
+/**
+ * Whether a run went silent. Only a run the agent is supposed to be working on
+ * counts: one waiting on the user is quiet by design, and a lost hook is exactly
+ * what leaves a run "running" with nothing behind it. The console only calls
+ * the user; it never decides the run failed.
+ */
+export function runStalled(input: StallInput) {
+  if (input.flagged || input.demo || !input.sessionActive || input.pendingQuestion || input.status !== "running") return false;
+  return input.now - input.lastActivityAt >= input.thresholdMs;
+}

@@ -38,6 +38,14 @@ export class RunSession {
   pendingQuestionInput: Record<string, unknown> | null = null;
   /** Resolved with whatever the active engine expects back, which only that engine knows. */
   resolvePendingQuestion: ((output?: unknown) => void) | null = null;
+  /** When anything last came out of the session: a hook, the terminal, the transcript. */
+  lastActivityAt = Date.now();
+  /** Set while the run sits in "attention" because the console found it silent, not because the agent asked. */
+  stallFlagged = false;
+  /** The hooks already applied, so one posted twice (a retry, a spool replay) counts once. */
+  readonly seenHooks = new Set<string>();
+  /** The replay of the hook spool in flight, so two never apply the same file. */
+  spoolDrain: Promise<void> | null = null;
   private archive: Activity[] = [];
   /**
    * Set by the registry. A row of the side list is drawn from a summary, so every
@@ -84,7 +92,33 @@ export class RunSession {
     this.state.planTasks = planTaskBoard(this.state.planTasks, this.state.planDelegations ?? [], this.state.agents, this.state.artifacts);
   }
 
+  /**
+   * Something came out of the session. A run the console flagged as silent is
+   * given back to the agent: it was never the agent that asked for attention.
+   */
+  touch() {
+    this.lastActivityAt = Date.now();
+    if (!this.stallFlagged) return;
+    this.stallFlagged = false;
+    if (this.state.status === "attention" && !this.state.pendingQuestion) {
+      this.state.status = "running";
+      this.activity("system", "Le run a repris");
+      this.publish();
+    }
+  }
+
+  /** Whether this hook is seen for the first time. One without an identifier always is. */
+  firstDelivery(hookId: unknown) {
+    if (typeof hookId !== "string" || !hookId) return true;
+    if (this.seenHooks.has(hookId)) return false;
+    this.seenHooks.add(hookId);
+    // Only a retry or a replay repeats a hook, and neither comes long after.
+    if (this.seenHooks.size > 2_000) this.seenHooks.delete(this.seenHooks.values().next().value!);
+    return true;
+  }
+
   appendTerminal(data: string) {
+    this.touch();
     this.terminalBuffer = (this.terminalBuffer + data).slice(-TERMINAL_BUFFER);
     broadcastToViewers(this.id, { type: "terminal.output", runId: this.id, data });
   }

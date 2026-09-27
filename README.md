@@ -259,9 +259,10 @@ Les réglages disponibles :
 | `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `true` |
 | `IMPL_REMOTE_CONTROL` | Remote Control sur le terminal d’un run | `true` |
 | `IMPL_PORT` | port d’écoute | `3210` |
-| `IMPL_HOST` | interface d’écoute | `127.0.0.1` |
+| `IMPL_HOST` | interface d’écoute ; hors boucle locale, la console est joignable depuis le réseau et le signale au démarrage | `127.0.0.1` |
 | `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
 | `IMPL_MAX_CONCURRENT_RUNS` | nombre de runs tenus en parallèle, de 1 à 10 ; au-delà, les lancements attendent en file | `3` |
+| `IMPL_STALL_MINUTES` | minutes sans activité avant qu’un run en cours soit signalé comme peut-être bloqué | `20` |
 | `IMPL_DEMO_STEP_MS` | durée d’une étape du mode démo | `5000` |
 
 Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur le défaut. Un réglage ponctuel ne demande donc aucune écriture :

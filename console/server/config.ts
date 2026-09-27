@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -33,3 +34,10 @@ export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);
+/** How long a run in progress may stay silent before the console calls the user. */
+export const stallThresholdMs = positiveDuration(process.env.IMPL_STALL_MINUTES, 20) * 60_000;
+/**
+ * The secret every hook posts back, drawn at each start. The integration suite
+ * sets its own, being the only caller that posts hooks without a session.
+ */
+export const hookToken = process.env.IMPL_HOOK_TOKEN?.trim() || randomBytes(32).toString("hex");

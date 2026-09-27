@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, hookToken } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -30,6 +30,7 @@ export default defineConfig({
       // The self-audit is on by default, and a run finishing under test must not
       // start a real improvement session on this checkout.
       IMPL_SELF_IMPROVEMENT_AUTORUN: "false",
+      IMPL_HOOK_TOKEN: hookToken,
     },
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

@@ -1,10 +1,11 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
-import { dataRoot, hostname, maxConcurrentRuns, pluginRoot, port, promptsRoot, queueFile } from "./config.js";
+import { dataRoot, hookToken, hostname, maxConcurrentRuns, pluginRoot, port, promptsRoot, queueFile } from "./config.js";
 import { closeAbandonedAgents, describeQueue, exitReport, runInProgress, sessionsToReleaseForQueue, terminalExitStatus } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
+import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
 import { acknowledgeDemoInstruction, demoLaunchState, startDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
@@ -42,6 +43,10 @@ export class RunRegistry {
 
   get(runId: string | undefined) {
     return runId ? this.sessions.get(runId) : undefined;
+  }
+
+  all() {
+    return [...this.sessions.values()];
   }
 
   /** The run holding each checkout right now, which is what a queued launch waits on. */
@@ -135,7 +140,8 @@ export class RunRegistry {
     if (plugin.customized.length) session.activity("system", "Prompts personnalisés", plugin.customized.join(", "));
     session.engine = engine.start({
       cwd: entry.cwd, runId: id, command, pluginDir: plugin.pluginDir, systemPrompt: plugin.systemPrompt,
-      hookUrl: `http://${hostname}:${port}/api/hooks`,
+      hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
+      hookSpool: hookSpoolPath(id),
       onData: (data) => {
         session.appendTerminal(data);
         void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);

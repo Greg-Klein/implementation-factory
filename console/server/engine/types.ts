@@ -36,7 +36,10 @@ export type StartOptions = {
   pluginDir: string;
   /** Instructions appended to the agent's own system prompt. */
   systemPrompt?: string;
+  /** Where the agent posts its events, secret included. */
   hookUrl: string;
+  /** The file an event goes to when posting it failed, replayed by the harness later. */
+  hookSpool: string;
   onData(data: string): void;
   onExit(exitCode: number): void;
 };

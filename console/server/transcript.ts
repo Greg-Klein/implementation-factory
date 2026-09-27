@@ -14,6 +14,7 @@ async function readNewMessages(session: RunSession, file: string) {
     const buffer = Buffer.alloc(size - follow.offset);
     await handle.read(buffer, 0, buffer.byteLength, follow.offset);
     follow.offset = size;
+    session.touch();
     const lines = (follow.carry + buffer.toString("utf8")).split("\n");
     follow.carry = lines.pop() ?? "";
     let published = false;

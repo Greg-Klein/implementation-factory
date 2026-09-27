@@ -1,14 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./context.js";
-import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort } from "./config.js";
+import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
-import { followTranscript } from "./transcript.js";
-import { answerQuestion, processHook } from "./hooks.js";
+import { answerQuestion } from "./hooks.js";
+import { checkStall, drainHookSpool, receiveHook } from "./hook-bridge.js";
+import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { listPendingImprovements, notice, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
@@ -63,15 +65,10 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   if (harnessMoved) await realignPendingImprovements();
 }
 
-/**
- * Every hook event names the run it belongs to and the transcript of the session
- * that emitted it, which is where that run's dialogue is read from.
- */
-function followRunTranscript(runId: string, body: Record<string, unknown>) {
-  const session = registry.get(runId);
-  if (!session) return;
-  const transcript = engine.transcriptPath(body);
-  if (transcript) void followTranscript(session, transcript);
+/** Read at each request: the desktop app binds port zero and learns the real one after listening. */
+function consoleHosts() {
+  const addresses = Object.values(os.networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []);
+  return allowedHosts(port, hostname, addresses);
 }
 
 function readBody(request: IncomingMessage) {
@@ -155,7 +152,13 @@ const handle = app.getRequestHandler();
 await app.prepare();
 
 const server = createServer(async (request, response) => {
-  if (request.method === "POST" && request.url === "/api/hooks") {
+  // A page on another site that got a name of its own resolved to this address
+  // still sends that name: refused before anything is read or run.
+  if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Hôte non autorisé." }); return; }
+  const requestPath = request.url?.split("?")[0];
+  if (request.method === "POST" && requestPath === "/api/hooks") {
+    const token = new URL(request.url ?? "", "http://console").searchParams.get("token") ?? request.headers["x-impl-hook-token"]?.toString();
+    if (!tokenMatches(token, hookToken)) { respond(response, 401, { ok: false }); return; }
     try {
       const body = await readBody(request);
       const runId = typeof body.runId === "string" ? body.runId : undefined;
@@ -163,8 +166,9 @@ const server = createServer(async (request, response) => {
       // A hook from a run the console no longer holds is not an error: the user
       // closed it, or the server restarted under a session still alive.
       if (!session || !runId) { respond(response, 200, { ok: true, hookOutput: null }); return; }
-      followRunTranscript(runId, body);
-      const hookOutput = await processHook(session, body);
+      // What the session could not post earlier happened first.
+      await drainHookSpool(session);
+      const hookOutput = await receiveHook(session, body);
       respond(response, 200, { ok: true, hookOutput: hookOutput ?? null });
     } catch { respond(response, 400, { ok: false }); }
     return;
@@ -219,6 +223,13 @@ const server = createServer(async (request, response) => {
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (request, socket, head) => {
   if (request.url !== "/ws") return;
+  // Browsers apply no same-origin policy to a WebSocket, and this one writes
+  // into live agent sessions: only a page the console served may open it.
+  const hosts = consoleHosts();
+  if (!hostAllowed(request.headers.host, hosts) || !originAllowed(request.headers.origin, hosts)) {
+    socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+    return;
+  }
   wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
 });
 wss.on("connection", (socket) => {
@@ -250,6 +261,7 @@ if (!address || typeof address === "string") throw new Error("Le serveur n'a pas
 setListeningPort(address.port);
 const url = `http://${hostname}:${port}`;
 console.log(`Implementation Harness: ${url}`);
+if (!isLoopbackHost(hostname)) console.warn(`Attention : la console écoute sur ${hostname}, elle est joignable depuis le réseau. Quiconque l'atteint peut piloter les sessions ${engine.label} en cours.`);
 // Electron's utility process owns this port. Ordinary Node keeps using signals.
 const desktopParent = (process as typeof process & {
   parentPort?: { postMessage: (message: unknown) => void; on: (event: "message", listener: (event: { data: unknown }) => void) => void };
@@ -257,12 +269,22 @@ const desktopParent = (process as typeof process & {
 desktopParent?.postMessage({ type: "ready", url });
 // Launches accepted before the last shutdown start now that the server is up.
 void registry.drain();
+// Hooks a session spooled while nothing else arrived, and runs gone silent,
+// would otherwise wait for an event that may never come.
+const watchdog = setInterval(() => {
+  for (const session of registry.all()) {
+    if (!session.state.sessionActive) continue;
+    void drainHookSpool(session).then(() => checkStall(session));
+  }
+}, 30_000);
+watchdog.unref();
 
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const timeout = setTimeout(() => process.exit(1), 8_000).unref();
+  clearInterval(watchdog);
   for (const socket of wss.clients) socket.terminate();
   wss.close();
   server.close();

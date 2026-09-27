@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { currentRun, resetRun } from "./helpers";
+import { hookToken } from "../fixtures";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -22,7 +23,7 @@ test("should return structured answers to a waiting Claude Code hook", async ({ 
     multiSelect: false,
   }];
 
-  const hookResponse = request.post("/api/hooks", { data: {
+  const hookResponse = request.post(`/api/hooks?token=${hookToken}`, { data: {
     runId: run.id,
     payload: {
       hook_event_name: "PreToolUse",

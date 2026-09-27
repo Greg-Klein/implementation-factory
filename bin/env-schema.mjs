@@ -129,6 +129,16 @@ export const schema = [
     validate: validateInteger(1, 10),
   },
   {
+    key: "IMPL_STALL_MINUTES",
+    label: "Silence avant alerte, en minutes",
+    comment: "Minutes a run in progress may stay silent before the console flags it for attention.",
+    help: "Minutes sans aucune activité avant que la console signale un run peut-être bloqué.",
+    fallback: "20",
+    kind: "text",
+    readBy: "console",
+    validate: validateInteger(1, 1440),
+  },
+  {
     key: "IMPL_DEMO_STEP_MS",
     label: "Durée d'une étape du mode démo, en millisecondes",
     comment: "Duration of each step of the simulated scenario, in milliseconds.",

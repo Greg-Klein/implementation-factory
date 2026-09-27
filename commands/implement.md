@@ -93,6 +93,40 @@ If there are more than three blocking questions, batch them: ask, then ask again
 
 Record every answer in `.claude/tasks/open-questions.md` next to its question. Answers are part of the specification from now on, and they go into the merge request description.
 
+### Write the acceptance criteria registry
+
+Once the answers are in, and before any plan exists, write `.claude/tasks/acceptance-criteria.json`: the one list of what this run has to prove, with an identifier every later document reuses. The planner links its tasks to these identifiers, every evidence file cites them, and the console computes from them which criterion was verified, on which code, and with what. You are its only writer.
+
+```json
+{
+  "schemaVersion": 1,
+  "revision": 1,
+  "criteria": [
+    {
+      "id": "AC1",
+      "text": "La valeur du filtre est conservée au retour sur la page.",
+      "revision": 1,
+      "source": { "kind": "ticket", "reference": "<ticket URL or document URL>", "excerpt": "the sentence it comes from, verbatim" },
+      "verification": {
+        "expected": "Le filtre retrouve sa dernière valeur.",
+        "requiredChecks": [
+          { "id": "AC1-C1", "description": "Quitter puis rouvrir la page", "method": "test" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- **Only what the specification asks.** A criterion comes from the ticket, a reference document (PRD, design, linked issue), an answer the user gave in step 2, or the run instruction: `source.kind` is one of `ticket`, `prd`, `design`, `linked_issue`, `user_answer`, `run_instruction`, and `excerpt` quotes the words it comes from. An obvious behaviour you deduced stays a deduction in `open-questions.md`; it never becomes a requirement here, and neither does a preference the planner infers later.
+- **Identifiers are stable for the whole run**, review rounds included: `AC1`, `AC2`, in the order of the ticket. A criterion discovered later gets the next free number; nothing is ever renumbered or reused.
+- **A change of meaning is a new revision.** Rewording that changes what has to be true increments the top-level `revision` and sets that criterion's `revision` to it; the console then stops counting the evidence gathered against the older wording. A typo fix is not a change of meaning.
+- **A broad criterion is split into required checks** (`AC<n>-C<m>`, `method` one of `test`, `browser`, `static_analysis`, `manual`). It is verified only when every one of them is. A criterion with a single obvious check needs no `requiredChecks`: it is its own check.
+- **Lint, typecheck and the whole test suite are not criteria.** They stay visible as general checks and are never attached to every criterion to make them look covered.
+- **No criterion at all is an answer too**: write `"criteria": []` and say why in `open-questions.md`. The console then shows that nothing was identified instead of an empty "all verified".
+
+Write it the way every evidence file of this run is written, to a temporary name renamed into place (`… > .claude/tasks/acceptance-criteria.json.tmp && mv .claude/tasks/acceptance-criteria.json.tmp .claude/tasks/acceptance-criteria.json`), so the console never reads it half written.
+
 Then, and only then, touch git:
 
 - If the working tree is dirty, do not stop and do not discard anything: `git stash push -u -m "implementation-harness-<iid>"`, note it, and mention the stash name in the final report.
@@ -126,9 +160,9 @@ GraphQL.
 
 Judge complexity from the ticket context.
 
-**Complex** (several surfaces or components, several acceptance criteria, data layer plus UI, migration, unclear scope): invoke `ticket-planner` with the ticket context path. It writes `.claude/tasks/planner-output.json` with atomic tasks. Validate that the JSON is well formed and that tasks and acceptance criteria exist. If the planner lacks codebase context, run an `Explore` agent first and feed its map to the planner.
+**Complex** (several surfaces or components, several acceptance criteria, data layer plus UI, migration, unclear scope): invoke `ticket-planner` with the ticket context path and the path of `.claude/tasks/acceptance-criteria.json`. It writes `.claude/tasks/planner-output.json` with atomic tasks, each naming in `criterion_ids` the registry criteria it serves, and `criteria_revision` at the top. Validate that the JSON is well formed, that every `criterion_ids` entry exists in the registry, and that every criterion is served by at least one task or explicitly left out with the reason in `technical_notes`. If the planner lacks codebase context, run an `Explore` agent first and feed its map to the planner.
 
-**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract.
+**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` included: `{"criteria_revision": 1, "acceptance_criteria": ["AC1: …"], "tasks": [{"id": "T1", "title": "…", "criterion_ids": ["AC1"], "dependencies": [], …}]}`.
 
 Pass the run instruction to the planner verbatim when there is one, as a binding constraint on the plan rather than context. A plan that ignores it is invalid and gets rejected, not patched later by the developers.
 
@@ -155,6 +189,7 @@ Whatever the batching, **commit one task at a time**: wait for the batch, verify
 Each `developer` invocation must receive:
 
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
+- the path of `.claude/tasks/acceptance-criteria.json`, the criterion and check ids its task serves (its `criterion_ids`), and the **evidence contract** below, which its `dev-evidence-<task-id>.json` follows
 - **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` keep two agents out of each other's code; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
 - **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - **in that same breath, that the Playwright browser is shared with those peers.** The tree and the gates are not the only common resource: the whole batch drives one browser, and a peer navigating the current tab mid-measurement is the normal case, not an incident. Tell each member to work in its own tab, to read back the URL in the tool output before trusting any value or any capture, and to redo a measurement it cannot attribute to its own page rather than report it. Two archived runs lost evidence here, one to a screenshot that had recorded a peer's page, the other to a developer who dropped browser evidence entirely because of the contention
@@ -199,7 +234,7 @@ After each task, commit: `<type>(<scope>): <description>`, conventional commits,
 Each agent wrote under its own suffix. Two files carry the run, and both are yours to assemble:
 
 - `.claude/tasks/developer-report.md`, the concatenation of the per-task reports, each under a heading naming its task. It is a **MANDATORY** input of `senior-reviewer` and `qa-reviewer`: what is missing from it is missing from the review.
-- `.claude/tasks/dev-evidence.json`, one object `{"source": "developer", "items": [...]}` whose `items` are every per-task `items` array end to end, in task order. This is the only developer file the console's "Preuves" tab reads, and it reads it by that exact name: a measurement left in a suffixed file is a measurement nobody sees.
+- `.claude/tasks/dev-evidence.json`, one object `{"schemaVersion": 2, "source": "developer", "criteriaRevision": <n>, "items": [...]}` whose `items` are every per-task `items` array end to end, in task order, **copied unchanged**: same `id`, same `criterionIds`, same `codeSnapshotId`. This is the developer file the console's per-source view reads by that exact name, and the ids are what lets the console count an item seen in both files once. Never renumber an item, never give two items the same id, and never merge two items into one.
 
 **Merge, never replace.** A later batch, and a rework round in step 7, add their rows to what is already there. Keep the per-task files, they are the archive; the merged pair is the view. An archived run that shows seven measurements while its suffixed files hold fifty-two is the failure this contract exists to prevent, and it happened.
 
@@ -257,15 +292,21 @@ A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, 
 
 ```json
 {
+  "schemaVersion": 2,
   "source": "qa",
   "status": "PASS | PASS_WITH_WARNINGS | FAIL",
+  "round": 1,
+  "criteriaRevision": 1,
+  "producer": { "role": "pilot" },
+  "codeSnapshot": { "atStart": "<id>", "atEnd": "<id>" },
   "items": [
-    { "label": "string", "verdict": "pass | fail | not_run", "command": "string", "actual": "string" }
+    { "id": "GATE-1", "label": "string", "verdict": "pass | fail | not_run", "method": "test", "command": "string", "actual": "string" },
+    { "id": "PILOT-1", "label": "string", "verdict": "pass | fail | not_run", "criterionIds": ["AC1"], "method": "test", "command": "string", "actual": "string" }
   ]
 }
 ```
 
-One item per gate, `label` and `actual` in French, `command` the literal command run, the JSON keys and verdict tokens in English exactly as shown. A gate you did not run is an item with `not_run` and the reason in `actual`, never a missing item.
+One item per gate (`GATE-<n>`, no `criterionIds`: a gate verifies the change as a whole, never a criterion), plus one item per criterion you verified yourself with something objective, a targeted test that failed before the fix and passes now being the usual one (`PILOT-<n>`, citing the criterion). `label` and `actual` in French, `command` the literal command run, the JSON keys and verdict tokens in English exactly as shown. A gate you did not run is an item with `not_run` and the reason in `actual`, never a missing item. The rest of the evidence contract below applies: snapshot, atomic write.
 
 **`pass | fail | not_run` is the set a gate row takes, not the whole schema.** When a `qa-reviewer` ran, that file is its output and it carries three more tokens for the observable criteria it reports on: `measured`, `confirmed` and `unverified` (see `agents/qa-reviewer.md`). The console renders all six. So do not touch the verdicts in a file a reviewer wrote: `measured` is not a malformed `pass`, and flattening it deletes the one thing those tokens exist to record, whether QA measured a criterion itself or took it from the developer's evidence. Normalise a verdict only when it falls outside those six tokens.
 
@@ -276,7 +317,7 @@ One item per gate, `label` and `actual` in French, `command` the literal command
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
-Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths, app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Preuves navigateur` rows and the screenshot paths from step 6), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
+Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths (the criteria registry `.claude/tasks/acceptance-criteria.json` among them), app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Preuves navigateur` rows and the screenshot paths from step 6), **the evidence contract below**, and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
 
 Whatever the tier, scope every reviewer to **the diff**, never to the repository: name the files and say explicitly that untouched code is out of scope. An unbounded reviewer will audit whatever it finds, and that is where the hour goes. And whatever the tier, the browser evidence from step 6 travels with the scope, orchestrator or not: on tiers 0 and 1 you hand it to the reviewer yourself.
 
@@ -326,6 +367,10 @@ If it comes back blocked (loop limit reached, `P0` still open), do not throw the
 ---
 
 ## Step 8 - Merge request
+
+**Read the acceptance summary first.** When the console runs the session (`IMPL_RUN_ID` is set), it keeps `.claude/tasks/acceptance-summary.md` up to date from the registry and every evidence file, with the same computation its "Preuves" tab shows: one sentence ("5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié"), the criteria that are not verified and why, and a detail table for step 9. Use it as it is. A criterion it reports unverified, blocked or failed is never reworded as validated, anywhere. When the file is absent (no console), write the same content yourself from the registry and the evidence files, by the same rule: a criterion is verified only when evidence taken on the final code says so.
+
+That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
 Write the description to `.claude/tasks/mr-description.md` first, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2.
 
@@ -386,6 +431,10 @@ Two or three sentences: the user facing problem, and what happens instead now.
 ## Changements
 
 Three to five bullets, one per notable item. File names only when they help the reader find their way.
+
+## Critères d'acceptation
+
+The summary sentence, then one bullet per criterion that is not verified, with its reason in a few words. Nothing more: the detail goes in the step 9 comment. Omit the bullets when every criterion is verified.
 
 ## Notes d'implémentation
 
@@ -457,6 +506,10 @@ What to change and why.
 
 - [P0] ... (relevé par senior, corrigé au round 2, confirmé par QA)
 
+### Critères d'acceptation
+
+The detail table of `.claude/tasks/acceptance-summary.md`. Every attachment it names is a local path: link it only once uploaded as below, with the returned link; one that was not uploaded is written "capture restée locale", never as a path.
+
 ### Validation
 
 - Lint / typecheck / tests : ...
@@ -500,9 +553,55 @@ Print a short summary in chat:
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
 
+**Before cleaning, let the console archive what the run leaves behind.** When `IMPL_RUN_ID` is set, write a sync request with a fresh id, then wait for the console's answer carrying that same id, for up to two minutes, with `Monitor` and an until-loop rather than a `sleep`:
+
+```bash
+REQUEST_ID="sync-$(date +%s)"
+printf '{"requestId":"%s"}\n' "$REQUEST_ID" > .claude/tasks/archive-sync-request.json.tmp && mv .claude/tasks/archive-sync-request.json.tmp .claude/tasks/archive-sync-request.json
+# then wait until .claude/tasks/archive-sync-ack.json contains "$REQUEST_ID"
+```
+
+The answer lists the versions kept and any capture still missing. Report a missing one, or an answer that never came, in the final report: the evidence of this run would be lost with the directory. Without `IMPL_RUN_ID` there is no console to archive anything; skip the request.
+
 **Always clean `.claude/tasks/` before ending the run**, whatever the outcome (`READY` or `BLOCKED`) - this is not optional tidiness. Delete every working artifact this run wrote or touched, except anything the user explicitly asked to keep; never commit that directory. Leftover files from a run are not inert: `.claude/tasks/` is not scoped per ticket, so a stale `ticket-context.md`, `planner-output.json`, or `developer-report-*.md` from an earlier, unrelated run will be sitting there the next time `/implementation-harness:implement` starts, ready to be misread as belonging to the current ticket. Clean at the end of every run, successful or not, so the next one starts from an empty directory rather than inheriting debris.
 
 ---
+
+## Evidence contract
+
+Every evidence file of the run (`dev-evidence-<suffix>.json` and its merge, `qa-evidence.json`, `design-evidence.json`) follows this contract, whoever writes it. Pass this section on to every agent that writes one. The console reads these files as data and archives each version: what they claim is what the merge request summary will say.
+
+```json
+{
+  "schemaVersion": 2,
+  "source": "developer | qa | design",
+  "round": 1,
+  "criteriaRevision": 1,
+  "producer": { "role": "developer | qa-reviewer | designer-reviewer | pilot" },
+  "codeSnapshot": { "atStart": "<id>", "atEnd": "<id>" },
+  "items": [
+    {
+      "id": "unique in the run",
+      "label": "string, in French",
+      "verdict": "pass | fail | not_run | measured | confirmed | unverified",
+      "criterionIds": ["AC2"], "checkIds": ["AC2-C1"], "taskIds": ["T3"],
+      "method": "test | browser | static_analysis | manual",
+      "observedAt": "ISO 8601",
+      "expected": "string", "actual": "string", "command": "string", "note": "string",
+      "screenshot": "assets/relative-path.png", "attachments": ["assets/other.png"],
+      "supersedes": ["an earlier id"], "confirms": "the id of the evidence inspected",
+      "blocker": { "reason": "what prevented the check", "action": "what it would take" }
+    }
+  ]
+}
+```
+
+- **Identifiers are unique in the run and never reused.** Developer `<task-id>-E<n>` (rework `rework<N>-E<n>`), QA `QA-R<round>-<n>`, design `DS-R<round>-<n>`, your own gates `GATE-<n>` and checks `PILOT-<n>`. A later round that verifies the same check again writes a **new** item with a new id and names the earlier one in `supersedes`. That is the only way a success replaces an earlier failure; a failure left unreplaced keeps the criterion from turning green.
+- **Links.** An item about a criterion cites it in `criterionIds`, plus the `checkIds` it covers when the criterion lists several required checks. General gates (lint, typecheck, the whole suite, a build) cite nothing. `criteriaRevision` is the registry revision the producer read.
+- **Blocked is not unverified.** A check prevented by something concrete (an unreachable environment, missing credentials, a state that cannot be reached) is `not_run` or `unverified` with a `blocker` naming the obstacle and what would unblock it. Without a named obstacle it is simply unverified.
+- **A confirmation names what it checked.** `confirmed` always carries `confirms` with the id of the evidence inspected; it stays worth that evidence, on the code that evidence was taken on.
+- **The code version comes from the shared utility, never from you.** Run `node "$IMPL_CODE_SNAPSHOT"` right before the first measurement of a sequence and right after the last, and copy the `id` of its JSON output into `codeSnapshot.atStart` and `codeSnapshot.atEnd` (or `codeSnapshotId` / `codeSnapshotAtEnd` on each item, which is what developers do so a merge keeps them). Never type, shorten or edit an id. When `IMPL_CODE_SNAPSHOT` is unset or the command fails, leave the fields out: the console then shows "version inconnue", which is true. Two different ids around one measurement mean the code moved under it: that measurement is not conclusive, and it is redone rather than reported.
+- **Written whole, then renamed into place**: write `<name>.json.tmp`, then `mv` it over `<name>.json`. The console reads files as they land, and a file caught half written is counted as nothing.
 
 ## Specification precedence
 
@@ -722,4 +821,5 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - At most two rework rounds, so the run cannot spin forever
 - Add a comment in code only for a non obvious "why", in English
 - Every element an end to end test needs to reach carries a stable `data-testid`, named after its role, reusing the ids that already exist
+- Every acceptance criterion has a stable id in `.claude/tasks/acceptance-criteria.json`, every piece of evidence cites it and follows the evidence contract, and nothing unverified is ever presented as validated
 - Every architectural choice and every non obvious mechanism is documented in the repository's own documentation, in the same commit as the code, and the existing pages the change makes stale are updated. A doc that contradicts the code is worse than no doc

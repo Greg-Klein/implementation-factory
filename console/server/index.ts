@@ -10,6 +10,7 @@ import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPor
 import { readArtifact } from "./artifacts.js";
 import { answerQuestion } from "./hooks.js";
 import { checkStall, drainHookSpool, receiveHook } from "./hook-bridge.js";
+import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
@@ -174,6 +175,17 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }
+  const acceptanceRoute = request.method === "GET" ? requestPath?.match(/^\/api\/runs\/([^/]+)\/acceptance$/) : null;
+  if (acceptanceRoute) {
+    const session = registry.get(decodeURIComponent(acceptanceRoute[1]));
+    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    // Asking is also a moment to look at the code again (at most every few
+    // seconds): evidence goes stale when the code moves, and nothing else
+    // would say so while the run is quiet.
+    try { respond(response, 200, await refreshAcceptance(session)); }
+    catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Couverture indisponible." }); }
+    return;
+  }
   if (request.method === "GET" && request.url?.startsWith("/api/runs/")) {
     const session = registry.get(decodeURIComponent(request.url.slice("/api/runs/".length).split("?")[0]));
     if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }

@@ -30,6 +30,7 @@ Expected from the caller, in the prompt:
 
 - feature branch and base branch (context only, you never run git)
 - `.claude/tasks/planner-output.json` and `.claude/tasks/developer-report.md`
+- `.claude/tasks/acceptance-criteria.json`, the criteria registry, and the caller's **evidence contract**, both passed on to every reviewer that writes evidence
 - `.claude/tasks/ticket-context.md`
 - app URL and the route to reach the feature, plus test credentials if any
 - the developer's browser evidence: the `## Preuves navigateur` rows of its report and the screenshots under `.claude/tasks/assets/`
@@ -50,7 +51,9 @@ Sub agents keep writing their own artifacts, a report and, for the two that meas
 - `.claude/tasks/qa-report.md` and `.claude/tasks/qa-evidence.json`
 - `.claude/tasks/developer-report-rework<N>.md` and `.claude/tasks/dev-evidence-rework<N>.json`, for a rework round
 
-Archive each artifact per round: after round N, copy it to `<name>-round<N>.<ext>`, because every reviewer overwrites its own file.
+Archive each artifact per round: after round N, copy it to `<name>-round<N>.<ext>`, because every reviewer overwrites its own file. Copy it byte for byte: the item ids inside are what lets the console recognise the same observation in both files and count it once.
+
+Every round has a number, starting at 1, and every reviewer that writes evidence is told it: its item ids carry it (`QA-R<round>-<n>`, `DS-R<round>-<n>`), and a reviewer checking again what an earlier round recorded replaces it by naming the earlier id in `supersedes`. Remind them of it, because a success that does not name the failure it replaces leaves that failure standing and the criterion unverified. Before launching `designer-reviewer`, which has no shell, run `node "$IMPL_CODE_SNAPSHOT"` yourself and hand it the `id` of the output as the code snapshot of its measurement (skip it when the variable is unset).
 
 A reviewer that hands back its report without its evidence file has not finished: the measurements exist in its table but the console shows that dimension as never verified. Ask that reviewer for the missing file before closing the round, and if it still does not come, say so in the summary rather than letting the gap pass unremarked.
 
@@ -95,7 +98,7 @@ For each round with remaining P0 or P1:
 
 1. Build a single consolidated rework brief: one list of findings, deduplicated across reviewers, ordered P0 then P1, each with file, expected behaviour, and which reviewer raised it. Drop P2 from the brief.
 2. Invoke **one** `developer` agent with that brief, plus the implementation brief supplied by the caller, and give it `rework<N>` as its artifact suffix. Never several in parallel: they would fight over the same files.
-3. Merge what it wrote into the caller's two files: append `.claude/tasks/developer-report-rework<N>.md` to `.claude/tasks/developer-report.md`, and add the `items` of `.claude/tasks/dev-evidence-rework<N>.json` to those of `.claude/tasks/dev-evidence.json`. Appending, never replacing: those two files already hold the implementation's own measurements, and overwriting them drops the evidence the run was built on.
+3. Merge what it wrote into the caller's two files: append `.claude/tasks/developer-report-rework<N>.md` to `.claude/tasks/developer-report.md`, and add the `items` of `.claude/tasks/dev-evidence-rework<N>.json` to those of `.claude/tasks/dev-evidence.json`, unchanged, ids included. Appending, never replacing: those two files already hold the implementation's own measurements, and overwriting them drops the evidence the run was built on. Write the merged file to a `.tmp` name and `mv` it into place.
 4. Re-run only the dimensions that had findings, plus `qa-reviewer` which always re-runs last.
 
 Stop the loop when:

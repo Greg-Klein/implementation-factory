@@ -40,6 +40,8 @@ export type StartOptions = {
   hookUrl: string;
   /** The file an event goes to when posting it failed, replayed by the harness later. */
   hookSpool: string;
+  /** Variables the workflow reads, set in the agent's environment as they are. */
+  environment?: Record<string, string>;
   onData(data: string): void;
   onExit(exitCode: number): void;
 };

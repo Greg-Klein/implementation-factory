@@ -174,7 +174,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   return undefined;
 }
 
-function start({ cwd, runId, command, pluginDir, systemPrompt, hookUrl, hookSpool, onData, onExit }: StartOptions): EngineSession {
+function start({ cwd, runId, command, pluginDir, systemPrompt, hookUrl, hookSpool, environment, onData, onExit }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
   const sessionName = `implementation-harness ${path.basename(cwd)}`;
@@ -184,7 +184,7 @@ function start({ cwd, runId, command, pluginDir, systemPrompt, hookUrl, hookSpoo
   const system = systemPrompt ? ["--append-system-prompt", systemPrompt] : [];
   const terminal = pty.spawn(executable, ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--name", sessionName, ...remote, ...system, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
-    env: { ...sessionEnvironment(), TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
+    env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
   });
   let alive = true;
   terminal.onData(onData);

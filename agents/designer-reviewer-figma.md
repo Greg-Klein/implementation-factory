@@ -51,6 +51,8 @@ Rules:
 ## Input Sources
 
 - `.claude/tasks/planner-output.json` (MANDATORY)
+- `.claude/tasks/acceptance-criteria.json` (when it exists): the criteria ids, for the rows that check a visual acceptance criterion
+- the review round number and the code snapshot id your caller took before launching you (the evidence contract below needs both)
 - `.claude/tasks/browser-recipe.md` (MANDATORY when it exists): how the developer put the app into the state you are about to measure. Read it before you touch the browser.
 - Figma link (MANDATORY for UI work)
 - Live application URL (via Playwright)
@@ -66,14 +68,23 @@ You MUST write two files:
 
 ```json
 {
+  "schemaVersion": 2,
   "source": "design",
+  "round": 1,
+  "criteriaRevision": 1,
+  "producer": { "role": "designer-reviewer" },
+  "codeSnapshot": { "atStart": "<the id your caller gave you>" },
   "items": [
-    { "label": "string", "verdict": "pass | fail", "expected": "string", "actual": "string", "screenshot": "assets/relative-path.png" }
+    { "id": "DS-R1-1", "label": "string", "verdict": "pass | fail", "method": "browser", "expected": "string", "actual": "string", "screenshot": "assets/relative-path.png", "criterionIds": ["AC3"], "supersedes": ["DS-R0-1"] }
   ]
 }
 ```
 
 One item per row of the property/expected/actual/verdict comparison table, `label` naming the property and its visual location — never a file path or component name, same rule as everywhere else in this agent. Attach `screenshot` whenever a screenshot documents that row. `label`, `expected` and `actual` are written in French; the JSON keys and `verdict` (`pass`/`fail`) stay in English exactly as shown.
+
+- **`id`**: `DS-R<round>-<n>`, never reused across rounds. When you measure again a property an earlier round recorded (read the previous `design-evidence.json` first), write a new item and name the earlier id in `supersedes`.
+- **`criterionIds`** only on a row that checks a visual acceptance criterion of the registry; a property of the design that no criterion states cites none.
+- **`codeSnapshot.atStart`** is the id your caller gave you, copied exactly. You have no shell to take one yourself; without an id from the caller, leave `codeSnapshot` out.
 
 ---
 

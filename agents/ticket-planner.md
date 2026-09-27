@@ -20,6 +20,7 @@ You are **NOT a coder**. You NEVER write implementation code.
 ## Input Sources
 
 - GitLab ticket (content or URL) provided by the calling command
+- `.claude/tasks/acceptance-criteria.json`, the run's criteria registry, when the caller gives it: the acceptance criteria with their stable ids (`AC1`, `AC2`, …) and required checks
 - Repository (you MUST explore it)
 - Optional Figma link
 
@@ -73,6 +74,10 @@ Produce:
 
 ### Phase 3 — Acceptance Criteria
 
+When the caller gives you the registry, **it is the list, and its ids are the ones you use.** Copy each criterion into `acceptance_criteria` as `"<id>: <text>"`, rephrased as "Given X, when Y, then Z" only when that keeps its meaning. Never renumber, merge, split or drop one, and never add one: a requirement you infer is an `assumption`, and a criterion you believe is missing is an `open_question`. Only the caller writes the registry.
+
+Without a registry:
+
 - Extract from ticket
 - Rewrite if unclear
 - MUST be testable
@@ -110,6 +115,7 @@ Each task MUST include:
 - outputs
 - dependencies
 - acceptance_criteria
+- criterion_ids: the registry ids this task serves (a purely technical task, a migration say, may serve none)
 - verification_steps
 - complexity (S/M/L)
 
@@ -135,6 +141,7 @@ Every free-text field's content is written in French: `summary`, `assumptions`, 
 
 ```json
 {
+  "criteria_revision": 1,
   "summary": "string",
   "assumptions": ["string"],
   "open_questions": ["string"],
@@ -155,6 +162,7 @@ Every free-text field's content is written in French: `summary`, `assumptions`, 
       "outputs": ["string"],
       "dependencies": ["T0"],
       "acceptance_criteria": ["string"],
+      "criterion_ids": ["AC1"],
       "verification_steps": ["string"],
       "complexity": "S|M|L"
     }
@@ -188,7 +196,8 @@ Every free-text field's content is written in French: `summary`, `assumptions`, 
 Before writing the file, validate:
 
 - A developer can execute WITHOUT questions
-- Every acceptance criterion is covered
+- Every acceptance criterion is covered: each registry id appears in the `criterion_ids` of at least one task, or `technical_notes` says why none serves it
+- `criteria_revision` is the `revision` of the registry you read, and every `criterion_ids` entry exists in it
 - Tasks are correctly ordered
 - Dependencies are explicit
 - Risks are identified

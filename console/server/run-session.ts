@@ -1,11 +1,12 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import { ARCHIVED_ACTIVITIES, broadcastToViewers, now } from "./context.js";
 import { dataRoot } from "./config.js";
 import { emptyState, planTaskBoard, runHoldsRepository, summarizeRun } from "./domain.js";
-import type { EngineSession } from "./engine/index.js";
-import type { Activity, ConversationMessage, RunState } from "./types.js";
+import { engine, type EngineSession } from "./engine/index.js";
+import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
+import type { AcceptanceView, Activity, ConversationMessage, RunState } from "./types.js";
 
 /**
  * Every event pushes the whole state to the pages showing this run, so the feed
@@ -46,6 +47,16 @@ export class RunSession {
   readonly seenHooks = new Set<string>();
   /** The replay of the hook spool in flight, so two never apply the same file. */
   spoolDrain: Promise<void> | null = null;
+  /** What the simulated workflow has "written" so far, since a demo run has no task directory. */
+  readonly demoFiles = new Map<string, Buffer>();
+  /** Every version of the documents acceptance coverage is computed from. See evidence-archive.ts. */
+  readonly evidence: EvidenceArchive;
+  /** The last coverage computed, served whole to the "Preuves" tab; the run state carries only its figures. */
+  acceptanceView: AcceptanceView | null = null;
+  /** What the figures last published were computed from, so an unchanged recomputation publishes nothing. */
+  acceptanceKey = "";
+  /** Writes of run.json one after another: two publications in the same tick must not race on the file. */
+  private persistence: Promise<void> = Promise.resolve();
   private archive: Activity[] = [];
   /**
    * Set by the registry. A row of the side list is drawn from a summary, so every
@@ -56,6 +67,9 @@ export class RunSession {
   constructor(id: string, state: Partial<RunState> = {}) {
     this.id = id;
     this.state = { ...emptyState(), ...state, id };
+    this.evidence = new EvidenceArchive(this.demo
+      ? memoryStorage((relativePath) => this.demoFiles.get(relativePath))
+      : diskStorage(() => engine.taskDirectory(this.state.cwd), path.join(dataRoot, id)));
   }
 
   get demo() { return this.id.startsWith("demo-"); }
@@ -129,11 +143,22 @@ export class RunSession {
     void this.persist();
   }
 
-  async persist() {
-    if (this.demo) return;
-    const runDirectory = path.join(dataRoot, this.id);
-    await mkdir(runDirectory, { recursive: true }).catch(() => undefined);
-    await writeFile(path.join(runDirectory, "run.json"), JSON.stringify(this.archivedState(), null, 2)).catch(() => undefined);
+  /**
+   * Written whole and renamed into place, one write after the other: a reader
+   * never sees half a file, and the last state published is the one that stays.
+   */
+  persist() {
+    if (this.demo) return Promise.resolve();
+    const snapshot = JSON.stringify(this.archivedState(), null, 2);
+    this.persistence = this.persistence.then(async () => {
+      const runDirectory = path.join(dataRoot, this.id);
+      const target = path.join(runDirectory, "run.json");
+      const temporary = `${target}.tmp`;
+      await mkdir(runDirectory, { recursive: true });
+      await writeFile(temporary, snapshot);
+      await rename(temporary, target);
+    }).catch(() => undefined);
+    return this.persistence;
   }
 
   clearDemoTimers() {

@@ -13,6 +13,8 @@ import { resolveProjectDirectory } from "./repository.js";
 import { fetchTicketTitle } from "./ticket.js";
 import { engine } from "./engine/index.js";
 import { createPromptStore } from "./prompts.js";
+import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
+import { snapshotScript } from "./code-snapshot.js";
 import { RunSession } from "./run-session.js";
 import type { HarnessSnapshot, QueuedRun } from "./types.js";
 
@@ -133,6 +135,7 @@ export class RunRegistry {
       session.publish();
     });
     await clearTaskDirectory(entry.cwd);
+    await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
@@ -142,6 +145,13 @@ export class RunRegistry {
       cwd: entry.cwd, runId: id, command, pluginDir: plugin.pluginDir, systemPrompt: plugin.systemPrompt,
       hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
       hookSpool: hookSpoolPath(id),
+      // The workflow identifies the code it verified with the same utility the
+      // console uses, and every snapshot it takes is logged where the console reads it.
+      environment: {
+        IMPL_CODE_SNAPSHOT: snapshotScript(plugin.pluginDir),
+        IMPL_SNAPSHOT_LOG: snapshotLogPath(id),
+        IMPL_SNAPSHOT_EXCLUDE: snapshotExclusions(entry.cwd).join(","),
+      },
       onData: (data) => {
         session.appendTerminal(data);
         void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);

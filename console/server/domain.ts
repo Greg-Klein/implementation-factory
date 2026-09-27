@@ -90,9 +90,11 @@ export function positiveDuration(value: string | undefined, fallback: number) {
  * request, a published review) when they themselves had just cut it off,
  * sometimes before a single agent had started.
  */
-export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean) {
+export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean, workflowComplete = false) {
   if (intentionallyStopped) return "stopped" as const;
-  return exitCode === 0 ? "completed" as const : "failed" as const;
+  // A clean exit of the process proves nothing about the workflow: only a
+  // result the workflow reached makes a session ending on its own a success.
+  return workflowComplete ? "completed" as const : "failed" as const;
 }
 
 /**
@@ -100,9 +102,10 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
  * itself killed left the same line as a crash, which on a finished run read as
  * an incident where there was only a place given back.
  */
-export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number) {
+export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true) {
   if (stoppedBy === "queue") return "Place libérée pour la file d'attente";
   if (stoppedBy === "user") return "Session arrêtée par l'utilisateur";
+  if (!workflowComplete) return exitCode === 0 ? "Session terminée avant la fin du workflow" : "Session interrompue";
   return exitCode === 0 ? "Session terminée" : "Session interrompue";
 }
 
@@ -364,6 +367,10 @@ export function phaseForArtifact(relativePath: string) {
   return 0;
 }
 
+function identifierList(value: unknown) {
+  return Array.isArray(value) ? value.flatMap((entry) => normalizeText(entry) ?? []) : [];
+}
+
 /**
  * The tasks of a `planner-output.json`, or undefined when the file is not a
  * plan yet: the planner writes it in one go, but a half-written read must not
@@ -379,7 +386,9 @@ export function plannedTasks(content: string): PlanTask[] | undefined {
     if (!id) return [];
     const title = normalizeText((task as { title?: unknown }).title) ?? id;
     const complexity = normalizeText((task as { complexity?: unknown }).complexity);
-    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const }];
+    const criterionIds = identifierList((task as { criterion_ids?: unknown }).criterion_ids);
+    const dependencies = identifierList((task as { dependencies?: unknown }).dependencies);
+    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const, ...(criterionIds.length ? { criterionIds } : {}), ...(dependencies.length ? { dependencies } : {}) }];
   });
 }
 
@@ -501,6 +510,11 @@ export function sessionsToReleaseForQueue(runs: HeldRun[], queue: QueuedRun[], m
  * The run as the side list sees it: everything a row, a dot or a notification
  * needs, and nothing that grows with the length of the run. See RunSummary.
  */
+function openIncidentSummary(state: RunState) {
+  const incident = state.incidents?.findLast((entry) => entry.status === "open");
+  return incident ? { incident: { id: incident.id, kind: incident.kind, title: incident.title, revision: incident.revision } } : {};
+}
+
 export function summarizeRun(state: RunState): RunSummary {
   const lastMessage = state.messages.at(-1);
   return {
@@ -523,7 +537,11 @@ export function summarizeRun(state: RunState): RunSummary {
     lastMessageId: lastMessage?.id,
     lastMessageAuthor: lastMessage?.author,
     evidenceUpdatedAt: state.evidenceUpdatedAt,
+    ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
     holdsRepository: runHoldsRepository(state),
+    ...(state.health ? { health: state.health.health } : {}),
+    ...(openIncidentSummary(state)),
+    ...(state.archived ? { archived: true } : {}),
   };
 }
 
@@ -578,27 +596,4 @@ export function spooledHooks(text: string) {
     } catch { /* a torn line */ }
   }
   return bodies;
-}
-
-export type StallInput = {
-  status: RunStatus;
-  sessionActive?: boolean;
-  pendingQuestion: boolean;
-  demo: boolean;
-  /** Already called for this silence: the user is told once, and activity clears it. */
-  flagged: boolean;
-  lastActivityAt: number;
-  now: number;
-  thresholdMs: number;
-};
-
-/**
- * Whether a run went silent. Only a run the agent is supposed to be working on
- * counts: one waiting on the user is quiet by design, and a lost hook is exactly
- * what leaves a run "running" with nothing behind it. The console only calls
- * the user; it never decides the run failed.
- */
-export function runStalled(input: StallInput) {
-  if (input.flagged || input.demo || !input.sessionActive || input.pendingQuestion || input.status !== "running") return false;
-  return input.now - input.lastActivityAt >= input.thresholdMs;
 }

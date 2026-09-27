@@ -1,9 +1,18 @@
 "use client";
 
-import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningIcon } from "@phosphor-icons/react";
-import { elapsedLabel, statusLabel } from "@/lib/run-state";
+import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { elapsedLabel, runStatusBadge, type StatusBadge } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
+
+/** Status pairs of brand/README.md: amber for a decision or a blocked run, red for an interruption or an error. */
+const BADGE_TONE: Record<StatusBadge["tone"], string> = {
+  decision: "bg-amber-100 text-amber-800",
+  blocked: "bg-amber-100 text-amber-800",
+  error: "bg-red-50 text-red-700",
+  stopped: "bg-[var(--line)] text-[var(--muted)]",
+  neutral: "bg-[var(--accent-soft)] text-[var(--accent)]",
+};
 
 const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
 
@@ -28,10 +37,11 @@ function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; labe
 export function PhaseRail({ run }: { run: RunState }) {
   const now = useNow(Boolean(run.startedAt) && !run.endedAt);
   const finished = run.status === "completed";
+  const badge = runStatusBadge(run);
 
   return (
     <aside aria-label="Progression du run" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
-      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : run.status === "stopped" ? "bg-[var(--line)] text-[var(--muted)]" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.status === "attention" && <WarningIcon size={10} weight="fill" />}{statusLabel(run.status)}</span></div>
+      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}>{(badge.tone === "decision" || badge.tone === "blocked") && <WarningIcon size={10} weight="fill" />}{badge.tone === "error" && <WarningCircleIcon size={10} weight="fill" />}{badge.label}</span></div>
       <ol>{phases.map((phase, index) => {
         // The last step is only ticked when the run itself is over, never just
         // because the workflow reached it.

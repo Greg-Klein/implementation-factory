@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
-import type { HarnessSnapshot, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
+import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { NoticeStrip } from "./notice-strip";
 import { RunRail } from "./run-rail";
@@ -18,7 +18,12 @@ const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 
-const emptySnapshot: HarnessSnapshot = { runs: [], queued: [], maxConcurrentRuns: 1 };
+/** `crypto.randomUUID` only exists in a secure context, and a console reached by its network address is not one. */
+function requestIdentifier() {
+  return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+const emptySnapshot: HarnessSnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, archived: [] };
 
 export function Harness() {
   const [snapshot, setSnapshot] = useState<HarnessSnapshot>(emptySnapshot);
@@ -33,6 +38,8 @@ export function Harness() {
   const [detectingProject, setDetectingProject] = useState(false);
   const [notice, setNotice] = useState<Notice>();
   const [error, setError] = useState<string>();
+  /** What became of the last incident action this page sent: a refusal is said next to the incident, not in a banner. */
+  const [incidentResult, setIncidentResult] = useState<IncidentResult>();
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -107,6 +114,7 @@ export function Harness() {
         }
         if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
         if (message.type === "error") setError(message.message);
+        if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
       socket.onclose = () => {
         if (socketRef.current !== socket) return;
@@ -120,7 +128,7 @@ export function Harness() {
 
   // A run the console no longer holds cannot stay open in front of the user.
   useEffect(() => {
-    if (!openRunId || snapshot.runs.some((summary) => summary.id === openRunId)) return;
+    if (!openRunId || snapshot.runs.some((summary) => summary.id === openRunId) || snapshot.archived?.some((summary) => summary.id === openRunId)) return;
     openRun(null);
     clearLaunchForm();
   }, [snapshot.runs, openRunId, openRun, clearLaunchForm]);
@@ -251,12 +259,13 @@ export function Harness() {
   }, []);
 
   useEffect(() => {
-    if (!connected || demoStartedRef.current || new URLSearchParams(window.location.search).get("demo") !== "1") return;
+    const demo = new URLSearchParams(window.location.search).get("demo");
+    if (!connected || demoStartedRef.current || (demo !== "1" && demo !== "incident")) return;
     demoStartedRef.current = true;
     setComposingRun(false);
     adoptNextRunRef.current = true;
     terminalRef.current?.clear();
-    send({ type: "demo.start" });
+    send({ type: "demo.start", ...(demo === "incident" ? { scenario: "incident" } : {}) });
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
 
@@ -304,6 +313,7 @@ export function Harness() {
         <RunRail
           runs={snapshot.runs}
           queued={snapshot.queued}
+          archived={snapshot.archived}
           maxConcurrentRuns={snapshot.maxConcurrentRuns}
           selectedRunId={openRunId}
           onOpen={openRun}
@@ -355,7 +365,14 @@ export function Harness() {
                 feedback: (body) => send({ type: "feedback.submit", runId, body }),
                 stop: () => send({ type: "run.stop", runId }),
                 close: () => send({ type: "run.close", runId }),
+                // Sent with the revision the page was shown, and an id of its own: the server
+                // refuses an action on a state that moved, and runs one request once.
+                incident: (incident, action, reason) => {
+                  setIncidentResult(undefined);
+                  send({ type: "incident.action", runId, incidentId: incident.id, expectedRevision: incident.revision, requestId: requestIdentifier(), action, ...(reason ? { reason } : {}) });
+                },
               }}
+              incidentResult={incidentResult}
             />
           ) : (
             <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />

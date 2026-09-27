@@ -143,7 +143,7 @@ Pour découvrir l’interface sans ticket ni appel à Claude Code :
 impl demo
 ```
 
-Cette commande ouvre un scénario local simulé avec progression, agents, documents générés et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle d’auto-amélioration. Le mode démo n’ajoute aucun contrôle à l’interface normale : la validation des améliorations et le champ de retour sont affichés comme en usage réel, marqués `démo`, et leurs actions restent simulées.
+Cette commande ouvre un scénario local simulé avec progression, agents, documents générés et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. L’onglet Preuves y montre cinq critères dans tous les états possibles, dont un échec du premier tour remplacé au second et conservé dans l’historique avec sa capture. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle d’auto-amélioration. Le mode démo n’ajoute aucun contrôle à l’interface normale : la validation des améliorations et le champ de retour sont affichés comme en usage réel, marqués `démo`, et leurs actions restent simulées.
 
 Pour redémarrer un serveur déjà lancé :
 
@@ -262,7 +262,7 @@ Les réglages disponibles :
 | `IMPL_HOST` | interface d’écoute ; hors boucle locale, la console est joignable depuis le réseau et le signale au démarrage | `127.0.0.1` |
 | `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
 | `IMPL_MAX_CONCURRENT_RUNS` | nombre de runs tenus en parallèle, de 1 à 10 ; au-delà, les lancements attendent en file | `3` |
-| `IMPL_STALL_MINUTES` | minutes sans activité avant qu’un run en cours soit signalé comme peut-être bloqué | `20` |
+| `IMPL_STALL_MINUTES` | minutes sans progression avant que la console exprime un doute sur un run en cours (un doute seulement : rien n’est arrêté ni relancé) | `10` |
 | `IMPL_DEMO_STEP_MS` | durée d’une étape du mode démo | `5000` |
 
 Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur le défaut. Un réglage ponctuel ne demande donc aucune écriture :
@@ -341,6 +341,8 @@ Claude Code reste le moteur du workflow. Le harnais ajoute :
 - un registre de runs (`console/server/registry.ts`) qui démarre, met en file et libère les sessions, chacune isolée dans sa `RunSession` avec son état, son terminal, ses surveillances de fichiers et sa question en attente;
 - un pseudo-terminal interactif par run, relié à l’interface avec WebSocket. Chaque page s’abonne au run qu’elle affiche et ne reçoit que son terminal et son état, la liste des runs étant diffusée à toutes;
 - des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
+- un dossier de preuves par critère d’acceptation : le pilote écrit un registre de critères identifiés, chaque preuve les cite avec la version du code qu’elle a vérifiée, et le serveur calcule pour chaque critère s’il est vérifié, en échec, bloqué ou non vérifié, dans l’onglet Preuves comme dans la synthèse de la merge request (voir `console/README.md`);
+- une détection des runs sans prochaine action : le serveur distingue qui peut faire avancer un run (l’utilisateur, un agent, une tâche de fond, personne), ouvre un incident explicite quand le pilote a rendu la main sans suite ou quand la session s’est perdue, et ne propose que les actions possibles, dont une demande de continuation à la session encore active (voir `console/README.md`);
 - une surveillance de `.claude/tasks/` pour suivre les étapes et conserver les rapports avant leur nettoyage. Ce dossier appartient au dépôt cible et un run interrompu n’a pas eu le temps de le nettoyer : seuls les fichiers écrits depuis le début du run lui sont rattachés, ceux laissés par un run précédent sont ignorés et ne font pas avancer le rail d’étapes. La surveillance est posée sur `.claude/` et restreinte à `tasks/`, parce que le workflow supprime et recrée ce dossier en cours de run et qu’une surveillance posée dessus ne se réveillerait plus ensuite.
 
 ### La couche moteur
@@ -355,7 +357,8 @@ Les données sont archivées dans `runs/<run-id>/`, sous le [dossier de données
 
 - `run.json` contient l’état, les agents et l’activité;
 - `terminal.log` contient la sortie brute du terminal;
-- `artifacts/` contient les documents générés pendant le run : plans, rapports QA, reviews et captures.
+- `artifacts/` contient les documents générés pendant le run : plans, rapports QA, reviews et captures;
+- `evidence/` et `acceptance/` gardent chaque version des preuves, leurs captures et la synthèse de couverture.
 
 Ce dossier est local et ignoré par Git. Il peut contenir des informations confidentielles provenant des tickets traités; il ne faut pas le partager.
 

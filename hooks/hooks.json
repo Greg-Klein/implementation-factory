@@ -30,7 +30,7 @@
         ]
       },
       {
-        "matcher": "Bash|Read|Edit|Write|NotebookEdit|Grep|Glob|Task|Agent|Skill|WebFetch|WebSearch|TodoWrite|mcp__.*",
+        "matcher": "Bash|Read|Edit|Write|NotebookEdit|Grep|Glob|Task|Agent|Skill|WebFetch|WebSearch|TodoWrite|Monitor|mcp__.*",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.mjs\"" }
         ]

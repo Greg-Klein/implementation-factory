@@ -4,10 +4,35 @@ import { continueDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { engine } from "./engine/index.js";
 import type { EngineEvent } from "./engine/index.js";
+import { recordEngineSignal } from "./run-health.js";
+import { declaredCompletion } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
 
 function advancePhase(session: RunSession, phase: number) {
+  if (phase > session.state.phase) session.markProgress();
   session.state.phase = Math.max(session.state.phase, phase);
+}
+
+/**
+ * Closes the run once the workflow is over: the pilot handed control back,
+ * nothing it launched is still running, and either the last phase was reached
+ * or the workflow declared an end that holds against what the run shows.
+ */
+export function closeWorkflowIfDone(session: RunSession) {
+  if (!runInProgress(session.state.status) || session.state.pendingQuestion) return false;
+  if (session.signals.pilotIdleSince === undefined || session.state.agents.some((agent) => agent.status === "running")) return false;
+  const declared = declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
+  if (!declared && session.state.phase < 9) return false;
+  session.state.phase = 10;
+  session.state.status = "completed";
+  session.state.action = undefined;
+  // The workflow, not the session, decides when the run ended: the session then
+  // sits idle at its prompt and may be killed much later.
+  session.state.endedAt = now();
+  session.markProgress();
+  session.activity("attention", "Workflow terminé");
+  scheduleAutonomousReview(session);
+  return true;
 }
 
 /** The agent resumed on its own, so the call for attention no longer holds. */
@@ -28,6 +53,7 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
   const url = mergeRequestUrl(toolResponse);
   if (!url) return;
   session.state.mergeRequestUrl = url;
+  session.markProgress();
   advancePhase(session, 9);
   session.activity("system", "Merge request ouverte", url);
 }
@@ -51,6 +77,7 @@ function waitForQuestionAnswer(session: RunSession, event: Extract<EngineEvent, 
   return new Promise<unknown>((resolve) => {
     session.resolvePendingQuestion = resolve;
     session.publish();
+    session.signal();
   });
 }
 
@@ -63,7 +90,9 @@ export function answerQuestion(session: RunSession, answers: Record<string, stri
     session.state.pendingQuestion = undefined;
     if (session.state.status === "attention") session.state.status = "running";
     session.activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
+    session.markProgress();
     session.publish();
+    session.signal();
     continueDemoRun(session);
     return;
   }
@@ -75,7 +104,9 @@ export function answerQuestion(session: RunSession, answers: Record<string, stri
   session.state.pendingQuestion = undefined;
   if (session.state.status === "attention") session.state.status = "running";
   session.activity("system", `Réponse transmise à ${engine.label}`);
+  session.markProgress();
   session.publish();
+  session.signal();
   resolve(output);
 }
 
@@ -87,6 +118,7 @@ export function clearPendingQuestion(session: RunSession) {
 }
 
 function apply(session: RunSession, event: EngineEvent) {
+  recordEngineSignal(session.signals, event, Date.now(), event.kind === "tool.start" ? actionLabel(event.tool, event.command, event.target) : undefined);
   if (event.kind === "agent.start") {
     const known = session.state.agents.find((agent) => agent.id === event.agentId);
     const identity = known?.nickname ? { nickname: known.nickname, avatar: known.avatar } : agentIdentity(session.state.agents.length);
@@ -143,7 +175,9 @@ function apply(session: RunSession, event: EngineEvent) {
   }
   if (event.kind === "attention") {
     session.state.status = "attention";
-    session.activity("attention", `${engine.label} attend ton attention`, event.message);
+    session.state.action = undefined;
+    const title = event.cause === "permission" ? "Permission attendue dans le terminal" : event.cause === "terminal_interaction" ? "Saisie attendue dans le terminal" : `${engine.label} attend ton attention`;
+    session.activity("attention", title, event.message);
     return;
   }
   // The turn ends every time the agent hands back, including while it waits for
@@ -154,13 +188,12 @@ function apply(session: RunSession, event: EngineEvent) {
     session.activity("agent", "Tour terminé, un agent continue en tâche de fond");
     return;
   }
-  if (session.state.phase >= 9) session.state.phase = 10;
-  session.state.status = session.state.phase >= 10 ? "completed" : "attention";
-  // The workflow, not the session, decides when the run ended: the session then
-  // sits idle at its prompt and may be killed much later.
-  if (session.state.status === "completed") session.state.endedAt = now();
-  session.activity("attention", session.state.phase >= 10 ? "Workflow terminé" : `${engine.label} attend une réponse`);
-  if (session.state.phase >= 10) scheduleAutonomousReview(session);
+  if (closeWorkflowIfDone(session)) return;
+  // A hand-back mid-workflow is not a verdict yet: it may be a wait the console
+  // cannot see, or nothing left to do. The health monitor tells the two apart
+  // after a grace period, with an incident when nothing is going to happen.
+  session.state.status = "running";
+  session.activity("system", `${engine.label} a rendu la main`);
 }
 
 /**
@@ -178,10 +211,14 @@ export function processHook(session: RunSession, body: Record<string, unknown>) 
   // and that promise is what keeps the agent waiting. It is raised even once
   // the workflow is over: the user can keep talking to the idle session, and a
   // question dropped here would only ever show in the terminal.
-  if (event.kind === "question") return waitForQuestionAnswer(session, event);
+  if (event.kind === "question") {
+    recordEngineSignal(session.signals, event, Date.now());
+    return waitForQuestionAnswer(session, event);
+  }
   // A finished run keeps receiving events while the session sits idle at its
   // prompt, and an idle notification must not put it back in progress.
   if (!inProgress) return;
   apply(session, event);
   session.publish();
+  session.signal();
 }

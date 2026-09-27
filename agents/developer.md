@@ -39,21 +39,41 @@ You MUST produce:
 
 ```json
 {
+  "schemaVersion": 2,
   "source": "developer",
+  "criteriaRevision": 1,
+  "producer": { "role": "developer" },
   "items": [
-    { "label": "string (the acceptance criterion)", "verdict": "measured", "expected": "string (the reference value)", "actual": "string (the measured value)", "screenshot": "assets/relative-path.png", "note": "route, viewport, how to reproduce" }
+    {
+      "id": "<suffix>-E1",
+      "label": "string (what was measured, in French)",
+      "verdict": "measured",
+      "criterionIds": ["AC2"], "checkIds": ["AC2-C1"], "taskIds": ["<task id>"],
+      "method": "browser",
+      "observedAt": "ISO 8601",
+      "codeSnapshotId": "<id printed before the measurement>", "codeSnapshotAtEnd": "<id printed after it>",
+      "expected": "string (the reference value)", "actual": "string (the measured value)",
+      "screenshot": "assets/relative-path.png", "note": "route, viewport, how to reproduce"
+    }
   ]
 }
 ```
 
 One item per row of the `## Preuves navigateur` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app. `label`, `expected`, `actual` and `note` are written in French, matching the table; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
 
+- **`id`**: `<suffix>-E<n>`, numbered in the order of the table. Unique, never reused: the caller merges your file with the others as is, and the console counts an item by its id.
+- **`criterionIds`** are the registry ids (`.claude/tasks/acceptance-criteria.json`) the row measures, among those your task serves; add `checkIds` when that criterion lists several required checks. A row that measures no criterion cites none.
+- **`codeSnapshotId` / `codeSnapshotAtEnd`**: run `node "$IMPL_CODE_SNAPSHOT"` right before your first browser measurement and right after your last, and copy the `id` of each output. Never write an id yourself. Leave both out when the variable is unset or the command fails. If the two differ, the code moved while you measured (a peer's batch, a hot reload): measure again once it is still.
+- A criterion you could not measure because of something concrete gets an item too, `"verdict": "unverified"` with `"blocker": { "reason": "…", "action": "…" }`.
+- Your measurement is a result you report about your own work; a reviewer confirms it later by citing your id. Do not call it anything else.
+- **Write it to `dev-evidence-<suffix>.json.tmp`, then `mv` it into place**, so the console never reads it half written.
+
 ---
 
 ## Output Rules
 
 - The report MUST be valid Markdown
-- Overwrite your own two files completely, and write no others
+- Overwrite your own two files completely, and write no others (the `.tmp` file you rename into place is the same file)
 - Never write, append to or delete `.claude/tasks/developer-report.md` or `.claude/tasks/dev-evidence.json`
 
 ---

@@ -20,6 +20,8 @@ You have access to a browser via **Playwright MCP** to visually inspect and func
 ## Input Sources
 
 - `.claude/tasks/planner-output.json` (MANDATORY)
+- `.claude/tasks/acceptance-criteria.json` (MANDATORY when it exists): the criteria with their stable ids and required checks. Its ids are the ones you use, everywhere
+- `.claude/tasks/dev-evidence.json` (when it exists): the developers' measurements, each with the `id` you cite when you confirm it
 - `.claude/tasks/developer-report.md` (MANDATORY)
 - `.claude/tasks/senior-review.md` (MANDATORY)
 - `.claude/tasks/browser-recipe.md` (MANDATORY when it exists): how the developer put the app into the state its measurements were taken in
@@ -37,15 +39,31 @@ You MUST write two files:
 
 ```json
 {
+  "schemaVersion": 2,
   "source": "qa",
   "status": "PASS | PASS_WITH_WARNINGS | FAIL",
+  "round": 1,
+  "criteriaRevision": 1,
+  "producer": { "role": "qa-reviewer" },
+  "codeSnapshot": { "atStart": "<id printed before your first check>", "atEnd": "<id printed after your last>" },
   "items": [
-    { "label": "string", "verdict": "pass | fail | not_run | measured | confirmed | unverified", "command": "string", "actual": "string", "screenshot": "assets/relative-path.png" }
+    { "id": "QA-R1-1", "label": "string", "verdict": "pass | fail | not_run", "method": "test", "command": "string", "actual": "string" },
+    { "id": "QA-R1-2", "label": "string", "verdict": "measured | confirmed | unverified | pass | fail", "criterionIds": ["AC1"], "checkIds": ["AC1-C1"], "method": "test | browser | static_analysis | manual", "command": "string", "actual": "string", "screenshot": "assets/relative-path.png", "confirms": "T2-E1", "supersedes": ["QA-R0-2"], "blocker": { "reason": "string", "action": "string" } }
   ]
 }
 ```
 
-One item per row of the `Contrôles` table (`verdict` from its `Résultat` column, `command` and `actual` from `Commande exécutée` and `Preuve`), plus one item per row of `Critères observables` (`verdict`: `measured` for "measured live", `confirmed` for "confirmed from the developer's evidence", `unverified` otherwise; `actual` is the value read; `screenshot` when the evidence names one under `.claude/tasks/assets/`). Every row in either markdown table has a matching item here — this file is that data, not a summary of it. `label` and `actual` are written in French; `command` stays the literal command run, verbatim; the JSON keys and verdict tokens (`pass`, `fail`, `not_run`, `measured`, `confirmed`, `unverified`) stay in English exactly as shown.
+One item per row of the `Contrôles` table (`verdict` from its `Résultat` column, `command` and `actual` from `Commande exécutée` and `Preuve`), plus one item per row of `Critères observables` (`verdict`: `measured` for "measured live", `confirmed` for "confirmed from the developer's evidence", `unverified` otherwise; `actual` is the value read; `screenshot` when the evidence names one under `.claude/tasks/assets/`), plus one item per line of `Critères d'acceptation` that is not already one of those (`pass` for MET with its evidence, `fail` for NOT MET, `unverified` for UNVERIFIED). Every row in either markdown table has a matching item here — this file is that data, not a summary of it. `label` and `actual` are written in French; `command` stays the literal command run, verbatim; the JSON keys and verdict tokens (`pass`, `fail`, `not_run`, `measured`, `confirmed`, `unverified`) stay in English exactly as shown.
+
+The fields that make it traceable, and that the console relies on:
+
+- **`id`**: `QA-R<round>-<n>`, the round your caller gives you (1 when it gives none). Never reuse an id, not even your own from an earlier round.
+- **Links**: an item about a criterion cites its registry id in `criterionIds`, and the `checkIds` it covers when the criterion lists several required checks. The gates (lint, typecheck, the whole suite, build) cite none: a green lint says nothing about any criterion.
+- **A new round replaces, it does not overwrite.** When you check again something a previous round of yours recorded (read the previous `qa-evidence.json` before you rewrite it, and the `qa-evidence-round<N>.json` copies), write a new item and put the earlier id in `supersedes`. Without it, the earlier failure keeps standing next to your success, and the criterion stays unverified.
+- **`confirmed` carries `confirms`**: the `id` of the developer item (`dev-evidence.json`) you inspected. A confirmation without it counts for nothing.
+- **Blocked is named**: a criterion you could not reach because of something concrete is `unverified` with `blocker.reason` (the obstacle) and `blocker.action` (what would unblock it).
+- **`codeSnapshot`**: run `node "$IMPL_CODE_SNAPSHOT"` right before your first check and right after your last, and copy the `id` of each output. Never write one yourself; leave the field out when the variable is unset or the command fails. Two different ids mean something edited the code while you verified: say so, and the results of that sequence are not conclusive.
+- **Write it to `qa-evidence.json.tmp`, then `mv` it into place**, so the console never reads it half written.
 
 ---
 
@@ -53,7 +71,7 @@ One item per row of the `Contrôles` table (`verdict` from its `Résultat` colum
 
 - Markdown, following the format below, with every heading present
 - Overwrite both files completely
-- Do NOT create any file beyond these two
+- Do NOT create any file beyond these two (the `.tmp` file you rename into place is the same file)
 - Every claim carries its evidence: the exact command, its exact result, and a `path/file.ext:line` anchor for anything read from the code
 
 ---
@@ -200,7 +218,7 @@ everything is not an answer.
 
 ## Critères d'acceptation
 
-One line per criterion: `AC<n>` - MET / NOT MET / UNVERIFIED, with the evidence and its `file:line` anchor.
+One line per criterion, under its registry id (`AC<n>` from `.claude/tasks/acceptance-criteria.json`, never a number of your own): MET / NOT MET / UNVERIFIED, with the evidence and its `file:line` anchor.
 
 ## Problèmes
 

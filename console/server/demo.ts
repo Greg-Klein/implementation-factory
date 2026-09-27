@@ -1,7 +1,9 @@
 import { demoStepDuration } from "./config.js";
 import { now } from "./context.js";
-import { demoArtifactContents } from "./demo-data.js";
+import { demoAcceptance, demoArtifactContents, DEMO_SNAPSHOTS } from "./demo-data.js";
+import { ingestAcceptanceInput, refreshAcceptance } from "./acceptance-runtime.js";
 import { agentIdentity, agentRole, pairDelegation, plannedTasks } from "./domain.js";
+import { pilotActs } from "./run-health.js";
 import type { RunSession } from "./run-session.js";
 import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
@@ -37,6 +39,19 @@ function startDemoReviewer(session: RunSession) {
   session.state.agents = [{ id: "demo-reviewer", name: "senior-reviewer", ...agentIdentity(session.state.agents.length), role: agentRole("senior-reviewer"), status: "running", startedAt: now() }, ...session.state.agents];
 }
 
+/**
+ * A document the simulated workflow "writes": kept in the run's in-memory task
+ * directory and handed to the same ingestion a real file goes through, so the
+ * coverage the demo shows is computed, not staged.
+ */
+function writeDemoDocument(session: RunSession, name: string, content: string | Buffer, listed = true) {
+  session.demoFiles.set(name, Buffer.isBuffer(content) ? content : Buffer.from(content));
+  if (listed && !session.state.artifacts.includes(name)) session.state.artifacts = [...session.state.artifacts, name];
+  void ingestAcceptanceInput(session, name);
+}
+
+const png = (base64: string) => Buffer.from(base64, "base64");
+
 export function acknowledgeDemoInstruction(session: RunSession) {
   demoTerminal(session, "Instruction prise en compte. La démonstration ne modifie aucun dépôt.");
 }
@@ -47,8 +62,15 @@ export function acknowledgeDemoInstruction(session: RunSession) {
  * far as the repository lock is concerned.
  */
 export const DEMO_CWD = "~/workspace/acme-dashboard";
+/** The incident scenario runs on a checkout of its own, so it can play beside the main demonstration. */
+export const INCIDENT_DEMO_CWD = "~/workspace/acme-exports";
 
-export function demoLaunchState() {
+export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") {
+  if (scenario === "incident") return {
+    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: "Exporter le tableau des factures en CSV",
+    instruction: "Démonstration d'incident : aucun dépôt ne sera modifié.", startedAt: now(),
+    action: "Lecture du ticket GitLab",
+  };
   return {
     status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
     instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
@@ -56,7 +78,85 @@ export function demoLaunchState() {
   };
 }
 
+/**
+ * A pilot that hands control back halfway, with nothing running and nothing
+ * declared next: the case the health detector exists for. No incident is
+ * staged here; the detector finds it on its own, after its grace period.
+ */
+export function startIncidentDemoRun(session: RunSession) {
+  session.activity("system", "Ticket simulé chargé", "IH-57 · Exporter le tableau des factures en CSV");
+  session.publish();
+  demoTerminal(session, "Lecture du ticket GitLab simulé…");
+  scheduleDemo(session, demoStepDuration, () => {
+    pilotActs(session.signals, Date.now());
+    session.state.phase = 4;
+    session.state.branch = "feat/ih-57-export-csv";
+    session.state.artifacts = ["ticket-context.md", "implementation-plan.md"];
+    session.state.planTasks = [
+      { id: "T1", title: "Sérialiser les lignes du tableau", status: "todo" },
+      { id: "T2", title: "Ajouter le bouton d'export", status: "todo", dependencies: ["T1"] },
+    ];
+    session.state.action = "Délégation à developer";
+    delegateDemoTask(session, "T1");
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.publish();
+    session.signal();
+    demoTerminal(session, "Plan prêt. T1 confiée à un développeur.");
+  });
+  scheduleDemo(session, demoStepDuration * 2, () => {
+    finishDemoTask(session, "T1");
+    session.state.phase = 5;
+    session.state.action = undefined;
+    session.refreshPlanTasks();
+    session.markProgress();
+    // The pilot ends its turn here and launches nothing: T2 is left waiting.
+    session.signals.pilotIdleSince = Date.now();
+    session.activity("system", "Claude Code a rendu la main");
+    session.publish();
+    session.signal();
+    demoTerminal(session, "T1 terminée. (La session attend à son invite, sans lancer T2.)");
+  });
+  // The monitor ticks every fifteen seconds; the demonstration asks for a look right after its shortened grace.
+  scheduleDemo(session, demoStepDuration * 2 + demoHealthGraceMs() + 50, () => session.signal());
+}
+
+/** The grace of the incident demonstration: long enough to see the hand-back, short enough not to wait a minute. */
+export function demoHealthGraceMs() {
+  return demoStepDuration * 2;
+}
+
+/** What the simulated pilot does once the user asks it to go on: T2, then the end of the run. */
+export function resumeDemoAfterContinuation(session: RunSession) {
+  scheduleDemo(session, Math.max(200, demoStepDuration / 2), () => {
+    pilotActs(session.signals, Date.now());
+    session.state.action = "Délégation à developer";
+    delegateDemoTask(session, "T2");
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.publish();
+    session.signal();
+    demoTerminal(session, "Reprise : le plan indique T2 restante, délégation au développeur.");
+  });
+  scheduleDemo(session, demoStepDuration * 1.5, () => {
+    finishDemoTask(session, "T2");
+    session.state.phase = 10;
+    session.state.action = undefined;
+    session.state.status = "completed";
+    session.state.endedAt = now();
+    session.refreshPlanTasks();
+    session.markProgress();
+    session.activity("system", "Démonstration d'incident terminée", "Aucun dépôt ni ticket n’a été modifié.");
+    session.publish();
+    session.signal();
+    demoTerminal(session, "T2 terminée. Fin de la démonstration d'incident.");
+  });
+}
+
 export function startDemoRun(session: RunSession) {
+  // The simulated code has two versions: the one the first review measured, and the one after the rework.
+  for (const id of Object.values(DEMO_SNAPSHOTS)) session.evidence.rememberSnapshot(id, session.state.startedAt ?? now());
+  session.evidence.currentSnapshot = { id: DEMO_SNAPSHOTS.implementation, capturedAt: now() };
   session.activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
   session.publish();
   demoTerminal(session, "Lecture du ticket GitLab simulé…");
@@ -104,6 +204,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.phase = 3;
     session.state.action = "Création de la branche";
     session.state.branch = "feat/ih-42-notification-preferences";
+    writeDemoDocument(session, "acceptance-criteria.json", JSON.stringify(demoAcceptance.criteria, null, 2));
     session.activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
     session.publish();
     demoTerminal(session, "Branche et plan de travail préparés.");
@@ -112,6 +213,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.phase = 4;
     session.state.artifacts = [...session.state.artifacts, "implementation-plan.md", "planner-output.json"];
     session.state.planTasks = plannedTasks(demoArtifactContents["planner-output.json"]);
+    writeDemoDocument(session, "planner-output.json", demoArtifactContents["planner-output.json"]);
     session.activity("artifact", "Plan d’implémentation validé", "implementation-plan.md");
     session.refreshPlanTasks();
     session.publish();
@@ -139,7 +241,9 @@ export function continueDemoRun(session: RunSession) {
     startDemoReviewer(session);
     session.state.action = "Exécution des tests";
     session.refreshPlanTasks();
-    session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
+    session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "assets/panneau-preferences.png"];
+    writeDemoDocument(session, "assets/panneau-preferences.png", png(demoArtifactContents["assets/panneau-preferences.png"]), false);
+    writeDemoDocument(session, "dev-evidence.json", JSON.stringify(demoAcceptance.developer, null, 2));
     session.state.evidenceUpdatedAt = now();
     session.activity("agent", "Implémentation terminée, vérifications en cours");
     session.publish();
@@ -149,6 +253,8 @@ export function continueDemoRun(session: RunSession) {
     session.state.phase = 7;
     session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "failed" as const, endedAt: now() } : agent);
     session.state.artifacts = [...session.state.artifacts, "senior-review-round-1.md"];
+    writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundOne), false);
+    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
     session.activity("attention", "Review : corrections demandées", "Le fallback critique ignore le fuseau horaire · un test de régression manque");
     session.publish();
     demoTerminal(session, "Review 1/2 : changements demandés sur le fallback et sa couverture de test.");
@@ -167,6 +273,9 @@ export function continueDemoRun(session: RunSession) {
     session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined } : agent);
     session.refreshPlanTasks();
     session.state.artifacts = [...session.state.artifacts, "test-report-round-2.json"];
+    // The rework changed the code: everything measured before it is now stale.
+    session.evidence.currentSnapshot = { id: DEMO_SNAPSHOTS.final, capturedAt: now() };
+    void refreshAcceptance(session);
     session.activity("agent", "Corrections vérifiées", "12 tests passent, dont le nouveau test de régression");
     session.publish();
     demoTerminal(session, "Corrections terminées. Les 12 tests passent, nouvelle review demandée.");
@@ -174,26 +283,29 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, demoStepDuration * 7, () => {
     session.state.phase = 7;
     session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-    session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md", "qa-evidence.json"];
+    session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md"];
+    writeDemoDocument(session, "qa-evidence-round1.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
+    writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundTwo), false);
+    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundTwo, null, 2));
     // A second write, the way a review round overwrites the file: the badge has to light again.
     session.state.evidenceUpdatedAt = now();
-    session.activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
+    session.activity("agent", "Review 2/2 bloquée", "Retours du premier passage résolus, AC4 toujours en échec");
     session.publish();
-    demoTerminal(session, "Review 2/2 : approuvée. Les retours ont bien été pris en compte.");
+    demoTerminal(session, "Review 2/2 : les retours du premier passage sont résolus, mais AC4 reste en échec. Limite de boucle atteinte : la merge request partira en draft.");
   });
   scheduleDemo(session, demoStepDuration * 8, () => {
     session.state.phase = 8;
     session.state.artifacts = [...session.state.artifacts, "mr-description.md"];
-    session.activity("artifact", "Merge request préparée", "mr-description.md");
+    session.activity("artifact", "Merge request draft préparée", "mr-description.md");
     session.publish();
-    demoTerminal(session, "Description et checklist de merge request générées.");
+    demoTerminal(session, "Description de merge request générée, avec une section Blocked pour AC4.");
   });
   scheduleDemo(session, demoStepDuration * 9, () => {
     session.state.phase = 9;
     session.state.action = "Ouverture de la merge request";
     session.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
-    session.activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
-    session.activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
+    session.activity("system", "Merge request draft ouverte (démo)", "acme-dashboard/-/merge_requests/128");
+    session.activity("system", "Rapport de review publié", "Review 2/2 · bloquée sur AC4");
     session.publish();
     demoTerminal(session, "Rapport final publié dans la merge request simulée.");
   });
@@ -204,7 +316,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.endedAt = now();
     session.activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
     session.publish();
-    demoTerminal(session, "Merge request simulée prête. Fin de la démonstration.");
+    demoTerminal(session, "Merge request draft simulée prête. Fin de la démonstration.");
   });
   scheduleDemo(session, demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;

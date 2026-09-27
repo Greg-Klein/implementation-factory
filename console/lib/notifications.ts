@@ -21,8 +21,6 @@ export function runAlert(previous: RunSummary | undefined, next: RunSummary): Ru
   const where = runLabel(next);
   if (next.pendingQuestionCount > 0 && previous.pendingQuestionCount === 0)
     return { runId: next.id, tag: `question-${next.pendingQuestionId}`, title: pendingAnswerLabel(next.pendingQuestionCount), body: `${where} · le workflow attend ta décision pour continuer.`, cue: "attention" };
-  if (next.pendingQuestionCount === 0 && next.status === "attention" && previous.status !== "attention")
-    return { runId: next.id, tag: `attention-${next.id}`, title: "Claude Code attend ton attention", body: `${where} · le run est en pause tant que tu n'as pas repris la main.`, cue: "attention" };
   if (next.status === "completed" && runInProgress(previous.status))
     return { runId: next.id, tag: `completed-${next.id}`, title: `Workflow terminé · ${where}`, body: next.mergeRequestUrl ?? "Le run est allé au bout.", cue: "done" };
   // A failed run is over too, and what happens next is the user's call either
@@ -33,6 +31,14 @@ export function runAlert(previous: RunSummary | undefined, next: RunSummary): Ru
   // must never read like the "completed" case above.
   if (next.status === "stopped" && runInProgress(previous.status))
     return { runId: next.id, tag: `stopped-${next.id}`, title: `Run arrêté · ${where}`, body: "Tu as arrêté la session avant la fin du workflow.", cue: "done" };
+  // One alert per incident, whatever else changed with it: its opening is the news.
+  if (next.incident && next.incident.id !== previous.incident?.id && next.pendingQuestionCount === 0)
+    return { runId: next.id, tag: `incident-${next.incident.id}`, title: `${next.incident.title} · ${where}`, body: "Ouvre le run pour voir ce qui a été observé et ce que tu peux faire.", cue: "attention" };
+  if (next.pendingQuestionCount === 0 && next.status === "attention" && previous.status !== "attention")
+    return { runId: next.id, tag: `attention-${next.id}`, title: "Claude Code attend ton attention", body: `${where} · le run est en pause tant que tu n'as pas repris la main.`, cue: "attention" };
+  // A doubt is worth one call, never on a run already waiting for the user: that one was called already.
+  if (next.health === "suspected_stall" && previous.health !== "suspected_stall" && next.status !== "attention" && next.pendingQuestionCount === 0)
+    return { runId: next.id, tag: `suspected-${next.id}`, title: `Aucune progression observée · ${where}`, body: "Un doute, pas un verdict : rien n’a été arrêté ni relancé.", cue: "attention" };
   return undefined;
 }
 

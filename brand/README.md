@@ -60,8 +60,8 @@ Les statuts reprennent la palette Tailwind, toujours en couple fond clair et tex
 | Sens | Fond | Texte | Bordure | Exemples |
 |---|---|---|---|---|
 | Progression, succès | `--accent-soft` ou `emerald-50` | `--accent` ou `emerald-700` | | « En cours », étape terminée, « Terminé » |
-| Décision attendue | `amber-50` / `amber-100` | `amber-800` / `amber-900` | `amber-200` | « À toi de jouer », question en attente, avertissement |
-| Erreur | `red-50` | `red-700` / `red-800` | `red-200` | Lancement refusé, champ invalide |
+| Décision attendue | `amber-50` / `amber-100` | `amber-800` / `amber-900` | `amber-200` | « À toi de jouer » (seulement pour une question ou une saisie attendue dans le terminal), « Sans suite » (le run n’a plus de prochaine action, sans qu’on ait posé de question), avertissement |
+| Erreur | `red-50` | `red-700` / `red-800` | `red-200` | Lancement refusé, champ invalide, « Erreur », « Interrompu » (session perdue, distincte d’une erreur du workflow) |
 | Neutre, arrêté | `--line` | `--muted` | | « Arrêté » |
 
 Une couleur de statut n’est jamais seule : elle accompagne un libellé et, pour l’attention et l’erreur, une icône (`Warning`, `WarningCircle`).
@@ -98,6 +98,9 @@ La hiérarchie repose sur la graisse et la couleur plus que sur la taille : on r
 - **Navigation latérale** : élément actif en fond `--accent-soft` et texte `--accent`, inactif en `--muted` avec survol `white/60`.
 - **Agent** : photo ronde (`public/avatars/`, `object-cover`) liée à son prénom, suivie de « Prénom · Rôle », le prénom en `--ink`, le séparateur et le rôle en `--muted`. Sans photo, l’initiale sur fond `--accent-soft`. Ce sont les seules images de personnes de l’interface : elles distinguent les agents d’un même run, elles ne décorent pas.
 - **Carte de tâche (Suivi)** : fond blanc, bordure `--line`, `rounded-lg`, posée sur une colonne `--paper`. Cercle vide à faire, anneau ambre en cours, coche blanche sur `--accent` terminée ; complexité et identifiant en mono `--muted`.
+- **Critère d’acceptation (Preuves)** : ligne dépliable, identifiant en mono `--muted`, texte en `--ink`, pastille d’état à droite. Vérifié en `emerald`, échec en `red`, bloqué en `amber` (quelqu’un doit agir), non vérifié en fond `--line` et texte `--ink` plutôt que `--muted`, pour rester lisible : un critère non vérifié n’est jamais vert. Les réserves sur une preuve (« Preuve ancienne », « Version inconnue », « Mesure non concluante ») sont de petites pastilles `amber-50`, les mentions neutres (« Résultat rapporté », « Confirmation ») des pastilles `--paper`.
+- **Bandeau d’incident (vue du run)** : sous les onglets, pleine largeur, fond et bordure basse de la couleur de statut : `amber` pour une attente, un doute ou un incident qu’on peut encore traiter, `red` pour une session interrompue. Icône `fill` à gauche (`Warning`, `WarningCircle`, `HourglassMedium` pour un doute), titre factuel en `font-semibold`, cause en une phrase, « Prochaine action attendue », puis seulement les actions possibles : « Demander la continuation » en bouton d’action du run, les autres en boutons secondaires. Le diagnostic reste replié. Dans la liste des runs, la même information tient dans la troisième ligne de la rangée, icône et libellé de la couleur du statut. Le texte de l’erreur n’est pas répété dans la colonne de droite quand le bandeau le dit déjà. Un run archivé n’a plus de session : sa durée s’arrête à son dernier événement connu, et sa conversation vide ne renvoie pas vers le terminal.
+- **Couverture dans la liste des runs** : au bout de la troisième ligne, « vérifiés/total AC » en mono `text-[9px] font-semibold`, texte seul de la couleur du pire état restant (`red-700` pour un échec, `amber-800` pour un blocage, `--accent` quand tout est vérifié, `--muted` sinon). Le détail va dans le libellé accessible et l’infobulle. Rien sans registre de critères.
 - **Terminal** : fond `--terminal`, barre de défilement fine `#47504b`. C’est la seule surface sombre de l’application.
 
 Tous les éléments interactifs ont un focus visible : `outline-2`, décalage 2 px, couleur `--accent`. Les actions appuyées descendent d’un pixel (`active:translate-y-px`).

@@ -10,7 +10,7 @@ export type ConversationMessage = { id: string; at: string; author: "claude" | "
 /** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
 /** `assignee`: the agent that last took the task, by id and by the name and role the interface calls it. */
-export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string } };
+export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[] };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 export type RunState = {
@@ -28,6 +28,13 @@ export type RunState = {
   planTasks?: PlanTask[];
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
+  /** Acceptance coverage in figures; the full view comes from /api/runs/<id>/acceptance. */
+  acceptance?: AcceptanceDigest;
+  /** Who can move the run forward, as the health monitor sees it. See server/run-health.ts. */
+  health?: RunHealthView;
+  incidents?: RunIncident[];
+  /** A run read back from its archive after a restart: no session, nothing to act on but its incident. */
+  archived?: boolean;
 };
 /**
  * A run as the side list sees it. Mirrors RunSummary in server/types.ts: the
@@ -46,12 +53,17 @@ export type RunSummary = {
   lastMessageId?: string;
   lastMessageAuthor?: ConversationMessage["author"];
   evidenceUpdatedAt?: string;
+  acceptance?: AcceptanceCounts;
   /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
   holdsRepository: boolean;
+  health?: RunHealth;
+  incident?: { id: string; kind: IncidentKind; title: string; revision: number };
+  archived?: boolean;
 };
 export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
 export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number };
+/** `archived`: runs of an earlier process left with an open incident, readable but not live. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
 export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string };
 export type ServerMessage =
@@ -59,7 +71,8 @@ export type ServerMessage =
   | { type: "run"; state: RunState }
   | { type: "terminal.output"; runId: string; data: string }
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
-  | { type: "error"; message: string; runId?: string };
+  | { type: "error"; message: string; runId?: string }
+  | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {
@@ -68,6 +81,56 @@ export type RepositoryResponse = {
 };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
-export type EvidenceItem = { label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string };
+export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string };
 export type EvidenceReport = { source: "qa" | "design" | "developer"; status?: string; items: EvidenceItem[] };
 export type PendingImprovementsResponse = { items: PendingSelfImprovementReview[]; error?: string };
+
+/** Mirrors the acceptance types of server/types.ts, computed by server/acceptance.ts. */
+export type AcceptanceStatus = "verified" | "unverified" | "blocked" | "failed";
+export type AcceptanceCounts = { total: number; verified: number; failed: number; blocked: number; unverified: number; stale: number };
+export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number };
+export type EvidenceSource = "qa" | "design" | "developer";
+export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
+export type EvidenceBasis = "observed" | "reported" | "confirmation";
+export type EvidenceFreshness = "current" | "stale" | "unknown" | "inconclusive";
+export type EvidenceAttachmentView = { source: string; path?: string; archived: boolean };
+export type EvidenceView = {
+  key: string; id?: string; label: string; verdict: string; source: EvidenceSource; file: string; version: number; receivedAt: string;
+  round?: number; producer?: { role?: string; agentId?: string }; observedAt?: string; method?: EvidenceMethod; basis: EvidenceBasis;
+  expected?: string; actual?: string; command?: string; note?: string;
+  criterionIds: string[]; checkIds: string[]; taskIds: string[];
+  snapshotId?: string; freshness: EvidenceFreshness; supersedes: string[]; supersededBy?: string; confirms?: string;
+  blocker?: { reason: string; action?: string };
+  attachments: EvidenceAttachmentView[];
+};
+export type AcceptanceCheckView = { id: string; description: string; method?: EvidenceMethod; status: AcceptanceStatus; reasons: string[]; evidence: EvidenceView[]; history: EvidenceView[] };
+export type AcceptanceCriterionView = {
+  id: string; text: string; status: AcceptanceStatus; source?: { kind: string; reference?: string; excerpt?: string }; expected?: string;
+  tasks: { id: string; title: string }[]; checks: AcceptanceCheckView[]; unassigned: EvidenceView[]; reasons: string[]; reconstructed?: boolean;
+};
+export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
+export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean };
+export type AcceptanceView = {
+  available: boolean; registryRevision?: number; updatedAt: string; counts: AcceptanceCounts; sentence: string; currentSnapshot?: { id: string; capturedAt: string };
+  criteria: AcceptanceCriterionView[]; general: EvidenceView[]; generalHistory: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[];
+};
+
+/** Mirrors the run health types of server/types.ts. */
+export type RunHealth = "healthy" | "waiting" | "suspected_stall" | "stalled" | "interrupted";
+export type WaitReason = "user_question" | "permission" | "terminal_interaction" | "agent" | "tool" | "dependency" | "unknown";
+export type RunWait = { reason: WaitReason; since: string; on?: string; liftedBy?: string };
+export type IncidentKind = "no_next_action" | "lost_session" | "missing_result" | "unresolvable_dependency";
+export type IncidentAction = "answer" | "open_terminal" | "view_diagnostic" | "request_continuation" | "stop" | "dismiss";
+export type IncidentDecision = { requestId: string; action: IncidentAction; at: string; outcome: "pending" | "done" | "refused" | "unknown"; detail?: string };
+export type RunIncident = {
+  id: string; runId: string; kind: IncidentKind; status: "open" | "resolved" | "dismissed"; revision: number; detectedAt: string; updatedAt: string; fingerprint: string;
+  title: string; reason: string; observations: { kind: string; at?: string; detail: string }[]; expectedNextAction?: string; suggestedActions: IncidentAction[];
+  continuation?: { requestedAt: string; requestId: string }; decisions: IncidentDecision[]; resolution?: { at: string; outcome: string; detail?: string };
+};
+export type RunHealthView = {
+  health: RunHealth; wait?: RunWait; title?: string; detail?: string;
+  workflow?: { state: string; revision: number; nextAction?: string; receivedAt: string } | { missing: true };
+  evaluatedAt: string;
+};
+/** What became of an incident action this page sent, shown next to the incident. */
+export type IncidentResult = { incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };

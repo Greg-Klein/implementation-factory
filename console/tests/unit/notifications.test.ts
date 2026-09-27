@@ -49,6 +49,24 @@ describe("run notifications", () => {
     expect(runAlert(run(), run())).toBeUndefined();
   });
 
+  it("should call back once when an incident opens, not a second time for the attention that comes with it", () => {
+    const incident = { id: "incident-1", kind: "no_next_action" as const, title: "Plus aucune action en cours", revision: 1 };
+    const alert = runAlert(run(), run({ status: "attention", health: "stalled", incident }));
+    expect(alert).toMatchObject({ tag: "incident-incident-1", title: "Plus aucune action en cours · repo", cue: "attention" });
+    expect(runAlert(run({ status: "attention", incident }), run({ status: "attention", incident: { ...incident, revision: 2 } }))).toBeUndefined();
+  });
+
+  it("should voice a doubt once, and never on a run already waiting for the user", () => {
+    expect(runAlert(run(), run({ health: "suspected_stall" }))?.title).toBe("Aucune progression observée · repo");
+    expect(runAlert(run({ health: "suspected_stall" }), run({ health: "suspected_stall" }))).toBeUndefined();
+    expect(runAlert(run({ status: "attention" }), run({ status: "attention", health: "suspected_stall" }))).toBeUndefined();
+  });
+
+  it("should announce a lost session as the failure it is, not twice", () => {
+    const alert = runAlert(run(), run({ status: "failed", health: "interrupted", incident: { id: "i2", kind: "lost_session", title: "Session interrompue", revision: 1 } }));
+    expect(alert?.tag).toBe("failed-run-1");
+  });
+
   it("should stay silent when the state belongs to another run", () => {
     expect(runAlert(run({ id: "run-0" }), run({ id: "run-1", status: "completed" }))).toBeUndefined();
   });

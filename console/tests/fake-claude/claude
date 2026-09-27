@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+// Stands in for Claude Code in the integration suite: a session that starts,
+// waits at its prompt and quits when the console stops it. The tests write the
+// workflow's documents and post its hooks themselves, so the real ingestion
+// path runs without a model. What the console types into the session is kept,
+// one file per run, for a test to count what was submitted.
+import { appendFileSync } from "node:fs";
+import path from "node:path";
+process.stdout.write("fake claude ready\r\n");
+const inputDirectory = process.env.FAKE_CLAUDE_INPUT_DIR;
+if (inputDirectory && process.env.IMPL_RUN_ID) {
+  const log = path.join(inputDirectory, `${process.env.IMPL_RUN_ID}.log`);
+  process.stdin.on("data", (chunk) => { try { appendFileSync(log, chunk); } catch { /* the test reads what it can */ } });
+}
+const quit = () => process.exit(0);
+process.on("SIGHUP", quit);
+process.on("SIGTERM", quit);
+setInterval(() => {}, 1 << 30);

@@ -1,11 +1,14 @@
 "use client";
 
-import { ClockCounterClockwiseIcon, GitBranchIcon, PlusIcon, StackIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { holdsIdleSession, isClosable, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
+import { ArchiveIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RunSummary } from "@/lib/types";
 
 const PHASES = 10;
+
+/** Status colours of brand/README.md, as text only: the chip sits in a line of muted text. */
+const CHIP_TONE = { error: "text-red-700", attention: "text-amber-800", verified: "text-[var(--accent)]", neutral: "text-[var(--muted)]" } as const;
 
 function Dot({ status, pulsing }: { status: RunSummary["status"]; pulsing: boolean }) {
   return <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${pulsing ? "status-breathe" : ""}`} style={{ background: statusColor(status) }} />;
@@ -51,7 +54,9 @@ function TicketTitle({ title }: { title: string }) {
 function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; selected: boolean; index: number; onOpen: () => void; onClose: () => void }) {
   const waiting = run.pendingQuestionCount > 0;
   const idle = holdsIdleSession(run);
+  const badge = healthBadge(run);
   const closable = isClosable(run);
+  const coverage = acceptanceChip(run.acceptance);
   return (
     <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal group relative flex transition-colors duration-200 ${selected ? "bg-white" : "hover:bg-white/60"}`}>
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
@@ -72,9 +77,11 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
               : <span className="shrink-0 font-mono text-[9px] text-[var(--muted)]">{run.phase}/{PHASES}</span>}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 truncate text-[10px] text-[var(--muted)]">
-            {run.branch && <GitBranchIcon size={10} className="shrink-0" />}
-            <span className="truncate">{idle ? "Session ouverte" : run.action ?? statusLabel(run.status)}</span>
+            {badge
+              ? <HealthMark badge={badge} />
+              : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session ouverte" : run.action ?? statusLabel(run.status)}</span></>}
             {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
+            {coverage && <span title={coverage.title} aria-label={coverage.title} className={`ml-auto shrink-0 font-mono text-[9px] font-semibold ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
           </span>
           <PhaseBar phase={run.phase} status={run.status} />
         </span>
@@ -90,6 +97,33 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
           <TrashIcon size={12} />
         </button>
       )}
+    </div>
+  );
+}
+
+/** What the health monitor says of a row, in the row's own third line: an incident or a doubt, never both. */
+function HealthMark({ badge }: { badge: NonNullable<ReturnType<typeof healthBadge>> }) {
+  const Icon = badge.tone === "error" ? WarningCircleIcon : badge.tone === "doubt" ? HourglassMediumIcon : WarningIcon;
+  const color = badge.tone === "error" ? "text-red-700" : "text-amber-800";
+  return <span className={`flex min-w-0 items-center gap-1 font-medium ${color}`}><Icon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{badge.label}</span></span>;
+}
+
+/**
+ * A run of an earlier session, read back from its archive because it ended
+ * with an open incident. It has no session and takes no slot: the row opens
+ * its diagnosis, nothing else.
+ */
+function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; selected: boolean; index: number; onOpen: () => void }) {
+  return (
+    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal relative ${selected ? "bg-white" : "hover:bg-white/60"}`}>
+      {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
+      <button type="button" onClick={onOpen} aria-label={`Consulter l’archive du run ${runLabel(run)}`} aria-current={selected ? "true" : undefined} className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left">
+        <ArchiveIcon size={11} className="mt-0.5 shrink-0 text-[var(--muted)]" aria-hidden />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11px] font-medium text-[var(--ink)]">{run.ticketTitle ?? runLabel(run)}</span>
+          <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-red-700"><WarningCircleIcon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{run.incident?.title ?? "Session interrompue"}</span></span>
+        </span>
+      </button>
     </div>
   );
 }
@@ -118,9 +152,10 @@ function QueuedRow({ entry, index, onCancel }: { entry: QueuedRunView; index: nu
  * column as that run's progression, the two headings competed and the list read
  * as the top half of the progression rather than as the navigation it is.
  */
-export function RunRail({ runs, queued, maxConcurrentRuns, selectedRunId, onOpen, onNew, onClose, onCancelQueued }: {
+export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, onClose, onCancelQueued }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
+  archived?: RunSummary[];
   maxConcurrentRuns: number;
   selectedRunId: string | null;
   onOpen: (runId: string) => void;
@@ -155,7 +190,7 @@ export function RunRail({ runs, queued, maxConcurrentRuns, selectedRunId, onOpen
       </div>
 
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-        {runs.length === 0 && queued.length === 0 ? (
+        {runs.length === 0 && queued.length === 0 && archived.length === 0 ? (
           <div className="px-3.5 py-6 text-center">
             <div className="mx-auto grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ClockCounterClockwiseIcon size={14} /></div>
             <p className="mt-2.5 text-[11px] font-medium">Aucun run</p>
@@ -164,6 +199,15 @@ export function RunRail({ runs, queued, maxConcurrentRuns, selectedRunId, onOpen
         ) : (
           <div className="divide-y divide-[var(--line)]">
             {runs.map((run, index) => <RunRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} onClose={() => onClose(run.id)} />)}
+          </div>
+        )}
+
+        {archived.length > 0 && (
+          <div role="group" aria-label="Runs interrompus" className="border-t border-[var(--line)]">
+            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs d’une session précédente, restés avec un incident ouvert. Lecture seule.">Interrompus · {archived.length}</p>
+            <div className="divide-y divide-[var(--line)]">
+              {archived.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
+            </div>
           </div>
         )}
 

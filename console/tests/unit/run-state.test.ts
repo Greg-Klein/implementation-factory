@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -82,7 +82,9 @@ describe("run state selectors", () => {
   it("should mark an intentional terminal stop as stopped, never as completed or failed", () => {
     expect(terminalExitStatus(1, true)).toBe("stopped");
     expect(terminalExitStatus(0, true)).toBe("stopped");
-    expect(terminalExitStatus(0, false)).toBe("completed");
+    // A clean exit proves nothing: only a result the workflow reached is a completion.
+    expect(terminalExitStatus(0, false)).toBe("failed");
+    expect(terminalExitStatus(0, false, true)).toBe("completed");
     expect(terminalExitStatus(1, false)).toBe("failed");
   });
 });
@@ -100,5 +102,44 @@ describe("the message announcing a queued launch", () => {
   it("should leave every other message alone, however long the queue stays empty", () => {
     expect(noticeIsStale({}, [])).toBe(false);
     expect(noticeIsStale(undefined, [])).toBe(false);
+  });
+});
+
+describe("the Progression badge", () => {
+  const incident = (kind: "no_next_action" | "lost_session") => ({
+    id: "i", runId: "r", kind, status: "open" as const, revision: 1, detectedAt: "", updatedAt: "", fingerprint: "f", title: "t", reason: "r",
+    observations: [], suggestedActions: [], decisions: [],
+  });
+
+  it("should keep « À toi de jouer » for a real question", () => {
+    expect(runStatusBadge({ status: "attention", pendingQuestion: { id: "q", questions: [] }, incidents: [incident("no_next_action")] })).toEqual({ label: "À toi de jouer", tone: "decision" });
+  });
+
+  it("should keep « À toi de jouer » for a prompt waiting in the terminal", () => {
+    expect(runStatusBadge({ status: "attention", health: { health: "waiting", wait: { reason: "permission", since: "" }, evaluatedAt: "" } })).toEqual({ label: "À toi de jouer", tone: "decision" });
+  });
+
+  it("should say a run with no next action is blocked, without implying a question", () => {
+    expect(runStatusBadge({ status: "attention", incidents: [incident("no_next_action")] })).toEqual({ label: "Sans suite", tone: "blocked" });
+  });
+
+  it("should read a lost session as an interruption, not as an error", () => {
+    expect(runStatusBadge({ status: "failed", incidents: [incident("lost_session")] })).toEqual({ label: "Interrompu", tone: "error" });
+    expect(runStatusBadge({ status: "failed" })).toEqual({ label: "Erreur", tone: "error" });
+  });
+});
+
+describe("the acceptance chip of a run row", () => {
+  const counts = { total: 5, verified: 2, failed: 1, blocked: 1, unverified: 1, stale: 0 };
+
+  it("should show nothing without a registry of criteria", () => {
+    expect(acceptanceChip(undefined)).toBeUndefined();
+    expect(acceptanceChip({ ...counts, total: 0, verified: 0, failed: 0, blocked: 0, unverified: 0 })).toBeUndefined();
+  });
+
+  it("should show verified over total, coloured by the worst state left", () => {
+    expect(acceptanceChip(counts)).toEqual({ label: "2/5 AC", title: "2 critères vérifiés sur 5 · 1 en échec · 1 bloqué · 1 non vérifié", tone: "error" });
+    expect(acceptanceChip({ ...counts, failed: 0, unverified: 2 })?.tone).toBe("attention");
+    expect(acceptanceChip({ ...counts, verified: 5, failed: 0, blocked: 0, unverified: 0 })).toMatchObject({ label: "5/5 AC", tone: "verified" });
   });
 });

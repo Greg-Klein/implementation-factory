@@ -126,10 +126,12 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.endedAt).not.toBeNull();
   });
 
-  it("should not date the end of a run that is only waiting for an answer", () => {
+  it("should leave a mid-workflow hand-back to the health monitor, without dating the end of the run", () => {
     session.state.phase = 5;
     hook({ hook_event_name: "Stop" });
-    expect(session.state).toMatchObject({ status: "attention", endedAt: null });
+    // Not "attention" straight away: a hand-back is a verdict only once nothing is going to wake the pilot.
+    expect(session.state).toMatchObject({ status: "running", endedAt: null });
+    expect(session.signals.pilotIdleSince).toBeDefined();
   });
 
   it("should leave a finished run alone when the idle session keeps notifying", () => {

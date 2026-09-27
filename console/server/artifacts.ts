@@ -6,11 +6,26 @@ import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isR
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
+import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
+import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
+import { closeWorkflowIfDone } from "./hooks.js";
+import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 
+/** A version kept by the evidence archive: served only when the archive itself wrote that path. */
+async function readArchivedEvidence(session: RunSession, archivePath: string) {
+  const buffer = await session.evidence.read(archivePath);
+  if (!buffer) throw new Error("Document introuvable pour ce run.");
+  if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
+  const contentType = IMAGE_CONTENT_TYPES[path.extname(archivePath).toLowerCase()];
+  if (contentType) return { path: archivePath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
+  return { path: archivePath, content: buffer.toString("utf8") };
+}
+
 export async function readArtifact(session: RunSession, artifactPath: string) {
+  if (artifactPath.startsWith("evidence/")) return readArchivedEvidence(session, artifactPath);
   if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
   if (session.demo) {
     const content = demoArtifactContents[artifactPath];
@@ -20,7 +35,9 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
     return { path: artifactPath, content };
   }
   const root = path.resolve(dataRoot, session.id, "artifacts");
-  const target = resolveArtifactPath(root, artifactPath);
+  // The lexical check refuses `..`; the real path refuses a symbolic link
+  // planted in the archive that points outside it.
+  const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
   if (!target) throw new Error("Chemin de document invalide.");
   const buffer = await readFile(target);
   if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
@@ -43,7 +60,10 @@ async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: s
     if (typeof screenshot !== "string" || !screenshot) continue;
     const source = path.resolve(taskRoot, screenshot);
     const relative = path.relative(taskRoot, source);
-    if (relative.startsWith("..") || path.isAbsolute(relative) || session.state.artifacts.includes(relative)) continue;
+    // Copied again when it was already: a later round may have replaced the
+    // capture under the same name, and this copy is the one the latest report
+    // points at. Every earlier version keeps its own in the evidence archive.
+    if (relative.startsWith("..") || path.isAbsolute(relative)) continue;
     const target = path.join(dataRoot, session.id, "artifacts", relative);
     await mkdir(path.dirname(target), { recursive: true });
     const copied = await copyFile(source, target).then(() => true, () => false);
@@ -60,7 +80,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   const taskRoot = engine.taskDirectory(session.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
-  if (!isRunDocument(relative)) return;
+  if (!isRunDocument(relative)) { await attachmentArrived(session); return; }
   const target = path.join(dataRoot, session.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(source, target);
@@ -79,10 +99,36 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
     if (tasks) session.state.planTasks = tasks;
   }
   session.refreshPlanTasks();
+  if (acceptanceInputKind(relative)) await ingestAcceptanceInput(session, relative);
+  if (relative === SYNC_REQUEST_FILE) await confirmArchiveSync(session, source);
+  if (relative === WORKFLOW_STATE_FILE) readWorkflowState(session, await readFile(source, "utf8").catch(() => ""));
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) session.state.phase = Math.max(session.state.phase, completedPhase + 1);
+  // A document is progress of the workflow, whatever the terminal shows.
+  session.markProgress();
   session.publish();
+  session.signal();
+}
+
+/**
+ * What the workflow says about itself. A malformed or older revision leaves
+ * the last valid one in force; a declared end closes the run only once it
+ * holds against the deliverable (see closeWorkflowIfDone).
+ */
+function readWorkflowState(session: RunSession, content: string) {
+  const reading = parseWorkflowState(content, new Date().toISOString());
+  if ("error" in reading) {
+    if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignoré", reading.error);
+    session.workflowDiagnostic = reading.error;
+    return;
+  }
+  session.workflowDiagnostic = undefined;
+  const previous = session.state.workflow;
+  if (previous && reading.state.revision < previous.revision) return;
+  session.state.workflow = reading.state;
+  if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow : ${reading.state.state}${reading.state.step ? `, étape ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
+  closeWorkflowIfDone(session);
 }
 
 /**

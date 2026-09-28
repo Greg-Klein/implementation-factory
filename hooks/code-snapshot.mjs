@@ -41,8 +41,8 @@ export function codeSnapshot(cwd, { exclude = [] } = {}) {
     if (existsSync(realIndex)) copyFileSync(realIndex, index);
     const excluded = exclude.map((entry) => entry.trim()).filter(Boolean);
     const env = { GIT_INDEX_FILE: index };
-    git(root, ["add", "--all", "--", ".", ...excluded.map((entry) => `:(exclude)${entry}`)], env);
-    // A path excluded from `add` may still sit in the copied index; it must not count.
+    // Exclusions are not passed to `add` as pathspecs: when one names a gitignored path, `add` fails.
+    git(root, ["add", "--all", "--", "."], env);
     for (const entry of excluded) git(root, ["rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", entry], env);
     const tree = git(root, ["write-tree"], env);
     return { schemaVersion: 1, id: `snap-${tree.slice(0, 16)}`, tree, commit, capturedAt: new Date().toISOString(), scope: { root, excluded } };

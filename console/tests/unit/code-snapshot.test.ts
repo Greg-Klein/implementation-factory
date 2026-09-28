@@ -55,6 +55,14 @@ describe("code snapshot utility", () => {
     expect(withIgnore.id).not.toBe(first.id);
   });
 
+  it("should work when the workflow documents are gitignored", () => {
+    writeFileSync(path.join(repository, ".gitignore"), ".claude\n");
+    const first = snapshot();
+    mkdirSync(path.join(repository, ".claude", "tasks"), { recursive: true });
+    writeFileSync(path.join(repository, ".claude", "tasks", "qa-report.md"), "report");
+    expect(snapshot().id).toBe(first.id);
+  });
+
   it("should leave the real index untouched and log what it took", () => {
     const log = path.join(repository, "..", `${path.basename(repository)}.jsonl`);
     const taken = snapshot({ IMPL_SNAPSHOT_LOG: log });

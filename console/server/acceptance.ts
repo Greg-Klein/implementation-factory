@@ -462,7 +462,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
         reasons.unshift(`Un échec antérieur n'a pas été explicitement remplacé : ${olderFailures.map(({ entry }) => entry.view.id ?? entry.view.label).join(", ")}.`);
       } else if (positives.length > 0) {
         status = "verified";
-      } else if (blocked.length > 0) {
+      } else if (blocked.length > 0 && !counted.some(({ outcome }) => outcome === "positive")) {
         status = "blocked";
         reasons.unshift(...blocked.map(({ entry }) => `Bloqué : ${entry.view.blocker!.reason}${entry.view.blocker!.action ? ` Action nécessaire : ${entry.view.blocker!.action}` : ""}`));
       } else {

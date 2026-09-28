@@ -147,6 +147,15 @@ describe("acceptance coverage", () => {
     expect(criterion(view, "AC3").checks[0].reasons[0]).toContain("Environnement de test inaccessible");
   });
 
+  it("should lift a blocker once another source reports a result on the same check", () => {
+    const view = coverage({ reports: [
+      report("dev-evidence.json", qa([{ id: "D1", label: "Erreur serveur", verdict: "not_run", criterionIds: ["AC3"], blocker: { reason: "Session requise", action: "Mesure déléguée au pilote" } }], { source: "developer", codeSnapshot: undefined })),
+      report("qa-evidence.json", qa([{ id: "Q1", label: "Erreur serveur", verdict: "pass", criterionIds: ["AC3"] }], { codeSnapshot: undefined })),
+    ] });
+    expect(criterion(view, "AC3").status).toBe("unverified");
+    expect(criterion(view, "AC3").checks[0].reasons.join(" ")).toContain("Version inconnue");
+  });
+
   it("should put failure before blocking before incomplete coverage", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([
       { id: "Q1", label: "Zoom", verdict: "not_run", checkIds: ["AC2-C1"], blocker: "Pas de navigateur" },

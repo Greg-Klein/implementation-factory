@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { request } from "node:http";
 import process from "node:process";
 
 let input = "";
@@ -13,17 +14,24 @@ function undelivered(response) {
   return !response || response.status >= 500;
 }
 
-async function post(body, timeout) {
-  try {
-    return await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      signal: AbortSignal.timeout(timeout),
+/**
+ * Not `fetch`: its dispatcher gives up on a response whose headers take more
+ * than five minutes, whatever the abort signal says, and a question the user
+ * takes longer than that to answer then falls back to the terminal dialog.
+ */
+function post(body, timeout) {
+  return new Promise((resolve) => {
+    const outgoing = request(endpoint, { method: "POST", headers: { "content-type": "application/json" }, timeout }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { text += chunk; });
+      response.on("end", () => resolve({ status: response.statusCode ?? 0, ok: response.statusCode >= 200 && response.statusCode < 300, json: () => JSON.parse(text) }));
+      response.on("error", () => resolve(undefined));
     });
-  } catch {
-    return undefined;
-  }
+    outgoing.on("timeout", () => outgoing.destroy());
+    outgoing.on("error", () => resolve(undefined));
+    outgoing.end(body);
+  });
 }
 
 try {
@@ -41,7 +49,7 @@ try {
     // carry that answer back: it is neither retried nor spooled.
     const response = await post(body, 3_600_000);
     if (response?.ok) {
-      const result = await response.json();
+      const result = response.json();
       if (result.hookOutput) process.stdout.write(JSON.stringify(result.hookOutput));
     }
   } else {

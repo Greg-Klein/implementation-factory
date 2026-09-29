@@ -13,7 +13,8 @@
     "test:unit": "jest --runInBand",
     "test:integration": "playwright test",
     "test:integration:headed": "playwright test --headed",
-    "test": "npm run test:unit && npm run test:integration"
+    "test": "npm run test:unit && npm run test:integration",
+    "prebuild": "node -e \"require('node:fs').rmSync('.next/dev', { recursive: true, force: true })\""
   },
   "engines": {
     "node": ">=22"

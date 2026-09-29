@@ -297,12 +297,12 @@ function Summary({ view }: { view: AcceptanceView }) {
       <p className="text-[10px] uppercase tracking-[.16em] text-[var(--muted)]">Critères d’acceptation</p>
       <p role="status" aria-live="polite" className="mt-1 text-sm font-medium text-[var(--ink)]" data-testid="acceptance-sentence">{view.sentence}</p>
       <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{details}</p>
-      {view.diagnostics.length > 0 && (
-        <details className={`mt-3 rounded-lg border px-3 py-2 ${errors.length ? "border-amber-200 bg-amber-50" : "border-[var(--line)] bg-[var(--paper)]"}`}>
-          <summary className={`cursor-pointer text-[11px] font-medium ${errors.length ? "text-amber-900" : "text-[var(--muted)]"}`}>
-            {errors.length ? `${errors.length} ${errors.length > 1 ? "anomalies" : "anomalie"} de traçabilité` : `${view.diagnostics.length} ${view.diagnostics.length > 1 ? "remarques" : "remarque"} sur les documents`}
+      {errors.length > 0 && (
+        <details className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-medium text-amber-900">
+            {`${errors.length} ${errors.length > 1 ? "anomalies" : "anomalie"} de traçabilité`}
           </summary>
-          <ul className="mt-2 space-y-1">{view.diagnostics.map((diagnostic, index) => <li key={index} className="text-[11px] leading-relaxed text-[var(--ink)]">{diagnostic.file && <span className="font-mono text-[10px] text-[var(--muted)]">{diagnostic.file} · </span>}{diagnostic.message}</li>)}</ul>
+          <ul className="mt-2 space-y-1">{errors.map((diagnostic, index) => <li key={index} className="text-[11px] leading-relaxed text-[var(--ink)]">{diagnostic.file && <span className="font-mono text-[10px] text-[var(--muted)]">{diagnostic.file} · </span>}{diagnostic.message}</li>)}</ul>
         </details>
       )}
     </div>

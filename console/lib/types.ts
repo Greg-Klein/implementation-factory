@@ -5,7 +5,7 @@ export type Activity = { id: string; at: string; kind: string; title: string; de
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "orphaned" };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 /** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";

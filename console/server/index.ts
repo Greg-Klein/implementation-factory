@@ -14,7 +14,7 @@ import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { listPendingImprovements, notice, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
+import { listPendingImprovements, notice, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories } from "./repository.js";
 import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { registry } from "./registry.js";
@@ -242,6 +242,14 @@ const server = createServer(async (request, response) => {
       const diff = await worktreeDiff(worktree);
       respond(response, 200, { diff: diff || "(aucune modification détectée)" });
     } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Erreur git." }); }
+    return;
+  }
+  if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/report")) {
+    const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
+    if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Nom de worktree invalide." }); return; }
+    const report = await readImprovementReport(worktreeName);
+    if (report === undefined) { respond(response, 404, { error: "Rapport introuvable." }); return; }
+    respond(response, 200, { report });
     return;
   }
   if (request.method === "GET" && request.url === "/api/self-improvement/pending") {

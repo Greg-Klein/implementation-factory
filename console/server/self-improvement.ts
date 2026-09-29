@@ -1,9 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
 import { feedbackRoot, pluginRoot, bundledPlugin, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
-import { commitlessImprovementStatus, hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
@@ -21,13 +21,18 @@ export function notice(level: "info" | "attention", title: string, detail?: stri
   broadcast({ type: "notice", level, title, detail, at: now() });
 }
 
+/** The report of an improvement worktree, undefined until its agent has written it. */
+export async function readImprovementReport(worktreeName: string) {
+  return await readFile(path.join(path.dirname(feedbackRoot), improvementReportName(worktreeName)), "utf8").catch(() => undefined);
+}
+
 /**
  * Every self-improvement worktree, whichever run spawned it and however long ago,
  * including one the background agent has just opened and not committed to yet: the
  * console shows it as "analyzing" rather than staying silent until the first commit
- * lands. A worktree with nothing ahead of the harness, whose branch the harness
- * already contains and with nothing uncommitted under it, is shown as "orphaned"
- * instead: nobody is writing to it and there is nothing left to take from it.
+ * lands. A worktree with nothing ahead of the harness whose agent has written its
+ * report is shown as "finished" instead: the agent is done and the report says why
+ * it left nothing to merge.
  * Computed fresh on every call instead of watched: a timer that gives up after
  * a fixed delay can only ever miss a slow commit, and one that never re-checks a
  * worktree it already gave up on loses it for good.
@@ -38,14 +43,9 @@ export async function listPendingImprovements(): Promise<PendingSelfImprovementR
   for (const worktree of worktrees) {
     const commits = await worktreeCommitCount(worktree).catch(() => 0);
     if (commits === 0) {
-      // A branch with nothing ahead of the harness is either an agent that
-      // has not committed yet, or one whose commits the harness already
-      // contains (merged by hand, or by an earlier promotion that left the
-      // worktree behind). The commit count cannot tell them apart, and neither
-      // can branchIsMerged on its own: see commitlessImprovementStatus.
-      const merged = worktree.branch ? await branchIsMerged(pluginRoot, worktree.branch).catch(() => false) : false;
-      const clean = await worktreeIsClean(worktree).catch(() => false);
-      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: commitlessImprovementStatus({ merged, clean }) });
+      const worktreeName = path.basename(worktree.path);
+      const reported = (await readImprovementReport(worktreeName)) !== undefined;
+      reviews.push({ worktreeName, branch: worktree.branch, commits: 0, status: commitlessImprovementStatus({ reported }) });
       continue;
     }
     const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;

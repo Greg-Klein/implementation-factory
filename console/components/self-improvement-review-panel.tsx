@@ -1,34 +1,36 @@
 "use client";
 
-import { CheckIcon, CircleNotchIcon, CodeIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { PendingSelfImprovementReview } from "@/lib/types";
 
-function DiffModal({ worktreeName, onClose }: { worktreeName: string; onClose: () => void }) {
-  const [diff, setDiff] = useState<string | null>(null);
+type ShownDocument = { worktreeName: string; kind: "diff" | "report" };
+
+function DocumentModal({ worktreeName, kind, onClose }: ShownDocument & { onClose: () => void }) {
+  const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/self-improvement/diff?worktree=${encodeURIComponent(worktreeName)}`)
-      .then((r) => r.json() as Promise<{ diff?: string; error?: string }>)
-      .then((data) => { if (data.error) setError(data.error); else setDiff(data.diff ?? ""); })
-      .catch(() => setError("Impossible de récupérer le diff."));
-  }, [worktreeName]);
+    fetch(`/api/self-improvement/${kind}?worktree=${encodeURIComponent(worktreeName)}`)
+      .then((r) => r.json() as Promise<{ diff?: string; report?: string; error?: string }>)
+      .then((data) => { if (data.error) setError(data.error); else setText(data.diff ?? data.report ?? ""); })
+      .catch(() => setError(kind === "diff" ? "Impossible de récupérer le diff." : "Impossible de récupérer le rapport."));
+  }, [worktreeName, kind]);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Diff des améliorations proposées" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div role="dialog" aria-modal="true" aria-label={kind === "diff" ? "Diff des améliorations proposées" : "Rapport de l’auto-amélioration"} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-4.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-30px_rgba(20,30,25,.55)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-3.5">
-          <div className="flex items-center gap-2 text-sm font-semibold"><CodeIcon size={15} /> Améliorations · {worktreeName}</div>
+          <div className="flex items-center gap-2 text-sm font-semibold">{kind === "diff" ? <CodeIcon size={15} /> : <FileTextIcon size={15} />} {kind === "diff" ? "Améliorations" : "Rapport"} · {worktreeName}</div>
           <button type="button" onClick={onClose} className="grid size-7 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"><XIcon size={15} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {!diff && !error && <p className="p-5 text-xs text-[var(--muted)]">Chargement du diff…</p>}
+          {!text && !error && <p className="p-5 text-xs text-[var(--muted)]">{kind === "diff" ? "Chargement du diff…" : "Chargement du rapport…"}</p>}
           {error && <p className="p-5 text-xs text-red-700">{error}</p>}
-          {diff && (
-            <pre className="whitespace-pre-wrap break-all p-5 font-mono text-[11px] leading-5">
-              {diff.split("\n").map((line, i) => (
-                <span key={i} className={line.startsWith("+") && !line.startsWith("+++") ? "text-emerald-700" : line.startsWith("-") && !line.startsWith("---") ? "text-red-700" : line.startsWith("@@") ? "text-blue-600" : "text-[var(--ink)]"}>
+          {text && (
+            <pre className={`whitespace-pre-wrap ${kind === "diff" ? "break-all" : "break-words"} p-5 font-mono text-[11px] leading-5`}>
+              {text.split("\n").map((line, i) => (
+                <span key={i} className={kind === "report" ? "text-[var(--ink)]" : line.startsWith("+") && !line.startsWith("+++") ? "text-emerald-700" : line.startsWith("-") && !line.startsWith("---") ? "text-red-700" : line.startsWith("@@") ? "text-blue-600" : "text-[var(--ink)]"}>
                   {line}{"\n"}
                 </span>
               ))}
@@ -73,14 +75,17 @@ function AnalyzingRow({ review }: { review: PendingSelfImprovementReview }) {
   );
 }
 
-function OrphanedRow({ review, onClean }: { review: PendingSelfImprovementReview; onClean: () => void }) {
+function FinishedRow({ review, onClean, onViewReport }: { review: PendingSelfImprovementReview; onClean: () => void; onViewReport: () => void }) {
   return (
     <Strip tone="muted">
       <p className="flex min-w-0 items-center gap-2 text-[11px]">
-        <span className="font-semibold text-[var(--muted)]">Auto-amélioration déjà intégrée</span>
-        <Name>{review.worktreeName} · aucun commit à fusionner</Name>
+        <span className="font-semibold text-[var(--muted)]">Auto-amélioration terminée sans commit</span>
+        <Name>{review.worktreeName} · rien à fusionner</Name>
       </p>
-      <button type="button" onClick={onClean} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Nettoyer</button>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onViewReport} className={ACTION}><FileTextIcon size={12} /> Voir le rapport</button>
+        <button type="button" onClick={onClean} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Nettoyer</button>
+      </div>
     </Strip>
   );
 }
@@ -110,7 +115,7 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
 }
 
 export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { reviews: PendingSelfImprovementReview[]; onApprove: (worktreeName: string) => void; onReject: (worktreeName: string) => void }) {
-  const [diffWorktree, setDiffWorktree] = useState<string | null>(null);
+  const [shown, setShown] = useState<ShownDocument | null>(null);
 
   if (reviews.length === 0) return null;
 
@@ -118,10 +123,10 @@ export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { r
     <>
       {reviews.map((review) => review.status === "analyzing"
         ? <AnalyzingRow key={review.worktreeName} review={review} />
-        : review.status === "orphaned"
-        ? <OrphanedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} />
-        : <ReviewRow key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />)}
-      {diffWorktree && <DiffModal worktreeName={diffWorktree} onClose={() => setDiffWorktree(null)} />}
+        : review.status === "finished"
+        ? <FinishedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} onViewReport={() => setShown({ worktreeName: review.worktreeName, kind: "report" })} />
+        : <ReviewRow key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setShown({ worktreeName: review.worktreeName, kind: "diff" })} />)}
+      {shown && <DocumentModal {...shown} onClose={() => setShown(null)} />}
     </>
   );
 }

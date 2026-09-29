@@ -14,7 +14,7 @@ export type PendingQuestion = { id: string; questions: Question[] };
  * after the automatic replay, which means a conflict git cannot resolve on its own:
  * the promotion is not one click.
  */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "orphaned" };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 /** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";

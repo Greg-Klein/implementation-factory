@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { commitlessImprovementStatus, hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -74,22 +74,19 @@ describe("environment handed to the improvement agent", () => {
   });
 });
 
-// The contradiction this guards: on 18 September the console showed
-// self-improvement-32506e8f as "déjà intégrée" while an agent was still writing
-// to it, and the only button it offered, Nettoyer, refused to run because the
-// worktree held uncommitted work.
+// On 29 September self-improvement-4824d4ae read "déjà intégrée" from the
+// moment it was opened, and still did once the agent had given up without a
+// commit: nothing had been integrated, and the report saying why went unseen.
 describe("reading a worktree that holds no commit ahead of the harness", () => {
-  it("should call an agent still writing an analysis, not an integrated one", () => {
-    expect(commitlessImprovementStatus({ merged: true, clean: false })).toBe("analyzing");
+  it("should call an agent that has not written its report yet analyzing", () => {
+    expect(commitlessImprovementStatus({ reported: false })).toBe("analyzing");
   });
 
-  it("should call a worktree the harness already contains, with nothing left on disk, orphaned", () => {
-    expect(commitlessImprovementStatus({ merged: true, clean: true })).toBe("orphaned");
+  it("should call an agent that wrote its report without a commit finished", () => {
+    expect(commitlessImprovementStatus({ reported: true })).toBe("finished");
   });
 
-  // A branch the harness does not contain yet has something to give, whatever the disk says.
-  it("should wait on a branch the harness does not contain", () => {
-    expect(commitlessImprovementStatus({ merged: false, clean: true })).toBe("analyzing");
-    expect(commitlessImprovementStatus({ merged: false, clean: false })).toBe("analyzing");
+  it("should name the report after the branch, without the loop's prefix", () => {
+    expect(improvementReportName("self-improvement-4824d4ae")).toBe("improvement-report-4824d4ae.md");
   });
 });

@@ -142,18 +142,22 @@ export function improvementWorktreeInFlight(worktreePaths: string[]) {
   return worktreePaths.find(isImprovementWorktree);
 }
 
+/** The report /implementation-harness:improve writes last, next to the feedback, named after its branch. */
+export function improvementReportName(worktreeName: string) {
+  return `improvement-report-${worktreeName.slice(IMPROVEMENT_WORKTREE_PREFIX.length)}.md`;
+}
+
 /**
  * What the console says about an improvement worktree holding no commit ahead of
- * the harness: an agent still writing, or work the harness already has. A branch
- * that never received a commit is an ancestor of the harness exactly like one
- * already merged, so `merged` on its own cannot separate the two, and it
- * labelled a worktree being written to as already integrated, offering to clean
- * it up as the only way out. The disk separates them, an agent at work being the
- * one of the two holding something uncommitted. Same pair the promotion path
- * takes before it destroys anything.
+ * the harness. Git cannot tell an agent still reading from one that is done:
+ * both leave a clean branch that is an ancestor of the harness, and the agent
+ * writes its diagnosis next to the feedback, never in the worktree. Reading that
+ * pair as "already integrated" showed every iteration as spent from its first
+ * second, and hid the ones that ended without a commit. The report is what the
+ * agent writes last, whatever the outcome, so it alone says the agent is done.
  */
-export function commitlessImprovementStatus(worktree: { merged: boolean; clean: boolean }) {
-  return worktree.merged && worktree.clean ? ("orphaned" as const) : ("analyzing" as const);
+export function commitlessImprovementStatus(worktree: { reported: boolean }) {
+  return worktree.reported ? ("finished" as const) : ("analyzing" as const);
 }
 
 // The console is itself a Next server, and Next writes its bundler choice and

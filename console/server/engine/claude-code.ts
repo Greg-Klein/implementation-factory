@@ -1,9 +1,9 @@
+import * as pty from "node-pty";
 import { spawn as spawnChild } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import * as pty from "node-pty";
-import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../domain.js";
 import { pluginRoot, remoteControl, sessionPermissionMode } from "../config.js";
+import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../domain.js";
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import type { Engine, EngineEvent, EngineSession, StartOptions } from "./types.js";
@@ -268,7 +268,7 @@ export const claudeCode: Engine = {
       "--permission-mode", "auto",
       "--name", `implementation-harness self-improvement ${runId.slice(-8)}`,
       `/implementation-harness:improve ${feedbackDirectory}`,
-    ], { cwd: pluginRoot, env: sessionEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
+    ], { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
   startConflictResolution: ({ worktreeName, onto }) => {
     const executable = findExecutable("claude");
@@ -280,6 +280,6 @@ export const claudeCode: Engine = {
       "--permission-mode", "auto",
       "--name", `implementation-harness rebase ${worktreeName.slice(-8)}`,
       `/implementation-harness:rebase ${onto}`,
-    ], { cwd: pluginRoot, env: sessionEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
+    ], { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
 };

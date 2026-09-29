@@ -107,6 +107,12 @@ export async function mergeBranch(repository: string, branch: string, message: s
   return (await head()) !== before;
 }
 
+/** The files that differ between two commits, relative to the repository root. */
+export async function changedPaths(repository: string, from: string, to: string) {
+  const { stdout } = await exec("git", ["-C", repository, "diff", "--name-only", from, to]);
+  return stdout.split("\n").filter(Boolean);
+}
+
 /** The commit an improvement branch has to sit on top of to merge in one click. */
 export async function headCommit(repository: string) {
   return (await exec("git", ["-C", repository, "rev-parse", "HEAD"])).stdout.trim();

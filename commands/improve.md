@@ -7,7 +7,7 @@ argument-hint: <feedback-directory>
 
 Improve the Implementation Harness from the user feedback and autonomous self-audits stored under: $ARGUMENTS
 
-That feedback directory is the only location to trust for runtime data. The run archives are its sibling `runs/` directory (`$ARGUMENTS/../runs/`), which is `console/data/runs/` for a console started from the checkout but lives outside the repository for the desktop app. Never look for run archives under `console/data/` of this worktree: it is gitignored and empty.
+That feedback directory is the only location to trust for runtime data. The run archives are its sibling `runs/` directory (`$ARGUMENTS/../runs/`), which is `console/data/runs/` unless `IMPL_DATA_DIR` moves it. Never look for run archives under `console/data/` of this worktree: it is gitignored and empty.
 
 This is a controlled recursive self-improvement run. Work autonomously, but keep every change reviewable and reversible.
 

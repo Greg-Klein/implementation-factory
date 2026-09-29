@@ -32,10 +32,8 @@ export type StartOptions = {
   runId: string;
   /** The workflow entry point, already built by the engine and logged by the caller. */
   command: string;
-  /** The plugin the session loads, with the prompts edited in the settings. */
+  /** The plugin the session loads: the harness checkout itself. */
   pluginDir: string;
-  /** Instructions appended to the agent's own system prompt. */
-  systemPrompt?: string;
   /** Where the agent posts its events, secret included. */
   hookUrl: string;
   /** The file an event goes to when posting it failed, replayed by the harness later. */

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
-import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, mergeBranch, rebaseWorktree, worktreeIsClean } from "../../server/worktree";
+import { branchIsMerged, changedPaths, branchIsRebasedOn, branchMergesCleanly, headCommit, mergeBranch, rebaseWorktree, worktreeIsClean } from "../../server/worktree";
 
 let repository: string;
 
@@ -28,6 +28,16 @@ beforeEach(() => {
 afterEach(() => rmSync(repository, { recursive: true, force: true }));
 
 describe("merging an improvement branch", () => {
+  it("should list the files the merge brought in", async () => {
+    const before = await headCommit(repository);
+    git("checkout", "-q", "-b", "improvement");
+    commit("fix.ts", "export const fixed = true;\n", "fix: something");
+    git("checkout", "-q", "main");
+    await mergeBranch(repository, "improvement", "apply");
+
+    await expect(changedPaths(repository, before, "HEAD")).resolves.toEqual(["fix.ts"]);
+  });
+
   it("should report the merge when the branch brings a commit", async () => {
     git("checkout", "-q", "-b", "improvement");
     commit("fix.ts", "export const fixed = true;\n", "fix: something");

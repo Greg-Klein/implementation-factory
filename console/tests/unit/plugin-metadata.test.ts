@@ -4,7 +4,7 @@ import path from "node:path";
 import { parse } from "yaml";
 
 const pluginRoot = path.resolve(process.cwd(), "..");
-/** The layout Claude Code reads from a plugin, and what the desktop package has to carry whole. */
+/** The layout Claude Code reads from a plugin. */
 const pluginDirectories = [".claude-plugin", "agents", "commands", "hooks", "skills"];
 
 function definitions(directory: "agents" | "commands") {
@@ -45,14 +45,8 @@ describe("Claude Code plugin metadata", () => {
     }
   });
 
-  it("should ship every plugin directory with the desktop application", () => {
-    const configuration = readFileSync(path.join(process.cwd(), "electron-builder.cjs"), "utf8");
-    const filter = configuration.match(/filter:\s*\[([^\]]*)\]/)?.[1];
-    expect(filter).toEqual(expect.any(String));
-    for (const directory of pluginDirectories) {
-      expect(existsSync(path.join(pluginRoot, directory))).toBe(true);
-      expect(filter).toContain(`"${directory}/**/*"`);
-    }
+  it("should keep every plugin directory at the root of the checkout", () => {
+    for (const directory of pluginDirectories) expect(existsSync(path.join(pluginRoot, directory))).toBe(true);
   });
 
   it("should identify Gregory Klein as the plugin author", () => {

@@ -3,7 +3,6 @@
 import { ArrowRightIcon, CheckIcon, FileTextIcon, FolderOpenIcon, GitBranchIcon, PlayIcon, RobotIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { RepositoryOption } from "@/lib/types";
-import type {} from "@/lib/desktop";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
@@ -17,8 +16,6 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
   detecting: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [desktop, setDesktop] = useState(false);
-  const [pickerError, setPickerError] = useState<string>();
   const [activeIndex, setActiveIndex] = useState(0);
   const query = value.trim().toLocaleLowerCase("fr");
   const suggestions = useMemo(() => {
@@ -30,15 +27,6 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
   const listOpen = open && query.length > 0;
 
   useEffect(() => setActiveIndex(0), [query]);
-  useEffect(() => setDesktop(Boolean(window.desktop)), []);
-
-  const browse = async () => {
-    try {
-      setPickerError(undefined);
-      const directory = await window.desktop?.selectDirectory();
-      if (directory) { onChange(directory); setOpen(false); }
-    } catch { setPickerError("Impossible d’ouvrir le sélecteur de dossier."); }
-  };
 
   const select = (repository: RepositoryOption) => {
     onChange(repository.path, repository.project);
@@ -80,8 +68,6 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
         />
         {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
       </div>
-      {desktop && <button type="button" onClick={() => void browse()} className="mt-2 flex items-center gap-1.5 text-xs text-[var(--accent)] hover:underline"><FolderOpenIcon size={14} /> Parcourir les dossiers…</button>}
-      {pickerError && <p role="alert" className="mt-2 text-xs text-red-700">{pickerError}</p>}
       {listOpen && (
         <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-white p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
           {suggestions.length > 0 ? suggestions.map((repository, index) => (

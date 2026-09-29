@@ -16,7 +16,8 @@ import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { listPendingImprovements, notice, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories } from "./repository.js";
-import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
+import { mergeNeedsRestart } from "./domain.js";
+import { branchIsMerged, changedPaths, findWorktree, headCommit, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { registry } from "./registry.js";
 import { engine } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
@@ -38,6 +39,7 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     await realignPendingImprovements();
     // A worktree is destroyed just below, so nothing may be announced as merged
     // before the checkout actually moved.
+    const before = await headCommit(pluginRoot);
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
       .catch((error) => { throw new Error(`La fusion de ${worktreeName} a échoué et a été annulée, le worktree est conservé : ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
     // Git brings nothing in two cases its exit code cannot tell apart: a branch
@@ -49,7 +51,11 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
     if (!merged && !spent)
       throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
-    notice("info", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
+    // Prompts apply to the next run on their own; the console's code only after
+    // a restart, which it cannot do itself while sessions may be running under it.
+    const restart = merged && mergeNeedsRestart(await changedPaths(pluginRoot, before, "HEAD").catch(() => []));
+    if (restart) notice("attention", "Améliorations fusionnées, relance nécessaire", `${worktreeName} modifie la console : lance impl restart pour l'appliquer.`);
+    else notice("info", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
     harnessMoved = merged;
   } else {
     // Merging already refuses to destroy a worktree with something uncommitted
@@ -66,7 +72,7 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   if (harnessMoved) await realignPendingImprovements();
 }
 
-/** Read at each request: the desktop app binds port zero and learns the real one after listening. */
+/** Read at each request: port zero binds a free port, only known after listening. */
 function consoleHosts() {
   const addresses = Object.values(os.networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []);
   return allowedHosts(port, hostname, addresses);
@@ -314,11 +320,6 @@ setListeningPort(address.port);
 const url = `http://${hostname}:${port}`;
 console.log(`Implementation Harness: ${url}`);
 if (!isLoopbackHost(hostname)) console.warn(`Attention : la console écoute sur ${hostname}, elle est joignable depuis le réseau. Quiconque l'atteint peut piloter les sessions ${engine.label} en cours.`);
-// Electron's utility process owns this port. Ordinary Node keeps using signals.
-const desktopParent = (process as typeof process & {
-  parentPort?: { postMessage: (message: unknown) => void; on: (event: "message", listener: (event: { data: unknown }) => void) => void };
-}).parentPort;
-desktopParent?.postMessage({ type: "ready", url });
 // Launches accepted before the last shutdown start now that the server is up.
 void registry.drain();
 // Hooks a session spooled while nothing else arrived, and runs with nothing
@@ -336,6 +337,5 @@ async function shutdown() {
   try { await registry.shutdown(); await app.close(); }
   finally { clearTimeout(timeout); process.exit(0); }
 }
-desktopParent?.on("message", ({ data }) => { if (data === "shutdown") void shutdown(); });
 process.on("SIGINT", () => void shutdown());
 process.on("SIGTERM", () => void shutdown());

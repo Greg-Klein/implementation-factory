@@ -211,15 +211,14 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   return undefined;
 }
 
-function start({ cwd, runId, command, pluginDir, systemPrompt, hookUrl, hookSpool, environment, onData, onExit }: StartOptions): EngineSession {
+function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
   const sessionName = `implementation-harness ${path.basename(cwd)}`;
   // --remote-control takes an optional name, so leaving it empty would let the
   // parser swallow the prompt that follows as that name.
   const remote = remoteControl ? ["--remote-control", sessionName] : [];
-  const system = systemPrompt ? ["--append-system-prompt", systemPrompt] : [];
-  const terminal = pty.spawn(executable, ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--name", sessionName, ...remote, ...system, command], {
+  const terminal = pty.spawn(executable, ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--name", sessionName, ...remote, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
     env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
   });

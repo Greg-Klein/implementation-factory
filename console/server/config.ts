@@ -15,18 +15,15 @@ try {
   // but unusable, and staying silent would hide a broken configuration.
   if (existsSync(envFile)) console.warn(`Configuration ignorée, ${envFile} est illisible : ${error instanceof Error ? error.message : error}`);
 }
-export const pluginRoot = path.resolve(process.env.IMPL_PLUGIN_ROOT?.trim() || process.env.IMPL_BUNDLED_PLUGIN_ROOT || path.join(consoleRoot, ".."));
+export const pluginRoot = path.resolve(process.env.IMPL_PLUGIN_ROOT?.trim() || path.join(consoleRoot, ".."));
 export const storageRoot = path.resolve(process.env.IMPL_DATA_DIR ?? path.join(consoleRoot, "data"));
 export const dataRoot = path.join(storageRoot, "runs");
 export const feedbackRoot = path.join(storageRoot, "feedback", "pending");
-/** The prompts edited from the settings, applied to every run launched afterwards. */
-export const promptsRoot = path.resolve(process.env.IMPL_PROMPTS_DIR?.trim() || path.join(storageRoot, "prompts"));
 /** The launches accepted but not started, kept across a restart of the console. */
 export const queueFile = path.join(storageRoot, "queue.json");
 export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 /** Port zero lets the OS bind a free port; agent hooks need the actual one. */
 export function setListeningPort(value: number) { port = value; }
-export const bundledPlugin = process.env.IMPL_BUNDLED_PLUGIN === "true" && !process.env.IMPL_PLUGIN_ROOT?.trim();
 /** On unless explicitly turned off. */
 export function selfImprovementAutorun() { return process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "false"; }
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";

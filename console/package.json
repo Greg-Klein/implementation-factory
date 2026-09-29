@@ -13,15 +13,7 @@
     "test:unit": "jest --runInBand",
     "test:integration": "playwright test",
     "test:integration:headed": "playwright test --headed",
-    "test": "npm run test:unit && npm run test:integration",
-    "desktop:dev": "node scripts/build-desktop.mjs && node scripts/desktop.mjs --dev",
-    "desktop:build": "npm run build && node scripts/build-desktop.mjs",
-    "desktop:start": "node scripts/desktop.mjs",
-    "desktop:pack": "npm run desktop:build && electron-builder --config electron-builder.cjs --dir",
-    "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.cjs",
-    "test:desktop": "node scripts/build-desktop.mjs && playwright test --config playwright.desktop.config.ts",
-    "test:desktop:policy": "node --test tests/desktop-policy/*.test.cjs",
-    "desktop:dist:signed": "npm run desktop:build && electron-builder --config electron-builder.cjs --mac --publish never -c.forceCodeSigning=true"
+    "test": "npm run test:unit && npm run test:integration"
   },
   "engines": {
     "node": ">=22"
@@ -51,13 +43,8 @@
     "@swc/core": "^1.16.2",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "electron": "^44.4.3",
-    "electron-builder": "^26.16.1",
-    "esbuild": "^0.28.2",
     "jest": "^30.5.1",
-    "sharp": "^0.35.4",
     "yaml": "^2.8.1"
   },
-  "description": "Application locale pour piloter les workflows Claude Code",
-  "main": "electron/main.cjs"
+  "description": "Application locale pour piloter les workflows Claude Code"
 }

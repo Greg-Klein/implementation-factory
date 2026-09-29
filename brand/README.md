@@ -1,6 +1,6 @@
 # Brand book Implementation Harness
 
-Ce document décrit l’identité visuelle et le ton de l’application : console web, application de bureau et icône. Il décrit ce qui existe dans le code. Quand un écran s’en écarte, on corrige l’écran ou on met ce document à jour dans le même commit, jamais l’un sans l’autre.
+Ce document décrit l’identité visuelle et le ton de l’application : console web et icône. Il décrit ce qui existe dans le code. Quand un écran s’en écarte, on corrige l’écran ou on met ce document à jour dans le même commit, jamais l’un sans l’autre.
 
 ![Planche des couleurs et styles](brand-sheet.png)
 
@@ -10,7 +10,7 @@ Les sources de vérité restent dans le code :
 
 - tokens de couleur et classes partagées : `console/app/globals.css`
 - polices : `console/app/layout.tsx`
-- icône : `console/electron/icon.svg`
+- icône : `brand/icon.svg`
 
 ## Intention
 

@@ -601,3 +601,13 @@ export function spooledHooks(text: string) {
   }
   return bodies;
 }
+
+/**
+ * Whether a merged improvement needs the console restarted to take effect. The
+ * plugin (commands, agents, skills, hooks) is read again by every new session,
+ * the console's own code only by a fresh `impl` process. The launcher and its
+ * configuration also live outside the plugin.
+ */
+export function mergeNeedsRestart(changedPaths: string[]) {
+  return changedPaths.some((file) => file.startsWith("console/") || file.startsWith("bin/"));
+}

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
-import { feedbackRoot, pluginRoot, bundledPlugin, selfImprovementAutorun } from "./config.js";
+import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
 import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
@@ -38,7 +38,7 @@ export async function readImprovementReport(worktreeName: string) {
  * worktree it already gave up on loses it for good.
  */
 export async function listPendingImprovements(): Promise<PendingSelfImprovementReview[]> {
-  const worktrees = (bundledPlugin ? [] : await listWorktrees()).filter((worktree) => isImprovementWorktree(worktree.path));
+  const worktrees = (await listWorktrees()).filter((worktree) => isImprovementWorktree(worktree.path));
   const reviews: PendingSelfImprovementReview[] = [];
   for (const worktree of worktrees) {
     const commits = await worktreeCommitCount(worktree).catch(() => 0);
@@ -87,7 +87,6 @@ function startConflictResolution(worktreeName: string, onto: string) {
  * fails, which a rebase would take away.
  */
 export async function realignPendingImprovements() {
-  if (bundledPlugin) return;
   const onto = await headCommit(pluginRoot);
   for (const worktree of (await listWorktrees()).filter((candidate) => isImprovementWorktree(candidate.path))) {
     const branch = worktree.branch;
@@ -159,7 +158,7 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
 /** Resolves once the launch itself has returned, which is what lets the next audit take its turn. */
 function startAutonomousImprovement(session: RunSession) {
   return new Promise<void>((resolve) => {
-    if (bundledPlugin || !selfImprovementAutorun()) return resolve();
+    if (!selfImprovementAutorun()) return resolve();
     void listWorktrees().catch(() => []).then((worktrees) => {
       const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
       if (inFlight) {

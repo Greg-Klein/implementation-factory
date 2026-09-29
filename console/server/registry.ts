@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
-import { dataRoot, healthPolicy, hookToken, hostname, maxConcurrentRuns, pluginRoot, port, promptsRoot, queueFile } from "./config.js";
+import { dataRoot, healthPolicy, hookToken, hostname, maxConcurrentRuns, pluginRoot, port, queueFile } from "./config.js";
 import { closeAbandonedAgents, describeQueue, exitReport, runInProgress, sessionsToReleaseForQueue, terminalExitStatus } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
@@ -12,7 +12,6 @@ import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
 import { fetchTicketTitle } from "./ticket.js";
 import { engine } from "./engine/index.js";
-import { createPromptStore } from "./prompts.js";
 import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
 import { snapshotScript } from "./code-snapshot.js";
 import { RunSession } from "./run-session.js";
@@ -162,16 +161,14 @@ export class RunRegistry {
     await startArtifactWatcher(session);
     if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
-    const plugin = createPromptStore({ pluginRoot: () => pluginRoot, promptsRoot }).sessionPlugin(path.join(dataRoot, id, "plugin"));
-    if (plugin.customized.length) session.activity("system", "Prompts personnalisés", plugin.customized.join(", "));
     session.engine = engine.start({
-      cwd: entry.cwd, runId: id, command, pluginDir: plugin.pluginDir, systemPrompt: plugin.systemPrompt,
+      cwd: entry.cwd, runId: id, command, pluginDir: pluginRoot,
       hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
       hookSpool: hookSpoolPath(id),
       // The workflow identifies the code it verified with the same utility the
       // console uses, and every snapshot it takes is logged where the console reads it.
       environment: {
-        IMPL_CODE_SNAPSHOT: snapshotScript(plugin.pluginDir),
+        IMPL_CODE_SNAPSHOT: snapshotScript(pluginRoot),
         IMPL_SNAPSHOT_LOG: snapshotLogPath(id),
         IMPL_SNAPSHOT_EXCLUDE: snapshotExclusions(entry.cwd).join(","),
       },

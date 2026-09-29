@@ -6,7 +6,3 @@ data/
 test-results/
 playwright-report/
 next-env.d.ts
-.desktop/
-.desktop-runtime/
-release/
-desktop-test-results/

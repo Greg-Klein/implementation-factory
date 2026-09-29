@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, mergeNeedsRestart, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -88,5 +88,17 @@ describe("reading a worktree that holds no commit ahead of the harness", () => {
 
   it("should name the report after the branch, without the loop's prefix", () => {
     expect(improvementReportName("self-improvement-4824d4ae")).toBe("improvement-report-4824d4ae.md");
+  });
+});
+
+describe("restart after an improvement merge", () => {
+  it("should ask for a restart when the merge touches the console or the launcher", () => {
+    expect(mergeNeedsRestart(["commands/implement.md", "console/server/registry.ts"])).toBe(true);
+    expect(mergeNeedsRestart(["bin/implementation-harness"])).toBe(true);
+  });
+
+  it("should not ask for a restart when only the plugin changed", () => {
+    expect(mergeNeedsRestart(["agents/developer.md", "skills/tdd/SKILL.md", "hooks/emit.mjs"])).toBe(false);
+    expect(mergeNeedsRestart([])).toBe(false);
   });
 });

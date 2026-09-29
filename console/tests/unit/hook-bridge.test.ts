@@ -59,9 +59,11 @@ describe("hooks a session could not post", () => {
 
 describe("the hook emitter", () => {
   const emitter = path.resolve(__dirname, "../../../hooks/emit.mjs");
-  const emit = (url: string, spool: string, payload: object) => new Promise<void>((resolve) => {
-    const child = spawn(process.execPath, [emitter], { env: { ...process.env, IMPL_HARNESS_HOOK_URL: url, IMPL_HOOK_SPOOL: spool, IMPL_RUN_ID: "run" }, stdio: ["pipe", "ignore", "ignore"] });
-    child.on("exit", () => resolve());
+  const emit = (url: string, spool: string, payload: object) => new Promise<string>((resolve) => {
+    const child = spawn(process.execPath, [emitter], { env: { ...process.env, IMPL_HARNESS_HOOK_URL: url, IMPL_HOOK_SPOOL: spool, IMPL_RUN_ID: "run" }, stdio: ["pipe", "pipe", "ignore"] });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.on("exit", () => resolve(output));
     child.stdin.end(JSON.stringify(payload));
   });
 
@@ -85,6 +87,19 @@ describe("the hook emitter", () => {
     const spooled = spooledHooks(readFileSync(spool, "utf8"));
     expect(spooled).toEqual([expect.objectContaining({ runId: "run", hookId: expect.any(String), payload: { hook_event_name: "SubagentStop", agent_id: "a1" } })]);
   });
+
+  it("should wait for the answer to a question and hand it back to Claude Code", async () => {
+    const hookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { answers: { q: "a" } } } };
+    const server = createServer((request, response) => {
+      request.resume();
+      request.on("end", () => { setTimeout(() => response.writeHead(200).end(JSON.stringify({ ok: true, hookOutput })), 3_000); });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    const output = await emit(`http://127.0.0.1:${port}/api/hooks`, path.join(storage, "answer-spool.jsonl"), { hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_input: {} });
+    server.close();
+    expect(JSON.parse(output)).toEqual(hookOutput);
+  }, 10_000);
 
   it("should never spool a question, which only the live request can answer", async () => {
     const spool = path.join(storage, "question-spool.jsonl");

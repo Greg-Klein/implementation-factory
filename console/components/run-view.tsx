@@ -1,7 +1,7 @@
 "use client";
 
 import { ChatCircleDotsIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
 import type { IncidentAction, IncidentResult, RunIncident, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
@@ -29,7 +29,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
   run: RunState;
   connected: boolean;
   writing: boolean;
-  terminalRef: RefObject<TerminalHandle | null>;
+  terminalRef: Ref<TerminalHandle>;
   actions: RunViewActions;
   incidentResult?: IncidentResult;
 }) {

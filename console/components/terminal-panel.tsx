@@ -21,9 +21,22 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
   const callbacks = useRef({ onInput, onResize });
   useEffect(() => { callbacks.current = { onInput, onResize }; });
 
+  /**
+   * The handle is attached before the effect below creates the terminal, and
+   * the output replayed on opening a run lands in that gap: kept here and
+   * written once the terminal exists, instead of being dropped.
+   */
+  const pendingRef = useRef("");
+
   useImperativeHandle(ref, () => ({
-    write: (data) => terminalRef.current?.write(data),
-    clear: () => terminalRef.current?.clear(),
+    write: (data) => {
+      if (terminalRef.current) terminalRef.current.write(data);
+      else pendingRef.current += data;
+    },
+    clear: () => {
+      pendingRef.current = "";
+      terminalRef.current?.clear();
+    },
   }), []);
 
   useEffect(() => {
@@ -48,6 +61,7 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
     terminal.loadAddon(fit);
     terminal.open(containerRef.current);
     terminalRef.current = terminal;
+    if (pendingRef.current) { terminal.write(pendingRef.current); pendingRef.current = ""; }
     const inputDisposable = terminal.onData((data) => callbacks.current.onInput(data));
     // A hidden tab has no box to measure: fitting there keeps the default 80x24
     // and would shrink the agent's pseudo-terminal away from the size it runs at.

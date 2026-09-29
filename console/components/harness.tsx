@@ -47,6 +47,19 @@ export function Harness() {
   const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
+  /**
+   * The output replayed on opening a run arrives with the run itself, before
+   * React has mounted the view that holds the terminal. Kept until it mounts.
+   */
+  const pendingOutputRef = useRef("");
+  const attachTerminal = useCallback((handle: TerminalHandle | null) => {
+    terminalRef.current = handle;
+    if (handle && pendingOutputRef.current) { handle.write(pendingOutputRef.current); pendingOutputRef.current = ""; }
+  }, []);
+  const clearTerminal = useCallback(() => {
+    pendingOutputRef.current = "";
+    terminalRef.current?.clear();
+  }, []);
   const previousRunsRef = useRef<RunSummary[]>([]);
   /**
    * The run this page is showing. Held in a ref as well as in state because the
@@ -70,7 +83,7 @@ export function Harness() {
     setOpenRunId(runId);
     setComposingRun(runId === null);
     if (runId === null) setRun(null);
-    terminalRef.current?.clear();
+    clearTerminal();
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "run.subscribe", runId }));
   }, []);
 
@@ -109,7 +122,8 @@ export function Harness() {
         }
         if (message.type === "terminal.output" && message.runId === openRunRef.current) {
           lastOutputRef.current = Date.now();
-          terminalRef.current?.write(message.data);
+          if (terminalRef.current) terminalRef.current.write(message.data);
+          else pendingOutputRef.current += message.data;
         }
         if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
         if (message.type === "error") setError(message.message);
@@ -249,7 +263,7 @@ export function Harness() {
     demoStartedRef.current = true;
     setComposingRun(false);
     adoptNextRunRef.current = true;
-    terminalRef.current?.clear();
+    clearTerminal();
     send({ type: "demo.start", ...(demo === "incident" ? { scenario: "incident" } : {}) });
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
@@ -279,7 +293,7 @@ export function Harness() {
     setError(undefined);
     setComposingRun(false);
     adoptNextRunRef.current = true;
-    terminalRef.current?.clear();
+    clearTerminal();
     unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
     send({ type: "run.start", cwd, issueUrl, instruction });
@@ -338,7 +352,7 @@ export function Harness() {
               run={run}
               connected={connected}
               writing={writing}
-              terminalRef={terminalRef}
+              terminalRef={attachTerminal}
               actions={{
                 terminalInput: (data) => send({ type: "terminal.input", runId, data }),
                 terminalResize: (cols, rows) => send({ type: "terminal.resize", runId, cols, rows }),

@@ -353,6 +353,7 @@ Loop exit criteria, enforced by the orchestrator:
 - no `P0` and no `P1` left on any dimension
 - QA status `PASS` or `PASS_WITH_WARNINGS`
 - `P2` findings may remain: they are reported, not fixed
+- the designer's "Écarts préexistants" may remain whatever their severity: they concern elements the ticket does not touch, and they are reported for a follow-up ticket, not fixed
 - **at most two rework rounds**, and the time bound above applies over them. A third round means the implementation or the plan is wrong, not that another pass is needed: stop, and say so in the report
 
 When the review phase is over, read what the tier you picked actually produced, and never a file that tier cannot write:
@@ -549,6 +550,7 @@ Print a short summary in chat:
 - the review tier you picked and the diff size that justified it, plus anything you stopped early
 - review verdicts (senior, designer, QA) and number of loops
 - remaining `P2` findings, listed
+- the designer's pre-existing deviations, listed, for a follow-up ticket
 - other tickets this run updated, and what changed in each
 - questions asked and answers applied, plus obvious behaviours you deduced
 - how the run instruction was applied, and anything in it you could not honour, with the reason

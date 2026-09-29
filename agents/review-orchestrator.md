@@ -96,7 +96,7 @@ Continue looping while any dimension still reports **P0 or P1**, or QA is `FAIL`
 
 For each round with remaining P0 or P1:
 
-1. Build a single consolidated rework brief: one list of findings, deduplicated across reviewers, ordered P0 then P1, each with file, expected behaviour, and which reviewer raised it. Drop P2 from the brief.
+1. Build a single consolidated rework brief: one list of findings, deduplicated across reviewers, ordered P0 then P1, each with file, expected behaviour, and which reviewer raised it. Drop P2 from the brief. Drop the designer's "Écarts préexistants" too: they concern elements this ticket does not touch, so they neither enter the brief nor keep the loop going, and they are listed in the summary so they become a follow-up ticket.
 2. Invoke **one** `developer` agent with that brief, plus the implementation brief supplied by the caller, and give it `rework<N>` as its artifact suffix. Never several in parallel: they would fight over the same files.
 3. Merge what it wrote into the caller's two files: append `.claude/tasks/developer-report-rework<N>.md` to `.claude/tasks/developer-report.md`, and add the `items` of `.claude/tasks/dev-evidence-rework<N>.json` to those of `.claude/tasks/dev-evidence.json`, unchanged, ids included. Appending, never replacing: those two files already hold the implementation's own measurements, and overwriting them drops the evidence the run was built on. Write the merged file to a `.tmp` name and `mv` it into place.
 4. Re-run only the dimensions that had findings, plus `qa-reviewer` which always re-runs last.
@@ -144,6 +144,10 @@ READY | BLOCKED
 ## Findings mineurs restants (P2)
 
 - `path/file.ts:42` - ce que c'est, ce qui serait mieux
+
+## Écarts de design préexistants (hors ticket, à reprendre dans un ticket de suivi)
+
+- élément et emplacement visuel, attendu Figma, mesuré, sévérité
 
 ## Encore ouvert (BLOCKED uniquement)
 

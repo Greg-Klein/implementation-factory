@@ -56,7 +56,8 @@ function hashOf(data: Buffer) {
 export function containedRelativePath(candidate: string) {
   const normalized = path.posix.normalize(candidate.replace(/\\/g, "/"));
   if (!normalized || normalized.startsWith("../") || normalized === ".." || path.posix.isAbsolute(normalized) || /^[a-zA-Z]:/.test(normalized)) return undefined;
-  return normalized.replace(/^\.\//, "");
+  // The workflow prompts name captures from the repository root (`.claude/tasks/assets/x.png`).
+  return normalized.replace(/^\.\//, "").replace(/^\.claude\/tasks\//, "") || undefined;
 }
 
 export class EvidenceArchive {

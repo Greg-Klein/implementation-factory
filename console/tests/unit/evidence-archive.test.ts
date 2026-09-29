@@ -78,6 +78,18 @@ describe("evidence archive", () => {
     expect(archive.serves("evidence/qa-evidence.json/v1/assets/result.png")).toBe(true);
   });
 
+  it("should archive a capture named from the repository root", async () => {
+    const { archive, put } = memoryArchive();
+    put("acceptance-criteria.json", criteria);
+    put("assets/result.png", "png");
+    put("qa-evidence.json", qa(1, "pass", { screenshot: ".claude/tasks/assets/result.png" }));
+    await archive.ingest("acceptance-criteria.json");
+    await archive.ingest("qa-evidence.json");
+    expect(archive.pendingAttachments()).toEqual([]);
+    expect((await archive.read("evidence/qa-evidence.json/v1/assets/result.png"))?.toString()).toBe("png");
+    expect(archive.view().criteria[0].checks[0].status).toBe("verified");
+  });
+
   it("should still reconstruct the run once the task directory is gone", async () => {
     const { archive, files, put } = memoryArchive();
     put("acceptance-criteria.json", criteria);
@@ -99,6 +111,7 @@ describe("evidence archive", () => {
     expect(containedRelativePath("../x.png")).toBeUndefined();
     expect(containedRelativePath("/etc/passwd")).toBeUndefined();
     expect(containedRelativePath("./assets/a.png")).toBe("assets/a.png");
+    expect(containedRelativePath(".claude/tasks/")).toBeUndefined();
   });
 
   it("should serialise concurrent steps in the order they were asked", async () => {

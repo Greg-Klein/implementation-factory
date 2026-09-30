@@ -10,7 +10,7 @@ export type ConversationMessage = { id: string; at: string; author: "claude" | "
 /** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
 /** `assignee`: the agent that last took the task, by id and by the name and role the interface calls it. */
-export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[]; description?: string; filePaths?: string[] };
+export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[]; summary?: string; description?: string; filePaths?: string[] };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 export type RunState = {

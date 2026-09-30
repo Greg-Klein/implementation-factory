@@ -31,11 +31,17 @@ test("should open the detail of a plan task from its card, and close it", async 
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
   await page.getByRole("tab", { name: "Suivi" }).click();
 
+  // The demo moves the cards across columns: the card is clicked once the board has settled.
+  await expect(page.getByTestId("tracking-column-done").getByTestId("tracking-card")).toHaveCount(4);
   const card = page.locator('[data-testid="tracking-card"][data-task-id="T2"] button');
   await card.click();
   const detail = page.getByRole("dialog", { name: "Créer le panneau de réglages" });
   await expect(detail).toBeVisible();
-  await expect(detail).toContainText("Les alertes critiques restent toujours actives");
+  await expect(detail).toContainText("Ajoute aux réglages un panneau Notifications");
+  await expect(detail.getByText("Le bouton Enregistrer se désactive pendant l’envoi.")).toBeHidden();
+  await detail.getByText("Détail pour le développeur").click();
+  await expect(detail.getByText("Le bouton Enregistrer se désactive pendant l’envoi.", { exact: false })).toBeVisible();
+  await expect(detail.locator("code", { hasText: "usePreferences()" })).toBeVisible();
   await expect(detail).toContainText("src/settings/NotificationsPanel.tsx");
   await expect(detail).toContainText("AC2");
 

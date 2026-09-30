@@ -398,12 +398,13 @@ export function plannedTasks(content: string): PlanTask[] | undefined {
     const complexity = normalizeText((task as { complexity?: unknown }).complexity);
     const criterionIds = identifierList((task as { criterion_ids?: unknown }).criterion_ids);
     const dependencies = identifierList((task as { dependencies?: unknown }).dependencies);
-    const description = prose((task as { description?: unknown }).description, 1200);
+    const summary = prose((task as { summary?: unknown }).summary, 400);
+    const description = prose((task as { description?: unknown }).description, 4000);
     const filePaths = identifierList((task as { file_paths?: unknown }).file_paths);
     return [{
       id, title, ...(complexity ? { complexity } : {}), status: "todo" as const,
       ...(criterionIds.length ? { criterionIds } : {}), ...(dependencies.length ? { dependencies } : {}),
-      ...(description ? { description } : {}), ...(filePaths.length ? { filePaths } : {}),
+      ...(summary ? { summary } : {}), ...(description ? { description } : {}), ...(filePaths.length ? { filePaths } : {}),
     }];
   });
 }

@@ -3,7 +3,9 @@
 import { CheckIcon, KanbanIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlanTask, PlanTaskStatus, RunState } from "@/lib/types";
+import { detailParagraphs, hasMoreDetail, markCode, taskAbstract } from "@/lib/plan-task";
 import { AgentAvatar, AgentName } from "./agent-avatar";
+import { InlineText } from "./inline-text";
 
 const COLUMNS: { status: PlanTaskStatus; title: string }[] = [
   { status: "todo", title: "To Do" },
@@ -61,9 +63,10 @@ function IdChips({ ids }: { ids: string[] }) {
   return <p className="flex flex-wrap gap-1.5">{ids.map((id) => <span key={id} className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[10px] text-[var(--ink)]">{id}</span>)}</p>;
 }
 
-/** What the plan asks of one task, kept to what a reader needs to follow it: the verification steps and criterion texts stay in the plan document. */
+/** What the plan asks of one task, kept to what a reader needs to follow it: the developer-facing detail stays folded, the verification steps and criterion texts stay in the plan document. */
 function TaskDetail({ task, onClose }: { task: PlanTask; onClose: () => void }) {
   const dialog = useRef<HTMLElement>(null);
+  const abstract = taskAbstract(task);
   useEffect(() => {
     dialog.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -92,7 +95,15 @@ function TaskDetail({ task, onClose }: { task: PlanTask; onClose: () => void }) 
           <button type="button" onClick={onClose} aria-label="Fermer" className="grid size-7 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] active:translate-y-px"><XIcon size={14} /></button>
         </header>
         <div className="scrollbar-thin min-h-0 space-y-4 overflow-y-auto px-5 py-4">
-          <p className="whitespace-pre-line text-xs leading-relaxed text-[var(--ink)]">{task.description ?? "Le plan ne décrit pas cette tâche au-delà de son titre."}</p>
+          {abstract
+            ? <p className="text-xs leading-relaxed text-[var(--ink)]"><InlineText text={markCode(abstract)} /></p>
+            : <p className="text-xs leading-relaxed text-[var(--muted)]">Le plan ne décrit pas cette tâche au-delà de son titre.</p>}
+          {task.description && hasMoreDetail(task) && <details className="rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
+            <summary className="cursor-pointer text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">Détail pour le développeur</summary>
+            <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
+              {detailParagraphs(task.description).map((paragraph, index) => <p key={index}><InlineText text={markCode(paragraph)} /></p>)}
+            </div>
+          </details>}
           {task.filePaths && <DetailSection title="Fichiers">
             <ul className="space-y-1">{task.filePaths.map((file) => <li key={file} className="break-all font-mono text-[11px] text-[var(--ink)]">{file}</li>)}</ul>
           </DetailSection>}

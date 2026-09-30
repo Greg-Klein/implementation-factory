@@ -289,6 +289,33 @@ describe("acceptance coverage", () => {
       expect(withCopy.general.map((entry) => entry.id)).toEqual(["QA-R2-1"]);
     });
 
+    it("should let a general gate replace an earlier general gate it names", () => {
+      const view = coverage({ reports: [report("qa-evidence.json", qa([
+        { id: "QA-R1-1", label: "Lint", verdict: "not_run" },
+        { id: "GATE-1", label: "Lint sur le code final", verdict: "pass", command: "npm run lint", supersedes: ["QA-R1-1"] },
+      ]))] });
+      expect(view.general.map((entry) => entry.id)).toEqual(["GATE-1"]);
+      expect(view.generalHistory.map((entry) => [entry.id, entry.supersededBy])).toEqual([["QA-R1-1", "GATE-1"]]);
+      expect(renderAcceptanceSummary(view).markdown).not.toContain("Lint : not_run");
+      expect(view.diagnostics.some((entry) => entry.message.includes("ne contrôle pas la même chose"))).toBe(false);
+    });
+
+    it("should refuse a general gate replacement taken on stale code or across a criterion", () => {
+      const stale = coverage({ reports: [report("qa-evidence.json", qa([
+        { id: "QA-R1-1", label: "Lint", verdict: "not_run" },
+        { id: "GATE-1", label: "Lint", verdict: "pass", codeSnapshotId: OLD, supersedes: ["QA-R1-1"] },
+      ]))] });
+      expect(stale.generalHistory).toEqual([]);
+      expect(stale.diagnostics.some((entry) => entry.message.includes("sans avoir été prise sur le code actuel"))).toBe(true);
+      expect(stale.general.map((entry) => entry.id)).toEqual(["QA-R1-1", "GATE-1"]);
+      const across = coverage({ reports: [report("qa-evidence.json", qa([
+        { id: "QA-R1-1", label: "Lint", verdict: "not_run" },
+        { id: "Q9", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], supersedes: ["QA-R1-1"] },
+      ]))] });
+      expect(across.general.map((entry) => entry.id)).toEqual(["QA-R1-1"]);
+      expect(across.diagnostics.some((entry) => entry.message.includes("ne contrôle pas la même chose"))).toBe(true);
+    });
+
     it("should keep every archived version in the report list, the latest marked current", () => {
       const view = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([]), 2)] });
       expect(view.reports.map((entry) => [entry.version, entry.current])).toEqual([[1, false], [2, true]]);

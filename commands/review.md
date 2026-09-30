@@ -1,80 +1,17 @@
 ---
 name: review
-description: Perform a code review on the current branch or a specific PR. Use when the user wants a code review.
+description: Independently review the current branch or a supplied change and return evidence-backed findings without modifying code.
 disable-model-invocation: true
-allowed-tools: Bash, Read, Glob, Grep, Task
+allowed-tools: Bash, Read, Glob, Grep, Skill
 argument-hint: <file-path-or-diff>
 ---
 
 Review: $ARGUMENTS
 
-Read the code thoroughly before forming any opinion. Apply KISS, YAGNI, and DRY throughout — favor simplicity, delete what's unused, and question every abstraction.
+Read [engineering principles](${CLAUDE_PLUGIN_ROOT}/principles/engineering.md). Load `implementation-harness:review-change` with its code-review method and [the comment format](${CLAUDE_PLUGIN_ROOT}/contracts/review-comments.md).
 
-Review across these dimensions:
+Start with the actual diff, authoritative requirements and relevant consumers. Form expected behavior and counterexamples before consulting author reports or previous verdicts; disclose prior exposure when supplied in the request. Use `implementation-harness:how` for an unfamiliar mechanism and `implementation-harness:why` for uncertain historical constraints only when needed, respecting its required dependency.
 
-1. **Bugs & correctness** — logic errors, off-by-ones, race conditions, unhandled edge cases that *actually matter* (not hypothetical ones)
-2. **Security** — injection, auth/authz gaps, secrets exposure, unsafe deserialization. Real attack surfaces only
-3. **Simplicity** — unnecessary complexity, premature abstractions, dead code, unused imports, commented-out code. If it can be simpler, it should be
-4. **Performance** — only on hot paths with measurable impact. No micro-optimizations that sacrifice readability
-5. **Readability** — unclear naming, misleading comments, convoluted control flow, functions doing too many things
+Inspect correctness, real security boundaries, justified simplicity, measurable performance concerns and readability that affects understanding. Report evidence, concrete impact and unknowns. Do not flag unestablished style preferences, speculative future issues or impossible states. No finding is a valid result.
 
-## Output format — Conventional Comments
-
-Use the [conventional comments](https://conventionalcomments.org/) format for every finding. Each comment follows this structure:
-
-```
-**<label> (<decoration>):** `file:line` — <subject>
-
-<discussion>
-```
-
-### Labels
-
-| Label | Use for |
-|---|---|
-| `issue` | Bugs, security flaws, correctness problems — things that are broken or will break |
-| `suggestion` | Improvements: simplify, rename, restructure. Always explain *what* and *why* |
-| `nitpick` | Trivial preferences — always non-blocking |
-| `question` | Something unclear or suspicious — you're not sure it's wrong but want to flag it |
-| `todo` | Small necessary changes (missing cleanup, incomplete migration) |
-| `praise` | Something genuinely well done — be specific, not generic |
-| `thought` | Ideas sparked by the review — non-blocking by nature |
-| `chore` | Mechanical tasks before merge (update changelog, remove debug prints) |
-
-### Decorations
-
-- `(blocking)` — must be resolved before merge
-- `(non-blocking)` — nice to have, author decides
-- `(if-minor)` — resolve only if changes are trivial
-
-### Examples
-
-```
-**issue (blocking):** `src/api/auth.py:42` — SQL query built with f-string
-
-User input is interpolated directly into the query. Use parameterized queries instead.
-```
-
-```
-**suggestion (non-blocking):** `src/services/processor.py:15-28` — This wrapper adds indirection without value
-
-Inline the logic directly at the call site. Simpler to read and maintain.
-```
-
-```
-**praise:** `src/utils/retry.py:10` — Clean exponential backoff with jitter
-
-Simple, handles the real failure modes well.
-```
-
-## Do NOT flag
-
-- Missing docstrings or type annotations on code that's already clear
-- "Could be more configurable" — less config is usually better
-- Style preferences not established in the codebase
-- Hypothetical future problems with no current impact
-- Error handling for scenarios that can't happen within the system's boundaries
-
-## Verdict
-
-End with a **verdict**: `ship it` | `minor changes` | `needs rework` — with a 1-2 sentence summary and counts: `N blocking · N non-blocking · N nitpicks · N praise`.
+Do not fix code, publish comments or change external state. Execute checks only within the review authorization, through the documented commands; report what was not run. Return findings and the verdict using the linked format.

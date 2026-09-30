@@ -1,0 +1,11 @@
+# Browser measurements
+
+- Read the repository's documented runtime configuration before starting or probing a service. Establish its expected port, backend, flags and state prerequisites; do not print secrets. Start a service only within the caller's permissions.
+- Use a headless browser. Reuse a supplied test account securely; if authentication or a prerequisite is unavailable, identify the affected checks and the missing input. Do not reconfigure a shared browser or open a visible window to work around access.
+- Read the supplied reproduction recipe before navigating. It describes setup, not the expected answer. Inspect fixtures and stubs for assumptions that could mask a defect. Report simulation explicitly: a stub proves behavior against that stub, not compatibility with a live backend.
+- Use an owned tab and verify its URL in tool output before trusting a measurement. Capture the values needed for one check together. A peer's navigation invalidates the measurement, not the requirement to measure.
+- Observe the relevant channel: rendered DOM, computed style, geometry, requests, redirects, storage or events. A change without pixels may still be observable. Match evidence to the claim; a screenshot alone cannot prove a network payload.
+- Record route, viewport, inputs, setup and observation. Take screenshots when they support the claim, with unique names under the caller's authorized asset directory.
+- If temporary fixtures were needed, return the exact fixture code, response shapes and setup order to the caller for its recipe artifact; keep temporary scaffolding out of the delivered diff.
+- If live access is unavailable, inspect existing captures only as attributed indirect evidence, checking their version and scope. Mark uncovered checks unavailable. Do not silently convert a confirmation into a fresh measurement.
+- A browser observation is invalid when the app reloads changed code during the measurement. Repeat after code freezes, or report the limitation.

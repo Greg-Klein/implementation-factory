@@ -50,33 +50,10 @@ Use `glab issue update <iid> --assignee <username> -R <project>`.
 
 Do not go through `glab api projects/:id/issues -f "assignee_ids[]=<userid>"` (POST or PUT): the assignment is silently ignored (`assignees` stays empty) with no error. The dedicated `glab issue update` command works reliably with the username.
 
-## A ticket's status (work item)
+## Work item status
 
-The status ("In progress", "Done"...) is the work item's native field, **NOT a label**. It does not appear in the REST API (`glab api projects/<id>/issues/<iid>` never returns it). The `.statut::*` labels on `app/companion` are a separate, older mechanism.
+For native status reads and authorized updates, read [work-item-status.md](references/work-item-status.md). The caller chooses the transition; lifecycle names are project-specific.
 
-Read (current status plus the global id, which is NOT the iid):
+## Merge request delivery
 
-```bash
-glab api graphql -f query='
-query { project(fullPath: "<group>/<project>") { workItems(iid: "<iid>") { nodes {
-  id widgets { ... on WorkItemWidgetStatus { status { name } } } } } } }'
-```
-
-Write, by name, case insensitive:
-
-```bash
-glab api graphql -f query='
-mutation { workItemUpdate(input: {
-  id: "gid://gitlab/WorkItem/<numeric id>", statusWidget: { name: "In progress" } }) {
-  errors workItem { widgets { ... on WorkItemWidgetStatus { status { name } } } } } }'
-```
-
-Traps:
-- an unknown name writes nothing and returns an error listing the valid statuses;
-- GraphQL answers HTTP 200 with a populated `errors` array, so only `errors: []` proves the write;
-- statuses come from the group's lifecycle, so resolve them by name and never hardcode an id;
-- `glab api graphql` intercepts introspection queries (`__type`) and returns the whole schema.
-
-Statuses of the `synapse-medicine` group (exact casing): To triage, To refine, Backlog, To do, Ready to sprint, Blocked, To do - QA, In progress, In progress - Design review, In progress - Merge request, In progress - QA, Validated - To deploy, Deployed in PR, Done, Won't do, Duplicate.
-
-`/implementation-harness:implement` uses this twice: `In progress` when the branch is created, and `In progress - Merge request` once the merge request is open.
+For an authorized MR creation or consolidated review publication, read [merge-request.md](references/merge-request.md). Do not publish merely because a report or URL is supplied. The caller provides the branch, target, exact content, reviewer policy and whether delivery is ready or draft.

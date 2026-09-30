@@ -58,6 +58,8 @@ If Claude Code already placed this session in a worktree or a non-protected bran
 
 Implement only changes directly supported by the feedback and run evidence. Prefer a precise prompt correction, event contract or UI fix over a broad new abstraction. Do not weaken permission, git-safety, review or privacy rules to gain autonomy. Do not add credentials, project-specific paths or runtime content to tracked files.
 
+For instruction changes, read `docs/engineering-workflow.md` first. Put reusable procedures in the responsible skill or its conditional reference, role decisions in the agent, formats in `contracts/`, and scheduling in the command. Do not paste a skill body back into agent briefs. Preserve the separation between developer self-checks and independent review; shared measurement mechanics must not become a shared verdict or scenario checklist.
+
 Update documentation when installation, configuration, behavior or data storage changes.
 
 ## 4. Validate independently

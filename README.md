@@ -6,6 +6,12 @@ Le dépôt contient un plugin Claude Code dont la commande `/implementation-harn
 
 L’interface s’ouvre dans le navigateur avec la commande `impl`, qui sert la version compilée du checkout. Il n’y a pas d’application de bureau : le harnais tourne depuis son propre dépôt, et c’est ce qui permet à la boucle d’auto-amélioration de modifier le code qui s’exécute.
 
+## Organisation des agents et skills
+
+Les agents définissent les responsabilités et les livrables ; les skills portent les méthodes chargées selon le besoin. L'autovérification du développeur et la revue contradictoire utilisent des démarches distinctes, avec une collecte de preuves commune. Les formats consommés par la console restent dans des contrats dédiés.
+
+Voir [Agents, skills et revue indépendante](docs/engineering-workflow.md) pour les capacités, les déclencheurs, la transmission du contexte et les vérifications.
+
 ## Installation en une commande
 
 Prérequis :

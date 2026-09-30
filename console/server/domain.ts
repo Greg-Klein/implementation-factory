@@ -375,6 +375,12 @@ function identifierList(value: unknown) {
   return Array.isArray(value) ? value.flatMap((entry) => normalizeText(entry) ?? []) : [];
 }
 
+/** Unlike normalizeText, keeps the paragraph breaks and more than a line: the description is read in the task detail. */
+function prose(value: unknown, limit: number) {
+  if (typeof value !== "string") return undefined;
+  return value.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, limit) || undefined;
+}
+
 /**
  * The tasks of a `planner-output.json`, or undefined when the file is not a
  * plan yet: the planner writes it in one go, but a half-written read must not
@@ -392,7 +398,13 @@ export function plannedTasks(content: string): PlanTask[] | undefined {
     const complexity = normalizeText((task as { complexity?: unknown }).complexity);
     const criterionIds = identifierList((task as { criterion_ids?: unknown }).criterion_ids);
     const dependencies = identifierList((task as { dependencies?: unknown }).dependencies);
-    return [{ id, title, ...(complexity ? { complexity } : {}), status: "todo" as const, ...(criterionIds.length ? { criterionIds } : {}), ...(dependencies.length ? { dependencies } : {}) }];
+    const description = prose((task as { description?: unknown }).description, 1200);
+    const filePaths = identifierList((task as { file_paths?: unknown }).file_paths);
+    return [{
+      id, title, ...(complexity ? { complexity } : {}), status: "todo" as const,
+      ...(criterionIds.length ? { criterionIds } : {}), ...(dependencies.length ? { dependencies } : {}),
+      ...(description ? { description } : {}), ...(filePaths.length ? { filePaths } : {}),
+    }];
   });
 }
 

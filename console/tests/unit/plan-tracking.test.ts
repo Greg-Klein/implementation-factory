@@ -43,6 +43,13 @@ describe("plan tasks read from planner-output.json", () => {
     ]);
   });
 
+  it("should keep the description and the files a task touches, for its detail", () => {
+    const content = JSON.stringify({ tasks: [{ id: "T1", title: "Modèle", description: "  Ajouter le modèle.\n\n\n\nPuis   le persister.  ", file_paths: ["src/model.ts", ""] }] });
+    expect(plannedTasks(content)).toEqual([
+      { id: "T1", title: "Modèle", status: "todo", description: "Ajouter le modèle.\n\nPuis le persister.", filePaths: ["src/model.ts"] },
+    ]);
+  });
+
   it("should skip a task without an id and fall back to the id for a missing title", () => {
     expect(plannedTasks(JSON.stringify({ tasks: [{ title: "Orpheline" }, { id: "T9" }] }))).toEqual([{ id: "T9", title: "T9", status: "todo" }]);
   });

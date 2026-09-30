@@ -124,6 +124,11 @@ export const demoAcceptance = {
     {
       "id": "T1",
       "title": "Ajouter le modèle de préférences",
+      "description": "Ajouter au profil un objet de préférences de notification (canal, horaires de silence) persisté côté API, avec des valeurs par défaut pour les comptes existants.",
+      "file_paths": [
+        "src/models/notification-preferences.ts",
+        "src/api/preferences.ts"
+      ],
       "complexity": "S",
       "criterion_ids": [
         "AC1",
@@ -134,6 +139,11 @@ export const demoAcceptance = {
     {
       "id": "T2",
       "title": "Créer le panneau de réglages",
+      "description": "Créer le panneau Notifications des réglages : interrupteurs par canal et plage de silence. Les alertes critiques restent toujours actives et le disent.",
+      "file_paths": [
+        "src/settings/NotificationsPanel.tsx",
+        "src/settings/NotificationsPanel.module.css"
+      ],
       "complexity": "M",
       "criterion_ids": [
         "AC2",
@@ -146,6 +156,10 @@ export const demoAcceptance = {
     {
       "id": "T3",
       "title": "Connecter l’enregistrement optimiste",
+      "description": "Enregistrer chaque changement immédiatement avec une mise à jour optimiste, annulée si l’API refuse. Un second clic pendant l’envoi ne relance pas de requête.",
+      "file_paths": [
+        "src/settings/useSavePreferences.ts"
+      ],
       "complexity": "M",
       "criterion_ids": [
         "AC3",
@@ -158,6 +172,10 @@ export const demoAcceptance = {
     {
       "id": "T4",
       "title": "Tester le fallback des alertes critiques",
+      "description": "Couvrir par des tests l’affichage des alertes critiques quand les notifications sont coupées, y compris autour de minuit dans un autre fuseau.",
+      "file_paths": [
+        "src/alerts/critical-alerts.test.ts"
+      ],
       "complexity": "S",
       "criterion_ids": [
         "AC2"

@@ -67,6 +67,23 @@ describe("evidence archive", () => {
     expect(check.history[0]).toMatchObject({ id: "Q-R1", verdict: "fail" });
   });
 
+  it("should drop a round copy's anomalies once the live report corrects them", async () => {
+    const { archive, put } = memoryArchive();
+    put("acceptance-criteria.json", criteria);
+    put("assets/result.png", "png");
+    await archive.ingest("acceptance-criteria.json");
+    put("qa-evidence.json", qa(1, "measured live"));
+    await archive.ingest("qa-evidence.json");
+    put("qa-evidence-round1.json", qa(1, "measured live"));
+    await archive.ingest("qa-evidence-round1.json");
+    expect(archive.view().diagnostics.filter((diagnostic) => diagnostic.message.includes("Verdict inconnu"))).toHaveLength(1);
+    put("qa-evidence.json", qa(1, "pass"));
+    await archive.ingest("qa-evidence.json");
+    const view = archive.view();
+    expect(view.diagnostics.filter((diagnostic) => diagnostic.level === "error")).toEqual([]);
+    expect(view.criteria[0].status).toBe("verified");
+  });
+
   it("should archive a capture that arrives after the report naming it", async () => {
     const { archive, put } = memoryArchive();
     put("qa-evidence.json", qa(1, "pass"));

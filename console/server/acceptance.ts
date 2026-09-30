@@ -29,6 +29,10 @@ const METHODS = new Set<EvidenceMethod>(["test", "browser", "static_analysis", "
 const BASES = new Set<EvidenceBasis>(["observed", "reported", "confirmation"]);
 const ROUND_COPY = /-round\d+\.json$/;
 
+export function isRoundCopy(file: string) {
+  return ROUND_COPY.test(file);
+}
+
 type Diagnostics = AcceptanceDiagnostic[];
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -352,7 +356,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   // What the latest version of some report still says, as opposed to what only an older version said.
   // A `-roundN` copy is the orchestrator's archive of a finished round: history by construction.
   const stillReported = new Set(input.reports
-    .filter(({ version }) => latestVersion.get(version.file) === version.version && !ROUND_COPY.test(version.file))
+    .filter(({ version }) => latestVersion.get(version.file) === version.version && !isRoundCopy(version.file))
     .flatMap(({ records: current }) => current.map((entry) => entry.identity)));
   const byId = new Map<string, typeof records>();
   for (const entry of records) if (entry.view.id) byId.set(entry.view.id, [...byId.get(entry.view.id) ?? [], entry]);

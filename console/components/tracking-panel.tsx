@@ -65,12 +65,15 @@ function IdChips({ ids }: { ids: string[] }) {
 function TaskDetail({ task, onClose }: { task: PlanTask; onClose: () => void }) {
   const dialog = useRef<HTMLElement>(null);
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     dialog.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", closeOnEscape);
-    return () => { window.removeEventListener("keydown", closeOnEscape); opener?.focus(); };
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      // Looked up on close, not kept from opening: the card is remounted in another column when the task moves while its detail is open.
+      document.querySelector<HTMLElement>(`[data-testid="tracking-card"][data-task-id="${CSS.escape(task.id)}"] button`)?.focus();
+    };
+  }, [onClose, task.id]);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[#17201bb8] p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>

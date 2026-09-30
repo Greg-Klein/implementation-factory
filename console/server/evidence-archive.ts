@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  deriveAcceptanceCoverage, MAX_REPORT_BYTES, parseCriteriaRegistry, parseEvidenceReport, parsePlanLinks, sourceOfReport,
+  deriveAcceptanceCoverage, isRoundCopy, MAX_REPORT_BYTES, parseCriteriaRegistry, parseEvidenceReport, parsePlanLinks, sourceOfReport,
   type CriteriaRegistry, type EvidenceRecord, type PlanLinks,
 } from "./acceptance.js";
 import { isEvidenceReport } from "./domain.js";
@@ -202,7 +202,8 @@ export class EvidenceArchive {
       const parsed = parseEvidenceReport(this.raw.get(version.archivePath), version, (source) => archived.get(source));
       if (!("records" in parsed)) continue;
       const current = this.latest(version.file)?.version === version.version;
-      if (current) diagnostics.push(...parsed.diagnostics);
+      // A round copy only repeats what its live report said at the time: once the live report is fixed, the copy's anomalies are history.
+      if (current && !isRoundCopy(version.file)) diagnostics.push(...parsed.diagnostics);
       reports.push({ version: { file: version.file, version: version.version, receivedAt: version.receivedAt, hash: version.hash, source: version.source ?? sourceOfReport(version.file), ...(version.round ? { round: version.round } : {}), items: version.items, current }, records: parsed.records });
     }
     for (const [file, invalid] of this.invalid) diagnostics.push({ level: "error", file, message: invalid.message });

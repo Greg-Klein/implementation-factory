@@ -26,14 +26,14 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
     setQueued(true);
   };
   return (
-    <aside className="scrollbar-thin flex min-h-0 flex-col bg-[#f7f8f4] lg:overflow-y-auto">
-      {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-white p-4">
+    <aside className="scrollbar-thin flex min-h-0 flex-col bg-[var(--tint)] lg:overflow-y-auto">
+      {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-[var(--raised)] p-4">
         <div className="flex items-center justify-between gap-2">
           <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
           {demo && <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-mono text-[9px] text-[var(--accent)]">démo</span>}
         </div>
         <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
-        <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle d’auto-amélioration</button>
+        <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle d’auto-amélioration</button>
         {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">{demo ? "Retour simulé. Rien n’a été enregistré." : <>Retour enregistré. Lance <code>impl improve</code> pour produire l&apos;amélioration.</>}</p>}
       </div>}
       {run.error && !healthNotice(run)?.incident && <div className="m-4 flex gap-2.5 rounded-2.5 border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
@@ -43,8 +43,8 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
           <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
             {agent.nickname ? <div className="relative">
               <AgentAvatar nickname={agent.nickname} avatar={agent.avatar} />
-              <span className={`absolute -bottom-0.5 -right-0.5 grid size-3.5 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={9} /> : agent.status === "failed" ? <WarningIcon size={9} weight="fill" /> : <CheckIcon size={8} weight="bold" />}</span>
-            </div> : <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>}
+              <span className={`absolute -bottom-0.5 -right-0.5 grid size-3.5 place-items-center rounded-full bg-[var(--raised)] shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={9} /> : agent.status === "failed" ? <WarningIcon size={9} weight="fill" /> : <CheckIcon size={8} weight="bold" />}</span>
+            </div> : <div className={`grid size-8 place-items-center rounded-full bg-[var(--raised)] shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>}
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium" title={agent.name}><AgentName name={agent.name} nickname={agent.nickname} role={agent.role} /></p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsedLabel(agent.startedAt, agent.endedAt, now)}</p></div>
           </div>)}</div>}
       </section>}

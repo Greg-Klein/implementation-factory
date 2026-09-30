@@ -7,7 +7,7 @@ import type { IncidentAction, IncidentResult, RunIncident, RunState } from "@/li
 
 const time = (at: string) => new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
-const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
+const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * Who can move this run forward, when the answer is not "it is working": an
@@ -56,7 +56,7 @@ export function IncidentPanel({ run, connected, result, onAction, onOpenTerminal
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               {actions.includes("answer") && <button type="button" onClick={onOpenConversation} className={secondary}><ChatCircleDotsIcon size={12} /> Répondre</button>}
               {actions.includes("request_continuation") && !pendingContinuation && (
-                <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "request_continuation")} title="Demande à Claude Code de relire le contexte, le plan et l’état Git, puis de reprendre la prochaine action. Rien n’est relancé depuis le début." className="flex items-center gap-1.5 rounded-[11px] bg-[var(--ink)] px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">
+                <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "request_continuation")} title="Demande à Claude Code de relire le contexte, le plan et l’état Git, puis de reprendre la prochaine action. Rien n’est relancé depuis le début." className="flex items-center gap-1.5 rounded-[11px] bg-[var(--ink)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">
                   <ArrowClockwiseIcon size={12} /> Demander la continuation
                 </button>
               )}

@@ -48,7 +48,7 @@ export function PhaseRail({ run }: { run: RunState }) {
         const number = index + 1; const done = number < run.phase || finished; const current = number === run.phase && !finished;
         return <li key={phase} className="relative flex min-h-9 gap-3 text-xs">
           {index < phases.length - 1 && <span className={`absolute left-[9px] top-5 h-4 w-px ${done ? "bg-[var(--accent)]" : "bg-[var(--line)]"}`} />}
-          <span className={`relative grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[9px] ${done ? "border-[var(--accent)] bg-[var(--accent)] text-white" : current ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]"}`}>{done ? <CheckIcon size={10} weight="bold" /> : number}</span>
+          <span className={`relative grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[9px] ${done ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--on-accent)]" : current ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]"}`}>{done ? <CheckIcon size={10} weight="bold" /> : number}</span>
           <span className={`pt-0.5 ${current ? "font-semibold text-[var(--ink)]" : done ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>{phase}</span>
         </li>;
       })}</ol>

@@ -1,15 +1,86 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
   --paper: #f3f4ef;
   --ink: #1c211f;
   --muted: #707873;
+  --faint: #7c847f;
   --line: #d8dcd5;
+  --line-strong: #b9bfb8;
   --surface: #fafbf7;
+  --raised: #ffffff;
+  --sunken: #f1f3ee;
+  --backdrop: #eceee8;
+  --tint: #f7f8f4;
   --accent: #477a62;
   --accent-soft: #dce9e0;
+  --accent-strong: #2f5546;
+  --on-accent: #ffffff;
+  --on-ink: #ffffff;
+  --ink-hover: #2a322e;
+  --tab-selected: #1c211f;
+  --on-tab-selected: #ffffff;
+  --callout: #eef2ec;
+  --callout-line: #d8dcd5;
+  --selection: #b8d3c3;
+  --highlight: rgba(255, 255, 255, .8);
   --doc: #3f6d8a;
   --terminal: #191d1b;
+}
+
+/* Status colors come straight from the Tailwind palette (bg-amber-50 with
+   text-amber-800, and so on). In dark mode the steps used by the interface are
+   inverted rather than renamed: a light step becomes a tinted dark background,
+   a dark step a light text, so every "light background, dark text" pair stays
+   a readable pair on the dark surfaces. The attribute is set before the first
+   paint by THEME_BOOT_SCRIPT (lib/theme.ts), from the user's pick or the system. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #101412;
+  --ink: #e2e7e2;
+  --muted: #949c97;
+  --faint: #737b76;
+  --line: #2a312d;
+  --line-strong: #46504a;
+  --surface: #151917;
+  --raised: #1c211e;
+  --sunken: #121614;
+  --backdrop: #0d100f;
+  --tint: #181c1a;
+  --accent: #7fb096;
+  --accent-soft: #1e3028;
+  --accent-strong: #b3d3c1;
+  --on-accent: #0f1512;
+  --on-ink: #111513;
+  --ink-hover: #c5ccc6;
+  --tab-selected: #2a4639;
+  --on-tab-selected: #d6eadd;
+  --callout: #1f2824;
+  --callout-line: #3a4640;
+  --selection: #2e4a3c;
+  --highlight: rgba(255, 255, 255, .04);
+  --doc: #85afc9;
+  --terminal: #191d1b;
+
+  --color-amber-50: #2a2112;
+  --color-amber-100: #3a2c13;
+  --color-amber-200: #5a4319;
+  --color-amber-300: #715522;
+  --color-amber-500: #d9a03f;
+  --color-amber-600: #e0ab4f;
+  --color-amber-700: #e6b866;
+  --color-amber-800: #eec67f;
+  --color-amber-900: #f5d9a0;
+  --color-red-50: #2e1716;
+  --color-red-200: #5c2b27;
+  --color-red-500: #e0645a;
+  --color-red-600: #e8766c;
+  --color-red-700: #ef8a80;
+  --color-red-800: #f5a39a;
+  --color-emerald-50: #15291f;
+  --color-emerald-700: #7cc59f;
+  --color-blue-600: #8fb4e8;
 }
 
 * { box-sizing: border-box; }
@@ -31,13 +102,13 @@ button { cursor: pointer; }
   width: 100%;
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: white;
+  background: var(--raised);
   padding: 12px 14px;
   outline: none;
   transition: border-color .25s cubic-bezier(.16, 1, .3, 1), box-shadow .25s cubic-bezier(.16, 1, .3, 1);
 }
 .field:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
-::selection { background: #b8d3c3; color: var(--ink); }
+::selection { background: var(--selection); color: var(--ink); }
 .scrollbar-thin { scrollbar-color: #505753 transparent; scrollbar-width: thin; }
 .xterm { height: 100%; padding: 18px 18px 12px; }
 .xterm-viewport { scrollbar-width: thin; scrollbar-color: #47504b var(--terminal); }

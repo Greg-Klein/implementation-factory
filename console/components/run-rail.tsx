@@ -58,7 +58,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
   const closable = isClosable(run);
   const coverage = acceptanceChip(run.acceptance);
   return (
-    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal group relative flex transition-colors duration-200 ${selected ? "bg-white" : "hover:bg-white/60"}`}>
+    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal group relative flex transition-colors duration-200 ${selected ? "bg-[var(--raised)]" : "hover:bg-[var(--raised)]/60"}`}>
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
       <button
         type="button"
@@ -115,7 +115,7 @@ function HealthMark({ badge }: { badge: NonNullable<ReturnType<typeof healthBadg
  */
 function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; selected: boolean; index: number; onOpen: () => void }) {
   return (
-    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal relative ${selected ? "bg-white" : "hover:bg-white/60"}`}>
+    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal relative ${selected ? "bg-[var(--raised)]" : "hover:bg-[var(--raised)]/60"}`}>
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
       <button type="button" onClick={onOpen} aria-label={`Consulter l’archive du run ${runLabel(run)}`} aria-current={selected ? "true" : undefined} className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left">
         <ArchiveIcon size={11} className="mt-0.5 shrink-0 text-[var(--muted)]" aria-hidden />
@@ -137,7 +137,7 @@ function QueuedRow({ entry, index, onCancel }: { entry: QueuedRunView; index: nu
         <p className="truncate text-[11px] font-medium text-[var(--ink)]">{runLabel(entry)}</p>
         <p className="mt-0.5 truncate text-[10px] text-[var(--muted)]" title={entry.blockedBy ? `Bloqué par le run ${entry.blockedBy}` : undefined}>En attente, {reason}</p>
       </div>
-      <button type="button" onClick={onCancel} aria-label={`Retirer ${runLabel(entry)} de la file`} className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-white hover:text-[var(--ink)] active:translate-y-px"><XIcon size={11} /></button>
+      <button type="button" onClick={onCancel} aria-label={`Retirer ${runLabel(entry)} de la file`} className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px"><XIcon size={11} /></button>
     </div>
   );
 }
@@ -182,8 +182,8 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
           aria-pressed={selectedRunId === null}
           title="Lancer un nouveau run"
           className={`grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${selectedRunId === null
-            ? "border-[var(--ink)] bg-[var(--ink)] text-white hover:opacity-90"
-            : "border-[var(--line)] text-[var(--ink)] hover:bg-white"}`}
+            ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--on-ink)] hover:opacity-90"
+            : "border-[var(--line)] text-[var(--ink)] hover:bg-[var(--raised)]"}`}
         >
           <PlusIcon size={13} weight="bold" />
         </button>
@@ -212,7 +212,7 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
         )}
 
         {queued.length > 0 && (
-          <div role="group" aria-label="Runs en file d'attente" className="border-t border-[var(--line)] bg-[#f1f3ee]">
+          <div role="group" aria-label="Runs en file d'attente" className="border-t border-[var(--line)] bg-[var(--sunken)]">
             <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">En file · {queued.length}</p>
             <div className="divide-y divide-[var(--line)]">
               {queued.map((entry, index) => <QueuedRow key={entry.id} entry={entry} index={index} onCancel={() => onCancelQueued(entry.id)} />)}

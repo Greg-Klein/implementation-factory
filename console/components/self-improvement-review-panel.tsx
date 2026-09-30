@@ -61,7 +61,7 @@ function Name({ children }: { children: React.ReactNode }) {
   return <span className="truncate font-mono text-[9px] text-[var(--muted)]">{children}</span>;
 }
 
-const ACTION = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-[11px] font-medium transition hover:bg-[var(--paper)] active:translate-y-px";
+const ACTION = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1.5 text-[11px] font-medium transition hover:bg-[var(--paper)] active:translate-y-px";
 
 function AnalyzingRow({ review }: { review: PendingSelfImprovementReview }) {
   return (
@@ -107,7 +107,7 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <button type="button" onClick={onViewDiff} className={ACTION}><CodeIcon size={12} /> Voir les changements</button>
-        <button type="button" onClick={onApprove} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px"><CheckIcon size={12} weight="bold" /> Fusionner</button>
+        <button type="button" onClick={onApprove} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px"><CheckIcon size={12} weight="bold" /> Fusionner</button>
         <button type="button" onClick={onReject} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Ignorer</button>
       </div>
     </Strip>

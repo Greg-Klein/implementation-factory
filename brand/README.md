@@ -2,9 +2,11 @@
 
 Ce document décrit l’identité visuelle et le ton de l’application : console web et icône. Il décrit ce qui existe dans le code. Quand un écran s’en écarte, on corrige l’écran ou on met ce document à jour dans le même commit, jamais l’un sans l’autre.
 
-![Planche des couleurs et styles](brand-sheet.png)
+![Planche des couleurs et styles, thème clair](brand-sheet.png)
 
-La planche est générée depuis les tokens de `globals.css` et la palette Tailwind : après un changement de style, relancer `node scripts/render-brand-sheet.mjs` depuis `console/` (source : `brand/sheet.html`).
+![Planche des couleurs et styles, thème sombre](brand-sheet-dark.png)
+
+Les deux planches sont générées depuis les tokens de `globals.css` et la palette Tailwind : après un changement de style, relancer `node scripts/render-brand-sheet.mjs` depuis `console/` (source : `brand/sheet.html`).
 
 Les sources de vérité restent dans le code :
 
@@ -20,6 +22,7 @@ Un atelier calme. L’application surveille des sessions longues qui prennent de
 - **Le vert veut dire que ça avance**, l’ambre veut dire que c’est à toi, le rouge veut dire que ça a cassé. Aucune autre couleur ne porte de sens.
 - **Dense mais aéré** : beaucoup d’information dans de petites tailles, compensée par des marges généreuses et des séparateurs fins.
 - **Rien de décoratif** : pas de dégradé, pas d’illustration, pas d’emoji dans l’interface.
+- **Deux thèmes, une seule identité** : la console suit la préférence du système (`prefers-color-scheme`) tant qu’on n’a pas cliqué sur le bouton de thème ; ensuite elle garde ce choix (`impl.theme` dans le stockage local). Le thème est posé en attribut `data-theme` sur `<html>` avant le premier affichage, pour ne jamais faire clignoter le thème clair. Le thème sombre est le même atelier la nuit : fonds vert très sombre, encre claire, accent éclairci pour rester lisible. Aucun composant ne choisit sa couleur selon le thème, seuls les tokens changent.
 
 ## Icône
 
@@ -31,31 +34,47 @@ Un carré arrondi vert très sombre, un chevron d’invite de commande suivi d�
 | Chevron et curseur | `#e9eee5`, trait 64, extrémités et jointures arrondies |
 | Point de statut | `#88ad8e` |
 
-Dans l’application, la marque est un carré `size-8` fond `--ink` avec l’icône Phosphor `Code` en blanc, graisse `bold`. On ne recolore pas l’icône, on ne l’entoure pas d’un cadre, on ne l’utilise pas sur fond vert.
+Dans l’application, la marque est un carré `size-8` fond `--ink` avec l’icône Phosphor `Code` en `--on-ink`, graisse `bold` : carré sombre en thème clair, clair en thème sombre. On ne recolore pas l’icône, on ne l’entoure pas d’un cadre, on ne l’utilise pas sur fond vert.
 
 ## Couleurs
 
 ### Tokens
 
-Toujours passer par les variables CSS (`bg-[var(--accent)]`), jamais par une valeur recopiée.
+Toujours passer par les variables CSS (`bg-[var(--accent)]`), jamais par une valeur recopiée : pas de `bg-white`, `text-white` ni de code hexadécimal dans un composant, sinon il reste clair en thème sombre.
 
-| Token | Valeur | Usage |
-|---|---|---|
-| `--paper` | `#f3f4ef` | Fond de page, colonnes latérales, pieds de fenêtre |
-| `--surface` | `#fafbf7` | Zone de contenu principale, cartes posées sur `--paper` |
-| `--ink` | `#1c211f` | Texte, marque, boutons sombres |
-| `--muted` | `#707873` | Texte secondaire, aides, libellés inactifs |
-| `--line` | `#d8dcd5` | Bordures, séparateurs, piste d’une étape non atteinte |
-| `--accent` | `#477a62` | Action principale, progression, focus, lien |
-| `--accent-soft` | `#dce9e0` | Fond d’un élément sélectionné, halo de focus, pastille « en cours » |
-| `--doc` | `#3f6d8a` | Tout ce qui désigne un document produit par le workflow |
-| `--terminal` | `#191d1b` | Fond du terminal |
+| Token | Clair | Sombre | Usage |
+|---|---|---|---|
+| `--paper` | `#f3f4ef` | `#101412` | Fond de page, colonnes latérales, pieds de fenêtre |
+| `--surface` | `#fafbf7` | `#151917` | Zone de contenu principale, cartes posées sur `--paper` |
+| `--raised` | `#ffffff` | `#1c211e` | Champs de saisie, boutons secondaires, cartes, ligne sélectionnée, fenêtre de document |
+| `--sunken` | `#f1f3ee` | `#121614` | Zones en retrait : blocs de code, composeur, rail d’onglets, file d’attente |
+| `--backdrop` | `#eceee8` | `#0d100f` | Fond derrière le formulaire de lancement |
+| `--tint` | `#f7f8f4` | `#181c1a` | Colonne des agents, survol léger |
+| `--ink` | `#1c211f` | `#e2e7e2` | Texte, marque, boutons sombres (clairs en thème sombre) |
+| `--ink-hover` | `#2a322e` | `#c5ccc6` | Survol d’un bouton `--ink` |
+| `--on-ink` | `#ffffff` | `#111513` | Texte et icône posés sur `--ink` |
+| `--tab-selected` | `#1c211f` | `#2a4639` | Pastille de l’onglet actif (vue du run) |
+| `--on-tab-selected` | `#ffffff` | `#d6eadd` | Libellé de l’onglet actif |
+| `--callout` | `#eef2ec` | `#1f2824` | Carte de question posée dans la conversation, plus claire que le fond en thème sombre pour s’en détacher |
+| `--callout-line` | `#d8dcd5` | `#3a4640` | Bordure de cette carte |
+| `--muted` | `#707873` | `#949c97` | Texte secondaire, aides, libellés inactifs |
+| `--faint` | `#7c847f` | `#737b76` | Mentions de dernier plan (signature, action en cours d’un message) |
+| `--line` | `#d8dcd5` | `#2a312d` | Bordures, séparateurs, piste d’une étape non atteinte |
+| `--line-strong` | `#b9bfb8` | `#46504a` | Cercle d’une tâche à faire, survol d’une option, interrupteur désactivé |
+| `--accent` | `#477a62` | `#7fb096` | Action principale, progression, focus, lien |
+| `--on-accent` | `#ffffff` | `#0f1512` | Texte et icône posés sur `--accent` |
+| `--accent-soft` | `#dce9e0` | `#1e3028` | Fond d’un élément sélectionné, halo de focus, pastille « en cours » |
+| `--accent-strong` | `#2f5546` | `#b3d3c1` | Texte posé sur `--accent-soft` (bandeau de notification) |
+| `--doc` | `#3f6d8a` | `#85afc9` | Tout ce qui désigne un document produit par le workflow |
+| `--selection` | `#b8d3c3` | `#2e4a3c` | Sélection de texte |
+| `--highlight` | blanc à 80 % | blanc à 4 % | Reflet intérieur en haut du formulaire de lancement |
+| `--terminal` | `#191d1b` | `#191d1b` | Fond du terminal, identique dans les deux thèmes |
 
-Le blanc pur est réservé aux champs de saisie et aux boutons secondaires, pour qu’ils se détachent du papier. La sélection de texte utilise `#b8d3c3`. Le survol du bouton principal passe à `#38644f`.
+`--raised` est la surface la plus claire en thème clair et la plus haute en thème sombre : c’est elle qui fait détacher un champ ou un bouton secondaire du papier.
 
 ### Statuts
 
-Les statuts reprennent la palette Tailwind, toujours en couple fond clair et texte foncé.
+Les statuts reprennent la palette Tailwind, toujours en couple fond clair et texte foncé. En thème sombre, `globals.css` inverse les paliers utilisés (`amber-50` devient un fond ambre sombre, `amber-800` un texte ambre clair, de même pour `red` et `emerald`) : les couples restent les mêmes classes et restent lisibles. Un nouveau palier employé dans un composant doit être ajouté à cette inversion.
 
 | Sens | Fond | Texte | Bordure | Exemples |
 |---|---|---|---|---|
@@ -88,20 +107,21 @@ La hiérarchie repose sur la graisse et la couleur plus que sur la taille : on r
 
 ## Composants
 
-- **Champ** : classe `.field`. Fond blanc, bordure `--line`, 12 × 14 px de marge interne ; au focus, bordure `--accent` et halo `--accent-soft` de 2 px. Désactivé : `opacity-60`.
-- **Bouton secondaire** : fond blanc, bordure `--line`, `text-xs font-medium`, `px-3.5 py-2`, survol `--paper`.
-- **Bouton principal** : fond et bordure `--accent`, texte blanc. Un seul par zone d’action, toujours à droite.
-- **Bouton d’action du run** : fond `--ink`, texte blanc, rayon 11 px. Réservé aux gestes qui font avancer un run : le lancer, répondre à une question, envoyer une instruction.
-- **Interrupteur** : piste 44 × 24 px, `--accent` activé, `#c7cdc7` désactivé, pastille blanche.
+- **Champ** : classe `.field`. Fond `--raised`, bordure `--line`, 12 × 14 px de marge interne ; au focus, bordure `--accent` et halo `--accent-soft` de 2 px. Désactivé : `opacity-60`.
+- **Bouton secondaire** : fond `--raised`, bordure `--line`, `text-xs font-medium`, `px-3.5 py-2`, survol `--paper`.
+- **Bouton principal** : fond et bordure `--accent`, texte `--on-accent`. Un seul par zone d’action, toujours à droite.
+- **Bouton d’action du run** : fond `--ink`, texte `--on-ink`, rayon 11 px. Réservé aux gestes qui font avancer un run : le lancer, répondre à une question, envoyer une instruction.
+- **Boutons d’en-tête** : en haut à droite, carrés `size-7`, `rounded-lg`, bordure `--line`, icône de 14 px. Le thème (icône du thème vers lequel il bascule : `Moon` en clair, `Sun` en sombre, `--muted`) puis le son (`--accent` activé, `--muted` coupé). Chacun est un `role="switch"` avec un libellé accessible et une infobulle qui dit l’état et l’effet du clic.
+- **Interrupteur** : piste 44 × 24 px, `--accent` activé, `--line-strong` désactivé, pastille blanche.
 - **Alerte** : `rounded-lg`, bordure et fond de la couleur de statut, icône à gauche, action de reprise soulignée sous le texte.
 - **Pastille de statut** : `rounded-full`, `px-2 py-1`, `text-[10px] font-semibold`, couple fond et texte du statut.
-- **Navigation latérale** : élément actif en fond `--accent-soft` et texte `--accent`, inactif en `--muted` avec survol `white/60`.
+- **Navigation latérale** : élément actif en fond `--accent-soft` et texte `--accent`, inactif en `--muted` avec survol `--raised` à 60 %.
 - **Agent** : photo ronde (`public/avatars/`, `object-cover`) liée à son prénom, suivie de « Prénom · Rôle », le prénom en `--ink`, le séparateur et le rôle en `--muted`. Sans photo, l’initiale sur fond `--accent-soft`. Ce sont les seules images de personnes de l’interface : elles distinguent les agents d’un même run, elles ne décorent pas.
-- **Carte de tâche (Suivi)** : fond blanc, bordure `--line`, `rounded-lg`, posée sur une colonne `--paper`. Cercle vide à faire, anneau ambre en cours, coche blanche sur `--accent` terminée ; complexité et identifiant en mono `--muted`.
+- **Carte de tâche (Suivi)** : fond `--raised`, bordure `--line`, `rounded-lg`, posée sur une colonne `--paper`. Cercle vide à faire, anneau ambre en cours, coche `--on-accent` sur `--accent` terminée ; complexité et identifiant en mono `--muted`.
 - **Critère d’acceptation (Preuves)** : ligne dépliable, identifiant en mono `--muted`, texte en `--ink`, pastille d’état à droite. Vérifié en `emerald`, échec en `red`, bloqué en `amber` (quelqu’un doit agir), non vérifié en fond `--line` et texte `--ink` plutôt que `--muted`, pour rester lisible : un critère non vérifié n’est jamais vert. Les réserves sur une preuve (« Preuve ancienne », « Version inconnue », « Mesure non concluante ») sont de petites pastilles `amber-50`, les mentions neutres (« Résultat rapporté », « Confirmation ») des pastilles `--paper`.
 - **Bandeau d’incident (vue du run)** : sous les onglets, pleine largeur, fond et bordure basse de la couleur de statut : `amber` pour une attente, un doute ou un incident qu’on peut encore traiter, `red` pour une session interrompue. Icône `fill` à gauche (`Warning`, `WarningCircle`, `HourglassMedium` pour un doute), titre factuel en `font-semibold`, cause en une phrase, « Prochaine action attendue », puis seulement les actions possibles : « Demander la continuation » en bouton d’action du run, les autres en boutons secondaires. Le diagnostic reste replié. Dans la liste des runs, la même information tient dans la troisième ligne de la rangée, icône et libellé de la couleur du statut. Le texte de l’erreur n’est pas répété dans la colonne de droite quand le bandeau le dit déjà. Un run archivé n’a plus de session : sa durée s’arrête à son dernier événement connu, et sa conversation vide ne renvoie pas vers le terminal.
 - **Couverture dans la liste des runs** : au bout de la troisième ligne, « vérifiés/total AC » en mono `text-[9px] font-semibold`, texte seul de la couleur du pire état restant (`red-700` pour un échec, `amber-800` pour un blocage, `--accent` quand tout est vérifié, `--muted` sinon). Le détail va dans le libellé accessible et l’infobulle. Rien sans registre de critères.
-- **Terminal** : fond `--terminal`, barre de défilement fine `#47504b`. C’est la seule surface sombre de l’application.
+- **Terminal** : fond `--terminal`, barre de défilement fine `#47504b`. En thème clair, c’est la seule surface sombre de l’application ; en thème sombre, il garde le même fond et les mêmes couleurs ANSI.
 
 Tous les éléments interactifs ont un focus visible : `outline-2`, décalage 2 px, couleur `--accent`. Les actions appuyées descendent d’un pixel (`active:translate-y-px`).
 
@@ -132,7 +152,7 @@ L’interface est en français, le code et ses commentaires en anglais.
 
 ## Accessibilité
 
-- Contraste AA visé pour tout texte (4,5:1). Écart connu : `--muted` atteint 4,1:1 sur `--paper` et 4,4:1 sur `--surface`, sous le seuil ; le texte blanc sur `--accent` est à 5:1. Tant que `--muted` n’est pas foncé, ne pas l’utiliser pour une information indispensable.
+- Contraste AA visé pour tout texte (4,5:1). Écart connu : `--muted` atteint 4,1:1 sur `--paper` et 4,4:1 sur `--surface`, sous le seuil ; le texte blanc sur `--accent` est à 5:1. En thème sombre, `--muted` dépasse 6:1 sur `--surface` et `--accent` 7:1. Tant que `--muted` n’est pas foncé, ne pas l’utiliser pour une information indispensable.
 - Le sens ne passe jamais par la couleur seule (libellé, icône ou forme en plus).
 - Les zones qui changent pendant un run (statut d’enregistrement, compteurs) sont annoncées avec `role="status"` et `aria-live="polite"`, les erreurs avec `role="alert"`.
 - Chaque champ a un `label` associé et ses aides reliées par `aria-describedby`.

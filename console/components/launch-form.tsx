@@ -69,7 +69,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
         {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
       </div>
       {listOpen && (
-        <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-white p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
+        <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-[var(--raised)] p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
           {suggestions.length > 0 ? suggestions.map((repository, index) => (
             <button
               key={`${repository.project}-${repository.path}`}
@@ -79,9 +79,9 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
               type="button"
               onMouseDown={(event) => { event.preventDefault(); select(repository); }}
               onMouseEnter={() => setActiveIndex(index)}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[#f4f5f1]"}`}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--tint)]"}`}
             >
-              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-white text-[var(--accent)]"><GitBranchIcon size={13} /></span>
+              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-[var(--raised)] text-[var(--accent)]"><GitBranchIcon size={13} /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
               {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Introuvable</span>}
             </button>
@@ -111,8 +111,8 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, se
         </div>
       </div>
 
-      <div className="flex items-center border-t border-[var(--line)] bg-[#eceee8] p-5 md:p-8 lg:border-l lg:border-t-0">
-        <form className="w-full rounded-5.5 border border-white/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_rgba(255,255,255,.8)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
+      <div className="flex items-center border-t border-[var(--line)] bg-[var(--backdrop)] p-5 md:p-8 lg:border-l lg:border-t-0">
+        <form className="w-full rounded-5.5 border border-[var(--raised)]/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_var(--highlight)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
           <div className="mb-7 flex items-start justify-between">
             <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
@@ -120,7 +120,7 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, se
           <Field label="Ticket GitLab"><input type="url" value={issueUrl} onChange={(event) => setIssueUrl(event.target.value)} placeholder="https://gitlab.com/…/-/issues/217" className="field text-sm" /></Field>
           <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />
           <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· facultatif</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
-          <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> Lancer l’implémentation</span><ArrowRightIcon size={16} />
           </button>
         </form>

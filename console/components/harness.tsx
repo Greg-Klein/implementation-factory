@@ -1,10 +1,11 @@
 "use client";
 
-import { CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
+import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
 import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { NoticeStrip } from "./notice-strip";
@@ -41,6 +42,7 @@ export function Harness() {
   const [incidentResult, setIncidentResult] = useState<IncidentResult>();
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
+  const [theme, setTheme] = useState<Theme>("light");
   const [writing, setWriting] = useState(false);
   const cwdRef = useRef("");
   const lastOutputRef = useRef(0);
@@ -245,6 +247,18 @@ export function Harness() {
     };
   }, []);
 
+  useEffect(() => {
+    setTheme(storedTheme() ?? systemTheme());
+    return followSystemTheme(setTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+    setStoredTheme(next);
+    setTheme(next);
+  };
+
   /** Turning it on plays the cue straight away, so the setting proves itself. */
   const toggleSound = () => {
     const enabled = !sound;
@@ -321,14 +335,17 @@ export function Harness() {
         <div className="flex min-w-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
           <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5 md:px-7">
             <div className="flex items-center gap-3">
-              <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
+              <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-[var(--on-ink)]"><CodeIcon size={18} weight="bold" /></div>
               <div>
                 <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Harness</h1>
-                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">by Gregory Klein</span></p>
+                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[var(--faint)]">by Gregory Klein</span></p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-              <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-white active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+              <button type="button" role="switch" aria-checked={theme === "dark"} aria-label="Thème sombre" onClick={toggleTheme} title={theme === "dark" ? "Thème sombre, cliquer pour passer en clair" : "Thème clair, cliquer pour passer en sombre"} className="mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px">
+                {theme === "dark" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
+              </button>
+              <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
                 {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
               </button>
               <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
@@ -340,7 +357,7 @@ export function Harness() {
             {error && (
               <div role="alert" className="flex items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-red-800 md:px-7">
                 <p className="flex min-w-0 items-start gap-2.5 text-[11px] leading-5"><WarningIcon className="mt-0.5 shrink-0" size={14} weight="fill" />{error}</p>
-                <button type="button" onClick={() => setError(undefined)} aria-label="Masquer l'erreur" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-white/70 active:translate-y-px"><XIcon size={12} /></button>
+                <button type="button" onClick={() => setError(undefined)} aria-label="Masquer l'erreur" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
               </div>
             )}
             <NoticeStrip notice={notice} onDismiss={() => setNotice(undefined)} />

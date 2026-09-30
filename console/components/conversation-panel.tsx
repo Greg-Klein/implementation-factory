@@ -9,7 +9,7 @@ import { QuestionPanel } from "./question-panel";
 
 function MessageBody({ text }: { text: string }) {
   return <>{messageBlocks(text).map((block, index) => block.kind === "code"
-    ? <pre key={index} className="scrollbar-thin mt-2 overflow-x-auto rounded-2.5 border border-[var(--line)] bg-[#f1f3ee] p-3 font-mono text-[10px] leading-4 first:mt-0">{block.content}</pre>
+    ? <pre key={index} className="scrollbar-thin mt-2 overflow-x-auto rounded-2.5 border border-[var(--line)] bg-[var(--sunken)] p-3 font-mono text-[10px] leading-4 first:mt-0">{block.content}</pre>
     : <p key={index} className="mt-2 whitespace-pre-wrap text-[12.5px] leading-5 first:mt-0"><InlineText text={block.content} /></p>)}</>;
 }
 
@@ -22,7 +22,7 @@ function WritingHint({ action }: { action?: string }) {
         Claude réfléchit…
       </p>
       {/* Aligned on the label above, past the dot and its gap. */}
-      {action && <p className="mt-1 pl-3.5 font-mono text-[9px] leading-4 text-[#9aa19c]">{action}</p>}
+      {action && <p className="mt-1 pl-3.5 font-mono text-[9px] leading-4 text-[var(--faint)]">{action}</p>}
     </div>
   );
 }
@@ -101,7 +101,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
             ) : stalled ? (
               <>
                 <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Le run progresse mais aucun message n’a pu être lu depuis le transcript. La session peut attendre une confirmation invisible ici, comme la confiance du dossier.</p>
-                <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Vérifier l’onglet Terminal</button>
+                <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px">Vérifier l’onglet Terminal</button>
               </>
             ) : (
               <>
@@ -118,7 +118,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
                 <span>{new Date(message.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
                 {message.pending && <span title="Claude prendra cette instruction à la fin de son tour" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">en attente</span>}
               </div>
-              <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-white shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
+              <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-[var(--raised)] shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
                 <MessageBody text={message.text} />
               </div>
             </article>
@@ -132,7 +132,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
             onClick={jumpToBottom}
             title="Aller au dernier message"
             aria-label="Aller au dernier message"
-            className="reveal absolute bottom-4 right-5 grid size-9 place-items-center rounded-full border border-[var(--line)] bg-white text-[var(--ink)] shadow-[0_10px_24px_-14px_rgba(30,42,35,.55)] transition hover:bg-[#f7f8f4] active:translate-y-px md:right-7"
+            className="reveal absolute bottom-4 right-5 grid size-9 place-items-center rounded-full border border-[var(--line)] bg-[var(--raised)] text-[var(--ink)] shadow-[0_10px_24px_-14px_rgba(30,42,35,.55)] transition hover:bg-[var(--tint)] active:translate-y-px md:right-7"
           >
             <ArrowDownIcon size={15} />
           </button>
@@ -140,7 +140,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
       </div>
       <form
         onSubmit={(event) => { event.preventDefault(); send(); }}
-        className="shrink-0 border-t border-[var(--line)] bg-[#f1f3ee] p-4 md:px-7"
+        className="shrink-0 border-t border-[var(--line)] bg-[var(--sunken)] p-4 md:px-7"
       >
         <div className="flex items-end gap-2.5">
           <label className="sr-only" htmlFor="instruction">Instruction pour Claude</label>
@@ -155,7 +155,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
             placeholder={canSend ? "Transmettre une instruction à Claude…" : "Aucune session active."}
             className="field max-h-32 resize-none text-[12.5px] leading-5 disabled:opacity-50"
           />
-          <button type="submit" disabled={!draft.trim() || !canSend} aria-label="Envoyer l’instruction" className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-[var(--ink)] text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="submit" disabled={!draft.trim() || !canSend} aria-label="Envoyer l’instruction" className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-[var(--ink)] text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <PaperPlaneTiltIcon size={16} weight="fill" />
           </button>
         </div>

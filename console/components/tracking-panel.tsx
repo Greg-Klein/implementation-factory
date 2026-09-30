@@ -13,15 +13,15 @@ const COLUMNS: { status: PlanTaskStatus; title: string }[] = [
 const STATUS_LABEL: Record<PlanTaskStatus, string> = { todo: "À faire", in_progress: "En cours", done: "Terminée" };
 
 function StatusMark({ status }: { status: PlanTaskStatus }) {
-  if (status === "done") return <span role="img" aria-label={STATUS_LABEL.done} className="grid size-4.5 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-white"><CheckIcon size={10} weight="bold" /></span>;
+  if (status === "done") return <span role="img" aria-label={STATUS_LABEL.done} className="grid size-4.5 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)]"><CheckIcon size={10} weight="bold" /></span>;
   if (status === "in_progress") return <span role="img" aria-label={STATUS_LABEL.in_progress} className="size-4.5 shrink-0 rounded-full border-2 border-amber-200 border-t-amber-500" />;
-  return <span role="img" aria-label={STATUS_LABEL.todo} className="size-4.5 shrink-0 rounded-full border-2 border-[#b9bfb8]" />;
+  return <span role="img" aria-label={STATUS_LABEL.todo} className="size-4.5 shrink-0 rounded-full border-2 border-[var(--line-strong)]" />;
 }
 
 function TaskCard({ task }: { task: PlanTask }) {
   const assignee = task.assignee?.nickname ? task.assignee : undefined;
   return (
-    <li data-testid="tracking-card" data-task-id={task.id} data-status={task.status} className="reveal rounded-lg border border-[var(--line)] bg-white p-3">
+    <li data-testid="tracking-card" data-task-id={task.id} data-status={task.status} className="reveal rounded-lg border border-[var(--line)] bg-[var(--raised)] p-3">
       <div className="flex items-start gap-2.5">
         <StatusMark status={task.status} />
         <p className="min-w-0 flex-1 text-xs font-medium leading-relaxed text-[var(--ink)]">{task.title}</p>

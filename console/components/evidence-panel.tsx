@@ -61,7 +61,7 @@ function Lightbox({ image, label, onClose }: { image: string; label: string; onC
   return (
     <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-50 grid place-items-center bg-[#17201bb8] p-6 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <img src={image} alt={label} className="max-h-[92vh] max-w-[94vw] rounded-5 border border-white/15 shadow-[0_32px_90px_-28px_rgba(0,0,0,.6)]" />
-      <button type="button" onClick={onClose} aria-label="Fermer" className="absolute right-6 top-6 grid size-8 place-items-center rounded-full border border-white/20 bg-white/90 transition hover:bg-white active:scale-95"><XIcon size={14} /></button>
+      <button type="button" onClick={onClose} aria-label="Fermer" className="absolute right-6 top-6 grid size-8 place-items-center rounded-full border border-white/20 bg-[var(--raised)]/90 transition hover:bg-[var(--raised)] active:scale-95"><XIcon size={14} /></button>
     </div>
   );
 }
@@ -125,7 +125,7 @@ function EvidenceCard({ runId, view }: { runId: string; view: EvidenceView }) {
     view.round ? `tour ${view.round}` : undefined, `${view.file} v${view.version}`, clock(view.observedAt ?? view.receivedAt),
   ].filter(Boolean).join(" · ");
   return (
-    <li className="rounded-lg border border-[var(--line)] bg-white px-3 py-2.5" data-testid="evidence-item">
+    <li className="rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3 py-2.5" data-testid="evidence-item">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-medium text-[var(--ink)]">{view.label}</p>
         <Pill {...verdict} />
@@ -318,7 +318,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
 
   return (
     <ArchivedRun.Provider value={Boolean(run.archived)}>
-    <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-white p-5">
+    <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-[var(--raised)] p-5">
       <section aria-label="Couverture des critères" className="mb-6">
         {error && <p role="alert" className="mb-3 text-[11px] text-red-700">{error}</p>}
         {view && traced && <Summary view={view} />}

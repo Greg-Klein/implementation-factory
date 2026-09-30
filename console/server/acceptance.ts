@@ -392,14 +392,16 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     if (view.criterionIds.length === 0 && view.checkIds.length === 0) general.add(entry.identity);
   }
 
-  // A replacement is honoured only between two results on the same check, the
-  // newer one taken on the code as it stands. Anything else stays on the record.
+  // A replacement is honoured only between two results on the same check, or
+  // between two general gates (which cite no check by contract), the newer one
+  // taken on the code as it stands. Anything else stays on the record.
   const supersededBy = new Map<string, string>();
   for (const entry of records) {
     for (const replacedId of entry.view.supersedes) {
       for (const replaced of byId.get(replacedId) ?? []) {
         if (replaced.identity === entry.identity) continue;
-        const shared = [...linkedChecks.get(replaced.identity) ?? []].some((check) => linkedChecks.get(entry.identity)?.has(check));
+        const shared = (general.has(replaced.identity) && general.has(entry.identity))
+          || [...linkedChecks.get(replaced.identity) ?? []].some((check) => linkedChecks.get(entry.identity)?.has(check));
         if (!shared) { diagnostics.push({ level: "warning", file: entry.view.file, message: `« ${entry.view.label} » remplace ${replacedId}, qui ne contrôle pas la même chose : remplacement ignoré.` }); continue; }
         if (entry.view.freshness !== "current") { diagnostics.push({ level: "warning", file: entry.view.file, message: `« ${entry.view.label} » remplace ${replacedId} sans avoir été prise sur le code actuel : remplacement ignoré.` }); continue; }
         supersededBy.set(replaced.identity, entry.view.id ?? entry.view.label);
@@ -509,8 +511,8 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     sentence: coverageSentence(counts),
     ...(input.currentSnapshot ? { currentSnapshot: input.currentSnapshot } : {}),
     criteria: shown,
-    general: finalRecords.filter((entry) => general.has(entry.identity) && stillReported.has(entry.identity)).map((entry) => entry.view),
-    generalHistory: finalRecords.filter((entry) => general.has(entry.identity) && !stillReported.has(entry.identity)).map((entry) => entry.view),
+    general: finalRecords.filter((entry) => general.has(entry.identity) && stillReported.has(entry.identity) && !entry.view.supersededBy).map((entry) => entry.view),
+    generalHistory: finalRecords.filter((entry) => general.has(entry.identity) && (!stillReported.has(entry.identity) || entry.view.supersededBy)).map((entry) => entry.view),
     diagnostics: dedupeDiagnostics(diagnostics),
     reports,
   };

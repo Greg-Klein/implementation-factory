@@ -310,6 +310,8 @@ Print a short summary in chat:
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
 
+Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
+
 **Declare the end first.** Write `workflow-state.json` with `"state": "completed"` and its `result` (see the workflow-state contract), before the archive sync below, so the console knows the run reached its end rather than lost its session.
 
 **Before cleaning, let the console archive what the run leaves behind.** When `IMPL_RUN_ID` is set, write a sync request with a fresh id, then wait for the console's answer carrying that same id, for up to two minutes, with `Monitor` and an until-loop rather than a `sleep`:

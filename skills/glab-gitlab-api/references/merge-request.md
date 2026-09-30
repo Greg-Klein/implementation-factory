@@ -48,6 +48,7 @@ Rules:
   - the keyword: `Closes #<iid>` when the target is the project's default branch, `Related to #<iid>` otherwise (a merge into a feature branch closes nothing, so `Closes` would be a lie)
   - both go into the description file before the merge request is created, so the link is there from the first second
 - **Never merge the MR yourself.** The user merges.
+- **"Livré" means deployed to production**, in the description and in the step 9 comment alike. A ticket whose merge request is open, or merged into a feature branch or `develop`, is not "livré": name the stage it reached ("MR ouverte", "mergé dans `<branch>`").
 
 If the caller separately authorized a ticket lifecycle transition, perform that supplied transition using [work-item-status.md](work-item-status.md). MR creation alone does not authorize a status update.
 

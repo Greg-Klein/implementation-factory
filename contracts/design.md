@@ -24,7 +24,7 @@ You MUST write two files:
 One item per row of the property/expected/actual/verdict comparison table, `label` naming the property and its visual location — never a file path or component name, same rule as everywhere else in this agent. Attach `screenshot` whenever a screenshot documents that row. `label`, `expected` and `actual` are written in French; the JSON keys and `verdict` (`pass`/`fail`/`unverified`) stay in English exactly as shown.
 
 - **`id`**: `DS-R<round>-<n>`, never reused across rounds. When you measure again a property an earlier round recorded (read the previous `design-evidence.json` first), write a new item and name the earlier id in `supersedes`.
-- **`criterionIds`** only on a row that checks a visual acceptance criterion of the registry; a property of the design that no criterion states cites none.
+- **`criterionIds`** only on a row that checks a visual acceptance criterion of the registry, plus the `checkIds` the row covers when that criterion lists several required checks (a row that names only such a criterion counts for none of them); a property of the design that no criterion states cites none.
 - **`codeSnapshot.atStart`** is the id your caller gave you, copied exactly. You have no shell to take one yourself; without an id from the caller, leave `codeSnapshot` out.
 
 ---

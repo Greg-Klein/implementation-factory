@@ -220,6 +220,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
   if (root.items.length > MAX_ITEMS) diagnostics.push({ level: "warning", file: context.file, message: `Plus de ${MAX_ITEMS} éléments : les suivants sont ignorés.` });
   const seenIds = new Map<string, number>();
   const records: EvidenceRecord[] = [];
+  let futureDates = 0;
   root.items.slice(0, MAX_ITEMS).forEach((entry, index) => {
     const item = record(entry);
     if (!item) { diagnostics.push({ level: "error", file: context.file, message: `Élément ${index + 1} ignoré : ce n'est pas un objet.` }); return; }
@@ -246,6 +247,9 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
     // only a reviewer's measurement is an observation of someone else's code.
     const basis: EvidenceBasis = verdict === "confirmed" || confirms ? "confirmation" : source === "developer" ? "reported" : declaredBasis ?? "observed";
     const blocker = blockerOf(item.blocker);
+    // A result cannot be observed after the file reporting it arrived: such a date was made up.
+    let observedAt = text(item.observedAt, 40);
+    if (observedAt && /^\d{4}-\d{2}-\d{2}T/.test(observedAt) && Date.parse(observedAt) > Date.parse(context.receivedAt)) { observedAt = undefined; futureDates += 1; }
     const attachments: EvidenceAttachmentView[] = attachmentPaths(item).map((attachment) => {
       const archived = attachmentPath(attachment);
       return { source: attachment, ...(archived ? { path: archived } : {}), archived: Boolean(archived) };
@@ -268,7 +272,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       label, verdict, source, file: context.file, version: context.version, receivedAt: context.receivedAt,
       ...(positiveInteger(item.round) ?? round ? { round: positiveInteger(item.round) ?? round } : {}),
       ...(itemProducer ? { producer: { ...(text(itemProducer.role, 80) ? { role: text(itemProducer.role, 80) } : {}), ...(text(itemProducer.agentId, 120) ? { agentId: text(itemProducer.agentId, 120) } : {}) } } : {}),
-      ...(text(item.observedAt, 40) ? { observedAt: text(item.observedAt, 40) } : {}),
+      ...(observedAt ? { observedAt } : {}),
       ...(content.method ? { method: content.method } : {}),
       basis,
       ...(content.expected ? { expected: content.expected } : {}),
@@ -291,6 +295,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       ...(content.snapshotAtEnd ? { snapshotAtEnd: content.snapshotAtEnd } : {}),
     });
   });
+  if (futureDates > 0) diagnostics.push({ level: "warning", file: context.file, message: `${futureDates} date${futureDates > 1 ? "s" : ""} d'observation postérieure${futureDates > 1 ? "s" : ""} à la réception du fichier, remplacée${futureDates > 1 ? "s" : ""} par l'heure de réception.` });
   return { source, ...(text(root.status, 40) ? { status: text(root.status, 40) } : {}), ...(round ? { round } : {}), records, diagnostics };
 }
 

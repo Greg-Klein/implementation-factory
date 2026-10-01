@@ -109,6 +109,16 @@ describe("evidence reports", () => {
     expect(parsed.diagnostics.some((entry) => entry.message.includes("double"))).toBe(true);
   });
 
+  it("should drop an observation date later than the file's arrival, with one warning per report", () => {
+    const parsed = parseEvidenceReport(qa([
+      { id: "Q1", label: "a", verdict: "pass", observedAt: "2026-09-27T10:05:00Z" },
+      { id: "Q2", label: "b", verdict: "pass", observedAt: "2026-09-27T10:12:00Z" },
+      { id: "Q3", label: "c", verdict: "pass", observedAt: "2026-09-27T09:58:41Z" },
+    ]), { file: "qa-evidence.json", version: 1, receivedAt: NOW, hash: "h" }) as ParsedReport;
+    expect(parsed.records.map((entry) => entry.view.observedAt)).toEqual([undefined, undefined, "2026-09-27T09:58:41Z"]);
+    expect(parsed.diagnostics).toEqual([expect.objectContaining({ level: "warning", file: "qa-evidence.json", message: expect.stringContaining("2 dates d'observation") })]);
+  });
+
   it("should map attachments to their archived copy of that version", () => {
     const { records } = report("qa-evidence.json", qa([{ id: "Q1", label: "a", verdict: "pass", screenshot: "assets/result.png", attachments: ["assets/log.txt"] }]), 2);
     expect(records[0].view.attachments).toEqual([

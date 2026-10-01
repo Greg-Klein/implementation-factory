@@ -17,12 +17,14 @@ function advancePhase(session: RunSession, phase: number) {
  * Closes the run once the workflow is over: the pilot handed control back,
  * nothing it launched is still running, and either the last phase was reached
  * or the workflow declared an end that holds against what the run shows.
+ * Reaching the last phase is not an end while a command the pilot left in the
+ * background has yet to wake it: the review comment and the archive still follow.
  */
 export function closeWorkflowIfDone(session: RunSession) {
   if (!runInProgress(session.state.status) || session.state.pendingQuestion) return false;
   if (session.signals.pilotIdleSince === undefined || session.state.agents.some((agent) => agent.status === "running")) return false;
   const declared = declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
-  if (!declared && session.state.phase < 9) return false;
+  if (!declared && (session.state.phase < 9 || session.signals.backgroundWaits.size > 0)) return false;
   session.state.phase = 10;
   session.state.status = "completed";
   session.state.action = undefined;

@@ -117,6 +117,26 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.activities).toEqual([]);
   });
 
+  it("should keep the run open while a command the pilot left in the background has yet to wake it", () => {
+    session.state.phase = 9;
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "b1", tool_input: { command: "./upload.sh", run_in_background: true } });
+    hook({ hook_event_name: "Stop" });
+    expect(session.state).toMatchObject({ status: "running", phase: 9, endedAt: null });
+
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "b2", tool_input: { command: "glab mr note 12" } });
+    hook({ hook_event_name: "Stop" });
+    expect(session.state).toMatchObject({ status: "completed", phase: 10 });
+  });
+
+  it("should close on a declared end even with a command still in the background", () => {
+    session.state.phase = 9;
+    session.state.mergeRequestUrl = "https://gitlab.example/mr/12";
+    session.state.workflow = { schemaVersion: 1, revision: 1, state: "completed", receivedAt: new Date().toISOString(), result: { delivery: "merge_request", blockers: [] } };
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "b1", tool_input: { command: "npm run dev", run_in_background: true } });
+    hook({ hook_event_name: "Stop" });
+    expect(session.state.status).toBe("completed");
+  });
+
   it("should date the end of the run from the workflow, not from the session", () => {
     session.state.phase = 9;
     expect(session.state.endedAt).toBeNull();

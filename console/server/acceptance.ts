@@ -473,6 +473,9 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
         reasons.unshift(...blocked.map(({ entry }) => `Bloqué : ${entry.view.blocker!.reason}${entry.view.blocker!.action ? ` Action nécessaire : ${entry.view.blocker!.action}` : ""}`));
       } else {
         status = "unverified";
+        for (const view of unassigned.get(criterion.id) ?? []) {
+          reasons.push(`« ${view.label} » cite ${criterion.id} sans nommer ce contrôle : elle ne compte que si \`checkIds\` cite ${check.id}.`);
+        }
         if (counted.length === 0 && reasons.length === 0) reasons.push("Aucune preuve ne couvre ce contrôle.");
         for (const { outcome, freshness, entry } of counted) {
           if (outcome === "positive" && freshness !== "current") reasons.push(`${FRESHNESS_REASON[freshness]} (« ${entry.view.label} »)`);

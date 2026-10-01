@@ -189,6 +189,18 @@ describe("acceptance coverage", () => {
     expect(criterion(view, "AC2").unassigned.map((entry) => entry.label)).toEqual(["Vague"]);
   });
 
+  it("should name the check a criterion-only evidence must cite on every uncovered check", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([
+      { id: "Q1", label: "Vague", verdict: "pass", criterionIds: ["AC2"] },
+      { id: "Q2", label: "Zoom", verdict: "pass", checkIds: ["AC2-C1"] },
+    ]))] });
+    const [zoom, keyboard] = criterion(view, "AC2").checks;
+    expect(zoom.status).toBe("verified");
+    expect(zoom.reasons).toEqual([]);
+    expect(keyboard.reasons).toEqual(["« Vague » cite AC2 sans nommer ce contrôle : elle ne compte que si `checkIds` cite AC2-C2."]);
+    expect(renderAcceptanceSummary(view).markdown).toContain("**AC2** non vérifié : Le formulaire reste utilisable à 200 % (« Vague » cite AC2 sans nommer ce contrôle");
+  });
+
   it("should diagnose references to unknown criteria and checks", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "x", verdict: "pass", criterionIds: ["AC9"], checkIds: ["AC9-C1"] }]))] });
     const messages = view.diagnostics.map((entry) => entry.message).join(" ");

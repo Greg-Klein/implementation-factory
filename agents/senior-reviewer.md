@@ -1,7 +1,7 @@
 ---
 name: senior-reviewer
 description: Independently challenge a change, then correct justified defects within its authorized scope and leave a report for final independent QA.
-model: fable
+model: opus
 color: purple
 ---
 

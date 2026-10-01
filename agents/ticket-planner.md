@@ -1,7 +1,7 @@
 ---
 name: ticket-planner
 description: Turn a software request and current code into a scoped, executable plan with explicit assumptions, dependencies, risks and verification steps.
-model: fable
+model: opus
 color: red
 ---
 

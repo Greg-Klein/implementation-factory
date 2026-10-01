@@ -264,8 +264,9 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       snapshotAtEnd: snapshotReference(item.codeSnapshotAtEnd) ?? reportEnd,
       supersedes: identifiers(item.supersedes),
       attachments: attachments.map((attachment) => attachment.source),
-      criteriaRevision: positiveInteger(item.criteriaRevision) ?? criteriaRevision,
     };
+    // Kept out of the identity: the merged file restates a per-task item under its own root revision.
+    const itemRevision = positiveInteger(item.criteriaRevision) ?? criteriaRevision;
     const view: EvidenceView = {
       key: `${context.file}@${context.version}#${index}`,
       ...(id ? { id } : {}),
@@ -290,7 +291,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
     records.push({
       identity: `${source}:${id ?? "anonymous"}:${stableHash(content)}`,
       view,
-      ...(content.criteriaRevision ? { criteriaRevision: content.criteriaRevision } : {}),
+      ...(itemRevision ? { criteriaRevision: itemRevision } : {}),
       ...(content.snapshotAtStart ? { snapshotAtStart: content.snapshotAtStart } : {}),
       ...(content.snapshotAtEnd ? { snapshotAtEnd: content.snapshotAtEnd } : {}),
     });
@@ -354,9 +355,14 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   for (const { version } of input.reports) latestVersion.set(version.file, Math.max(latestVersion.get(version.file) ?? 0, version.version));
   const reports = input.reports.map(({ version }) => ({ ...version, current: latestVersion.get(version.file) === version.version }));
 
-  // One observation seen in several files or versions counts once, under the first place it appeared.
+  // One observation seen in several files or versions counts once, under the first place it appeared,
+  // against the oldest criteria revision any copy declares: a later copy cannot vouch for a newer text.
   const unique = new Map<string, EvidenceRecord>();
-  for (const { records } of input.reports) for (const entry of records) if (!unique.has(entry.identity)) unique.set(entry.identity, entry);
+  for (const { records } of input.reports) for (const entry of records) {
+    const seen = unique.get(entry.identity);
+    if (!seen) unique.set(entry.identity, entry);
+    else if ((entry.criteriaRevision ?? 1) < (seen.criteriaRevision ?? 1)) unique.set(entry.identity, { ...seen, criteriaRevision: entry.criteriaRevision ?? 1 });
+  }
   const records = [...unique.values()].map((entry) => ({ ...entry, view: { ...entry.view, freshness: freshnessOf(entry, input) } }));
   // What the latest version of some report still says, as opposed to what only an older version said.
   // A `-roundN` copy is the orchestrator's archive of a finished round: history by construction.

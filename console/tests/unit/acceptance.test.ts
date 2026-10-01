@@ -302,6 +302,24 @@ describe("acceptance coverage", () => {
       expect(criterion(view, "AC1").status).toBe("verified");
     });
 
+    it("should count a per-task item once when the merged file restates it under a newer criteria revision", () => {
+      const item = { id: "D1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
+      const developer = (file: string, criteriaRevision?: number) => report(file, { schemaVersion: 2, source: "developer", ...(criteriaRevision ? { criteriaRevision } : {}), codeSnapshot: { atStart: CURRENT }, items: [item] });
+      const view = coverage({ reports: [developer("dev-evidence-T1.json", 1), developer("dev-evidence.json", 2)] });
+      expect(criterion(view, "AC1").checks[0].evidence).toHaveLength(1);
+      expect(criterion(view, "AC1").status).toBe("verified");
+      const undeclared = coverage({ reports: [developer("dev-evidence-T1.json"), developer("dev-evidence.json", 1)] });
+      expect(criterion(undeclared, "AC1").checks[0].evidence).toHaveLength(1);
+    });
+
+    it("should not let a merged copy vouch for a criterion revised after the item was measured", () => {
+      const revised = registry({ ...registryJson, revision: 2, criteria: registryJson.criteria.map((entry) => (entry.id === "AC1" ? { ...entry, revision: 2 } : entry)) });
+      const item = { id: "D1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
+      const developer = (file: string, criteriaRevision: number) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision, codeSnapshot: { atStart: CURRENT }, items: [item] });
+      const view = coverage({ registry: revised, reports: [developer("dev-evidence.json", 2), developer("dev-evidence-T1.json", 1)] });
+      expect(criterion(view, "AC1").status).toBe("unverified");
+    });
+
     it("should keep a previous round's gates apart from the current ones", () => {
       const gate = (round: number) => report("qa-evidence.json", qa([{ id: `QA-R${round}-1`, label: "Lint", verdict: "pass", command: "npm run lint" }], { round }), round);
       const view = coverage({ reports: [gate(1), gate(2)] });

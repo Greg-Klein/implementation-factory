@@ -320,6 +320,34 @@ describe("acceptance coverage", () => {
       expect(criterion(view, "AC1").status).toBe("unverified");
     });
 
+    it("should keep only the latest content of an item its producer rewrote in the same file", () => {
+      const first = report("qa-evidence.json", qa([{ id: "PILOT-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: "6ffd758838" } }), 1);
+      const corrected = report("qa-evidence.json", qa([{ id: "PILOT-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], codeSnapshotId: CURRENT }]), 2);
+      const view = coverage({ reports: [first, corrected] });
+      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.version)).toEqual([2]);
+      expect(criterion(view, "AC1").status).toBe("verified");
+      expect(view.diagnostics.map((entry) => entry.message).join("\n")).not.toContain("réutilisé");
+    });
+
+    it("should drop the rewritten content from the merged copy as well", () => {
+      const item = { id: "T4-E1", label: "Payload", verdict: "pass", checkIds: ["AC1-C1"], note: "testé en T2-E*" };
+      const developer = (file: string, value: Record<string, unknown>, version: number) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT }, items: [value] }, version);
+      const view = coverage({ reports: [
+        developer("dev-evidence-T4.json", item, 1),
+        developer("dev-evidence.json", item, 1),
+        developer("dev-evidence-T4.json", { ...item, note: "testé en T2-E4" }, 2),
+      ] });
+      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.note)).toEqual(["testé en T2-E4"]);
+    });
+
+    it("should keep counting a failure its producer rewrote as a success under the same id", () => {
+      const failed = report("qa-evidence.json", qa([{ id: "QA-R1-1", label: "Filtre", verdict: "fail", checkIds: ["AC1-C1"] }]), 1);
+      const rewritten = report("qa-evidence.json", qa([{ id: "QA-R1-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }]), 2);
+      const view = coverage({ reports: [failed, rewritten] });
+      expect(criterion(view, "AC1").status).toBe("failed");
+      expect(view.diagnostics.map((entry) => entry.message)).toContain("QA-R1-1 a été réécrit sur un échec : l'échec reste compté tant qu'un nouvel identifiant ne le remplace pas avec `supersedes`.");
+    });
+
     it("should keep a previous round's gates apart from the current ones", () => {
       const gate = (round: number) => report("qa-evidence.json", qa([{ id: `QA-R${round}-1`, label: "Lint", verdict: "pass", command: "npm run lint" }], { round }), round);
       const view = coverage({ reports: [gate(1), gate(2)] });

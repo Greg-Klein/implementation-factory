@@ -363,7 +363,27 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     if (!seen) unique.set(entry.identity, entry);
     else if ((entry.criteriaRevision ?? 1) < (seen.criteriaRevision ?? 1)) unique.set(entry.identity, { ...seen, criteriaRevision: entry.criteriaRevision ?? 1 });
   }
-  const records = [...unique.values()].map((entry) => ({ ...entry, view: { ...entry.view, freshness: freshnessOf(entry, input) } }));
+  // A producer correcting its own file restates an item under the same id: the latest version of that file
+  // is the item. A failure is the exception, only a new id naming it in `supersedes` replaces it.
+  const latestById = new Map<string, EvidenceRecord>();
+  for (const { version, records: listed } of input.reports) {
+    if (latestVersion.get(version.file) !== version.version || isRoundCopy(version.file)) continue;
+    for (const entry of listed) if (entry.view.id) latestById.set(`${version.file}#${entry.view.id}`, entry);
+  }
+  const rewritten = new Set<string>();
+  for (const { version, records: listed } of input.reports) {
+    if (latestVersion.get(version.file) === version.version) continue;
+    for (const entry of listed) {
+      const latest = entry.view.id ? latestById.get(`${version.file}#${entry.view.id}`) : undefined;
+      if (!latest || latest.identity === entry.identity) continue;
+      if (outcomeOf(entry.view) === "negative" && outcomeOf(latest.view) !== "negative") {
+        diagnostics.push({ level: "warning", file: version.file, message: `${entry.view.id} a été réécrit sur un échec : l'échec reste compté tant qu'un nouvel identifiant ne le remplace pas avec \`supersedes\`.` });
+        continue;
+      }
+      rewritten.add(entry.identity);
+    }
+  }
+  const records = [...unique.values()].filter((entry) => !rewritten.has(entry.identity)).map((entry) => ({ ...entry, view: { ...entry.view, freshness: freshnessOf(entry, input) } }));
   // What the latest version of some report still says, as opposed to what only an older version said.
   // A `-roundN` copy is the orchestrator's archive of a finished round: history by construction.
   const stillReported = new Set(input.reports

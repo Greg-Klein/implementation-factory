@@ -190,7 +190,7 @@ After each task, commit: `<type>(<scope>): <description>`, conventional commits,
 
 Each agent wrote under its own suffix. Two files carry the run, and both are yours to assemble:
 
-- `.claude/tasks/developer-report.md`, the concatenation of the per-task reports, each under a heading naming its task. It is a **MANDATORY** input of `senior-reviewer` and `qa-reviewer`: what is missing from it is missing from the review.
+- `.claude/tasks/developer-report.md`, the concatenation of the per-task reports, each under a heading naming its task. `senior-reviewer` and `qa-reviewer` read it to reconcile, after forming their own expectations from the criteria and the code. It is never the source of their coverage, but a claim missing from it is a claim nobody reconciles.
 - `.claude/tasks/dev-evidence.json`, one object `{"schemaVersion": 2, "source": "developer", "criteriaRevision": <n>, "items": [...]}` whose `items` are the idempotent union of per-task items in task order, **copied unchanged**: same `id`, same `criterionIds`, same `codeSnapshotId`. This is the developer file the console's per-source view reads by that exact name, and the ids are what lets the console count an item seen in both files once. Never renumber an item, never give two items the same id, and never merge two items into one.
 
 **Merge by immutable id, never replace history.** A later batch, continuation or rework adds unseen ids; identical items already present are skipped. Conflicting content under the same id is rejected and returned to the producer for a fresh id and supersession. Reports replace only the same suffix section, preserving other task sections. Keep the per-task files, they are the archive; the merged pair is the view. An archived run that shows seven measurements while its suffixed files hold fifty-two is the failure this contract exists to prevent, and it happened.
@@ -203,7 +203,7 @@ After the batch stops editing, merge `browser-recipe-<suffix>.md` sections into 
 
 The implementation phase is not over because the last agent you launched came back. It is over when every task in `planner-output.json` is accounted for. Before you open step 6, put the plan's task ids next to the `developer-report-<id>.md` files that exist and read the two lists against each other, in both directions:
 
-- **A plan id with no report is a task that never ran.** Launch it now, as step 5 describes, and commit it like any other. Do not push it into the review phase, do not demote it to a follow-up ticket, and do not conclude from the diff that it looks done anyway: the per-task report is what feeds the merged one the reviewers read, so a task without one is a task nobody checks.
+- **A plan id with no report is a task that never ran.** Launch it now, as step 5 describes, and commit it like any other. Do not push it into the review phase, do not demote it to a follow-up ticket, and do not conclude from the diff that it looks done anyway: the per-task report is what feeds the merged one the reviewers read, so a task without one is a task whose claims nobody reconciles.
 - **A report under an id the plan does not carry means the ids drifted.** Say which plan task it actually implemented, or relaunch it under the right id. That suffix is the only mapping between the plan and what was built, and a renumbered one breaks it without a trace.
 - **A task you decided not to run is written down, not left silent.** Name it in the merged `developer-report.md`, with what covers it instead and why. A stated decision is something a reviewer can challenge; an absence is not.
 
@@ -225,19 +225,19 @@ Preserve the developers' actual measurements, captures and reproduction recipe f
 
 **Size the review to the diff before you delegate anything.** The review phase costs the same on a four line fix as on a feature. Read `git diff --stat <base>...HEAD` and pick a tier. Announce which tier you picked and why, in one line.
 
-**Tier 0, one short correctness review.** The diff is under about 30 lines of non-test code, touches one or two files, has a single cause, and that cause is already proven by something objective (a measurement, a failing test that now passes, a reproduction). You still get a second pair of eyes, but a narrow one: **a single `senior-reviewer`, one pass, no orchestrator, no rework loop**, invoked with a Sonnet model override (the mandate below is narrow enough that Sonnet holds the same bar at a lower cost; reserve Fable, the agent's default, for tier 2), while you run the gates yourself (lint, typecheck, tests, one browser measurement when the change is visible).
+**Tier 0, one short correctness review.** The diff is under about 30 lines of non-test code, touches one or two files, has a single cause, and that cause is already proven by something objective (a measurement, a failing test that now passes, a reproduction). You still get a second pair of eyes, but a narrow one: **a single `senior-reviewer`, one pass, no orchestrator, no rework loop**, invoked with a Sonnet model override (the mandate below is narrow enough that Sonnet holds the same bar at a lower cost; reserve Opus, the agent's default, for tier 2), while you run the gates yourself (lint, typecheck, tests, one browser measurement when the change is visible).
 
 Give it the narrow correctness mandate: independently challenge the cause, affected consumers, regression tests and acceptance criteria; report only P0/P1. It loads `review-change` itself. No cosmetic findings, broad refactors or author checklist as its review plan. Require its normal `senior-review.md` report even on this tier.
 
-If the senior corrects code, its verdict is not independent evidence about its own fix: run one focused `qa-reviewer` pass on the changed behavior and final code before calling it verified. This is not another rework loop. If the time bound prevents that pass, leave the affected checks unverified in the delivery.
+If the senior corrects code, its verdict is not independent evidence about its own fix: run one focused `qa-reviewer` pass, with a Sonnet model override and the changed behavior and its criteria as mandate, on the final code before calling it verified. This is not another rework loop. If the time bound prevents that pass, leave the affected checks unverified in the delivery.
 
 Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
 
-**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer` with a Sonnet model override, then `qa-reviewer`, once each, and rework only `P0` and `P1`. No second pass unless a `P0` is still open. No orchestrator: you sequence the two agents yourself.
+**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when the change is visible in the UI and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. For QA, create a throwaway worktree (`git worktree add --detach <directory outside the repository> HEAD`), pass its path, the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id, then remove it (`git worktree remove --force`) when QA returns. The same holds for a reviewer you invoke at tier 0.
 
 A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, and you merge what it wrote into `developer-report.md` and `dev-evidence.json` the same way as at the end of a batch. At tier 2 the orchestrator does that merge for you.
 
-**Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer` keeps its default Fable model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap.
+**Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer`, `designer-reviewer` and `qa-reviewer` keep their default Opus model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap.
 
 **The gates you run yourself still get written down.** At tier 0 follow [pilot evidence](${CLAUDE_PLUGIN_ROOT}/contracts/pilot-evidence.md) and write `qa-evidence.json` only when QA did not produce it. Never overwrite a QA report or normalize its valid measured/confirmed/unverified tokens into pass/fail.
 
@@ -248,11 +248,11 @@ A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, 
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
-At tier 2 only, delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths (the criteria registry `.claude/tasks/acceptance-criteria.json` among them), app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Preuves navigateur` rows and the screenshot paths from step 6), the path to [the evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
+At tier 2 only, delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths (the criteria registry `.claude/tasks/acceptance-criteria.json` among them), app URL and route, the design inputs listed below, your gate results with the snapshot id they ran on, **the developer's browser evidence, by path only** (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md` and the captures from step 6, never their values copied into the brief), the path to [the evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
 
-Whatever the tier, scope corrections to the authorized change. A code reviewer may inspect relevant consumers beyond the diff, and the designer observes the relevant full frame while separating pre-existing differences. Neither may expand the correction scope into unrelated work. And whatever the tier, the browser evidence from step 6 travels with the scope, orchestrator or not: on tiers 0 and 1 you hand it to the reviewer yourself.
+Whatever the tier, scope corrections to the authorized change. A code reviewer may inspect relevant consumers beyond the diff, and the designer observes the relevant full frame while separating pre-existing differences. Neither may expand the correction scope into unrelated work. And whatever the tier, the browser evidence from step 6 travels with the scope, orchestrator or not: on tiers 0 and 1 you hand it to the reviewer yourself, as paths. QA writes `.claude/tasks/qa-plan.md` before opening any of it.
 
-It runs the review loop (`senior-reviewer`, `designer-reviewer` when a design exists, `qa-reviewer`), routes findings back to `developer`, and stops when only minor findings remain.
+It runs the review loop (`senior-reviewer`, `designer-reviewer` when the change is visible in the UI and the app is reachable, `qa-reviewer`), routes findings back to `developer`, and stops when only minor findings remain.
 
 **Ordering, which is a real constraint and not a preference:**
 
@@ -261,12 +261,12 @@ It runs the review loop (`senior-reviewer`, `designer-reviewer` when a design ex
 - A measurement whose code moved under it is **reported non conclusive and redone on the frozen code**, or carried to step 9 as unverified. It is never presented as a result, and the run never simply forgets it: an abandoned measurement that nobody redoes is how a feature ships with no live evidence at all.
 - When in doubt, sequential. A browser review has already produced false findings from a moving target; a faster loop that returns wrong findings costs more than the minutes it saves.
 
-The design reviewer loads its own `figma-review` method. Pass authoritative frames and decisions, viewports, setup and observation/correction scopes. The reviewer builds an independent inventory before reconciling the developer's style values or measurements. Existing frame differences stay visible as pre-existing findings, outside rework.
+The design reviewer loads its own `figma-review` method. Pass the reference level, the highest available of `figma`, `ticket-mockup` and `live-neighbours`, with its frames or files and decisions, the required viewports and states (the design contract sets the default when you name none), 3 to 5 routes that consume shared components the diff modifies, setup and observation/correction scopes. When the repository has token files, a brand document or a component library, write `.claude/tasks/design-reference.md` with their paths and the values worth knowing, and pass its path: you extract them so the reviewer stays out of source code. The reviewer writes its own inventory to `.claude/tasks/design-inventory.md` before reconciling the developer's style values or measurements, which it receives as paths. Existing frame differences stay visible as pre-existing findings, outside rework.
 
 Loop exit criteria, enforced by the orchestrator:
 
 - no `P0` and no `P1` left on any dimension
-- QA status `PASS` or `PASS_WITH_WARNINGS`
+- QA status `PASS` or `PASS_WITH_WARNINGS`, with no acceptance criterion left without a fresh QA observation. `INCONCLUSIVE` never exits as ready
 - `P2` findings may remain: they are reported, not fixed
 - the designer's "Écarts préexistants" may remain whatever their severity: they concern elements the ticket does not touch, and they are reported for a follow-up ticket, not fixed
 - one initial review round plus at most two rework rounds (three review rounds total, QA last each time); the time bound may stop earlier. No separate per-dimension limit. If still unresolved, stop and report the competing hypotheses and what would discriminate them
@@ -278,7 +278,9 @@ When the review phase is over, read what the tier you picked actually produced, 
 
 Then commit any code the reviewers changed with a `fix(...)` or `refactor(...)` commit. Version control stays your responsibility, never theirs.
 
-If it comes back blocked (loop limit reached, `P0` still open), do not throw the work away: still push the branch and still open the merge request, but as a **draft**, with a `## Blocked` section at the top listing what remains open and what was tried. A draft MR with an honest blocker section is more useful than a lost branch.
+If it comes back blocked (loop limit reached, `P0` still open, QA `INCONCLUSIVE`), do not throw the work away: still push the branch and still open the merge request, but as a **draft**, with a `## Blocked` section at the top listing what remains open and what was tried. A QA `INCONCLUSIVE` lists there each unobserved criterion by id with its blocker, at tiers 0 and 1 too, where you read the QA verdict yourself. A draft MR with an honest blocker section is more useful than a lost branch.
+
+A design verdict `INCONCLUSIVE`, or a design review skipped because the app was unreachable, blocks nothing and is never silent: take the `## Design non vérifié` section of the review summary, or write that "design non vérifié" line yourself at tiers 0 and 1, with the reason, into the merge request description, the step 9 comment and the step 10 summary.
 
 **Close the Playwright browser here if one is open (`browser_close`).** Step 6 or the review agents may have left it running; steps 8 to 10 do not measure the running app, and a browser process left open outlives the run for nothing.
 
@@ -286,7 +288,7 @@ If it comes back blocked (loop limit reached, `P0` still open), do not throw the
 
 ## Step 8 - Merge request
 
-Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use `implementation-harness:glab-gitlab-api` with [the delivery recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch and open the MR against the chosen base. An unresolved P0/P1 or blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge.
+Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use `implementation-harness:glab-gitlab-api` with [the delivery recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch and open the MR against the chosen base. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge.
 
 Then set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
 
@@ -421,13 +423,14 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Developers run in parallel only on strictly disjoint file scopes, and sequentially the moment those scopes overlap. While a batch is in flight the branch is a moving target: a repository-wide gate measures that, not any one task, so nobody concludes from it until the batch is done
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
-- Only you touch git: branches, commits, push, MR
+- Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2
 - The ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review
 - The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes
 - Never skip required QA or design review, except at tier 0 where pilot gates accompany the short review; a senior correction still requires focused independent QA or an explicit unverified result
+- QA writes `qa-plan.md` before opening any author report, and a criterion without a fresh QA observation is never delivered as ready
 - The design review builds its own frame inventory before reconciling author measurements; unexplained additions are reported and explicit authoritative decisions are preserved
 - At most two rework rounds, so the run cannot spin forever
 - Add a comment in code only for a non obvious "why", in English

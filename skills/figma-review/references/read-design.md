@@ -8,7 +8,7 @@
 4. `get_screenshot` on each node, to keep a visual reference for the developer and the design review
 5. `get_variable_defs` for the tokens actually used, so the code binds to design tokens instead of hardcoded values
 
-When you return the extracted specs to the caller, make it an **exhaustive list of named values**, not a prose summary: colours with their opacity, blurs, radii, borders, shadows, font families, sizes, weights, line heights, paddings, gaps, dimensions, plus every interactive state the design provides. Whatever you leave out will not be checked by anyone downstream: the design review reads your list, and a value absent from it comes back as "no spec given" instead of as a defect.
+When you return the extracted specs to the caller, make it an **exhaustive list of named values**, not a prose summary: colours with their opacity, blurs, radii, borders, shadows, font families, sizes, weights, line heights, paddings, gaps, dimensions, plus every interactive state the design provides. The design review builds its own inventory from Figma and uses your list only to reconcile afterwards, so a value you leave out is one you did not implement against, and the review will report it.
 
 Use the available Figma tools directly. An additional design-to-code skill is optional; its absence does not replace a missing Figma source with a guess.
 

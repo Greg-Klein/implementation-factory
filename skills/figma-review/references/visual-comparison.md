@@ -1,4 +1,6 @@
-## Four Failure Modes That Make This Review Worthless
+# Visual comparison
+
+## Four failure modes that make this review worthless
 
 All four have happened. Read them before starting.
 
@@ -6,150 +8,73 @@ All four have happened. Read them before starting.
 
 "Visually consistent with the reference" is not a review, it is an impression. A backdrop was once passed that way while being white at 70% opacity where the design said mid-grey at 55%.
 
-Rules, no exceptions:
-
-- **Every visual claim is a measured number against a Figma number.** Read the actual value from the live DOM with `getComputedStyle` through `browser_evaluate`, and the expected value from Figma with `get_design_context` / `get_variable_defs`. Report both side by side.
-- **Never conclude PASS because you lack a reference value.** A missing reference means you have not finished reading Figma. Go get it, including from the parent frame.
-- **Values are not positions.** Matching every colour, radius, padding and font metric proves nothing about where elements actually land. Also compare the rendered geometry: alignment between neighbours, vertical centring within a row, baselines, equal gaps, and what changes across breakpoints. A pass once matched every declared value on a modal whose checkbox sat at the top of a row the design centres, and a human caught it by eye immediately.
-- **The backdrop, overlay, scrim and shadow belong to the frame around the component, not to the component node.** Read the parent frame too, or you will miss them, which is exactly how the miss above happened.
-- Any brief or summary handed to you is a convenience, never the source of truth. Figma is. If a spec is absent from the summary, that says nothing about the design.
+- **Every visual claim is a measured value against a reference value.** Read the actual value from the live DOM with `getComputedStyle` through `browser_evaluate`, and the expected value from the reference level (at `figma`, `get_design_context` / `get_variable_defs`). Report both side by side.
+- **Never conclude PASS because you lack a reference value.** At `figma` a missing value means you have not finished reading the frame, parent frame included. At the other levels the row is unverified.
+- **Values are not positions.** Matching every colour, radius, padding and font metric proves nothing about where elements land. Also compare the rendered geometry: alignment between neighbours, vertical centring within a row, baselines, equal gaps, and what changes between the required viewports. A pass once matched every declared value on a modal whose checkbox sat at the top of a row the design centres.
+- **The backdrop, overlay, scrim and shadow belong to the frame around the component, not to the component node.** Read the parent frame too.
+- Any brief or summary handed to you is a convenience, never the source of truth. The reference is.
 
 ### 2. Reviewing behaviour instead of design
 
 You inspect through the browser, so you can observe behaviour, but you have **no access to the code and no way to know what state the app is really in**. A review once filed three blocking findings claiming an interception was broken; every one was false, because the indicator it probed disappears earlier than the state it stood for.
 
-Rules:
+- **You never file a finding with a severity about functional correctness.** That is QA's job, and QA has the code. Your severities cover visual deviations and the interaction design defined in [objective-checks.md](objective-checks.md).
+- A behaviour that looks wrong goes under "À vérifier par la QA", as an observation with the exact steps you ran.
+- Before writing even an observation, say what you used as a proxy for the app's state. A DOM element taken as a proxy for an internal state is a guess.
+- **Reach the state through `.claude/tasks/browser-recipe.md`, never through a stub of your own making.** The recipe says how to get there, not what you should see, so it costs you no independence. Without a recipe, say so in your method and treat anything odd you then see as an artefact of your setup: a review once filed an observation on a crash its own malformed payload had caused, and QA spent a round proving it.
 
-- **You never file a blocking finding about behaviour.** Correctness is QA's job, and QA has the code.
-- A behaviour that looks wrong goes into a dedicated **"For QA to verify"** section in the returned findings, phrased as an observation with the exact steps you ran, never as a defect and never with a severity.
-- Before writing even an observation, ask what you are actually using as a proxy for the app's state, and say so explicitly. A DOM element you took as a proxy for an internal state is a guess.
-- **Reach the state through `.claude/tasks/browser-recipe.md`, never through a stub of your own making.** That file is the setup someone already validated: it says how to get there, it says nothing about what you should see, so using it costs you none of your independence. You still read every value yourself. When there is no recipe and you build your own, say so in your method, and treat anything odd you then see as an artefact of your stub until the recipe reproduces it: a review once filed an observation on a crash its own malformed payload had caused, and QA spent a round proving it. Such a divergence goes in your method section as a setup you could not reproduce, not in "For QA to verify" as something about the application.
-- Your P0/P1/P2 severities apply **only** to visual and interaction-design deviations from Figma.
+### 3. Reviewing the ticket's diff instead of the screen
 
-### 3. Reviewing the ticket's diff instead of the frame
+A composer review once measured the two new chips to the pixel and wrote the send button, the question field and the header off as "pre-existing, out of scope". The designer then filed eleven comments on that same screen, none of which had been measured.
 
-A composer review once measured the two new chips to the pixel and wrote the send button, the question field and the header off as "pre-existing, out of scope". The designer then filed eleven comments on that same screen: the send button radius, the field radius, the language dropdown radius, a row where the chips and the send button did not share one height, the cross of the attached file, the icon strokes, the mobile paddings. None of them had been measured.
-
-Rules:
-
-- **The observation scope is the relevant Figma frame; the correction scope remains the authorized change.** Every element the frame draws gets a row in your comparison, the ones the ticket touches and the ones it does not: header controls, neighbouring buttons, the container the new element sits in.
-- A deviation on an element the ticket does not touch is still a finding. It goes into the "Écarts préexistants" section with its severity, so it is reported without being routed to this ticket's developer.
-- **Elements that sit on one row are compared with each other**, not only with Figma: same height, same radius, same icon size and stroke. A row of buttons at 36 px beside a button at 40 px is a finding even before Figma is opened.
+- **The observation scope is the whole screen the reference shows; the correction scope remains the authorized change.** Every element the frame draws gets an inventory row, the ones the ticket touches and the ones it does not.
+- A deviation on an element the ticket does not touch is still a finding. It goes into "Écarts préexistants" with its severity, so it is reported without being routed to this ticket's developer.
+- **Elements that sit on one row are measured against each other**: height, radius, icon size and stroke. A difference the reference does not draw is a finding citing the sibling as reference; one the reference draws is conforming.
 
 ### 4. Accepting a deviation on the design's behalf
 
-The same run kept a 36×36 remove cross where the frame drew 24×24, called it an accepted touch target, and the next round used that decision to excuse a truncated filename. A 40 px frame height measured at 36.89 px was downgraded to P2 because the component set disagreed with the frame. The designer reported both.
+The same run kept a 36×36 remove cross where the frame drew 24×24, called it an accepted touch target, and the next round used that decision to excuse a truncated filename. A 40 px frame height measured at 36.89 px was downgraded to P2 because the component set disagreed with the frame.
 
-Rules:
+- **You never accept, excuse or rationalise a deviation.** A repository idiom, a component set that disagrees, "the mockup understates it": none of these turns a measured difference into a pass. Report the fail and state the argument next to it. A deviation is waived only by an explicit authoritative decision supplied by the caller.
+- An accessibility threshold does not excuse a deviation either, and a reference does not excuse a failed threshold. When the two disagree, report both values under "Conflits à arbitrer".
+- **When two Figma sources disagree, the instance in the frame wins** over the component set, and the gap between them goes under "Conflits à arbitrer".
+- A finding you reported in an earlier round stays open until it is fixed or waived by name.
 
-- **You never accept, excuse or rationalise a deviation.** An accessibility target, a repository idiom, a component set that disagrees, "the mockup understates it": none of these turns a measured difference into a pass. Report the fail and state the argument next to it; the decision follows the caller’s specification policy or requires a human when unresolved. A deviation is waived only by an explicit authoritative decision supplied by the caller.
-- **When two Figma sources disagree, the instance in the frame wins** over the component set, and the gap between them is itself worth a line in "Suggestions".
-- A finding you reported in an earlier round stays open until it is fixed or waived by name. Never close it because you had judged it acceptable yourself.
+## Order of the pass
 
-## Responsibilities
+The caller stops a review that runs long. Work by decreasing risk, and after each step overwrite the report and the staged evidence with everything measured so far, so a stop leaves a usable result.
 
-### 1. Visual Validation (Figma vs Live App)
+1. Whole composition at each required viewport: a live capture at the exact width beside the reference capture, checking the vertical distribution of every block before any single value.
+2. Elements the ticket touches, in every required state.
+3. Layout invariants, accessibility, wording, themes and consumer routes ([objective-checks.md](objective-checks.md)).
+4. Pre-existing neighbours on the same screen, with the remaining budget.
 
-Using Playwright screenshots and Figma specs, compare:
+## Building the inventory at `figma`
 
-- layout
-- spacing (padding, margin, gaps)
-- typography (font size, weight, line height)
-- colors
-- alignment
+- **Inventory every node the frame draws** with `get_metadata` before extracting anything. A node with no row means the review is not finished. When a frame is too large for one call, read its children node by node; never substitute the component set for a frame you could not read.
+- For every node record: box (width, height), radius, insets to the four inner edges of its container and gaps to neighbours, text position and string, icon glyph, frame size and stroke weight, the visible footprint of a control at rest and on hover, and every state the design provides.
+- Repeat for **each supplied frame width**: paddings, heights and layout are read from the frame of that width, never inferred from another one.
+- Pull tokens with `get_variable_defs`, so you compare against token values rather than approximations.
+- What the design does not specify is recorded as "not specified in the design" and judged at the next reference level, never passed.
 
----
+The other levels build their inventory as [reference-levels.md](reference-levels.md) says.
 
-### 2. UX Validation
+## Measuring
 
-Using Playwright to interact with the live app:
+- **Batch.** One `browser_evaluate` per screen, viewport and state returns the whole table (computed styles and `getBoundingClientRect` of every inventory row, relative to its container). Not one call per property.
+- A capture comparison alone never closes a property. Colours and opacities in particular are unreliable by eye against a pale background.
+- **Icon strokes are measured.** The rendered stroke of an SVG icon is its `stroke-width` times the rendered size divided by the `viewBox` size (a 24 viewBox at 2 drawn at 16 px gives 1.33 px). An icon of the right size and colour with a thinner stroke is a fail.
+- **Paired captures.** For every screen, viewport and state you measure, keep one live capture and one reference capture (Figma `get_screenshot`, the mockup file, or the neighbour screen). Without the pair the cell is not measured.
+- Name findings by screen and visual location, never by file path or component name.
 
-- Validate flows defined in Figma
-- Check states by interacting:
-  - hover (move cursor over elements)
-  - focus (tab through elements)
-  - disabled (verify non-interactive elements)
-  - loading (trigger async actions)
-  - error (submit invalid data)
+## Severity
 
----
+- P0: blocking. A major visual or interaction-design mismatch with the reference, or an objective check that makes the screen unusable (content unreachable, control not operable by keyboard).
+- P1: important. A deviation a person can see side by side: a size, radius, inset, gap or padding off by 2 px or more, a stroke weight off, a different glyph or string, a text block in the wrong column or at the wrong height, a sibling of a different height, a failed objective check.
+- P2: minor. What cannot be seen at 1× without a measurement: sub-pixel differences from font metrics, a 1 px border counted inside or outside the box.
 
-### 3. Responsive Validation
+P2 findings are dropped from the rework brief and never fixed, so a P2 is a deviation you accept to ship. Every design P2 of past runs came back as a designer comment.
 
-Using Playwright viewport resizing:
-
-- Test key breakpoints (mobile, tablet, desktop)
-- Compare responsive behavior against Figma frames if available
-
----
-
-### 4. Cross-Screen Consistency
-
-- Navigate through multiple pages/views
-- Detect visual inconsistencies across screens
-
----
-
-### 5. Prioritization
-
-Classify issues:
-
-- P0: Blocking (major mismatch with Figma or broken UX)
-- P1: Important (noticeable inconsistencies)
-- P2: Minor (cosmetic differences)
-
-Calibrate against what happens next: P2 findings are dropped from the rework brief and never fixed, so a P2 is a deviation you accept to ship. Every design P2 of past runs came back as a designer comment. Therefore:
-
-- A measured deviation a designer can see side by side is **at least P1**: a size, radius, inset, gap or padding off by 2 px or more, a stroke weight off, a different glyph, a text block in the wrong column or at the wrong height, a sibling of a different height
-- P2 is left for what cannot be seen at 1× without a measurement: sub-pixel differences from font metrics, a 1 px border counted inside or outside the box
-- A deviation on an element the ticket does not touch gets the same severity and goes into "Écarts préexistants"
-
-## Execution Process
-
-### Phase 1 — Figma Analysis
-
-- Open Figma link
-- Identify relevant frames
-- **Read the component node AND the frame that contains it.** The frame carries the backdrop, scrim, overlay and page background that the node does not
-- Extract design specs as a **list of named values**: colours with their opacity, blurs, radii, borders, shadows, font families, sizes, weights, line heights, paddings, gaps, dimensions, and the interactive states the design provides
-- **Inventory every node the frame draws** with `get_metadata`, before extracting anything: this list is the checklist of your comparison table, and a node with no row means the review is not finished. When a frame is too large to read in one call, read its children node by node; never substitute the component set for a frame you could not read. What stays unread is "non vérifié", never PASS
-- For every node of the inventory, record at least:
-  - **box**: width and height, for every button, field, chip, dropdown and icon container
-  - **radius**, for every container, button, field and dropdown, the page header included
-  - **insets**: the distance from each child to the four inner edges of its container, and the gap to its neighbours
-  - **text position**: the x of each text column and the y of each text block within its container, placeholders included
-  - **icons**: the glyph, the frame size, and the stroke weight of the vector
-  - **visible footprint** of a control: the size of the background it shows, at rest and on hover, which is what a designer compares, whatever its hit area
-- Repeat the inventory for **each breakpoint frame** (desktop and mobile at least): paddings, heights and layout are read from the frame of that width, never inferred from the desktop one
-- Pull tokens with `get_variable_defs`, so you compare against token values rather than approximations
-- Anything the design genuinely does not specify is recorded as **"not specified in the design"**, never as a pass
-
----
-
-### Phase 2 — Live Application Inspection (Playwright)
-
-- Navigate to the application URL in the browser
-- Take screenshots of all relevant pages/views
-- Test interactive states (hover, focus, disabled, loading, error)
-- Test responsive breakpoints if relevant
-
----
-
-### Phase 3 — Visual Comparison (Figma vs Live App)
-
-- Compare Figma frames with browser screenshots
-- **Then measure.** For every value listed in Phase 1, read the computed value from the live DOM via `browser_evaluate` + `getComputedStyle`, and put the two in a table: property, expected (Figma), actual (measured), verdict
-- A screenshot comparison alone never closes a property. Colours and opacities in particular are unreliable by eye against a pale background
-- **Icon strokes are measured, not eyeballed.** The rendered stroke of an SVG icon is its `stroke-width` times the rendered size divided by the `viewBox` size (a 24 viewBox at 2 drawn at 16 px gives 1.33 px). Compare that number with the Figma vector's stroke weight at the same scale. An icon of the right size and colour with a thinner stroke is a fail
-- **Geometry is measured with `getBoundingClientRect`** for every node of the inventory, relative to its container, and compared with the x / y / width / height `get_metadata` gives for the matching Figma node
-- **At each breakpoint, compare the whole composition**: take a screenshot at the frame's exact width, put it beside the Figma screenshot of that frame, and check the vertical distribution of every block (where the placeholder sits, how the field splits between text and buttons) before looking at single values
-- Document pixel-level differences: spacing, colors, typography, alignment
-- Reference issues by page/screen name and visual location (NOT by file path or component name)
-
----
-
-### Phase 4 — UX Review
-
-- Use Playwright to simulate user flows defined in Figma
-- Click through flows, fill forms, trigger states
-- Validate interaction consistency between Figma spec and live behavior
+- The 2 px rule applies to values the reference fixes. A dimension that derives from content or viewport (an auto width or height, a fluid container, a text box sized by its font) is compared only when the reference fixes it; otherwise judge the paddings, gaps and alignment around it.
+- The caps of the reference level apply: an image alone gives P2, a neighbour value gives P1 at most.
+- A deviation on an element the ticket does not touch gets the same severity and goes into "Écarts préexistants".

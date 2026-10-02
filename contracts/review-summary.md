@@ -33,17 +33,22 @@ READY | BLOCKED
 
 ## Écarts de design préexistants (hors ticket, à reprendre dans un ticket de suivi)
 
-- élément et emplacement visuel, attendu Figma, mesuré, sévérité
+- élément et emplacement visuel, attendu selon la référence, mesuré, sévérité
+
+## Design non vérifié
+
+- design non vérifié : verdict INCONCLUSIVE ou revue non lancée, la raison, les viewports et états non atteints. « Rien » quand la revue design a conclu.
 
 ## Encore ouvert (BLOCKED uniquement)
 
 - Ce qui reste, ce qui a été tenté, ce qu'un humain doit décider
+- Critères sans observation QA, chacun avec son blocage
 
 ## Confiance
 
 - Tests : exécutés / partiellement exécutés / non exécutés
 - App en direct : inspectée via Playwright / inaccessible et pourquoi
-- Figma : comparé / pas de design fourni
+- Référence design : figma / ticket-mockup / live-neighbours / revue non lancée
 - Critères observables, une ligne chacun : measured live / confirmed from the developer's evidence (avec le chemin de la capture) / unverified (avec ce qui manquait)
 - Tout ce qui n'a pas pu être vérifié
 ```

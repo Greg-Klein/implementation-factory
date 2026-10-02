@@ -162,6 +162,8 @@ export function parsePlanLinks(value: unknown): PlanLinks | undefined {
 export type EvidenceRecord = {
   /** Same observation seen twice (a per-task file and the merged one, a round copy) has the same identity and counts once. */
   identity: string;
+  /** The identity without the code version, for a copy that lost the root `codeSnapshot` its item relied on. */
+  unversionedIdentity?: string;
   view: EvidenceView;
   criteriaRevision?: number;
   snapshotAtStart?: string;
@@ -300,6 +302,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
     };
     records.push({
       identity: `${source}:${id ?? "anonymous"}:${stableHash(content)}`,
+      ...(id ? { unversionedIdentity: `${source}:${id}:${stableHash({ ...content, snapshotAtStart: undefined, snapshotAtEnd: undefined })}` } : {}),
       view,
       ...(itemRevision ? { criteriaRevision: itemRevision } : {}),
       ...(content.snapshotAtStart ? { snapshotAtStart: content.snapshotAtStart } : {}),
@@ -387,17 +390,43 @@ export function emptyCounts(): AcceptanceCounts {
   return { total: 0, verified: 0, failed: 0, blocked: 0, unverified: 0, stale: 0 };
 }
 
+/**
+ * The merged file copies an item without the root `codeSnapshot` of the per-task file it came from.
+ * That copy takes the code version of the one other file stating the same item with a version.
+ */
+function withCopiedCodeVersions(reports: CoverageInput["reports"]): CoverageInput["reports"] {
+  const versioned = new Map<string, EvidenceRecord[]>();
+  for (const { records } of reports) for (const entry of records) {
+    if (!entry.unversionedIdentity || !(entry.snapshotAtStart || entry.snapshotAtEnd)) continue;
+    versioned.set(entry.unversionedIdentity, [...versioned.get(entry.unversionedIdentity) ?? [], entry]);
+  }
+  return reports.map(({ version, records }) => ({ version, records: records.map((entry) => {
+    if (!entry.unversionedIdentity || entry.snapshotAtStart || entry.snapshotAtEnd) return entry;
+    const elsewhere = (versioned.get(entry.unversionedIdentity) ?? []).filter((candidate) => candidate.view.file !== entry.view.file);
+    if (new Set(elsewhere.map((candidate) => candidate.identity)).size !== 1) return entry;
+    const [original] = elsewhere;
+    return {
+      ...entry,
+      identity: original.identity,
+      ...(original.snapshotAtStart ? { snapshotAtStart: original.snapshotAtStart } : {}),
+      ...(original.snapshotAtEnd ? { snapshotAtEnd: original.snapshotAtEnd } : {}),
+      view: { ...entry.view, ...(original.view.snapshotId ? { snapshotId: original.view.snapshotId } : {}) },
+    };
+  }) }));
+}
+
 export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   const t = acceptanceText(input.language);
   const diagnostics: Diagnostics = [...input.diagnostics ?? []];
+  const evidence = withCopiedCodeVersions(input.reports);
   const latestVersion = new Map<string, number>();
-  for (const { version } of input.reports) latestVersion.set(version.file, Math.max(latestVersion.get(version.file) ?? 0, version.version));
-  const reports = input.reports.map(({ version }) => ({ ...version, current: latestVersion.get(version.file) === version.version }));
+  for (const { version } of evidence) latestVersion.set(version.file, Math.max(latestVersion.get(version.file) ?? 0, version.version));
+  const reports = evidence.map(({ version }) => ({ ...version, current: latestVersion.get(version.file) === version.version }));
 
   // One observation seen in several files or versions counts once, under the first place it appeared,
   // against the oldest criteria revision any copy declares: a later copy cannot vouch for a newer text.
   const unique = new Map<string, EvidenceRecord>();
-  for (const { records } of input.reports) for (const entry of records) {
+  for (const { records } of evidence) for (const entry of records) {
     const seen = unique.get(entry.identity);
     if (!seen) unique.set(entry.identity, entry);
     else if ((entry.criteriaRevision ?? 1) < (seen.criteriaRevision ?? 1)) unique.set(entry.identity, { ...seen, criteriaRevision: entry.criteriaRevision ?? 1 });
@@ -405,12 +434,12 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   // A producer correcting its own file restates an item under the same id: the latest version of that file
   // is the item. A failure is the exception, only a new id naming it in `supersedes` replaces it.
   const latestById = new Map<string, EvidenceRecord>();
-  for (const { version, records: listed } of input.reports) {
+  for (const { version, records: listed } of evidence) {
     if (latestVersion.get(version.file) !== version.version || isRoundCopy(version.file)) continue;
     for (const entry of listed) if (entry.view.id) latestById.set(`${version.file}#${entry.view.id}`, entry);
   }
   const rewritten = new Set<string>();
-  for (const { version, records: listed } of input.reports) {
+  for (const { version, records: listed } of evidence) {
     if (latestVersion.get(version.file) === version.version) continue;
     for (const entry of listed) {
       const latest = entry.view.id ? latestById.get(`${version.file}#${entry.view.id}`) : undefined;
@@ -425,7 +454,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   const records = [...unique.values()].filter((entry) => !rewritten.has(entry.identity)).map((entry) => ({ ...entry, view: { ...entry.view, freshness: freshnessOf(entry, input) } }));
   // What the latest version of some report still says, as opposed to what only an older version said.
   // A `-roundN` copy is the orchestrator's archive of a finished round: history by construction.
-  const stillReported = new Set(input.reports
+  const stillReported = new Set(evidence
     .filter(({ version }) => latestVersion.get(version.file) === version.version && !isRoundCopy(version.file))
     .flatMap(({ records: current }) => current.map((entry) => entry.identity)));
   const byId = new Map<string, typeof records>();

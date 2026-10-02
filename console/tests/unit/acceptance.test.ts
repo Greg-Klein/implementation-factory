@@ -313,6 +313,26 @@ describe("acceptance coverage", () => {
       expect(criterion(undeclared, "AC1").checks[0].evidence).toHaveLength(1);
     });
 
+    it("should count a per-task item once when the merged copy drops the root code version it relied on", () => {
+      const item = { id: "T1-E1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
+      const perTask = report("dev-evidence-T1.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT, atEnd: CURRENT }, items: [item] });
+      const merged = report("dev-evidence.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, items: [item] });
+      for (const reports of [[perTask, merged], [merged, perTask]]) {
+        const view = coverage({ reports });
+        expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.freshness)).toEqual(["current"]);
+        expect(view.diagnostics.map((entry) => entry.message).join("\n")).not.toContain("réutilisé");
+      }
+    });
+
+    it("should leave a copy without code version unknown when no single original states one", () => {
+      const item = { id: "T1-E1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
+      const developer = (file: string, snapshot?: string) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision: 1, ...(snapshot ? { codeSnapshot: { atStart: snapshot } } : {}), items: [item] });
+      const alone = coverage({ reports: [developer("dev-evidence.json")] });
+      expect(criterion(alone, "AC1").checks[0].evidence.map((entry) => entry.freshness)).toEqual(["unknown"]);
+      const ambiguous = coverage({ reports: [developer("dev-evidence-T1.json", CURRENT), developer("dev-evidence-round1.json", OLD), developer("dev-evidence.json")] });
+      expect(criterion(ambiguous, "AC1").checks[0].evidence.map((entry) => entry.freshness).sort()).toEqual(["current", "stale", "unknown"]);
+    });
+
     it("should not let a merged copy vouch for a criterion revised after the item was measured", () => {
       const revised = registry({ ...registryJson, revision: 2, criteria: registryJson.criteria.map((entry) => (entry.id === "AC1" ? { ...entry, revision: 2 } : entry)) });
       const item = { id: "D1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };

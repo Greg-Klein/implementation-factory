@@ -381,6 +381,19 @@ The answer lists the versions kept and any capture still missing. Report a missi
 
 ---
 
+## A request after the final report
+
+The session stays open after step 10, and the user often writes again: a question about the result, a red pipeline, a correction of the delivered behavior. A question gets an answer and nothing else. **A request that changes the branch, or what the merge request states, reopens the run.** It does not lift the rules: you still never implement it yourself, however small it looks, and its diff is still reviewed. A four-line retouch applied straight onto a merge request already presented as ready is exactly the change nobody else looks at.
+
+1. Before the first tool call that acts on it, write `workflow-state.json` again: `working`, the next revision, the step the request sends you back to. `.claude/tasks/` is already clean, so recreate only what the steps you rerun read.
+2. When the request changes what must be true, or covers something no criterion states, write a new revision of `acceptance-criteria.json`, as at step 2, and record the request verbatim in `open-questions.md` as a user decision.
+3. Delegate the change to a `developer` with `rework<N>` as its artifact suffix and the request verbatim as binding, then commit it as at step 5.
+4. Review its own diff at the tier step 7 sizes it to, with the browser measurement when the change is visible.
+5. Push, correct every sentence of the MR description and review comment the change made false, and post a short follow-up comment saying what changed.
+6. Close as step 10 does: `completed` with the next revision, archive sync, cleaning, and a report limited to what this request changed.
+
+---
+
 ## Shared contracts and conditional methods
 
 Read [evidence](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md) before producing or merging proof files, and [workflow state](${CLAUDE_PLUGIN_ROOT}/contracts/workflow-state.md) before the first transition. Every delegated producer receives these resolved reference paths, not a pasted schema.

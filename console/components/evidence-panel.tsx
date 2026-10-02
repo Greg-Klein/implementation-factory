@@ -130,7 +130,7 @@ function QaStatus({ status }: { status: string }) {
 
 function QaWarning({ qa }: { qa: AcceptanceQaView | undefined }) {
   if (!qa?.warning) return null;
-  return <p role="note" data-testid="qa-verdict-warning" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">{qa.warning}</p>;
+  return <p role="note" data-testid="qa-verdict-warning" className="mt-2 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900"><WarningCircleIcon className="mt-0.5 shrink-0" size={13} weight="fill" />{qa.warning}</p>;
 }
 
 function Tag({ children, tone = "neutral" }: { children: string; tone?: "neutral" | "attention" }) {

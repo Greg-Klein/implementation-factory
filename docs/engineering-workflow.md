@@ -149,3 +149,7 @@ Typecheck, build, 395 tests unitaires et 54 tests d'intégration passent. Les di
 Un essai réel de `review-change` sur une fixture isolée détecte un seuil `> 18` contraire à la spécification `>= 18`. Le reviewer charge la référence de méthode, établit le contre-exemple avant de consulter le rapport auteur rassurant, puis distingue son constat statique d'un test exécuté. Cet essai utilise le mode `auto` du Harness, sans hooks ni connexions MCP.
 
 Dans un mode restrictif comme `dontAsk`, une référence du plugin située hors du dépôt cible peut être refusée faute d'autorisation de lecture. Le chargement du catalogue ne prouve donc pas à lui seul que les fichiers annexes sont accessibles. Respecter le refus et signaler la méthode indisponible ; les permissions de l'hôte restent applicables. Voir la [documentation des permissions de Claude Code](https://code.claude.com/docs/en/permissions).
+
+### Vérification de la refonte des reviewers, 2 octobre 2026
+
+Typecheck, build, 443 tests unitaires et 59 tests d'intégration passent sur la branche `feat/reviewer-detection`. Le dépôt compte onze skills. Aucun run sur un ticket réel n'a encore exercé les nouvelles règles de revue QA et design.

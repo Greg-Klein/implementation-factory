@@ -73,7 +73,7 @@ export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") 
   };
   return {
     status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
-    instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
+    instruction: "Mode démonstration, aucun dépôt ne sera modifié.", startedAt: now(),
     action: "Lecture du ticket GitLab",
   };
 }
@@ -328,7 +328,7 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;
     demoState.pendingImprovement = { worktreeName, commits: 1, status: "ready" };
-    session.activity("agent", "Améliorations prêtes — en attente de validation");
+    session.activity("agent", "Améliorations prêtes, en attente de validation");
     session.publish();
     demoTerminal(session, "Auto-audit terminé. Des améliorations sont proposées dans le panneau de droite.");
   });

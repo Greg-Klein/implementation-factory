@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, heldBySchedule, mergeRequestLabel, phaseNames, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
+import { attachmentPaths } from "../../server/acceptance";
 
 describe("run state selectors", () => {
   it("should keep only running agents in their original order", () => {
@@ -29,6 +30,13 @@ describe("run state selectors", () => {
       "assets/design-reference.jpg",
       "notes.txt",
     ])).toEqual(["ticket-context.md", "dev-evidence-T4.json", "notes.txt"]);
+  });
+
+  it("should show every capture an evidence item names, by the rule the server copies them with", () => {
+    const item = { screenshot: "assets/T1-uploading.png", attachments: ["assets/T1-after-upload.png", { path: "assets/T1-log.txt" }, "assets/T1-uploading.png", " ", 7, null] };
+    expect(evidenceCaptures(item)).toEqual(["assets/T1-uploading.png", "assets/T1-after-upload.png", "assets/T1-log.txt"]);
+    expect(evidenceCaptures(item)).toEqual(attachmentPaths(item));
+    expect(evidenceCaptures({})).toEqual([]);
   });
 
   it("should recognise a demonstration run from its identifier", () => {

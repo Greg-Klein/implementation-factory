@@ -2,7 +2,7 @@
 
 import { CaretRightIcon, CheckCircleIcon, MinusCircleIcon, WarningCircleIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
 import { createContext, useContext, useEffect, useState } from "react";
-import { acceptanceUrl, artifactUrl } from "@/lib/run-state";
+import { acceptanceUrl, artifactUrl, evidenceCaptures } from "@/lib/run-state";
 import type {
   AcceptanceCheckView, AcceptanceCriterionView, AcceptanceQaView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
   EvidenceItem, EvidenceReport, EvidenceVerdict, EvidenceView, RunState,
@@ -265,7 +265,7 @@ function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
       )}
       {item.command && <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{item.command}</p>}
       {item.note && <p className="mt-1 text-[10px] text-[var(--muted)]">{item.note}</p>}
-      {item.screenshot && <Screenshot runId={runId} path={item.screenshot} />}
+      {evidenceCaptures(item).filter((capture) => IMAGE.test(capture)).map((capture) => <Screenshot key={capture} runId={runId} path={capture} />)}
     </li>
   );
 }

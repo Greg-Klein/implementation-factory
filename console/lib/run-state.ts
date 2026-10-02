@@ -60,6 +60,13 @@ export function generatedDocuments(artifacts: string[]) {
   return artifacts.filter((name) => DOCUMENT_EXTENSION.test(name));
 }
 
+/** Mirrors attachmentPaths in server/acceptance.ts, which decides what the server copies for this item. */
+export function evidenceCaptures(item: { screenshot?: unknown; attachments?: unknown[] }) {
+  const listed = Array.isArray(item.attachments) ? item.attachments : [];
+  const paths = [item.screenshot, ...listed.map((entry) => (typeof entry === "string" ? entry : (entry as { path?: unknown } | null)?.path))];
+  return [...new Set(paths.flatMap((entry) => (typeof entry === "string" && entry.trim() ? [entry.trim()] : [])))];
+}
+
 export function pendingAnswerLabel(count: number) {
   return count === 1 ? "Claude is waiting for an answer" : `Claude is waiting for ${count} answers`;
 }

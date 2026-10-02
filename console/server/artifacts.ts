@@ -6,6 +6,7 @@ import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isR
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
+import { attachmentPaths } from "./acceptance.js";
 import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
@@ -48,7 +49,9 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
 }
 
 /**
- * A screenshot is only ever archived when a proof file names it: widening this
+ * A capture is only ever archived when a proof file names it, as its
+ * screenshot or one of its attachments, by the rule the evidence archive
+ * applies to the same report: widening this
  * to every file under assets/ would pull in every Figma download and debug
  * capture, exactly what isRunDocument's extension filter was written to avoid.
  */
@@ -56,10 +59,9 @@ async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: s
   let items: unknown;
   try { items = JSON.parse(await readFile(evidenceSource, "utf8")).items; } catch { return; }
   if (!Array.isArray(items)) return;
-  for (const item of items) {
-    const screenshot = (item as { screenshot?: unknown } | null)?.screenshot;
-    if (typeof screenshot !== "string" || !screenshot) continue;
-    const source = path.resolve(taskRoot, screenshot);
+  const named = items.flatMap((item) => item && typeof item === "object" ? attachmentPaths(item as Record<string, unknown>) : []);
+  for (const capture of new Set(named)) {
+    const source = path.resolve(taskRoot, capture);
     const relative = path.relative(taskRoot, source);
     // Copied again when it was already: a later round may have replaced the
     // capture under the same name, and this copy is the one the latest report

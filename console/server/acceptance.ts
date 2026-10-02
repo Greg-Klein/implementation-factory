@@ -186,7 +186,7 @@ function snapshotReference(value: unknown) {
   return text(record(value)?.id, 80);
 }
 
-function attachmentPaths(item: Record<string, unknown>) {
+export function attachmentPaths(item: Record<string, unknown>) {
   const listed = Array.isArray(item.attachments) ? item.attachments : [];
   const paths = [item.screenshot, ...listed.map((entry) => (typeof entry === "string" ? entry : record(entry)?.path))];
   return [...new Set(paths.flatMap((entry) => (typeof entry === "string" && entry.trim() ? [entry.trim()] : [])))];

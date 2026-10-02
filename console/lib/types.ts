@@ -118,7 +118,7 @@ export type RepositoryResponse = {
 export type RecipeResponse = { repository: string; recipe: { content: string; updatedAt: string } | null; error?: string };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
-export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string; kind?: string };
+export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; attachments?: unknown[]; note?: string; kind?: string };
 export type EvidenceReport = { source: "qa" | "design" | "developer"; status?: string; items: EvidenceItem[] };
 export type PendingImprovementsResponse = { items: PendingSelfImprovementReview[]; error?: string };
 

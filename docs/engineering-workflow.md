@@ -27,6 +27,7 @@ Les principes et contrats sont lus explicitement depuis le chemin du plugin. Le 
 | `figma-review` | Comparaison d'une application avec une référence Figma. | Mesures, écarts, observations pour QA et éléments non vérifiés. |
 | `document-change` | Documentation rendue obsolète par un changement autorisé. | Mise à jour de la documentation existante et des décisions nécessaires. |
 | `glab-gitlab-api` | Opération GitLab choisie et autorisée par l'appelant. | Recette adaptée et vérification du résultat. |
+| `unslop` | Tout texte lu par une personne : rapport, synthèse, question, description ou commentaire de MR, ticket, documentation, champ libre d'un artefact JSON. | Phrases sans tics d'IA, format et langue du contrat inchangés. |
 
 `gitlab-tickets` conserve ses conventions Synapse. Ces conventions ne deviennent pas des principes d'ingénierie universels.
 

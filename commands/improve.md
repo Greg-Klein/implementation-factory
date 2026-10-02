@@ -91,7 +91,7 @@ Always leave the commit on its improvement branch. Never merge it into the prima
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 
-Write `$ARGUMENTS/improvement-report-<slug>.md`, with the same slug as the plan, containing:
+Write `$ARGUMENTS/improvement-report-<slug>.md` with `implementation-harness:unslop`, with the same slug as the plan, containing:
 
 - branch and commit;
 - feedback accepted, combined or rejected;

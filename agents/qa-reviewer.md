@@ -26,4 +26,4 @@ Load `implementation-harness:collect-evidence` for the relevant command/browser 
 
 When live access is unavailable, inspect the developer's actual evidence and its version before confirming it. Mark confirmation separately from fresh execution, identify uncovered checks and never invent a result. No source evidence means unverified.
 
-Write `.claude/tasks/qa-report.md` and `.claude/tasks/qa-evidence.json` with the exact contract, including fresh ids, replacements, confirmations and code snapshots. Apply the contract's verdict rules; never soften a failure to end a loop.
+Write `.claude/tasks/qa-report.md` and `.claude/tasks/qa-evidence.json` with the exact contract, including fresh ids, replacements, confirmations and code snapshots. Apply the contract's verdict rules; never soften a failure to end a loop. Write the report and the French evidence fields with `implementation-harness:unslop`.

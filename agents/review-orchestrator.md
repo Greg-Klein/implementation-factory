@@ -48,4 +48,4 @@ One initial review round plus at most two rework rounds: three review rounds tot
 
 READY requires no remaining in-scope P0/P1 and QA PASS or PASS_WITH_WARNINGS. A correction is closed only by a subsequent independent reviewer or QA check on the final code, never by its author's claim. Missing required artifacts, unresolved product decisions or remaining blocking findings produce BLOCKED. Do not soften a verdict to finish.
 
-Write `.claude/tasks/review-summary.md` using its contract, with counts, actual review dimensions, unresolved questions and confidence limits. The pilot owns commits, delivery and user interaction.
+Write `.claude/tasks/review-summary.md` using its contract and `implementation-harness:unslop`, with counts, actual review dimensions, unresolved questions and confidence limits. Rework briefs follow the same writing rules. The pilot owns commits, delivery and user interaction.

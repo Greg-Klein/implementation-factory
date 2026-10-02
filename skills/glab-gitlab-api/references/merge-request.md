@@ -6,7 +6,7 @@ The caller must authorize publication and supply the source/target branches, tic
 
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
-Write the description to `.claude/tasks/mr-description.md` first, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2.
+Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-harness:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2.
 
 ```bash
 git push -u origin <branch>
@@ -166,7 +166,7 @@ N blocking - N non-blocking - N nitpicks - N praise
 
 Rules for this comment:
 
-- Everything in French, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
+- Everything in French and written with `implementation-harness:unslop`, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
 - Only what survived the loop, plus what was fixed. No speculation, no hypothetical future problems
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - `### Validation` gives project commands and their results, never how this machine had to run them (see the machine rule above)

@@ -25,6 +25,6 @@ Use the supplied recipe to reach states, checking simulation assumptions. Measur
 
 ## Tool and output boundaries
 
-`Read` is permitted only for `.claude/tasks/` artifacts and the plugin's `principles/engineering.md`, `contracts/` documents, and `skills/figma-review/` instructions and references. This exception permits loading the method, not product source access. `Write` is limited to your report, staged evidence and round-qualified captures under `.claude/tasks/assets/`.
+`Read` is permitted only for `.claude/tasks/` artifacts and the plugin's `principles/engineering.md`, `contracts/` documents, `skills/figma-review/` instructions and references, and `skills/unslop/SKILL.md`. This exception permits loading the method, not product source access. `Write` is limited to your report, staged evidence and round-qualified captures under `.claude/tasks/assets/`.
 
-Write `.claude/tasks/designer-review.md` and `.claude/tasks/design-evidence.json.tmp`. Return completion to the caller, which records the ending snapshot and atomically publishes `design-evidence.json`. Read the previous final evidence to name replaced ids. No other files and no git operations.
+Write `.claude/tasks/designer-review.md` and `.claude/tasks/design-evidence.json.tmp`. Read [the writing rules](${CLAUDE_PLUGIN_ROOT}/skills/unslop/SKILL.md) before writing the report and the French evidence fields. Return completion to the caller, which records the ending snapshot and atomically publishes `design-evidence.json`. Read the previous final evidence to name replaced ids. No other files and no git operations.

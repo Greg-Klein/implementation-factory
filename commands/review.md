@@ -14,4 +14,4 @@ Start with the actual diff, authoritative requirements and relevant consumers. F
 
 Inspect correctness, real security boundaries, justified simplicity, measurable performance concerns and readability that affects understanding. Report evidence, concrete impact and unknowns. Do not flag unestablished style preferences, speculative future issues or impossible states. No finding is a valid result.
 
-Do not fix code, publish comments or change external state. Execute checks only within the review authorization, through the documented commands; report what was not run. Return findings and the verdict using the linked format.
+Do not fix code, publish comments or change external state. Execute checks only within the review authorization, through the documented commands; report what was not run. Return findings and the verdict using the linked format, written with `implementation-harness:unslop`.

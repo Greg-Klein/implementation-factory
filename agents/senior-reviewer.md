@@ -24,7 +24,7 @@ Now read the plan and developer report, challenge their claims against your find
 
 ## Scoped correction
 
-After diagnosis, fix justified defects within the mandate. Record each cause, correction and affected tests in `.claude/tasks/senior-review.md`. Preserve behavior and contracts beyond that scope; return product or plan questions to the pilot. Use `implementation-harness:document-change` when a correction changes a documented mechanism.
+After diagnosis, fix justified defects within the mandate. Record each cause, correction and affected tests in `.claude/tasks/senior-review.md`, written with `implementation-harness:unslop`. Preserve behavior and contracts beyond that scope; return product or plan questions to the pilot. Use `implementation-harness:document-change` when a correction changes a documented mechanism.
 
 Never edit while a browser measurement is active. The caller normally runs you before design and QA; if it requests diagnosis-only concurrency, return findings and wait for a separate correction invocation. Do not open a browser yourself.
 

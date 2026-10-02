@@ -67,6 +67,18 @@ describe("acceptance criteria registry", () => {
     expect(parsed.diagnostics.filter((entry) => entry.level === "error")).toHaveLength(2);
   });
 
+  it("should read checks written on the criterion instead of under verification, with a warning on the registry", () => {
+    const parsed = parseCriteriaRegistry({ schemaVersion: 1, criteria: [{ id: "AC1", text: "a", checks: [{ id: "AC1-unit", kind: "unit" }, { id: "AC1-browser", kind: "e2e" }] }] });
+    expect(parsed.registry?.criteria[0].checks.map((check) => check.id)).toEqual(["AC1-unit", "AC1-browser"]);
+    expect(parsed.diagnostics).toEqual([expect.objectContaining({ level: "warning", file: "acceptance-criteria.json", message: expect.stringContaining("AC1") })]);
+    const view = deriveAcceptanceCoverage({
+      registry: parsed.registry, now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
+      reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "unit", verdict: "pass", criterionIds: ["AC1"], checkIds: ["AC1-unit"] }]))],
+    });
+    expect(view.diagnostics.filter((entry) => entry.level === "error")).toEqual([]);
+    expect(view.criteria[0].status).toBe("unverified");
+  });
+
   it("should warn on an unknown schema version and refuse a document without criteria", () => {
     expect(parseCriteriaRegistry({ schemaVersion: 9, criteria: [] }).diagnostics[0].level).toBe("warning");
     expect(parseCriteriaRegistry({ nope: true }).registry).toBeUndefined();

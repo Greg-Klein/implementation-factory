@@ -107,7 +107,11 @@ export function parseCriteriaRegistry(value: unknown, file = "acceptance-criteri
     const source = record(input.source);
     const verification = record(input.verification);
     const checks: CriterionCheck[] = [];
-    const requested = Array.isArray(verification?.requiredChecks) ? verification.requiredChecks : [];
+    // Checks written straight on the criterion are still the checks producers cite: dropping them
+    // would report every evidence item citing one as unknown, blaming files that did nothing wrong.
+    const misplaced = !Array.isArray(verification?.requiredChecks) && Array.isArray(input.checks);
+    if (misplaced) diagnostics.push({ level: "warning", file, message: `Contrôles de ${id} lus sous \`checks\` au lieu de \`verification.requiredChecks\`.` });
+    const requested = Array.isArray(verification?.requiredChecks) ? verification.requiredChecks : misplaced ? input.checks as unknown[] : [];
     for (const candidate of requested.slice(0, MAX_CHECKS)) {
       const check = record(candidate);
       const checkId = typeof check?.id === "string" ? check.id.trim() : "";

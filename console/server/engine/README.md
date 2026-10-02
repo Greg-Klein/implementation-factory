@@ -2,15 +2,15 @@
 
 Le harnais pilote un agent de code. Ce dossier est la seule partie du serveur qui sait **lequel**.
 
-Il y a une implémentation aujourd'hui, `claude-code`. L'interface existe pour qu'une deuxième soit un fichier à écrire plutôt qu'une chirurgie à mener.
+Il y a une implémentation aujourd'hui, `claude-code`. L'interface existe pour qu'une deuxième demande un fichier à écrire plutôt qu'une réécriture du serveur.
 
 ## Pourquoi
 
-Le harnais est un outil de travail quotidien. Si le fournisseur d'IA change, l'outil ne doit pas mourir avec lui.
+Le harnais est un outil de travail quotidien. Si le fournisseur d'IA change, l'outil doit continuer à fonctionner.
 
-Ce qui coûte cher dans une migration n'est pas ce qu'on croit. Le serveur ne tenait qu'à six endroits, tous rassemblés ici depuis. Le vrai coût est ailleurs, dans `commands/implement.md` et les six agents, écrits contre les noms d'outils et la sémantique de sous-agents de Claude Code. Cette couche règle le premier problème, pas le second. Voir « Ce qui reste couplé » plus bas.
+Le serveur ne dépendait de Claude Code qu'à six endroits, tous rassemblés ici depuis. Le coût principal d'une migration est dans `commands/implement.md` et les six agents, écrits contre les noms d'outils et la sémantique de sous-agents de Claude Code. Cette couche traite le serveur et laisse ces prompts tels quels. Voir « Ce qui reste couplé » plus bas.
 
-Le mécanisme le plus spécifique du harnais, la question bloquante, a été prouvé portable avant que cette couche soit écrite : voir le spike dans `~/workspace/opencode-question-bridge`.
+Le mécanisme le plus spécifique du harnais, la question bloquante, a été prouvé portable avant que cette couche soit écrite. Voir le spike dans `~/workspace/opencode-question-bridge`.
 
 ## La frontière
 
@@ -30,7 +30,7 @@ Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne l
 
 ## Le contrat
 
-`engine/types.ts`. Chaque membre existe parce qu'il varie réellement d'un agent à l'autre.
+`engine/types.ts`. Chaque membre existe parce qu'il varie d'un agent à l'autre.
 
 | Membre | Rôle | Ce qui varie |
 |---|---|---|
@@ -68,11 +68,11 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 | `attention` | l'agent réclame la main, avec sa cause : `permission`, `terminal_interaction` ou `unknown` |
 | `turn.end` | le **pilote** rend la main, ce qui ne veut pas dire que le workflow est fini (la fin d'un sous-agent est `agent.stop`) |
 
-Ces champs ne sont remplis que quand Claude Code les fournit vraiment : `tool_use_id` et `agent_id` des hooks d'outils, `notification_type` des notifications. Un champ absent reste inconnu, et la santé du run (`server/run-health.ts`) s'en accommode. `END_REPORTED_TOOLS` doit rester égal au matcher `PostToolUse` de `hooks/hooks.json`, ce que vérifie un test.
+Ces champs ne sont remplis que quand Claude Code les fournit : `tool_use_id` et `agent_id` des hooks d'outils, `notification_type` des notifications. Un champ absent reste inconnu, et la santé du run (`server/run-health.ts`) s'en accommode. `END_REPORTED_TOOLS` doit rester égal au matcher `PostToolUse` de `hooks/hooks.json`, ce que vérifie un test.
 
 Deux détails qui comptent dans la traduction :
 
-1. **La commande passe entière.** `tool.start` porte `command` non tronqué, parce que `createsBranch` et `branchFromCommand` doivent matcher dessus. Pour l'affichage, il porte le nom de l'outil et un `target` neutre, la clé d'entrée qui le désigne (`file_path`, `pattern`, `subagent_type`, `url`) variant d'un outil à l'autre. `actionLabel` dans `domain.ts` en fait la ligne « ce que Claude fait en ce moment ». Ce libellé n'entre jamais dans le journal d'activité : deux cents appels d'outils y enterreraient les jalons du workflow.
+1. **La commande passe entière.** `tool.start` porte `command` non tronqué, parce que `createsBranch` et `branchFromCommand` doivent matcher dessus. Pour l'affichage, il porte le nom de l'outil et un `target` neutre, la clé d'entrée qui le désigne (`file_path`, `pattern`, `subagent_type`, `url`) variant d'un outil à l'autre. `actionLabel` dans `domain.ts` en fait la ligne « ce que Claude fait en ce moment ». Ce libellé n'entre jamais dans le journal d'activité, où deux cents appels d'outils rendraient les jalons du workflow illisibles.
 2. **Une question déjà répondue n'est pas reposée.** Claude Code rejoue le hook sur l'appel que le harnais a lui-même complété, et ce second passage porte les réponses. `claude-code.ts` le reconnaît et ne produit aucun événement.
 
 ### La question bloquante
@@ -99,7 +99,7 @@ answerQuestion → engine.questionAnswer(input, answers)
 la Promise se résout, la réponse HTTP part, l'agent repart
 ```
 
-La Promise non résolue **est** le blocage. Un moteur qui ne saurait pas attendre là-dessus ne peut pas porter le panneau de décisions.
+Le blocage est cette Promise non résolue. Un moteur qui ne sait pas attendre dessus ne peut pas alimenter le panneau de décisions.
 
 ## Ajouter un moteur
 
@@ -107,13 +107,13 @@ La Promise non résolue **est** le blocage. Un moteur qui ne saurait pas attendr
 2. Le choisir dans `engine/index.ts`.
 3. Fournir l'équivalent du corpus de prompts pour cet agent.
 
-L'étape 3 est la vraie. Les deux premières sont mécaniques.
+L'étape 3 demande le plus de travail. Les deux premières sont mécaniques.
 
 ## Ce qui reste couplé, en toute franchise
 
-Cette couche ne rend pas le harnais agnostique, elle rend le **serveur** agnostique. Restent dehors :
+Cette couche rend le serveur agnostique, pas le reste du harnais. Restent dehors :
 
 - **`commands/` et `agents/`**, environ 600 lignes plus six agents, écrits contre les noms d'outils de Claude Code. C'est le gros du coût de migration. Piste : une source canonique et une table de correspondance des noms d'outils, générées à l'installation.
 - **Les libellés d'interface** dans `console/lib/notifications.ts` et `console/lib/run-state.ts`, qui disent « Claude » en dur. Le client ne connaît pas le moteur; il faudrait faire descendre `engine.label` dans `RunState`.
 - **Le mode démo** (`server/demo.ts`), qui met en scène une session Claude Code.
-- **La qualité selon le modèle.** Un moteur qui répond n'est pas un moteur qui tient le workflow. Six agents et deux tours de review demandent un modèle solide, et rien ici ne le vérifie. Cela demande un eval, pas une interface.
+- **La qualité selon le modèle.** Un moteur peut répondre sans tenir le workflow. Six agents et deux tours de review demandent un modèle solide, et rien ici ne le vérifie. Le vérifier demande un eval.

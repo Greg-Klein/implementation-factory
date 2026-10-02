@@ -1,13 +1,13 @@
 # Implementation Harness
 
-Interface locale pour piloter la commande `/implementation-harness:implement` avec le véritable exécutable Claude Code. Le harnais n’utilise pas directement l’API Anthropic et ne demande aucune clé API. Le [README principal](../README.md#installation-en-une-commande) présente l’installation et l’usage quotidien avec `impl`.
+Interface locale pour piloter la commande `/implementation-harness:implement` avec l’exécutable Claude Code installé sur la machine. Le harnais n’utilise pas directement l’API Anthropic et ne demande aucune clé API. Le [README principal](../README.md#installation-en-une-commande) présente l’installation et l’usage quotidien avec `impl`.
 
 ## Prérequis
 
 - Claude Code installé et connecté (`claude --version`)
 - Node.js 22.12 ou plus récent
 - `glab` installé et authentifié pour accéder aux tickets et merge requests GitLab
-- les MCP utilisés par le workflow, notamment Playwright et Figma quand un ticket contient une maquette
+- les MCP utilisés par le workflow : Playwright pour les mesures du développeur, la revue design et la QA, Figma quand un ticket fournit des frames
 
 `node-pty` est un module natif. Sur une nouvelle machine, son installation peut nécessiter les outils de compilation du système, par exemple Xcode Command Line Tools sur macOS.
 
@@ -32,11 +32,11 @@ La commande et les agents restent dans le dossier `implementation-harness`; rien
 
 ## Ce que montrent les panneaux
 
-Le panneau de discussion est lu dans le transcript de la session, et Claude Code n’y écrit un message qu’une fois revenue l’action qui l’a suivi. Un paragraphe peut donc y arriver avec une minute de retard sur le terminal, qui est la seule vue vraiment live. Tant que la session produit de la sortie, le panneau affiche « Claude écrit… » pour dire que le dernier message visible n’est pas le dernier état du run.
+Le panneau de discussion est lu dans le transcript de la session, et Claude Code n’y écrit un message qu’une fois revenue l’action qui l’a suivi. Un paragraphe peut donc y arriver avec une minute de retard sur le terminal, qui est la seule vue en direct. Tant que la session produit de la sortie, le panneau affiche « Claude écrit… » pour dire que le dernier message visible n’est pas le dernier état du run.
 
 Le flux d’activité ne garde que les jalons du workflow : agents, documents, branche, merge request, décisions attendues. Le détail des commandes reste dans le terminal.
 
-Le harnais ne réclame l’attention que quand il est vraiment arrêté : une décision attendue, une demande de permission, un incident (plus aucune action en cours, résultat manquant, session interrompue), la fin ou l’échec du run. Un simple silence n’est qu’un doute, signalé une fois.
+Le harnais ne réclame l’attention que quand il est arrêté : une décision attendue, une demande de permission, un incident (plus aucune action en cours, résultat manquant, session interrompue), la fin ou l’échec du run. Un simple silence n’est qu’un doute, signalé une fois.
 
 ## Qui peut faire avancer ce run ?
 
@@ -48,9 +48,11 @@ La santé d’un run est une projection à part de son statut (`server/run-healt
 | Agent, commande ou tâche de fond au travail | sain ou attente | rien ; au-delà du seuil de silence, un doute |
 | Silence prolongé (`IMPL_STALL_MINUTES`, 10 par défaut) | doute | « Aucune progression observée », sans rien arrêter ni relancer |
 | Le pilote a rendu la main, rien ne tourne, rien n’est attendu, workflow inachevé | incident après 60 s | « Plus aucune action en cours » |
-| Un agent a fini sans le fichier que son contrat exige, et personne n’a pris la suite | incident après 30 s | « Rapport QA attendu », « Rapport de T3 attendu »… |
+| Un agent a fini sans le fichier que son contrat exige, et personne n’a pris la suite | incident après 30 s | « Rapport QA attendu », « Plan de test QA attendu », « Inventaire design attendu », « Rapport de T3 attendu »… |
 | Aucune tâche restante exécutable (dépendance absente ou circulaire) | incident | « Plan bloqué par ses dépendances » |
 | Session sortie avant un résultat, quel que soit son code | interruption | « Session interrompue » |
+
+Les fichiers exigés sont `planner-output.json` pour `ticket-planner`, `qa-report.md`, `qa-evidence.json` et `qa-plan.md` pour `qa-reviewer`, `designer-review.md`, `design-evidence.json` et `design-inventory.md` pour `designer-reviewer`, `review-summary.md` pour `review-orchestrator`.
 
 Une attente déclarée dans `workflow-state.json` ne masque jamais un blocage longtemps : `await_agent` sans agent actif reste une absence de prochaine action, les autres attentes deviennent un doute au seuil de silence. Une fin déclarée n’est prise que si elle tient face au livrable (merge request vue, ou blocages écrits). Sans ce fichier (prompts anciens), le détecteur s’en tient aux hooks et le dit dans son diagnostic. Après une mise en veille de la machine, toutes les grâces repartent du réveil.
 
@@ -59,15 +61,15 @@ Un incident est unique par cause stable (empreinte), notifié une fois, enregist
 - **Demander la continuation** : session active, pilote au repos, aucun agent, outil, question ni permission en cours. La console soumet à la session existante une instruction qui lui demande de relire le contexte, le plan, les rapports et l’état Git, de garder fichiers et commits, et de ne pas repartir de l’étape 1. L’incident reste ouvert, « continuation demandée », jusqu’à ce que la reprise soit observée.
 - **Ouvrir le terminal**, **Arrêter**, **Classer comme faux positif** (avec un motif), et le diagnostic repliable.
 
-Chaque action part avec la révision de l’incident affichée et un identifiant de requête : le serveur revérifie tout juste avant l’effet, refuse une action décidée sur un état qui a bougé, et n’exécute qu’une fois une requête envoyée par deux fenêtres. La décision est écrite avant l’effet ; après un arrêt entre les deux, elle reste « issue inconnue » et n’est jamais rejouée.
+Chaque action part avec la révision de l’incident affichée et un identifiant de requête. Le serveur revérifie tout juste avant l’effet, refuse une action décidée sur un état qui a bougé, et n’exécute qu’une fois une requête envoyée par deux fenêtres. La décision est écrite avant l’effet ; après un arrêt entre les deux, elle reste « issue inconnue » et n’est jamais rejouée.
 
-Au redémarrage, un run trouvé en cours reçoit un incident d’interruption, une seule fois, et sa question sans session est gardée comme contexte. Les runs restés avec un incident ouvert apparaissent sous « Interrompus », en lecture seule, par des routes séparées (`/api/archive/…`) : ni session, ni place, ni dépôt tenu. Les classer les retire de la liste ; leur archive reste sur disque. `/?demo=incident` joue un run dont le pilote rend la main sans suite, pour voir le détecteur et la continuation sans dépôt.
+Au redémarrage, un run trouvé en cours reçoit un incident d’interruption, une seule fois, et sa question sans session est gardée comme contexte. Les runs restés avec un incident ouvert apparaissent sous « Interrompus », en lecture seule, par des routes séparées (`/api/archive/…`). Ils n’ont ni session, ni place, ni dépôt tenu. Les classer les retire de la liste ; leur archive reste sur disque. `/?demo=incident` joue un run dont le pilote rend la main sans suite, pour voir le détecteur et la continuation sans dépôt.
 
 Limites : aucune reprise d’une session Claude Code perdue (le contrat moteur ne le permet pas encore), aucun superviseur LLM, aucun agent recréé automatiquement.
 
 ## Preuves par critère d’acceptation
 
-L’onglet Preuves répond à une question : qu’est-ce qui a réellement été vérifié ? Il part du registre des critères que le pilote écrit après la clarification (`.claude/tasks/acceptance-criteria.json`), des liens tâche → critère du plan (`criterion_ids` dans `planner-output.json`) et des fichiers de preuves (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). Les contrats de ces fichiers sont décrits dans `commands/implement.md` (« Write the acceptance criteria registry » et « Evidence contract »).
+L’onglet Preuves montre ce qui a été vérifié, critère par critère. Il part du registre des critères que le pilote écrit après la clarification (`.claude/tasks/acceptance-criteria.json`), des liens entre tâches et critères du plan (`criterion_ids` dans `planner-output.json`) et des fichiers de preuves (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). Le registre est décrit dans `commands/implement.md` (« Write the acceptance criteria registry »), les fichiers de preuves dans `contracts/` (`evidence.md`, `qa.md`, `design.md`, `pilot-evidence.md`).
 
 Chaque critère prend un état calculé par le serveur (`server/acceptance.ts`), dans cet ordre de priorité :
 
@@ -84,11 +86,14 @@ Règles qui en découlent :
 - Un succès ne remplace un échec que s’il le nomme dans `supersedes`, contrôle la même chose et a été pris sur le code actuel. Sinon l’échec reste affiché et le critère non vérifié.
 - La version du code est l’identifiant que calcule `hooks/code-snapshot.mjs` : l’arbre git du répertoire de travail, fichiers non suivis compris, fichiers ignorés et documents du workflow exclus, calculé dans un index jetable. Commiter l’état mesuré garde le même identifiant, toute modification le change. Le workflow l’appelle via `IMPL_CODE_SNAPSHOT` et chaque appel est journalisé dans `snapshots.jsonl` ; un identifiant absent de ce journal est affiché « Version inconnue ». Le serveur recalcule l’identifiant courant à chaque nouveau document et au plus toutes les 15 secondes quand l’onglet le demande.
 - Un résultat que le développeur rapporte sur son propre travail porte la mention « Résultat rapporté » ; une confirmation vaut ce qu’elle confirme, sur la version où cette preuve a été prise.
+- Une tentative de mise en échec est un item de preuve QA marqué `"kind": "attempt"`. Quand elle trouve un défaut (`fail`), elle compte contre le critère qu’elle cite. Quand elle ne trouve rien, elle est listée sous ce critère avec la mention « Aucun défaut trouvé », sans couleur verte et sans compter comme vérification. Une tentative seulement lue dans le code est affichée « Lue, non exécutée ». Une tentative qui ne cite aucun critère produit un avertissement dans le diagnostic.
+- Le verdict que QA déclare dans `qa-evidence.json` (`status`) apparaît dans la synthèse de l’onglet : « Validé », « Validé avec réserves », « Non concluant » ou « Échec », avec le tour et le mandat s’il y en a un. Le serveur compare ce verdict aux preuves (`qaVerdictConsistency`). Un `PASS` ou `PASS_WITH_WARNINGS` écrit alors qu’un critère n’a aucune observation exécutée par QA sur le code actuel affiche un avertissement qui nomme ces critères. Une confirmation, une tentative et une preuve remplacée ne comptent pas comme observation. Une passe ciblée (`mandate` à la racine du fichier) ne répond que des critères de son mandat.
+- Le serveur note la première arrivée de chaque document du run (`artifactArrivals` dans `run.json`). Quand `qa-plan.md` ou `design-inventory.md` n’est pas arrivé avant le rapport correspondant, l’onglet affiche une remarque : rien ne montre que le plan a été écrit en premier. Cette remarque ne change aucun verdict. Ces deux fichiers ne font pas avancer le rail d’étapes, parce qu’un reviewer les écrit avant de commencer.
 - Un run sans registre (ancien run resté sur l’ancien contrat) affiche « Traçabilité par critère indisponible pour ce run » et garde ses rapports lisibles. Des critères reconstruits depuis un ancien plan sont signalés comme tels et restent non vérifiés.
 
 `server/evidence-archive.ts` archive chaque version utile de ces fichiers sous un chemin immuable, avec son empreinte et sa date de réception, et copie dans cette version les captures qu’elle cite : une capture remplacée au tour 2 sous le même nom reste distincte de celle du tour 1. Une même preuve vue deux fois (fichier par tâche puis fichier fusionné, copie `-roundN`) compte une fois grâce à son identifiant. Un fichier surpris à moitié écrit devient un diagnostic et la dernière version valide reste en vigueur. Avant de supprimer `.claude/tasks/`, le workflow écrit `archive-sync-request.json` et attend `archive-sync-ack.json` : le serveur a alors tout réarchivé.
 
-Le même calcul produit `acceptance-summary.md` et `acceptance-summary.json`, que le serveur dépose dans `.claude/tasks/` pour la merge request : une phrase de bilan et les critères non vérifiés pour la description, le tableau détaillé pour le commentaire de review. Les captures y sont nommées par leur chemin local et marquées comme telles : le workflow ne les lie dans GitLab qu’après upload.
+Le même calcul produit `acceptance-summary.md` et `acceptance-summary.json`, que le serveur dépose dans `.claude/tasks/` pour la merge request : une phrase de bilan et les critères non vérifiés pour la description, le tableau détaillé pour le commentaire de review. Quand le verdict QA contredit les preuves, la synthèse contient une ligne « Verdict QA à confirmer » et le JSON un champ `qaWarning`. Les captures y sont nommées par leur chemin local et marquées comme telles, parce que le workflow ne les lie dans GitLab qu’après upload.
 
 Limites de cette version : aucune commande n’est encore corrélée à son résultat par les événements du moteur, tout résultat reste donc déclaré par l’agent qui l’écrit ; le serveur ne peut pas vérifier le contenu d’une preuve, seulement sa cohérence et sa version.
 
@@ -101,7 +106,7 @@ Limites de cette version : aucune commande n’est encore corrélée à son rés
 | `server/hooks.ts` | applique les événements du moteur à l’état du run |
 | `server/transcript.ts` | suit le fichier de dialogue de la session |
 | `server/artifacts.ts` | archive les documents produits avant leur nettoyage |
-| `server/acceptance.ts` | couverture des critères d’acceptation, logique pure, et synthèse de merge request |
+| `server/acceptance.ts` | couverture des critères d’acceptation, cohérence du verdict QA, logique pure, et synthèse de merge request |
 | `server/evidence-archive.ts` | versions immuables des registres, plans, preuves et captures d’un run |
 | `server/acceptance-runtime.ts` | ingestion, identification du code, recalcul et synthèse remise au workflow |
 | `server/run-health.ts` | qui peut faire avancer un run : signaux, matrice de détection, logique pure |
@@ -112,7 +117,7 @@ Limites de cette version : aucune commande n’est encore corrélée à son rés
 | `server/self-improvement.ts` | retours, auto-audit et boucle d’amélioration |
 | `server/domain.ts` | logique pure, sans agent ni système de fichiers |
 
-`server/domain.ts` et `server/engine/` sont les deux endroits testables sans rien lancer, et c’est là que vit l’essentiel de la logique.
+`server/domain.ts` et `server/engine/` sont les deux endroits testables sans rien lancer, et la plus grande part de la logique s’y trouve.
 
 ## Copier sur une autre machine
 
@@ -129,8 +134,8 @@ Chaque exécution est conservée dans `console/data/runs/<run-id>/` :
 - `acceptance/` contient la dernière synthèse de couverture, en Markdown et en JSON;
 - `snapshots.jsonl` journalise chaque identifiant de code pris par la session.
 
-`run.json` est écrit en entier puis renommé, une écriture après l’autre : une lecture ne voit jamais un fichier à moitié écrit, et le dernier état publié est celui qui reste.
+`run.json` est écrit en entier puis renommé, une écriture après l’autre. Une lecture ne voit donc jamais un fichier à moitié écrit, et le dernier état publié est celui qui reste.
 
 Le dossier `data/` est ignoré par Git.
 
-Au démarrage, le serveur referme tout run resté sur un statut non terminal (`starting`, `running`, `attention`) : `ctx.state` repart vide à chaque lancement, donc un run que le processus précédent n'a pas pu clore lui-même (arrêt brutal, `impl restart`) resterait sinon marqué "running" indéfiniment. Il est reclassé "failed" avec un message l'expliquant, distinct d'un échec de l'agent.
+Au démarrage, le serveur referme tout run resté sur un statut non terminal (`starting`, `running`, `attention`). `ctx.state` repart vide à chaque lancement, donc un run que le processus précédent n’a pas pu clore lui-même (arrêt brutal, `impl restart`) resterait sinon marqué `running`. Le serveur le reclasse `failed` avec un message qui l’explique, distinct d’un échec de l’agent.

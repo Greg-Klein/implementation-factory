@@ -88,6 +88,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
     session.state.artifacts = [...session.state.artifacts, relative];
     session.activity("artifact", "Nouvel artefact", relative);
   }
+  session.artifactArrived(relative, new Date(writtenAt).toISOString());
   // Every reviewer overwrites its own file on each round, so the list of
   // artifacts is identical from one round to the next and this stamp is the
   // only thing saying the content moved. Taken from the file's own mtime, so a

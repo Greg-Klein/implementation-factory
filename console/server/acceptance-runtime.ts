@@ -69,6 +69,7 @@ export function refreshAcceptance(session: RunSession, { snapshot = false }: { s
       session.state.acceptance = {
         available: view.available, revision: (session.state.acceptance?.revision ?? 0) + 1, updatedAt: view.updatedAt,
         counts: view.counts, diagnostics: view.diagnostics.filter((diagnostic) => diagnostic.level === "error").length,
+        ...(view.qa ? { qa: { status: view.qa.status, consistent: view.qa.consistent, unobserved: view.qa.unobserved.length } } : {}),
       };
       session.state.evidenceUpdatedAt = view.updatedAt;
       await writeSummary(session, view);

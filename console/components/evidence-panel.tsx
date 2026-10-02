@@ -4,7 +4,7 @@ import { CaretRightIcon, CheckCircleIcon, MinusCircleIcon, WarningCircleIcon, XC
 import { createContext, useContext, useEffect, useState } from "react";
 import { acceptanceUrl, artifactUrl } from "@/lib/run-state";
 import type {
-  AcceptanceCheckView, AcceptanceCriterionView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
+  AcceptanceCheckView, AcceptanceCriterionView, AcceptanceQaView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
   EvidenceItem, EvidenceReport, EvidenceVerdict, EvidenceView, RunState,
 } from "@/lib/types";
 
@@ -29,6 +29,25 @@ const STATUS_STYLE: Record<AcceptanceStatus, { label: string; className: string;
   failed: { label: "Échec", className: "bg-red-50 text-red-700", icon: XCircleIcon },
   blocked: { label: "Bloqué", className: "bg-amber-50 text-amber-800", icon: WarningCircleIcon },
   unverified: { label: "Non vérifié", className: "bg-[var(--line)] text-[var(--ink)]", icon: MinusCircleIcon },
+};
+
+/**
+ * A break attempt is read the other way round: passing means it found nothing,
+ * which proves nothing, so it is never drawn in green.
+ */
+const ATTEMPT_STYLE: Record<string, { label: string; className: string; icon: typeof CheckCircleIcon }> = {
+  pass: { label: "Aucun défaut trouvé", className: "bg-[var(--paper)] text-[var(--muted)]", icon: MinusCircleIcon },
+  fail: { label: "Défaut trouvé", className: "bg-red-50 text-red-700", icon: XCircleIcon },
+  unverified: { label: "Lue, non exécutée", className: "bg-[var(--paper)] text-[var(--muted)]", icon: MinusCircleIcon },
+  not_run: { label: "Non exécutée", className: "bg-[var(--paper)] text-[var(--muted)]", icon: MinusCircleIcon },
+};
+
+/** The verdict a QA report declares. An inconclusive review is neutral: nothing broke, nothing was approved. */
+const QA_STATUS_STYLE: Record<string, { label: string; className: string; icon: typeof CheckCircleIcon }> = {
+  PASS: { label: "Validé", className: "bg-emerald-50 text-emerald-700", icon: CheckCircleIcon },
+  PASS_WITH_WARNINGS: { label: "Validé avec réserves", className: "bg-amber-50 text-amber-800", icon: WarningCircleIcon },
+  INCONCLUSIVE: { label: "Non concluant", className: "bg-[var(--line)] text-[var(--ink)]", icon: MinusCircleIcon },
+  FAIL: { label: "Échec", className: "bg-red-50 text-red-700", icon: XCircleIcon },
 };
 
 const SOURCE_LABEL: Record<EvidenceView["source"], string> = { qa: "QA", design: "Design", developer: "Développeur" };
@@ -103,6 +122,17 @@ function StatusPill({ status }: { status: AcceptanceStatus }) {
   return <Pill {...STATUS_STYLE[status]} />;
 }
 
+/** A status the contract does not know is shown as written, never dressed as one it knows. */
+function QaStatus({ status }: { status: string }) {
+  const style = QA_STATUS_STYLE[status.trim().toUpperCase()];
+  return style ? <Pill {...style} /> : <span className="font-mono text-[10px] font-normal text-[var(--muted)]">{status}</span>;
+}
+
+function QaWarning({ qa }: { qa: AcceptanceQaView | undefined }) {
+  if (!qa?.warning) return null;
+  return <p role="note" data-testid="qa-verdict-warning" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">{qa.warning}</p>;
+}
+
 function Tag({ children, tone = "neutral" }: { children: string; tone?: "neutral" | "attention" }) {
   return <span className={`rounded-full px-1.5 py-px text-[9px] font-semibold ${tone === "attention" ? "bg-amber-50 text-amber-800" : "bg-[var(--paper)] text-[var(--muted)]"}`}>{children}</span>;
 }
@@ -110,6 +140,7 @@ function Tag({ children, tone = "neutral" }: { children: string; tone?: "neutral
 /** The labels that say how far a piece of evidence can be trusted, only when they apply. */
 function qualifiers(view: EvidenceView) {
   return [
+    view.kind === "attempt" ? { text: "Tentative de mise en échec", tone: "neutral" as const } : undefined,
     view.freshness === "stale" ? { text: "Preuve ancienne", tone: "attention" as const } : undefined,
     view.freshness === "unknown" ? { text: "Version inconnue", tone: "attention" as const } : undefined,
     view.freshness === "inconclusive" ? { text: "Mesure non concluante", tone: "attention" as const } : undefined,
@@ -119,7 +150,7 @@ function qualifiers(view: EvidenceView) {
 }
 
 function EvidenceCard({ runId, view }: { runId: string; view: EvidenceView }) {
-  const verdict = VERDICT_STYLE[view.verdict as EvidenceVerdict] ?? VERDICT_STYLE.unverified;
+  const verdict = (view.kind === "attempt" ? ATTEMPT_STYLE[view.verdict] : undefined) ?? VERDICT_STYLE[view.verdict as EvidenceVerdict] ?? VERDICT_STYLE.unverified;
   const meta = [
     SOURCE_LABEL[view.source], view.producer?.role, view.id, view.method ? METHOD_LABEL[view.method] : undefined,
     view.round ? `tour ${view.round}` : undefined, `${view.file} v${view.version}`, clock(view.observedAt ?? view.receivedAt),
@@ -204,6 +235,12 @@ function CriterionRow({ runId, criterion }: { runId: string; criterion: Acceptan
               <ul className="mt-2 space-y-2">{criterion.unassigned.map((view) => <EvidenceCard key={view.key} runId={runId} view={view} />)}</ul>
             </div>
           )}
+          {(criterion.attempts ?? []).length > 0 && (
+            <div className="mt-3" data-testid={`attempts-${criterion.id}`}>
+              <p className="text-[11px] text-[var(--muted)]">Tentatives de mise en échec sans défaut trouvé, affichées sans compter comme vérification :</p>
+              <ul className="mt-2 space-y-2">{criterion.attempts.map((view) => <EvidenceCard key={view.key} runId={runId} view={view} />)}</ul>
+            </div>
+          )}
         </div>
       )}
     </li>
@@ -211,13 +248,15 @@ function CriterionRow({ runId, criterion }: { runId: string; criterion: Acceptan
 }
 
 function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
-  const style = VERDICT_STYLE[item.verdict] ?? VERDICT_STYLE.unverified;
+  const attempt = item.kind === "attempt";
+  const style = (attempt ? ATTEMPT_STYLE[item.verdict] : undefined) ?? VERDICT_STYLE[item.verdict] ?? VERDICT_STYLE.unverified;
   return (
     <li className="border-b border-[var(--line)] py-3 last:border-b-0">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-medium text-[var(--ink)]">{item.label}</p>
         <Pill {...style} />
       </div>
+      {attempt && <p className="mt-1"><Tag>Tentative de mise en échec</Tag></p>}
       {(item.expected || item.actual) && (
         <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">
           {item.expected && <>attendu <span className="text-[var(--ink)]">{item.expected}</span>{item.actual ? " · " : ""}</>}
@@ -232,7 +271,7 @@ function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
 }
 
 /** One report as the workflow last wrote it, the view this tab had before criteria existed. */
-function Section({ title, file, run }: { title: string; file: string; run: RunState }) {
+function Section({ title, file, run, qa }: { title: string; file: string; run: RunState; qa?: AcceptanceQaView }) {
   const [report, setReport] = useState<EvidenceReport>();
   const [error, setError] = useState<string>();
   const present = run.artifacts.includes(file);
@@ -252,10 +291,11 @@ function Section({ title, file, run }: { title: string; file: string; run: RunSt
 
   return (
     <section className="mb-6 last:mb-0">
-      <h3 className="mb-2 text-xs font-semibold text-[var(--ink)]">
+      <h3 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--ink)]">
         {title}
-        {report?.status && <span className="ml-2 font-mono text-[10px] font-normal text-[var(--muted)]">{report.status}</span>}
+        {report?.status && <QaStatus status={report.status} />}
       </h3>
+      {report?.status && qa?.file === file && <div className="mb-2"><QaWarning qa={qa} /></div>}
       {!present ? <p className="text-[11px] text-[var(--muted)]">Aucune preuve écrite pour ce run.</p>
         : error ? <p className="text-[11px] text-red-700">{error}</p>
         : !report ? <p className="text-[11px] text-[var(--muted)]">Chargement…</p>
@@ -285,7 +325,7 @@ function useAcceptance(run: RunState) {
   return { view, error };
 }
 
-function Summary({ view }: { view: AcceptanceView }) {
+function Summary({ view, notes }: { view: AcceptanceView; notes: string[] }) {
   const errors = view.diagnostics.filter((diagnostic) => diagnostic.level === "error");
   const details = [
     view.currentSnapshot ? `code actuel ${view.currentSnapshot.id}` : "code actuel non identifié",
@@ -297,6 +337,14 @@ function Summary({ view }: { view: AcceptanceView }) {
       <p className="text-[10px] uppercase tracking-[.16em] text-[var(--muted)]">Critères d’acceptation</p>
       <p role="status" aria-live="polite" className="mt-1 text-sm font-medium text-[var(--ink)]" data-testid="acceptance-sentence">{view.sentence}</p>
       <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{details}</p>
+      {view.qa && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted)]" data-testid="qa-verdict">
+          Verdict QA{view.qa.round ? ` · tour ${view.qa.round}` : ""}{view.qa.mandate ? ` · mandat ${view.qa.mandate.join(", ") || "sans critère"}` : ""}
+          <QaStatus status={view.qa.status} />
+        </p>
+      )}
+      <QaWarning qa={view.qa} />
+      {notes.length > 0 && <ul className="mt-2 space-y-0.5" data-testid="review-notes">{notes.map((note) => <li key={note} className="text-[11px] leading-relaxed text-[var(--muted)]">{note}</li>)}</ul>}
       {errors.length > 0 && (
         <details className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
           <summary className="cursor-pointer text-[11px] font-medium text-amber-900">
@@ -321,7 +369,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
     <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-[var(--raised)] p-5">
       <section aria-label="Couverture des critères" className="mb-6">
         {error && <p role="alert" className="mb-3 text-[11px] text-red-700">{error}</p>}
-        {view && traced && <Summary view={view} />}
+        {view && traced && <Summary view={view} notes={run.reviewNotes ?? []} />}
         {view && traced && view.criteria.length > 0 && <ul>{view.criteria.map((criterion) => <CriterionRow key={criterion.id} runId={runId} criterion={criterion} />)}</ul>}
         {view && !traced && (
           <div className="rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5">
@@ -330,6 +378,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
             {view.criteria.length > 0 && (
               <ul className="mt-2 space-y-1">{view.criteria.map((criterion) => <li key={criterion.id} className="text-[11px] text-[var(--muted)]"><span className="font-mono">{criterion.id}</span> · {criterion.text} · reconstruit depuis le plan, non vérifié</li>)}</ul>
             )}
+            {(run.reviewNotes ?? []).length > 0 && <ul className="mt-2 space-y-0.5" data-testid="review-notes">{(run.reviewNotes ?? []).map((note) => <li key={note} className="text-[11px] leading-relaxed text-[var(--muted)]">{note}</li>)}</ul>}
           </div>
         )}
       </section>
@@ -350,7 +399,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
       <details open={!traced} className="border-t border-[var(--line)] pt-4">
         <summary className="cursor-pointer text-xs font-semibold text-[var(--ink)]">Rapports par source</summary>
         <div className="mt-3">
-          {SOURCES.map(({ file, title }) => <Section key={file} title={title} file={file} run={run} />)}
+          {SOURCES.map(({ file, title }) => <Section key={file} title={title} file={file} run={run} qa={view?.qa} />)}
           {archivedReports.length > 0 && (
             <section className="mt-4">
               <h3 className="mb-2 text-xs font-semibold text-[var(--ink)]">Versions archivées</h3>

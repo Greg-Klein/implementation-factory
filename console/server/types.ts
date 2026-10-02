@@ -32,7 +32,16 @@ export type AcceptanceCounts = { total: number; verified: number; failed: number
  * `available`: the run wrote a criteria registry; without one the tab falls back on the reports alone.
  * `revision` moves every time the computation is redone with a different result.
  */
-export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number };
+export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number; qa?: AcceptanceQaDigest };
+/**
+ * What the QA report claims, held against what the evidence shows. `consistent`
+ * is false when QA says PASS or PASS_WITH_WARNINGS while a criterion has no
+ * fresh QA observation; `unobserved` names those criteria. `mandate`: the
+ * criteria a focused pass answers for, the only ones held against its verdict.
+ */
+export type AcceptanceQaView = { status: string; file: string; round?: number; mandate?: string[]; consistent: boolean; unobserved: string[]; warning?: string };
+/** The same verdict in figures, for the run state. */
+export type AcceptanceQaDigest = { status: string; consistent: boolean; unobserved: number };
 
 export type EvidenceSource = "qa" | "design" | "developer";
 export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
@@ -52,6 +61,8 @@ export type EvidenceView = {
   id?: string;
   label: string;
   verdict: string;
+  /** `attempt`: a try at breaking a criterion. Only a failing one counts, against the criterion; one that found nothing verifies nothing. */
+  kind?: "attempt";
   source: EvidenceSource;
   file: string;
   version: number;
@@ -85,12 +96,14 @@ export type AcceptanceCriterionView = {
   checks: AcceptanceCheckView[];
   /** Evidence naming the criterion without saying which of its checks it covers: shown, never counted. */
   unassigned: EvidenceView[];
+  /** Break attempts that found no defect: listed under the criterion they target, never counted as a verification. */
+  attempts: EvidenceView[];
   reasons: string[];
   /** Rebuilt from an older plan that had no identifiers: never verified. */
   reconstructed?: boolean;
 };
 export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
-export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean };
+export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean; /** The verdict the report declares for itself, QA only. */ status?: string; /** The criteria a focused QA pass covers. */ mandate?: string[] };
 /** Everything the "Preuves" tab shows about one run, computed once on the server and reused by the merge request summary. */
 export type AcceptanceView = {
   available: boolean;
@@ -107,6 +120,8 @@ export type AcceptanceView = {
   generalHistory: EvidenceView[];
   diagnostics: AcceptanceDiagnostic[];
   reports: AcceptanceReportVersion[];
+  /** The verdict of the latest QA report, absent until QA wrote one that declares a status. */
+  qa?: AcceptanceQaView;
 };
 /**
  * How a run is doing, orthogonal to its lifecycle status. `waiting`: someone or
@@ -191,6 +206,10 @@ export type RunState = {
   planTasks?: PlanTask[];
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
+  /** When each document was first seen, from the file's own write time. Absent on runs archived before it was recorded. */
+  artifactArrivals?: Record<string, string>;
+  /** Non blocking remarks on how the reviewers worked, a plan written after its report for instance. See reviewPlanNotes. */
+  reviewNotes?: string[];
   /** Acceptance coverage in figures; the full view is served by /api/runs/<id>/acceptance. */
   acceptance?: AcceptanceDigest;
   /** Absent on archives written before run health existed, and on runs never evaluated. */

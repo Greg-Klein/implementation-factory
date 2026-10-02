@@ -170,6 +170,15 @@ test("should show the demo's criteria in every state, with the replaced round in
   await expect(page.getByRole("dialog", { name: "assets/alerte-critique.png" })).toBeVisible();
   await page.keyboard.press("Escape");
 
+  // A break attempt that found nothing sits under its criterion, apart from what verifies it.
+  const attempted = page.getByTestId("criterion-AC1");
+  await attempted.getByRole("button").first().click();
+  await expect(page.getByTestId("attempts-AC1").getByText("Changer de compte sans recharger la page")).toBeVisible();
+  await expect(page.getByTestId("attempts-AC1").getByText("Aucun défaut trouvé").first()).toBeVisible();
+  await expect(page.getByTestId("qa-verdict")).toContainText("Échec");
+  await expect(page.getByTestId("qa-verdict-warning")).toHaveCount(0);
+  await expect(page.getByTestId("review-notes")).toHaveCount(0);
+
   const stale = page.getByTestId("criterion-AC3");
   await stale.getByRole("button").first().click();
   await expect(stale.getByText("Preuve ancienne").first()).toBeVisible();

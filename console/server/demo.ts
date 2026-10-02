@@ -241,7 +241,10 @@ export function continueDemoRun(session: RunSession) {
     startDemoReviewer(session);
     session.state.action = "Exécution des tests";
     session.refreshPlanTasks();
-    session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "assets/panneau-preferences.png"];
+    // The reviewers write their plan before they read what the authors concluded.
+    session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "assets/panneau-preferences.png", "qa-plan.md", "design-inventory.md"];
+    session.artifactArrived("qa-plan.md", now());
+    session.artifactArrived("design-inventory.md", now());
     writeDemoDocument(session, "assets/panneau-preferences.png", png(demoArtifactContents["assets/panneau-preferences.png"]), false);
     writeDemoDocument(session, "dev-evidence.json", JSON.stringify(demoAcceptance.developer, null, 2));
     session.state.evidenceUpdatedAt = now();
@@ -283,7 +286,11 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, demoStepDuration * 7, () => {
     session.state.phase = 7;
     session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-    session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md"];
+    session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md", "designer-review.md", "assets/reference-panneau-preferences.png"];
+    session.artifactArrived("qa-report.md", now());
+    session.artifactArrived("designer-review.md", now());
+    writeDemoDocument(session, "assets/reference-panneau-preferences.png", png(demoArtifactContents["assets/reference-panneau-preferences.png"]), false);
+    writeDemoDocument(session, "design-evidence.json", JSON.stringify(demoAcceptance.design, null, 2));
     writeDemoDocument(session, "qa-evidence-round1.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
     writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundTwo), false);
     writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundTwo, null, 2));

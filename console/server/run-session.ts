@@ -3,7 +3,7 @@ import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import { ARCHIVED_ACTIVITIES, broadcastToViewers, now } from "./context.js";
 import { dataRoot } from "./config.js";
-import { emptyState, planTaskBoard, runHoldsRepository, summarizeRun } from "./domain.js";
+import { emptyState, planTaskBoard, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
 import { engine, type EngineSession } from "./engine/index.js";
 import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
 import { createSignals, pilotActs, type RunSignals } from "./run-health.js";
@@ -98,6 +98,18 @@ export class RunSession {
     const entry: Activity = { id: crypto.randomUUID(), at: now(), kind, title, detail };
     this.archive = [entry, ...this.archive].slice(0, ARCHIVED_ACTIVITIES);
     this.state.activities = [entry, ...this.state.activities].slice(0, BROADCAST_ACTIVITIES);
+  }
+
+  /**
+   * Records when a document was first seen and what that says about the
+   * reviewers' order of work. Only the first arrival counts: a later round
+   * rewriting a report does not make its plan look early.
+   */
+  artifactArrived(relativePath: string, at: string) {
+    if (this.state.artifactArrivals?.[relativePath]) return;
+    this.state.artifactArrivals = { ...this.state.artifactArrivals, [relativePath]: at };
+    const notes = reviewPlanNotes(this.state.artifactArrivals);
+    if (notes.length > 0 || this.state.reviewNotes?.length) this.state.reviewNotes = notes;
   }
 
   /** The run as it is archived: the same state, with the history the pages never received. */

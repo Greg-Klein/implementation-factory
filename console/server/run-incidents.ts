@@ -184,6 +184,7 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     ...(state.planTasks ? { planTasks: state.planTasks } : {}), ...(state.planDelegations ? { planDelegations: state.planDelegations } : {}),
     ...(state.acceptance ? { acceptance: state.acceptance } : {}), ...(state.evidenceUpdatedAt ? { evidenceUpdatedAt: state.evidenceUpdatedAt } : {}),
     ...(state.workflow ? { workflow: state.workflow } : {}), ...(state.health ? { health: state.health } : {}),
+    ...(state.artifactArrivals ? { artifactArrivals: state.artifactArrivals } : {}), ...(Array.isArray(state.reviewNotes) ? { reviewNotes: state.reviewNotes } : {}),
     // A question whose session is gone cannot be answered: its text stays, in the incident, as context.
     pendingQuestion: undefined,
     sessionActive: false,

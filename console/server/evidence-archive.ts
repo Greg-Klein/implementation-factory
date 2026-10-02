@@ -204,7 +204,7 @@ export class EvidenceArchive {
       const current = this.latest(version.file)?.version === version.version;
       // A round copy only repeats what its live report said at the time: once the live report is fixed, the copy's anomalies are history.
       if (current && !isRoundCopy(version.file)) diagnostics.push(...parsed.diagnostics);
-      reports.push({ version: { file: version.file, version: version.version, receivedAt: version.receivedAt, hash: version.hash, source: version.source ?? sourceOfReport(version.file), ...(version.round ? { round: version.round } : {}), items: version.items, current }, records: parsed.records });
+      reports.push({ version: { file: version.file, version: version.version, receivedAt: version.receivedAt, hash: version.hash, source: version.source ?? sourceOfReport(version.file), ...(version.round ? { round: version.round } : {}), items: version.items, current, ...(parsed.status ? { status: parsed.status } : {}), ...(parsed.mandate ? { mandate: parsed.mandate } : {}) }, records: parsed.records });
     }
     for (const [file, invalid] of this.invalid) diagnostics.push({ level: "error", file, message: invalid.message });
     for (const source of this.pendingAttachments()) diagnostics.push({ level: "warning", file: source, message: "Pièce jointe citée mais pas encore archivée." });

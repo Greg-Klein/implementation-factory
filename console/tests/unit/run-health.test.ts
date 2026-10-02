@@ -140,10 +140,20 @@ describe("a result its producer never wrote", () => {
   });
 
   it("should stay quiet once the report arrives, or when the pilot took over after the agent", () => {
-    const arrived = input({ agents: [qa], artifacts: ["qa-report.md", "qa-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
+    const arrived = input({ agents: [qa], artifacts: ["qa-plan.md", "qa-report.md", "qa-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
     expect(evaluateRunHealth(arrived, T0 + seconds(40), policy).incident).toBeUndefined();
     const takenOver = input({ agents: [qa] }, { pilotIdleSince: T0 + seconds(5), pilotLastActedAt: T0 + seconds(2) });
     expect(evaluateRunHealth(takenOver, T0 + seconds(40), policy).incident).toBeUndefined();
+  });
+
+  it("should require the plan each reviewer writes before its report", () => {
+    expect(requiredFiles({ id: "qa1", name: "implementation-harness:qa-reviewer" }, [])).toEqual(["qa-report.md", "qa-evidence.json", "qa-plan.md"]);
+    expect(requiredFiles({ id: "ds1", name: "implementation-harness:designer-reviewer" }, [])).toEqual(["designer-review.md", "design-evidence.json", "design-inventory.md"]);
+    const withoutPlan = input({ agents: [qa], artifacts: ["qa-report.md", "qa-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
+    expect(evaluateRunHealth(withoutPlan, T0 + seconds(40), policy).incident).toMatchObject({ kind: "missing_result", title: "Plan de test QA attendu", fingerprint: "missing_result:qa1:qa-plan.md" });
+    const designer = agent({ id: "ds1", name: "implementation-harness:designer-reviewer", status: "completed", endedAt: ended });
+    const withoutInventory = input({ agents: [designer], artifacts: ["designer-review.md", "design-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
+    expect(evaluateRunHealth(withoutInventory, T0 + seconds(40), policy).incident?.title).toBe("Inventaire design attendu");
   });
 
   it("should require nothing of a reviewer that answers in chat", () => {

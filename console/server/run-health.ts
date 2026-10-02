@@ -139,8 +139,8 @@ export function recordEngineSignal(signals: RunSignals, event: EngineEvent, now:
  */
 const PRODUCER_CONTRACTS: Record<string, string[]> = {
   "ticket-planner": ["planner-output.json"],
-  "qa-reviewer": ["qa-report.md", "qa-evidence.json"],
-  "designer-reviewer": ["designer-review.md", "design-evidence.json"],
+  "qa-reviewer": ["qa-report.md", "qa-evidence.json", "qa-plan.md"],
+  "designer-reviewer": ["designer-review.md", "design-evidence.json", "design-inventory.md"],
   "review-orchestrator": ["review-summary.md"],
 };
 
@@ -226,6 +226,8 @@ function waiting(reason: WaitReason, since: number, title: string, detail: strin
 /** "developer-report-T3.md" reads better as the report it is. */
 function fileLabel(file: string) {
   const name = path.basename(file);
+  if (name === "qa-plan.md") return "Plan de test QA";
+  if (name === "design-inventory.md") return "Inventaire design";
   if (name.startsWith("qa-")) return "Rapport QA";
   if (name.startsWith("design")) return "Rapport design";
   if (name.startsWith("developer-report-")) return `Rapport de ${name.slice("developer-report-".length, -".md".length)}`;

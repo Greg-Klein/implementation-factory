@@ -10,7 +10,10 @@ test("should keep the reports by source behind the criteria, and enlarge a scree
   await page.getByText("Rapports par source").click();
   const reports = page.locator("details", { hasText: "Rapports par source" });
   await expect(reports.getByRole("heading", { name: /Tests & vérifications/ })).toBeVisible();
-  await expect(reports.getByText("Aucune preuve écrite pour ce run.")).toHaveCount(1);
+  await expect(reports.getByRole("heading", { name: /Conformité au design/ })).toBeVisible();
+  // The demo writes all three sources, and the QA verdict reads in French, not as a raw token.
+  await expect(reports.getByText("Aucune preuve écrite pour ce run.")).toHaveCount(0);
+  await expect(reports.getByRole("heading", { name: /Tests & vérifications/ })).toContainText("Échec");
   await expect(reports.getByText("qa-evidence.json v2", { exact: false }).first()).toBeVisible();
 
   await reports.getByRole("button", { name: "Agrandir la capture assets/panneau-preferences.png" }).first().click();

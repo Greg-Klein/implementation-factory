@@ -358,6 +358,11 @@ export function watchedForArtifacts(taskRoot: string, candidate: string) {
   return candidate === artifactWatchRoot(taskRoot) || candidate === taskRoot || candidate.startsWith(taskRoot + path.sep);
 }
 
+/**
+ * `qa-plan.md` and `design-inventory.md` are deliberately absent: a reviewer
+ * writes them before it starts, so they are the output of no step and must
+ * not open the next one while the review is still running.
+ */
 export function phaseForArtifact(relativePath: string) {
   const name = path.basename(relativePath);
   if (name === "ticket-context.md") return 1;
@@ -369,6 +374,33 @@ export function phaseForArtifact(relativePath: string) {
   if (name === "mr-description.md") return 8;
   if (name === "mr-review-comment.md") return 9;
   return 0;
+}
+
+/**
+ * What each reviewer writes before it reads the authors' conclusions, and the
+ * report that must come after it.
+ */
+const REVIEW_PLANS = [
+  { plan: "qa-plan.md", report: "qa-report.md", planLabel: "Le plan de test QA", reportLabel: "le rapport QA" },
+  { plan: "design-inventory.md", report: "designer-review.md", planLabel: "L'inventaire design", reportLabel: "la revue de design" },
+];
+
+/**
+ * Whether each reviewer's plan was first seen before its report, from the
+ * arrival time of each document. A remark, never a verdict: it says the order
+ * cannot be shown, not that the review is wrong. Nothing is said while the
+ * report itself has not arrived, or when its arrival time is unknown.
+ */
+export function reviewPlanNotes(arrivals: Record<string, string> | undefined) {
+  const notes: string[] = [];
+  for (const { plan, report, planLabel, reportLabel } of REVIEW_PLANS) {
+    const reportAt = Date.parse(arrivals?.[report] ?? "");
+    if (Number.isNaN(reportAt)) continue;
+    const planAt = Date.parse(arrivals?.[plan] ?? "");
+    if (Number.isNaN(planAt)) notes.push(`${planLabel} (${plan}) n'est pas arrivé avant ${reportLabel} : rien ne montre qu'il a été écrit en premier.`);
+    else if (planAt > reportAt) notes.push(`${planLabel} (${plan}) est arrivé après ${reportLabel} : rien ne montre qu'il a été écrit en premier.`);
+  }
+  return notes;
 }
 
 function identifierList(value: unknown) {
@@ -433,7 +465,7 @@ const ROLES: Record<string, string> = {
   "ticket-planner": "Planif",
   "senior-reviewer": "Revue",
   "qa-reviewer": "QA",
-  "designer-reviewer-figma": "Design",
+  "designer-reviewer": "Design",
   "review-orchestrator": "Orchestration",
   Explore: "Exploration",
 };

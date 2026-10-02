@@ -31,7 +31,7 @@ function report(file: string, value: Record<string, unknown>, version = 1): { ve
   const parsed = parseEvidenceReport(value, { file, version, receivedAt: `2026-09-27T09:${String(versionCounter).padStart(2, "0")}:00.000Z`, hash: `h${versionCounter}` }, (source) => `evidence/${file}/v${version}/${source}`);
   if (!("records" in parsed)) throw new Error(`report expected: ${JSON.stringify(parsed.diagnostics)}`);
   const ok = parsed as ParsedReport;
-  return { version: { file, version, receivedAt: NOW, hash: `h${versionCounter}`, source: ok.source, items: ok.records.length, current: true }, records: ok.records };
+  return { version: { file, version, receivedAt: NOW, hash: `h${versionCounter}`, source: ok.source, items: ok.records.length, current: true, ...(ok.round ? { round: ok.round } : {}), ...(ok.status ? { status: ok.status } : {}), ...(ok.mandate ? { mandate: ok.mandate } : {}) }, records: ok.records };
 }
 
 function qa(items: Record<string, unknown>[], extra: Record<string, unknown> = {}) {
@@ -422,6 +422,178 @@ describe("acceptance coverage", () => {
     const view = deriveAcceptanceCoverage({ plan: parsePlanLinks({ acceptance_criteria: ["Given a, then b"], tasks: [] }), reports: [], now: NOW });
     expect(view.available).toBe(false);
     expect(view.criteria[0]).toMatchObject({ id: "AC1", reconstructed: true, status: "unverified" });
+  });
+});
+
+describe("break attempts", () => {
+  const attempt = (id: string, verdict: string, extra: Record<string, unknown> = {}) => ({ id, kind: "attempt", label: `Tentative ${id}`, verdict, criterionIds: ["AC1"], checkIds: ["AC1-C1"], ...extra });
+
+  it("should not verify a criterion whose only linked item is a passing attempt", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([attempt("A1", "pass")]))] });
+    const target = criterion(view, "AC1");
+    expect(target.status).toBe("unverified");
+    expect(target.checks[0].evidence).toEqual([]);
+    expect(target.attempts.map((entry) => [entry.id, entry.kind])).toEqual([["A1", "attempt"]]);
+    expect(target.reasons).toContain("Une tentative de mise en échec qui ne trouve rien ne vérifie pas le critère.");
+    expect(view.general).toEqual([]);
+  });
+
+  it("should count a failing attempt against its criterion like any failure", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }, attempt("A1", "fail", { actual: "valeur perdue" })]))] });
+    const target = criterion(view, "AC1");
+    expect(target.status).toBe("failed");
+    expect(target.checks[0].evidence.map((entry) => entry.id)).toEqual(["Q1", "A1"]);
+    expect(target.attempts).toEqual([]);
+  });
+
+  it("should list an attempt that was only read, or blocked, without blocking the check", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([attempt("A1", "unverified", { blocker: "Environnement inaccessible" })]))] });
+    expect(criterion(view, "AC1").status).toBe("unverified");
+    expect(criterion(view, "AC1").attempts).toHaveLength(1);
+  });
+
+  it("should leave a real verification standing next to an attempt that found nothing", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }, attempt("A1", "pass")]))] });
+    expect(criterion(view, "AC1").status).toBe("verified");
+    expect(criterion(view, "AC1").reasons).toEqual([]);
+  });
+
+  it("should not show a passing attempt on a multi-check criterion as uncounted evidence", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([attempt("A1", "pass", { criterionIds: ["AC2"], checkIds: undefined })]))] });
+    expect(criterion(view, "AC2").unassigned).toEqual([]);
+    expect(criterion(view, "AC2").attempts.map((entry) => entry.id)).toEqual(["A1"]);
+  });
+
+  it("should let a later observation of the check replace a failed attempt it names", () => {
+    const view = coverage({ reports: [
+      report("qa-evidence.json", qa([attempt("A1", "fail")], { round: 1 }), 1),
+      report("qa-evidence.json", qa([{ id: "Q2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], supersedes: ["A1"] }], { round: 2 }), 2),
+    ] });
+    const check = criterion(view, "AC1").checks[0];
+    expect(check.status).toBe("verified");
+    expect(check.history.map((entry) => entry.id)).toEqual(["A1"]);
+  });
+
+  it("should let a later attempt replace a failed one without verifying the criterion", () => {
+    const view = coverage({ reports: [
+      report("qa-evidence.json", qa([attempt("A1", "fail")], { round: 1 }), 1),
+      report("qa-evidence.json", qa([attempt("A2", "pass", { supersedes: ["A1"] })], { round: 2 }), 2),
+    ] });
+    expect(criterion(view, "AC1").status).toBe("unverified");
+    expect(criterion(view, "AC1").checks[0].history.map((entry) => entry.id)).toEqual(["A1"]);
+  });
+
+  it("should treat an item with another kind, or none, exactly as before", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", kind: "observation", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }]))] });
+    expect(criterion(view, "AC1").status).toBe("verified");
+    expect(criterion(view, "AC1").checks[0].evidence[0].kind).toBeUndefined();
+  });
+
+  it("should warn about an attempt that cites no criterion", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "A1", kind: "attempt", label: "Double clic", verdict: "pass" }]))] });
+    expect(view.diagnostics.some((entry) => entry.level === "warning" && entry.message.includes("Double clic"))).toBe(true);
+    expect(view.counts.verified).toBe(0);
+  });
+});
+
+describe("QA verdict consistency", () => {
+  const observedAll = [
+    { id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] },
+    { id: "Q2", label: "Zoom", verdict: "measured", checkIds: ["AC2-C1"] },
+    { id: "Q3", label: "Erreur", verdict: "fail", criterionIds: ["AC3"] },
+  ];
+
+  it("should accept an approval backed by a fresh QA observation of every criterion", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll, { status: "PASS_WITH_WARNINGS", round: 2 }))] });
+    expect(view.qa).toEqual({ status: "PASS_WITH_WARNINGS", file: "qa-evidence.json", round: 2, consistent: true, unobserved: [] });
+  });
+
+  it("should flag an approval while a criterion has no fresh QA observation", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll.slice(0, 1), { status: "pass" }))] });
+    expect(view.qa).toMatchObject({ status: "PASS", consistent: false, unobserved: ["AC2", "AC3"] });
+    expect(view.qa?.warning).toBe("QA annonce PASS alors que AC2 et AC3 n'ont aucune observation QA sur le code actuel.");
+    expect(renderAcceptanceSummary(view).markdown).toContain("Verdict QA à confirmer : QA annonce PASS");
+    expect(renderAcceptanceSummary(view).json.qaWarning).toBe(view.qa?.warning);
+  });
+
+  it("should not count an attempt, a confirmation, a code reading or another source as a QA observation", () => {
+    const view = coverage({ reports: [
+      report("dev-evidence.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT, atEnd: CURRENT }, items: [{ id: "T1-E1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] }, { id: "T1-E2", label: "Erreur", verdict: "measured", criterionIds: ["AC3"] }] }),
+      report("qa-evidence.json", qa([
+        { id: "Q1", label: "Filtre", verdict: "confirmed", checkIds: ["AC1-C1"], confirms: "T1-E1" },
+        { id: "Q2", kind: "attempt", label: "Zoom", verdict: "pass", criterionIds: ["AC2"], checkIds: ["AC2-C1"] },
+        { id: "Q3", label: "Erreur lue dans le code", verdict: "unverified", criterionIds: ["AC3"] },
+      ], { status: "PASS" })),
+    ] });
+    expect(view.qa?.unobserved).toEqual(["AC1", "AC2", "AC3"]);
+  });
+
+  it("should not count an observation taken on older code", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll, { status: "PASS", codeSnapshot: { atStart: OLD, atEnd: OLD } }))] });
+    expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC1", "AC2", "AC3"] });
+  });
+
+  it("should never flag a verdict that approves nothing", () => {
+    for (const status of ["INCONCLUSIVE", "FAIL"]) {
+      const view = coverage({ reports: [report("qa-evidence.json", qa([], { status }))] });
+      expect(view.qa).toEqual({ status, file: "qa-evidence.json", consistent: true, unobserved: [] });
+    }
+  });
+
+  it("should say nothing about QA when no report declares a status, or without a registry", () => {
+    expect(coverage({ reports: [report("qa-evidence.json", qa(observedAll))] }).qa).toBeUndefined();
+    expect(deriveAcceptanceCoverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS" }))], now: NOW }).qa).toBeUndefined();
+  });
+
+  it("should read the latest version of the live report, never a round copy", () => {
+    const view = coverage({ reports: [
+      report("qa-evidence.json", qa([], { status: "PASS", round: 1 }), 1),
+      report("qa-evidence-round1.json", qa([], { status: "PASS", round: 1 }), 1),
+      report("qa-evidence.json", qa(observedAll, { status: "FAIL", round: 2 }), 2),
+    ] });
+    expect(view.qa).toMatchObject({ status: "FAIL", round: 2, consistent: true });
+  });
+
+  describe("focused pass", () => {
+    it("should only hold the criteria of the mandate against the verdict", () => {
+      const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll.slice(0, 1), { status: "PASS", mandate: ["AC1"] }))] });
+      expect(view.qa).toMatchObject({ consistent: true, unobserved: [], mandate: ["AC1"] });
+    });
+
+    it("should flag a criterion of the mandate left unobserved", () => {
+      const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll.slice(0, 1), { status: "PASS", mandate: ["AC1", "AC3"] }))] });
+      expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC3"] });
+    });
+
+    it("should accept a single id, and ignore ids the registry does not know or that are not strings", () => {
+      expect(coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate: "AC2" }))] }).qa).toMatchObject({ mandate: ["AC2"], unobserved: ["AC2"] });
+      expect(coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate: ["AC9", 4, null, " AC3 "] }))] }).qa).toMatchObject({ mandate: ["AC3"], unobserved: ["AC3"] });
+    });
+
+    it("should check every criterion when the mandate is absent or not a list", () => {
+      for (const mandate of [undefined, null, { criteria: ["AC1"] }, 3]) {
+        const view = coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", ...(mandate === undefined ? {} : { mandate }) }))] });
+        expect(view.qa?.mandate).toBeUndefined();
+        expect(view.qa?.unobserved).toEqual(["AC1", "AC2", "AC3"]);
+      }
+    });
+
+    it("should hold nothing against a pass whose mandate names no criterion", () => {
+      expect(coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate: [] }))] }).qa).toMatchObject({ mandate: [], consistent: true });
+    });
+  });
+
+  it("should count what the pilot executed itself at tier 0, and not its general gates", () => {
+    const pilot = (items: Record<string, unknown>[]) => qa(items, { status: "PASS", producer: { role: "pilot" } });
+    const gate = { id: "GATE-1", label: "Lint", verdict: "pass", command: "npm run lint" };
+    const observed = coverage({ reports: [report("qa-evidence.json", pilot([gate,
+      { id: "PILOT-1", label: "Filtre", verdict: "pass", criterionIds: ["AC1"], method: "test" },
+      { id: "PILOT-2", label: "Zoom", verdict: "pass", criterionIds: ["AC2"], checkIds: ["AC2-C1", "AC2-C2"], method: "test" },
+      { id: "PILOT-3", label: "Erreur", verdict: "pass", criterionIds: ["AC3"], method: "test" },
+    ]))] });
+    expect(observed.qa).toMatchObject({ consistent: true, unobserved: [] });
+    const gatesOnly = coverage({ reports: [report("qa-evidence.json", pilot([gate, { id: "PILOT-1", label: "Filtre", verdict: "not_run", criterionIds: ["AC1"] }]))] });
+    expect(gatesOnly.qa?.unobserved).toEqual(["AC1", "AC2", "AC3"]);
   });
 });
 

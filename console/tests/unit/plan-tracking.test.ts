@@ -76,7 +76,7 @@ describe("agent names and roles", () => {
     expect(agentRole("ticket-planner")).toBe("Planif");
     expect(agentRole("implementation-harness:senior-reviewer")).toBe("Revue");
     expect(agentRole("qa-reviewer")).toBe("QA");
-    expect(agentRole("designer-reviewer-figma")).toBe("Design");
+    expect(agentRole("implementation-harness:designer-reviewer")).toBe("Design");
     expect(agentRole("review-orchestrator")).toBe("Orchestration");
     expect(agentRole("Explore")).toBe("Exploration");
   });

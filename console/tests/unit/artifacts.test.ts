@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, watchedForArtifacts } from "../../server/domain";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, reviewPlanNotes, watchedForArtifacts } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -72,5 +72,34 @@ describe("artifact handling", () => {
     expect(phaseForArtifact("senior-review.md")).toBe(6);
     expect(phaseForArtifact("mr-description.md")).toBe(8);
     expect(phaseForArtifact("unknown.txt")).toBe(0);
+  });
+});
+
+describe("reviewer plans", () => {
+  it("should not let a reviewer's plan open or close a phase", () => {
+    expect(phaseForArtifact("qa-plan.md")).toBe(0);
+    expect(phaseForArtifact("design-inventory.md")).toBe(0);
+    expect(phaseForArtifact("qa-report.md")).toBe(6);
+    expect(phaseForArtifact("designer-review.md")).toBe(6);
+  });
+
+  it("should say nothing when each plan arrived before its report, or while no report exists", () => {
+    expect(reviewPlanNotes(undefined)).toEqual([]);
+    expect(reviewPlanNotes({ "qa-plan.md": "2026-09-27T09:00:00.000Z" })).toEqual([]);
+    expect(reviewPlanNotes({
+      "qa-plan.md": "2026-09-27T09:00:00.000Z", "qa-report.md": "2026-09-27T09:10:00.000Z",
+      "design-inventory.md": "2026-09-27T09:01:00.000Z", "designer-review.md": "2026-09-27T09:12:00.000Z",
+    })).toEqual([]);
+  });
+
+  it("should note a plan that arrived after its report, or never", () => {
+    const late = reviewPlanNotes({ "qa-plan.md": "2026-09-27T09:11:00.000Z", "qa-report.md": "2026-09-27T09:10:00.000Z" });
+    expect(late).toEqual(["Le plan de test QA (qa-plan.md) est arrivé après le rapport QA : rien ne montre qu'il a été écrit en premier."]);
+    const missing = reviewPlanNotes({ "designer-review.md": "2026-09-27T09:12:00.000Z" });
+    expect(missing).toEqual(["L'inventaire design (design-inventory.md) n'est pas arrivé avant la revue de design : rien ne montre qu'il a été écrit en premier."]);
+  });
+
+  it("should not judge an order from an arrival time it cannot read", () => {
+    expect(reviewPlanNotes({ "qa-plan.md": "2026-09-27T09:11:00.000Z", "qa-report.md": "not a date" })).toEqual([]);
   });
 });

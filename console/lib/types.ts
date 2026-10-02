@@ -28,6 +28,8 @@ export type RunState = {
   planTasks?: PlanTask[];
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
+  /** Non blocking remarks on how the reviewers worked, computed by the server (reviewPlanNotes). */
+  reviewNotes?: string[];
   /** Acceptance coverage in figures; the full view comes from /api/runs/<id>/acceptance. */
   acceptance?: AcceptanceDigest;
   /** Who can move the run forward, as the health monitor sees it. See server/run-health.ts. */
@@ -81,21 +83,23 @@ export type RepositoryResponse = {
 };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
-export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string };
+export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string; kind?: string };
 export type EvidenceReport = { source: "qa" | "design" | "developer"; status?: string; items: EvidenceItem[] };
 export type PendingImprovementsResponse = { items: PendingSelfImprovementReview[]; error?: string };
 
 /** Mirrors the acceptance types of server/types.ts, computed by server/acceptance.ts. */
 export type AcceptanceStatus = "verified" | "unverified" | "blocked" | "failed";
 export type AcceptanceCounts = { total: number; verified: number; failed: number; blocked: number; unverified: number; stale: number };
-export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number };
+export type AcceptanceQaView = { status: string; file: string; round?: number; mandate?: string[]; consistent: boolean; unobserved: string[]; warning?: string };
+export type AcceptanceQaDigest = { status: string; consistent: boolean; unobserved: number };
+export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number; qa?: AcceptanceQaDigest };
 export type EvidenceSource = "qa" | "design" | "developer";
 export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
 export type EvidenceBasis = "observed" | "reported" | "confirmation";
 export type EvidenceFreshness = "current" | "stale" | "unknown" | "inconclusive";
 export type EvidenceAttachmentView = { source: string; path?: string; archived: boolean };
 export type EvidenceView = {
-  key: string; id?: string; label: string; verdict: string; source: EvidenceSource; file: string; version: number; receivedAt: string;
+  key: string; id?: string; label: string; verdict: string; kind?: "attempt"; source: EvidenceSource; file: string; version: number; receivedAt: string;
   round?: number; producer?: { role?: string; agentId?: string }; observedAt?: string; method?: EvidenceMethod; basis: EvidenceBasis;
   expected?: string; actual?: string; command?: string; note?: string;
   criterionIds: string[]; checkIds: string[]; taskIds: string[];
@@ -106,13 +110,13 @@ export type EvidenceView = {
 export type AcceptanceCheckView = { id: string; description: string; method?: EvidenceMethod; status: AcceptanceStatus; reasons: string[]; evidence: EvidenceView[]; history: EvidenceView[] };
 export type AcceptanceCriterionView = {
   id: string; text: string; status: AcceptanceStatus; source?: { kind: string; reference?: string; excerpt?: string }; expected?: string;
-  tasks: { id: string; title: string }[]; checks: AcceptanceCheckView[]; unassigned: EvidenceView[]; reasons: string[]; reconstructed?: boolean;
+  tasks: { id: string; title: string }[]; checks: AcceptanceCheckView[]; unassigned: EvidenceView[]; attempts: EvidenceView[]; reasons: string[]; reconstructed?: boolean;
 };
 export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
-export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean };
+export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean; status?: string; mandate?: string[] };
 export type AcceptanceView = {
   available: boolean; registryRevision?: number; updatedAt: string; counts: AcceptanceCounts; sentence: string; currentSnapshot?: { id: string; capturedAt: string };
-  criteria: AcceptanceCriterionView[]; general: EvidenceView[]; generalHistory: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[];
+  criteria: AcceptanceCriterionView[]; general: EvidenceView[]; generalHistory: EvidenceView[]; diagnostics: AcceptanceDiagnostic[]; reports: AcceptanceReportVersion[]; qa?: AcceptanceQaView;
 };
 
 /** Mirrors the run health types of server/types.ts. */

@@ -20,7 +20,7 @@ READY | BLOCKED
 | Dimension | Exécuté | Verdict final | P0 | P1 | P2 |
 |---|---|---|---|---|---|
 | Senior | oui | PASS_WITH_CHANGES | 0 | 0 | 2 |
-| Designer | oui / ignoré et pourquoi | ... | ... | ... | ... |
+| Designer | oui / hors déclencheur / ignoré et pourquoi | ... | ... | ... | ... |
 | QA | oui | PASS_WITH_WARNINGS | 0 | 0 | 1 |
 
 ## Corrigé pendant la boucle
@@ -37,7 +37,7 @@ READY | BLOCKED
 
 ## Design non vérifié
 
-- design non vérifié : verdict INCONCLUSIVE ou revue non lancée, la raison, les viewports et états non atteints. « Rien » quand la revue design a conclu.
+- design non vérifié : verdict INCONCLUSIVE ou revue non lancée, la raison, les viewports et états non atteints. « Rien » quand la revue design a conclu, ou quand elle était hors déclencheur.
 
 ## Encore ouvert (BLOCKED uniquement)
 
@@ -48,7 +48,7 @@ READY | BLOCKED
 
 - Tests : exécutés / partiellement exécutés / non exécutés
 - App en direct : inspectée via Playwright / inaccessible et pourquoi
-- Référence design : figma / ticket-mockup / live-neighbours / revue non lancée
+- Référence design : figma / ticket-mockup / live-neighbours / hors déclencheur / revue non lancée, app inaccessible
 - Critères observables, une ligne chacun : measured live / confirmed from the developer's evidence (avec le chemin de la capture) / unverified (avec ce qui manquait)
 - Tout ce qui n'a pas pu être vérifié
 ```

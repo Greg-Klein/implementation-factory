@@ -45,7 +45,7 @@ The fields that make it traceable, and that the console relies on:
 
 - Markdown, following the format below, with every heading present
 - Write the report and the evidence after each block of work (criteria observations, break attempts, gates), atomically each time, so a stop leaves a usable result. Until the last block the verdict is `INCONCLUSIVE` and rows not reached yet say so. An item already published keeps its id and content
-- Additional writes are limited to round-qualified captures under `.claude/tasks/assets/` and to the disposable worktree. Record exact setup and cleanup in the report; never edit product code or committed tests in the delivered checkout. The `.tmp` evidence file is renamed into its final path.
+- Additional writes are limited to round-qualified captures under `.claude/tasks/assets/` and to the disposable worktree when the caller provides one. Record exact setup and cleanup in the report; never edit product code or committed tests in the delivered checkout. The `.tmp` evidence file is renamed into its final path.
 - Read and apply [the evidence contract](evidence.md). Every claim carries its evidence: the exact command, its exact result, and a `path/file.ext:line` anchor for anything read from the code
 
 ## Output Format
@@ -131,12 +131,12 @@ An observation made only against a stub the developer wrote is `measured` only w
 
 ## Disposable worktree
 
-The caller gives you the path of a throwaway git worktree, the base ref and `git diff --stat <base>...HEAD`. The worktree holds the last commit: copy over the files `git status --porcelain` lists in the delivered checkout before using it, and install dependencies there with the documented command when a check needs them. Nothing run there is evidence on the delivered code; criteria and gates are observed in the delivered checkout.
+The caller always gives you the base ref and `git diff --stat <base>...HEAD`. It adds the path of a throwaway git worktree only when the diff adds or modifies test files. The worktree holds the last commit: copy over the files `git status --porcelain` lists in the delivered checkout before using it, and install dependencies there with the documented command when a check needs them. Nothing run there is evidence on the delivered code; criteria and gates are observed in the delivered checkout.
 
 - **Discrimination probe.** Revert the fix or reinject the original defect in the worktree and run the new or changed tests. A test that stays green is a P1 `test non discriminant` under `Problèmes`; it is not a break attempt row.
 - **Base comparison.** Check out the base ref there, detached, and rerun a failing command. Only that shows a failure is pre-existing.
 
-Without a worktree, both are `non testé` with that obstacle. Never switch, reset or edit the delivered checkout instead.
+Without a worktree the probe is not applicable: it is no obstacle, no missing scenario and no warning. The base comparison is unavailable, so a failing check counts against the diff under the FAIL rule. Never switch, reset or edit the delivered checkout instead.
 
 ## Focused pass
 

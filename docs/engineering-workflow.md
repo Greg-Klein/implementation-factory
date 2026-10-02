@@ -49,7 +49,7 @@ Le champ natif `skills:` précharge le corps de la skill. Le mettre sur toutes l
 | Concurrence, annulation et ressources | Analyse ciblée des transitions et propriétaires ; orchestration séparée des ressources partagées entre agents. |
 | Performance, migrations et retour arrière | Analyse proportionnée au risque et aux consommateurs réels, sans audit systématique. |
 | Accessibilité et contrats de sélecteurs | Developer et QA, qui teste le parcours clavier, le focus et le nom accessible quand le changement les touche. Le designer mesure contraste, parcours clavier, focus visible, rôle et nom, taille de cible sur la surface modifiée. |
-| Fidélité à la référence design (`figma`, `ticket-mockup` ou `live-neighbours`) et responsive | Designer via `figma-review`, dès que le changement est visible et l'app joignable, avec observation du frame et correction limitée au ticket. |
+| Fidélité à la référence design (`figma`, `ticket-mockup` ou `live-neighbours`) et responsive | Designer via `figma-review`, quand le pilote déclenche la revue design et que l'app est joignable, avec observation du frame et correction limitée au ticket. |
 | Documentation et décisions | `document-change` dans le périmètre d'écriture autorisé. |
 | Résultats reproductibles | `collect-evidence` ; interprétation séparée par chaque rôle. |
 | Fraîcheur et traçabilité | Contrat de preuves, snapshots, identifiants immuables et supersession. |
@@ -75,10 +75,12 @@ Le pilote choisit le niveau d'après la taille du diff (étape 7 de `commands/im
 | Niveau | Déroulé | Modèle des reviewers |
 | --- | --- | --- |
 | 0 | Un passage de `senior-reviewer`, sans orchestrateur ni boucle de reprise. Le pilote lance lui-même les contrôles généraux. | Sonnet, par surcharge à l'appel. |
-| 1 | `senior-reviewer`, puis `designer-reviewer` si le changement est visible dans l'interface et l'application joignable, puis `qa-reviewer`, une fois chacun. Le pilote enchaîne les agents et fait pour eux ce que l'orchestrateur fait au niveau 2. | Sonnet, par surcharge à l'appel. |
-| 2 | `review-orchestrator` conduit la boucle complète. | Opus, le modèle par défaut de `senior-reviewer`, `designer-reviewer` et `qa-reviewer`. L'orchestrateur ne passe aucune surcharge. |
+| 1 | `senior-reviewer`, puis `designer-reviewer` si le pilote a déclenché la revue design et que l'application est joignable, puis `qa-reviewer`, une fois chacun. Le pilote enchaîne les agents et fait pour eux ce que l'orchestrateur fait au niveau 2. | Sonnet, par surcharge à l'appel. |
+| 2 | `review-orchestrator` conduit la boucle complète. | Opus, le modèle par défaut de `senior-reviewer` et `qa-reviewer`. L'orchestrateur ne passe aucune surcharge. |
 
-L'appelant du designer prend l'identifiant de snapshot du code avant et après la revue, puis publie `design-evidence.json`. L'appelant de QA crée le worktree jetable et le supprime au retour de QA. Au niveau 2 l'appelant est l'orchestrateur, aux niveaux 0 et 1 le pilote. La création et la suppression de ce worktree sont les seules opérations git de l'orchestrateur.
+`designer-reviewer` tourne sur Sonnet, son modèle par défaut, à tous les niveaux : son travail est surtout de la mesure.
+
+L'appelant du designer prend l'identifiant de snapshot du code avant et après la revue, puis publie `design-evidence.json`. Quand le diff ajoute ou modifie des fichiers de test, l'appelant de QA crée le worktree jetable et le supprime au retour de QA. Au niveau 2 l'appelant est l'orchestrateur, aux niveaux 0 et 1 le pilote. La création et la suppression de ce worktree sont les seules opérations git de l'orchestrateur.
 
 ## Méthode QA
 
@@ -93,13 +95,15 @@ Le contrat est `contracts/qa.md`, la méthode `skills/review-change/references/b
 - La section `## Rapprochement` dit ce que le plan, les rapports du développeur et du senior et les hypothèses transmises ont ajouté ou changé par rapport à `qa-plan.md`.
 - Une passe ciblée reçoit un mandat : des identifiants de critères, ou le comportement qu'une correction a changé. Le plan, les tables, le minimum de tentatives et le verdict ne couvrent que ce mandat. Les autres critères sont listés HORS MANDAT et `qa-evidence.json` cite le mandat dans un tableau `"mandate"` à sa racine.
 
-QA reçoit de son appelant un worktree git jetable, la référence de base et `git diff --stat <base>...HEAD`. Il y annule le correctif ou y réinjecte le défaut pour vérifier que les tests nouveaux ou modifiés passent au rouge : un test resté vert ne discrimine rien et devient un P1. Il y rejoue aussi une commande en échec sur la base, seule façon de montrer qu'un échec est préexistant. Les preuves sur le code livré restent prises dans le checkout principal. Sans worktree, ces deux contrôles sont notés non testés avec cet obstacle.
+QA reçoit toujours de son appelant la référence de base et `git diff --stat <base>...HEAD`. Il reçoit aussi un worktree git jetable quand le diff ajoute ou modifie des fichiers de test, c'est-à-dire des fichiers que le lanceur de tests du dépôt collecte. Il y annule le correctif ou y réinjecte le défaut pour vérifier que les tests nouveaux ou modifiés passent au rouge : un test resté vert ne discrimine rien et devient un P1. Il y rejoue aussi une commande en échec sur la base, seule façon de montrer qu'un échec est préexistant. Les preuves sur le code livré restent prises dans le checkout principal. Sans worktree, la sonde est non applicable : ce n'est ni un obstacle, ni un scénario manquant, ni un avertissement. La comparaison avec la base est alors indisponible, et un contrôle en échec compte contre le diff.
 
 Les verdicts QA sont `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` et `FAIL`. Le verdict est `INCONCLUSIVE` quand un critère est UNVERIFIED, ou quand un critère est MET sans tentative de mise en échec exécutée et sans obstacle nommé.
 
 ## Méthode design
 
-Le contrat est `contracts/design.md`, la méthode `skills/figma-review/`. Malgré son nom, cette skill s'applique avec ou sans Figma. `designer-reviewer` intervient dès que le changement est visible dans l'interface et que l'application est joignable. Il ne lit pas le code du produit.
+Le contrat est `contracts/design.md`, la méthode `skills/figma-review/`. Malgré son nom, cette skill s'applique avec ou sans Figma. Il ne lit pas le code du produit.
+
+Le pilote décide de la revue design en dimensionnant la revue, d'après le diff, et annonce sa décision avec sa raison en une ligne. Avec des frames Figma, la revue a lieu dès que le changement est visible dans l'interface. Sans Figma (niveaux `ticket-mockup` et `live-neighbours`), elle a lieu seulement quand le diff modifie un composant d'interface partagé ou crée un écran ou une route. Un composant partagé est un fichier d'interface importé par plus d'un écran ou d'une route, ou rangé dans les répertoires d'interface partagée ou de design system du dépôt. Une revue hors déclencheur n'est pas une revue ratée : elle ne donne pas de ligne « design non vérifié ».
 
 | Niveau de référence | Source | Sévérité |
 | --- | --- | --- |
@@ -121,7 +125,7 @@ Le designer utilise le niveau le plus haut que le brief permet et le déclare en
 
 Le rapport contient une matrice de couverture, avec une ligne par écran, viewport et état ou cas de contenu requis. Une cellule est mesurée seulement si le designer l'a atteinte dans l'application, a lu ses valeurs et a gardé la paire de captures. Le verdict est `INCONCLUSIVE` quand un viewport requis ou un état explicitement requis n'est pas atteint, quand la couverture mesurée est sous 80 %, ou quand aucun niveau de référence n'a pu être établi.
 
-Un verdict design `INCONCLUSIVE`, ou une revue non lancée parce que l'application était injoignable, ne bloque pas READY. La synthèse de revue l'écrit sous `## Design non vérifié` avec la raison. Le pilote reporte la mention « design non vérifié » dans la description de la merge request, le commentaire de review et le rapport final.
+Un verdict design `INCONCLUSIVE`, ou une revue déclenchée mais non lancée parce que l'application était injoignable, ne bloque pas READY. La synthèse de revue l'écrit sous `## Design non vérifié` avec la raison. Le pilote reporte la mention « design non vérifié » dans la description de la merge request, le commentaire de review et le rapport final.
 
 ## Handoff et stabilité
 

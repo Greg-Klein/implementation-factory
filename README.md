@@ -17,19 +17,19 @@ Le plugin compte six agents :
 | `ticket-planner` | transforme le ticket et le code actuel en plan de tâches, avec hypothèses, dépendances, risques et étapes de vérification |
 | `developer` | implémente une tâche et vérifie son propre travail |
 | `senior-reviewer` | revue de code indépendante, puis corrections justifiées dans le périmètre autorisé |
-| `designer-reviewer` | revue de tout changement visible dans l’interface, avec ou sans Figma, sans lire le code du produit |
+| `designer-reviewer` | revue design d’un changement visible dans l’interface, avec ou sans Figma, sans lire le code du produit |
 | `qa-reviewer` | validation indépendante du comportement final, sans modifier le code livré |
 | `review-orchestrator` | enchaîne les revues, route les corrections et écrit la synthèse de revue |
 
 Le pilote choisit un niveau de revue d’après la taille du diff :
 
 - niveau 0 : un seul passage de `senior-reviewer`, sans orchestrateur ni boucle de reprise, pendant que le pilote lance lui-même les contrôles généraux (lint, typecheck, tests);
-- niveau 1 : `senior-reviewer`, puis `designer-reviewer` si le changement est visible dans l’interface et l’application joignable, puis `qa-reviewer`, une fois chacun;
-- niveau 2 : `review-orchestrator` conduit la boucle complète, et les trois reviewers gardent leur modèle par défaut, Opus. Aux niveaux 0 et 1, le pilote les appelle avec Sonnet.
+- niveau 1 : `senior-reviewer`, puis `designer-reviewer` si le pilote a déclenché la revue design et que l’application est joignable, puis `qa-reviewer`, une fois chacun;
+- niveau 2 : `review-orchestrator` conduit la boucle complète. `senior-reviewer` et `qa-reviewer` y gardent leur modèle par défaut, Opus. Aux niveaux 0 et 1, le pilote les appelle avec Sonnet. `designer-reviewer` tourne sur Sonnet à tous les niveaux.
 
 La QA écrit son plan de test dans `qa-plan.md` avant d’ouvrir les rapports de l’auteur, puis tente de mettre chaque critère en échec. Elle ne déclare un critère tenu que sur une observation qu’elle a exécutée elle-même. Quand un critère reste sans observation, le verdict est `INCONCLUSIVE` et la merge request part en draft, avec ces critères nommés.
 
-La revue design fonctionne sans Figma. Elle juge le changement contre la meilleure référence disponible : les frames Figma (`figma`), les maquettes jointes au ticket (`ticket-mockup`) ou les écrans déjà livrés de l’application (`live-neighbours`). Elle écrit son inventaire dans `design-inventory.md` avant de lire les mesures du développeur. Un verdict design `INCONCLUSIVE` ne bloque pas la livraison. La merge request, le commentaire de review et le rapport final le signalent par la mention « design non vérifié », avec la raison.
+La revue design fonctionne sans Figma. Avec des frames Figma, elle a lieu dès que le changement est visible dans l’interface. Sans Figma, le pilote ne la déclenche que si le diff modifie un composant d’interface partagé ou crée un écran ou une route. Elle juge le changement contre la meilleure référence disponible : les frames Figma (`figma`), les maquettes jointes au ticket (`ticket-mockup`) ou les écrans déjà livrés de l’application (`live-neighbours`). Elle écrit son inventaire dans `design-inventory.md` avant de lire les mesures du développeur. Un verdict design `INCONCLUSIVE` ne bloque pas la livraison. La merge request, le commentaire de review et le rapport final le signalent par la mention « design non vérifié », avec la raison.
 
 Voir [Agents, skills et revue indépendante](docs/engineering-workflow.md) pour les capacités, les déclencheurs, la transmission du contexte, les méthodes de revue et les vérifications.
 

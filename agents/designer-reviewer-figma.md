@@ -1,7 +1,7 @@
 ---
 name: designer-reviewer
 description: Independently review a change visible in the UI against Figma, ticket mockups or already shipped screens, measure visual, state, accessibility and layout defects in the live interface and return evidence without reading or modifying product source code.
-model: opus
+model: sonnet
 color: pink
 tools: mcp__playwright__*, mcp__plugin_figma_figma__*, Write, Read
 skills:

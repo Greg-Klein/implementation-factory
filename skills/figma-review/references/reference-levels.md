@@ -1,6 +1,6 @@
 # Reference levels
 
-A finding without a reference is taste. Use the highest level the brief supports, name it at the top of the report and build the inventory from it. Levels combine downwards: a property the higher level leaves open is judged at the next one, and the row says which.
+A finding without a reference is taste. Use the highest level the brief supports, name it at the top of the report and build the inventory from it. Levels combine downwards: a property the higher level leaves open is judged at the next one, and the row says which. Without Figma frames the caller starts this review only when the diff modifies a shared UI component or creates a screen or route.
 
 ## `figma`
 

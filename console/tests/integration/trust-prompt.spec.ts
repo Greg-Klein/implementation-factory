@@ -1,8 +1,9 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createGitCheckout, fakeClaudeInputDirectory } from "../fixtures";
-import { resetRun, startRun } from "./helpers";
+import { artifact, resetRun, runDirectory, startRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -12,7 +13,7 @@ test.beforeEach(async ({ page }) => resetRun(page));
  */
 const untrusted = (name: string) => createGitCheckout(path.join("untrusted", name));
 
-type State = { status: string; sessionActive: boolean; error?: string; sessionPrompt?: { directory: string }; incidents?: unknown[]; activities: { title: string }[] };
+type State = { status: string; sessionActive: boolean; cwd: string; repository?: string; error?: string; sessionPrompt?: { directory: string }; worktree?: { path: string; state: string; detail?: string }; incidents?: unknown[]; activities: { title: string }[] };
 
 async function state(request: APIRequestContext, runId: string) {
   return (await (await request.get(`/api/runs/${encodeURIComponent(runId)}`)).json() as { state: State }).state;
@@ -42,7 +43,10 @@ test("should show the folder trust dialog as a pending decision and continue the
   const conversation = page.getByRole("log", { name: "Conversation" });
   const decision = conversation.getByRole("region", { name: "Décision requise" });
   await expect(decision.getByText("Claude Code demande de faire confiance à ce dossier")).toBeVisible();
-  await expect(decision.getByText(checkout.directory, { exact: true })).toBeVisible();
+  // The directory Claude Code asks about is the one its session runs in: the worktree of the run, not the checkout.
+  const worktree = await runDirectory(request, runId);
+  expect(worktree).toBe(path.join(realpathSync(checkout.directory), ".claude", "worktrees", runId));
+  await expect(decision.getByText(worktree, { exact: true })).toBeVisible();
   // Signalled everywhere a question of the workflow is: the tab title, the badge, the row and the tab.
   await expect(page).toHaveTitle("● Claude attend une réponse · Implementation Harness");
   await expect(page.getByLabel("Progression du run").getByText("À toi de jouer", { exact: true })).toBeVisible();
@@ -53,7 +57,7 @@ test("should show the folder trust dialog as a pending decision and continue the
   await page.getByRole("tab", { name: "Conversation" }).click();
   // Nothing was typed for the user while the decision waited.
   expect(typed(runId)).toBe("");
-  expect((await state(request, runId)).sessionPrompt?.directory).toBe(checkout.directory);
+  expect((await state(request, runId)).sessionPrompt?.directory).toBe(worktree);
 
   await decision.getByRole("button", { name: "Faire confiance et continuer" }).click();
   await expect(decision).toHaveCount(0);
@@ -89,6 +93,53 @@ test("should end the run as stopped, with its reason, when the folder is refused
   await expect(page.getByText(/Le dossier n'a pas été approuvé/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Session interrompue" })).toHaveCount(0);
   await expect(page).toHaveTitle("○ Arrêté · Implementation Harness");
+  // The worktree created for the run is settled like that of any stopped run: kept, with its reason, and removable from the console.
+  await expect.poll(async () => (await state(request, runId)).worktree?.state).toBe("kept");
+  const settled = await state(request, runId);
+  expect(settled.worktree?.detail).toMatch(/^Worktree conservé : aucune merge request/);
+  expect(existsSync(settled.worktree!.path)).toBe(true);
+  await expect(page.getByRole("button", { name: "Supprimer le worktree" })).toBeVisible();
+});
+
+test("should ask to trust the worktree of the run, and continue the session in that worktree once trusted from the console", async ({ page, request }) => {
+  const checkout = untrusted("trust-worktree");
+  const repository = realpathSync(checkout.directory);
+  const git = (directory: string, ...args: string[]) => execFileSync("git", ["-C", directory, ...args], { encoding: "utf8" }).trim();
+  await page.goto("/");
+  const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
+  const worktree = path.join(repository, ".claude", "worktrees", runId);
+  await openRun(page);
+
+  // The session was started in the worktree, and the dialog it opens on is about that directory.
+  const sessionFile = path.join(fakeClaudeInputDirectory, `${runId}.session.json`);
+  await expect.poll(() => existsSync(sessionFile)).toBe(true);
+  expect(JSON.parse(readFileSync(sessionFile, "utf8"))).toMatchObject({ cwd: worktree, worktree, repository });
+  const decision = page.getByRole("log", { name: "Conversation" }).getByRole("region", { name: "Décision requise" });
+  await expect(decision.getByText(worktree, { exact: true })).toBeVisible();
+  const waiting = await state(request, runId);
+  expect(waiting).toMatchObject({ status: "attention", cwd: worktree, repository, sessionPrompt: { directory: worktree }, worktree: { path: worktree, state: "active" } });
+  // The worktree is there while the decision waits, and nothing was typed into it.
+  expect(git(repository, "worktree", "list")).toContain(worktree);
+  expect(typed(runId)).toBe("");
+
+  await decision.getByRole("button", { name: "Faire confiance et continuer" }).click();
+  await expect(decision).toHaveCount(0);
+  await expect.poll(() => typed(runId)).toBe("\u001b[B\r");
+  await expect.poll(async () => (await state(request, runId)).status).toBe("running");
+
+  // The same session goes on, in the same worktree: what it writes there is what the console reads.
+  const tasks = path.join(worktree, ".claude", "tasks");
+  mkdirSync(tasks, { recursive: true });
+  writeFileSync(path.join(tasks, "ticket-context.md.tmp"), "# Contexte\n\nÉcrit dans le worktree après la confiance.\n");
+  renameSync(path.join(tasks, "ticket-context.md.tmp"), path.join(tasks, "ticket-context.md"));
+  await expect.poll(async () => (await artifact(request, runId, "ticket-context.md")).status()).toBe(200);
+  const after = await state(request, runId);
+  expect(after).toMatchObject({ status: "running", sessionActive: true, cwd: worktree, worktree: { path: worktree, state: "active" } });
+  expect(after.sessionPrompt).toBeUndefined();
+  expect(after.activities.map((activity) => activity.title)).toEqual(expect.arrayContaining(["Worktree créé", "Confiance accordée au dossier"]));
+  // The user's checkout was never the session's directory, and nothing was written to it.
+  expect(existsSync(path.join(repository, ".claude", "tasks"))).toBe(false);
+  expect(git(repository, "status", "--porcelain")).toBe("");
 });
 
 test("should drop the decision by itself when the dialog is answered in the terminal", async ({ page, request }) => {

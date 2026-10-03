@@ -476,6 +476,7 @@
       <h3>One file between the watcher and the console</h3>
       <ul>
         <li>The watcher looks for tickets, for example by label, assignee and status, and writes everything that matches to <span class="mono">ticket-proposals.json</span>. It opens no Claude session and uses no tokens.</li>
+        <li>The file sits in the console's data directory, <span class="mono">console/data/ticket-proposals.json</span> by default, or wherever <span class="mono">IMPL_TICKET_PROPOSALS_FILE</span> points. The console reads it again every 5 seconds (<span class="mono">IMPL_PROPOSALS_POLL_MS</span>), so a change the watcher writes shows without a restart.</li>
         <li>The console reads the file and lists the tickets under « Proposés ». Nothing starts until you launch one. A ticket launched or dismissed is not proposed again while it stays in the file.</li>
         <li><span class="mono">ticket-source.ts</span> resolves a launched proposal to its checkout, as it does for a pasted URL, and the queue is the same. Without the file the console works as before.</li>
         <li>Not started: launching proposed tickets without the user.</li>

@@ -108,11 +108,18 @@ glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
 **A screenshot that backs a claim travels with the comment, not just in words.** `.claude/tasks/assets/` is only a path on this machine; nobody reading the merge request can open it, so a verification described in prose with no image reachable from there is unverifiable to that reader, whatever proof sat in the run's evidence. Before posting, upload every screenshot that backs a claim in the report (skip a debug capture nobody cites) to the project, one call per file:
 
 ```bash
+if [ "$(glab config get is_oauth2 --host <host>)" = "true" ]; then
+  AUTH="Authorization: Bearer $(glab config get token --host <host>)"
+else
+  AUTH="PRIVATE-TOKEN: $(glab config get token --host <host>)"
+fi
 curl -sS --request POST \
-  --header "PRIVATE-TOKEN: $(glab config get token --host <host>)" \
+  --header "$AUTH" \
   --form "file=@.claude/tasks/assets/<name>.png" \
   "https://<host>/api/v4/projects/<url-encoded-project-path>/uploads"
 ```
+
+The header depends on how `glab` is logged in. A token obtained through the OAuth login (`is_oauth2` is `true`) is refused as `PRIVATE-TOKEN` with `401 Unauthorized` and only passes as a bearer token; a personal access token passes as `PRIVATE-TOKEN`. Never print `$AUTH` nor the token.
 
 `<host>` is the GitLab host of the ticket URL, `gitlab.com` in the normal case. **This is the one call in the workflow that `glab api` cannot make.** `POST /uploads` only accepts `multipart/form-data`, while `--field` and `--raw-field` only ever build a JSON body: `glab api --method POST .../uploads --field "file=@<path>"` sends the bytes of the PNG as a JSON string and GitLab answers `400 Bad Request`, on every project and every file. Reaching for `glab mr note` instead does not help either, because the image has to exist on the project before any comment can link to it.
 

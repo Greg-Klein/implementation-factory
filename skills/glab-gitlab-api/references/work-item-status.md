@@ -16,7 +16,7 @@ query {
     workItems(iid: "<iid>") {
       nodes {
         id
-        widgets { ... on WorkItemWidgetStatus { status { name } } }
+        widgets { type ... on WorkItemWidgetStatus { status { name } } }
       }
     }
   }
@@ -25,6 +25,11 @@ query {
 
 One query gives both things you need: the current status name, and the global work item id
 (`gid://gitlab/WorkItem/<numeric id>`), which the mutation requires and which is **not** the iid.
+
+**No widget of type `STATUS` in the answer means the project has no status field** (it depends on the
+GitLab plan). Stop there: do not send the mutation, it can only fail. Say once in the final report
+that the status is not available on this project. Without `type` in the query the other widgets come
+back as empty objects, and a missing status cannot be told from a status that is not set.
 
 Then write it by name:
 

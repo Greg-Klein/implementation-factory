@@ -1,135 +1,135 @@
-# La couche moteur
+# The engine layer
 
-Le harnais pilote un agent de code. Ce dossier est la seule partie du serveur qui sait **lequel**.
+The harness drives a coding agent. This directory is the only part of the server that knows **which one**.
 
-Il y a une implémentation aujourd'hui, `claude-code`. L'interface existe pour qu'une deuxième demande un fichier à écrire plutôt qu'une réécriture du serveur.
+There is one implementation today, `claude-code`. The interface exists so that a second one means writing a file, without rewriting the server.
 
-## Pourquoi
+## Why
 
-Le harnais est un outil de travail quotidien. Si le fournisseur d'IA change, l'outil doit continuer à fonctionner.
+The harness is a daily work tool. If the AI provider changes, the tool has to keep working.
 
-Le serveur ne dépendait de Claude Code qu'à six endroits, tous rassemblés ici depuis. Le coût principal d'une migration est dans `commands/implement.md` et les six agents, écrits contre les noms d'outils et la sémantique de sous-agents de Claude Code. Cette couche traite le serveur et laisse ces prompts tels quels. Voir « Ce qui reste couplé » plus bas.
+The server depended on Claude Code in only six places, all gathered here since. The main cost of a migration is in `commands/implement.md` and the six agents, written against the tool names and the subagent semantics of Claude Code. This layer handles the server and leaves those prompts as they are. See "What stays coupled" below.
 
-Le mécanisme le plus spécifique du harnais, la question bloquante, a été prouvé portable avant que cette couche soit écrite. Voir le spike dans `~/workspace/opencode-question-bridge`.
+The most specific mechanism of the harness, the blocking question, was proven portable before this layer was written. See the spike in `~/workspace/opencode-question-bridge`.
 
-## La frontière
+## The boundary
 
-Au-dessus de cette ligne, le harnais raisonne en runs, phases, agents, documents et questions. En dessous, une implémentation connaît un exécutable, un vocabulaire d'événements et un format de transcript.
+Above this line, the harness reasons in runs, phases, agents, documents and questions. Below it, an implementation knows an executable, an event vocabulary and a transcript format.
 
 ```text
 index.ts, hooks.ts, artifacts.ts, transcript.ts, self-improvement.ts
         │
         │  engine.start() / engine.event() / engine.conversationLine() …
         ▼
-engine/index.ts        choisit le moteur actif
-engine/types.ts        le contrat
-engine/claude-code.ts  la seule implémentation
+engine/index.ts        picks the active engine
+engine/types.ts        the contract
+engine/claude-code.ts  the only implementation
 ```
 
-Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne lit `hook_event_name`, ne construit un `hookSpecificOutput`.
+Nothing above imports `node-pty`, knows the `.claude/tasks` path, reads `hook_event_name` or builds a `hookSpecificOutput`.
 
-## Le contrat
+## The contract
 
-`engine/types.ts`. Chaque membre existe parce qu'il varie d'un agent à l'autre.
+`engine/types.ts`. Each member exists because it varies from one agent to another.
 
-| Membre | Rôle | Ce qui varie |
+| Member | Role | What varies |
 |---|---|---|
-| `id`, `label` | identité du moteur | `label` apparaît dans les erreurs et le journal d'activité |
-| `locate()` | l'exécutable, ou `null` | nom du binaire |
-| `command(issueUrl, instruction)` | point d'entrée du workflow | forme de la commande, ici une commande slash |
-| `start(options)` | démarre la session, rend un `EngineSession`. `options.onEvent` reçoit ce que l’agent dit hors de ses hooks, lu dans le terminal. `options.environment` porte les variables que le workflow lit (`IMPL_CODE_SNAPSHOT`, `IMPL_SNAPSHOT_LOG`, `IMPL_SNAPSHOT_EXCLUDE`), posées telles quelles | arguments, variables d'environnement, transport |
-| `taskDirectory(cwd)` | où le workflow dépose ses documents | `.claude/tasks` pour Claude Code |
-| `transcriptPath(payload)` | le fichier d'où se lit le dialogue | nommé par l'agent dans ses propres événements |
-| `conversationLine(line)` | une ligne de ce fichier | format JSONL propre à l'agent |
-| `sessionUsage(source)` | les tokens consommés par le pilote et chaque sous-agent | champ `usage` du transcript, un fichier par sous-agent |
-| `event(payload)` | traduit un événement brut en `EngineEvent` | tout le vocabulaire de hooks |
-| `questionAnswer(input, answers)` | ce que l'agent attend en retour d'une question | `updatedInput` pour Claude Code |
-| `startSelfImprovement(options)` | lance la boucle d'auto-amélioration détachée | drapeaux de worktree et de permissions |
-| `startConflictResolution(options)` | rejoue une branche d'amélioration que git seul n'a pas pu rebaser | drapeaux de worktree et de permissions |
+| `id`, `label` | identity of the engine | `label` appears in errors and in the activity log |
+| `locate()` | the executable, or `null` | name of the binary |
+| `command(issueUrl, instruction)` | entry point of the workflow | shape of the command, here a slash command |
+| `start(options)` | starts the session, returns an `EngineSession`. `options.onEvent` receives what the agent says outside its hooks, read in the terminal. `options.environment` carries the variables the workflow reads (`IMPL_CODE_SNAPSHOT`, `IMPL_SNAPSHOT_LOG`, `IMPL_SNAPSHOT_EXCLUDE`), set as they are | arguments, environment variables, transport |
+| `taskDirectory(cwd)` | where the workflow puts its documents | `.claude/tasks` for Claude Code |
+| `transcriptPath(payload)` | the file the dialogue is read from | named by the agent in its own events |
+| `conversationLine(line)` | one line of that file | JSONL format specific to the agent |
+| `sessionUsage(source)` | the tokens used by the pilot and each subagent | `usage` field of the transcript, one file per subagent |
+| `event(payload)` | translates a raw event into an `EngineEvent` | the whole hook vocabulary |
+| `questionAnswer(input, answers)` | what the agent expects back from a question | `updatedInput` for Claude Code |
+| `startSelfImprovement(options)` | starts the detached self-improvement loop | worktree and permission flags |
+| `startConflictResolution(options)` | replays an improvement branch git alone could not rebase | worktree and permission flags |
 
 ### EngineSession
 
-Ce que le harnais fait d'une session en cours :
+What the harness does with a running session:
 
-- `write(data)` : les frappes brutes du terminal intégré;
-- `submit(text)` : une instruction tapée dans l'interface, envoyée comme l'agent l'attend. Sous Claude Code c'est un collage entre marqueurs suivi d'un retour chariot séparé, parce qu'un retour chariot **dans** le collage est lu comme du contenu et l'instruction n'est jamais soumise;
+- `write(data)`: the raw keystrokes of the built-in terminal;
+- `submit(text)`: an instruction typed in the interface, sent the way the agent expects it. Under Claude Code it is a paste between markers followed by a separate carriage return, because a carriage return **inside** the paste is read as content and the instruction is never submitted;
 - `resize(cols, rows)`, `kill()`;
-- `answerPrompt(decision)` : la réponse (`accept` ou `refuse`) à la demande que la session a levée par `session.prompt`, tapée comme l’agent l’attend. Rend `false`, sans rien taper, quand cette demande n’est plus à l’écran.
+- `answerPrompt(decision)`: the answer (`accept` or `refuse`) to the prompt the session raised with `session.prompt`, typed the way the agent expects it. Returns `false`, without typing anything, when that prompt is no longer on screen.
 
 ### EngineEvent
 
-Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` applique.
+One event, said in the words of the harness. The engine translates, `hooks.ts` applies.
 
-| Événement | Effet dans le harnais |
+| Event | Effect in the harness |
 |---|---|
-| `agent.start` / `agent.stop` | met à jour la liste des agents, fait avancer la phase |
-| `agent.kill` | clôt un agent arrêté de l'extérieur (Claude Code n'émet pas de fin pour lui) |
-| `tool.start` | nomme l'action en cours dans l'interface, détecte la création de branche ; porte l'identifiant de l'appel (`toolUseId`), le sous-agent appelant (`agentId`, absent pour le pilote), si l'appel travaille en arrière-plan (`background`) et si une fin sera rapportée (`endReported`) |
-| `tool.end` | y cherche l'adresse de la merge request, et clôt l'appel de même `toolUseId` |
-| `question` | **bloque l'agent** jusqu'à la réponse de l'utilisateur |
-| `attention` | l'agent réclame la main, avec sa cause : `permission`, `terminal_interaction` ou `unknown` |
-| `turn.end` | le **pilote** rend la main, ce qui ne veut pas dire que le workflow est fini (la fin d'un sous-agent est `agent.stop`) |
-| `session.prompt` | l’agent s’arrête sur une demande à lui avant que la session démarre (`folder_trust` : faire confiance au dossier) : une décision attend l’utilisateur |
-| `session.prompt.end` | cette demande a quitté l’écran |
+| `agent.start` / `agent.stop` | updates the list of agents, moves the phase forward |
+| `agent.kill` | closes an agent stopped from outside (Claude Code emits no end for it) |
+| `tool.start` | names the action in progress in the interface, detects the creation of a branch; carries the identifier of the call (`toolUseId`), the calling subagent (`agentId`, absent for the pilot), whether the call works in the background (`background`) and whether an end will be reported (`endReported`) |
+| `tool.end` | looks in it for the address of the merge request, and closes the call with the same `toolUseId` |
+| `question` | **blocks the agent** until the user answers |
+| `attention` | the agent asks for control, with its cause: `permission`, `terminal_interaction` or `unknown` |
+| `turn.end` | the **pilot** hands back, which does not mean the workflow is over (the end of a subagent is `agent.stop`) |
+| `session.prompt` | the agent stops on a prompt of its own before the session starts (`folder_trust`: trust the folder): a decision waits for the user |
+| `session.prompt.end` | that prompt has left the screen |
 
-Ces champs ne sont remplis que quand Claude Code les fournit : `tool_use_id` et `agent_id` des hooks d'outils, `notification_type` des notifications. Un champ absent reste inconnu, et la santé du run (`server/run-health.ts`) s'en accommode. `END_REPORTED_TOOLS` doit rester égal au matcher `PostToolUse` de `hooks/hooks.json`, ce que vérifie un test.
+These fields are filled only when Claude Code provides them: `tool_use_id` and `agent_id` of the tool hooks, `notification_type` of the notifications. A missing field stays unknown, and run health (`server/run-health.ts`) copes with it. `END_REPORTED_TOOLS` has to stay equal to the `PostToolUse` matcher of `hooks/hooks.json`, which a test checks.
 
-Deux détails qui comptent dans la traduction :
+Two details that matter in the translation:
 
-1. **La commande passe entière.** `tool.start` porte `command` non tronqué, parce que `createsBranch` et `branchFromCommand` doivent matcher dessus. Pour l'affichage, il porte le nom de l'outil et un `target` neutre, la clé d'entrée qui le désigne (`file_path`, `pattern`, `subagent_type`, `url`) variant d'un outil à l'autre. `actionLabel` dans `domain.ts` en fait la ligne « ce que Claude fait en ce moment ». Ce libellé n'entre jamais dans le journal d'activité, où deux cents appels d'outils rendraient les jalons du workflow illisibles.
-2. **Une question déjà répondue n'est pas reposée.** Claude Code rejoue le hook sur l'appel que le harnais a lui-même complété, et ce second passage porte les réponses. `claude-code.ts` le reconnaît et ne produit aucun événement.
+1. **The command goes through whole.** `tool.start` carries `command` untruncated, because `createsBranch` and `branchFromCommand` have to match on it. For display, it carries the name of the tool and a neutral `target`, since the input key that names it (`file_path`, `pattern`, `subagent_type`, `url`) varies from one tool to another. `actionLabel` in `domain.ts` turns it into the line "what Claude is doing right now". That label never enters the activity log, where two hundred tool calls would make the workflow's milestones unreadable.
+2. **A question already answered is not asked again.** Claude Code replays the hook on the call the harness completed itself, and that second pass carries the answers. `claude-code.ts` recognises it and produces no event.
 
-### La question bloquante
+### The blocking question
 
-C'est le mécanisme central, et le seul qui demande de la coopération des deux côtés.
+It is the central mechanism, and the only one that needs cooperation from both sides.
 
 ```text
-l'agent appelle son outil de question
+the agent calls its question tool
         │
         ▼
-hooks/emit.mjs poste sur /api/hooks, timeout 1 h
+hooks/emit.mjs posts to /api/hooks, 1 h timeout
         │
         ▼
 processHook → engine.event() → EngineEvent { kind: "question" }
         │
         ▼
-waitForQuestionAnswer rend une Promise NON RÉSOLUE
-        │                       et publie l'état (le panneau s'affiche)
+waitForQuestionAnswer returns an UNRESOLVED Promise
+        │                       and publishes the state (the panel shows)
         │
-        ▼                       … l'utilisateur répond dans l'interface
+        ▼                       … the user answers in the interface
 answerQuestion → engine.questionAnswer(input, answers)
         │
         ▼
-la Promise se résout, la réponse HTTP part, l'agent repart
+the Promise resolves, the HTTP response goes out, the agent resumes
 ```
 
-Le blocage est cette Promise non résolue. Un moteur qui ne sait pas attendre dessus ne peut pas alimenter le panneau de décisions.
+The block is that unresolved Promise. An engine that cannot wait on it cannot feed the decisions panel.
 
-### La demande de confiance du dossier
+### The folder trust prompt
 
-Claude Code la dessine avant tout hook et tout transcript : elle ne peut être lue que dans la sortie du terminal. `trust-prompt.ts` contient tout ce qu’on en sait, et rien d’autre n’en parle.
+Claude Code draws it before any hook and any transcript: it can only be read in the terminal output. `trust-prompt.ts` holds everything known about it, and nothing else mentions it.
 
-- **Le texte.** Observé sur Claude Code 2.1.288, dans un dossier jamais ouvert : « Accessing workspace: », le chemin, « Quick safety check: Is this a project you created or one you trust? … », puis deux options, « No, exit » (sous le curseur à l’ouverture) et « Yes, I trust this folder », et « Enter to confirm · Esc to cancel ». La sortie brute est gardée dans `tests/unit/fixtures/trust-dialog.json`, chemin remplacé.
-- **La détection.** Les mots sont séparés par des déplacements de curseur (`ESC[<colonne>G`), pas par des espaces, et la trame arrive coupée n’importe où. Le texte est donc comparé sans séquences d’échappement ni blancs, sur une fenêtre glissante. Trois expressions doivent s’y trouver dans l’ordre. La recherche s’arrête après les 16 premiers kilo-octets de sortie : la demande est la première chose que la session dessine, et le même texte affiché plus tard par un outil n’en est pas une.
-- **La fin.** Une sortie de 400 caractères visibles sans aucune expression de la demande veut dire que la session est passée à son propre écran. Au-dessus du moteur, le premier hook reçu et la sortie du processus ferment aussi la demande.
-- **La réponse.** Refuser envoie Échap, que la demande propose elle-même, puis termine la session si elle est encore là deux secondes plus tard. Accepter envoie Flèche bas puis Entrée, ou Entrée seule si le curseur a été vu sur « Yes ». Si le curseur n’est pas où il a été vu, une acceptation peut au pire devenir un refus.
-- **Ce qui n’est pas vérifié.** Aucune réponse n’a été envoyée au vrai Claude Code : accepter écrit dans la configuration de l’utilisateur. Les touches sont vérifiées contre `tests/fake-claude/claude`, qui rejoue la trame capturée.
-- **Un texte reformulé** ne correspond à rien. Le run se comporte alors comme avant : rien dans la conversation, la réponse dans l’onglet Terminal. Jamais une carte qui bloque un run sain.
-- Un sous-dossier d’un dossier déjà approuvé ne reçoit pas la demande (observé dans `<dépôt>/.claude/worktrees/trust-probe`, même version).
+- **The text.** Observed on Claude Code 2.1.288, in a directory never opened: "Accessing workspace:", the path, "Quick safety check: Is this a project you created or one you trust? …", then two options, "No, exit" (under the cursor when it opens) and "Yes, I trust this folder", and "Enter to confirm · Esc to cancel". The raw output is kept in `tests/unit/fixtures/trust-dialog.json`, with the path replaced.
+- **The detection.** The words are separated by cursor moves (`ESC[<column>G`), not by spaces, and the frame arrives cut anywhere. The text is therefore compared without escape sequences or blanks, over a sliding window. Three expressions have to be found in it, in order. The search stops after the first 16 kilobytes of output: the prompt is the first thing the session draws, and the same text shown later by a tool is not one.
+- **The end.** An output of 400 visible characters with no expression of the prompt means the session moved on to its own screen. Above the engine, the first hook received and the exit of the process also close the prompt.
+- **The answer.** Refusing sends Escape, which the prompt itself offers, then ends the session if it is still there two seconds later. Accepting sends Down Arrow then Enter, or Enter alone if the cursor was seen on "Yes". If the cursor is not where it was seen, an acceptance can at worst become a refusal.
+- **What is not verified.** No answer was sent to the real Claude Code: accepting writes to the user's configuration. The keys are checked against `tests/fake-claude/claude`, which replays the captured frame.
+- **A reworded text** matches nothing. The run then behaves as before: nothing in the conversation, the answer in the Terminal tab. Never a card that blocks a healthy run.
+- A subdirectory of a directory already approved does not get the prompt (observed in `<repository>/.claude/worktrees/trust-probe`, same version).
 
-## Ajouter un moteur
+## Adding an engine
 
-1. Écrire `engine/<nom>.ts` qui satisfait `Engine`.
-2. Le choisir dans `engine/index.ts`.
-3. Fournir l'équivalent du corpus de prompts pour cet agent.
+1. Write `engine/<name>.ts` that satisfies `Engine`.
+2. Pick it in `engine/index.ts`.
+3. Provide the equivalent of the prompt corpus for that agent.
 
-L'étape 3 demande le plus de travail. Les deux premières sont mécaniques.
+Step 3 takes the most work. The first two are mechanical.
 
-## Ce qui reste couplé, en toute franchise
+## What stays coupled
 
-Cette couche rend le serveur agnostique, pas le reste du harnais. Restent dehors :
+This layer makes the server agnostic. The rest of the harness is still tied to Claude Code:
 
-- **`commands/` et `agents/`**, environ 600 lignes plus six agents, écrits contre les noms d'outils de Claude Code. C'est le gros du coût de migration. Piste : une source canonique et une table de correspondance des noms d'outils, générées à l'installation.
-- **Les libellés d'interface** dans `console/lib/notifications.ts` et `console/lib/run-state.ts`, qui disent « Claude » en dur. Le client ne connaît pas le moteur; il faudrait faire descendre `engine.label` dans `RunState`.
-- **Le mode démo** (`server/demo.ts`), qui met en scène une session Claude Code.
-- **La qualité selon le modèle.** Un moteur peut répondre sans tenir le workflow. Six agents et deux tours de review demandent un modèle solide, et rien ici ne le vérifie. Le vérifier demande un eval.
+- **`commands/` and `agents/`**, about 600 lines plus six agents, written against the tool names of Claude Code. That is most of the migration cost. A possible route: one canonical source and a mapping table of tool names, generated at install time.
+- **The interface labels** in `console/lib/notifications.ts` and `console/lib/run-state.ts`, which say "Claude" in hard-coded text. The client does not know the engine; `engine.label` would have to be passed down into `RunState`.
+- **Demo mode** (`server/demo.ts`), which stages a Claude Code session.
+- **Quality depending on the model.** An engine can answer without holding the workflow. Six agents and two review rounds need a strong model, and nothing here checks it. Checking it takes an eval.

@@ -1,257 +1,270 @@
-# Agents, skills et revue indépendante
+# Agents, skills and independent review
 
-Le Harness sépare les responsabilités des agents, les méthodes réutilisables et les formats consommés par la console. Les dossiers `commands/`, `agents/`, `skills/` et `hooks/` restent à la racine du plugin.
+The harness separates the responsibilities of the agents, the reusable methods and the formats the console consumes. The `commands/`, `agents/`, `skills/` and `hooks/` directories stay at the root of the plugin.
 
-Le [schéma de fonctionnement](architecture.html) montre le trajet d'un run, le workflow, la santé des runs, l'ordonnancement d'un lot et la boucle d'auto-amélioration. C'est une page HTML autonome, à ouvrir dans un navigateur.
+The [architecture diagram](architecture.html) shows the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML page, to open in a browser.
 
-## Répartition
+The reports the workflow writes and the console's interface are in French. Section names and fixed phrases are quoted here as they are written.
 
-| Couche | Responsabilité |
+## Who owns what
+
+| Layer | Responsibility |
 | --- | --- |
-| `commands/implement.md` | Étapes, délégations, interaction utilisateur, git, livraison et archivage. |
-| `agents/` | Mission, périmètre, décisions, droits, méthodes à charger et livrables. |
-| `skills/` | Procédures invocables, avec leurs références chargées selon le besoin. |
-| `principles/engineering.md` | Preuves, proportionnalité, simplicité, contraintes et traitement des inconnues. |
-| `contracts/` | Formats de sortie, politique de spécification, transmission et identité des preuves. |
+| `commands/implement.md` | Steps, delegations, user interaction, git, delivery and archiving. |
+| `agents/` | Mission, scope, decisions, rights, methods to load and deliverables. |
+| `skills/` | Invocable procedures, with their references loaded when needed. |
+| `principles/engineering.md` | Evidence, proportionality, simplicity, constraints and handling of unknowns. |
+| `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
-Les principes et contrats sont lus explicitement depuis le chemin du plugin. Le `CLAUDE.md` de ce dépôt documente le développement du Harness ; il n'est pas supposé être injecté dans les projets que le plugin pilote. Aucun champ YAML propriétaire de chargement des principes n'est introduit.
+The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the harness; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
 
-## Capacités et déclencheurs
+## Capabilities and triggers
 
-| Skill | Déclenchement | Résultat |
+| Skill | Trigger | Result |
 | --- | --- | --- |
-| `how` | Comportement mal compris avant planification, modification ou investigation. | Modèle actuel sourcé, frontières et inconnues. |
-| `why` | Raison historique ou pertinence actuelle d'une contrainte à établir. | Motivation documentée, chronologie et limites. Nécessite `how`. |
-| `clarify-spec` | Contradiction entre sources ou décision produit manquante. | Exigences établies, hypothèses et questions à transmettre au pilote. |
-| `self-check` | Le développeur vérifie sa propre implémentation. | Couverture des comportements modifiés, tests, résultats et limites. |
-| `collect-evidence` | Exécuter des contrôles déjà choisis. | Observations reproductibles, commandes, contexte et obstacles. |
-| `review-change` | Revue de code ou QA indépendante. | Contre-exemples, défauts étayés et limites de vérification. |
-| `figma-review` | Revue design d'un changement visible dans l'interface, avec ou sans Figma. | Inventaire, mesures qui citent leur référence, couverture, observations pour QA et cellules non vérifiées. |
-| `document-change` | Documentation rendue obsolète par un changement autorisé. | Mise à jour de la documentation existante et des décisions nécessaires. |
-| `glab-gitlab-api` | Opération GitLab choisie et autorisée par l'appelant. | Recette adaptée et vérification du résultat. |
-| `unslop` | Tout texte lu par une personne : rapport, synthèse, question, description ou commentaire de MR, ticket, documentation, champ libre d'un artefact JSON. | Phrases sans tics d'IA, format et langue du contrat inchangés. |
+| `how` | A behaviour poorly understood before planning, modification or investigation. | Sourced current model, boundaries and unknowns. |
+| `why` | The historical reason or current relevance of a constraint has to be established. | Documented motivation, chronology and limits. Requires `how`. |
+| `clarify-spec` | A contradiction between sources or a missing product decision. | Established requirements, assumptions and questions to pass to the pilot. |
+| `self-check` | The developer checks its own implementation. | Coverage of the modified behaviours, tests, results and limits. |
+| `collect-evidence` | Running checks already chosen. | Reproducible observations, commands, context and obstacles. |
+| `review-change` | Independent code review or QA. | Counterexamples, substantiated defects and limits of verification. |
+| `figma-review` | Design review of a change visible in the interface, with or without Figma. | Inventory, measurements that cite their reference, coverage, observations for QA and unverified cells. |
+| `document-change` | Documentation made obsolete by an authorised change. | Update of the existing documentation and of the necessary decisions. |
+| `glab-gitlab-api` | A GitLab operation chosen and authorised by the caller. | Adapted recipe and check of the result. |
+| `unslop` | Any text read by a person: report, summary, question, MR description or comment, ticket, documentation, free field of a JSON artifact. | Sentences without AI tics, format and language of the contract unchanged. |
 
-`gitlab-tickets` conserve ses conventions Synapse. Ces conventions ne deviennent pas des principes d'ingénierie universels.
+`gitlab-tickets` keeps its Synapse conventions. These conventions do not become universal engineering principles.
 
-Les skills s'appellent sous leur nom qualifié dans le plugin, par exemple `implementation-harness:how`. Les agents techniques disposent de la découverte dynamique des skills. Le designer, sans outil `Skill`, précharge uniquement `implementation-harness:figma-review` et lit les références que cette skill cite. Si le préchargement manque, il lit d'abord l'entrée de la skill. Cette lecture documentaire ne lui permet pas de lire le code produit.
+Skills are called under their qualified name in the plugin, for example `implementation-harness:how`. The technical agents have dynamic skill discovery. The designer, which has no `Skill` tool, preloads only `implementation-harness:figma-review` and reads the references that skill cites. If the preload is missing, it first reads the entry of the skill. This documentary reading does not allow it to read the product code.
 
-Le champ natif `skills:` précharge le corps de la skill. Le mettre sur toutes les capacités déplacerait le texte sans réduire le contexte. Les autres méthodes et leurs références restent conditionnelles. Les droits de l'agent continuent à borner toute méthode chargée.
+The native `skills:` field preloads the body of the skill. Putting it on every capability would move the text without reducing the context. The other methods and their references stay conditional. The agent's rights still bound any method loaded.
 
-## Répartition des notions d'ingénierie
+## Who owns each engineering concern
 
-| Notion | Responsable et méthode |
+| Concern | Owner and method |
 | --- | --- |
-| Flux, état, invariants et consommateurs | Planner/developer/reviewers via `how` si nécessaire. |
-| Motivation historique et compatibilité | `why`, avec vérification de la pertinence actuelle. |
-| Exigences et hypothèses | Planner et pilote via `clarify-spec` ; le pilote tranche avec l'utilisateur. |
-| Décomposition et dépendances | Planner ; fichiers partagés séquencés par le pilote. |
-| Simplicité et conventions | Principes communs ; application dans le périmètre du rôle. |
-| Cause racine et régression | Developer via `self-check`, puis contre-exemples indépendants via `review-change`. |
-| Sécurité et intégrité des données | Planner, developer et senior aux frontières modifiées ; QA pour les comportements observables. |
-| Concurrence, annulation et ressources | Analyse ciblée des transitions et propriétaires ; orchestration séparée des ressources partagées entre agents. |
-| Performance, migrations et retour arrière | Analyse proportionnée au risque et aux consommateurs réels, sans audit systématique. |
-| Accessibilité et contrats de sélecteurs | Developer et QA, qui teste le parcours clavier, le focus et le nom accessible quand le changement les touche. Le designer mesure contraste, parcours clavier, focus visible, rôle et nom, taille de cible sur la surface modifiée. |
-| Fidélité à la référence design (`figma`, `ticket-mockup` ou `live-neighbours`) et responsive | Designer via `figma-review`, quand le pilote déclenche la revue design et que l'app est joignable, avec observation du frame et correction limitée au ticket. |
-| Documentation et décisions | `document-change` dans le périmètre d'écriture autorisé. |
-| Résultats reproductibles | `collect-evidence` ; interprétation séparée par chaque rôle. |
-| Fraîcheur et traçabilité | Contrat de preuves, snapshots, identifiants immuables et supersession. |
+| Flow, state, invariants and consumers | Planner, developer and reviewers through `how` if necessary. |
+| Historical motivation and compatibility | `why`, with a check of current relevance. |
+| Requirements and assumptions | Planner and pilot through `clarify-spec`; the pilot settles with the user. |
+| Decomposition and dependencies | Planner; shared files sequenced by the pilot. |
+| Simplicity and conventions | Common principles; applied within the scope of the role. |
+| Root cause and regression | Developer through `self-check`, then independent counterexamples through `review-change`. |
+| Security and data integrity | Planner, developer and senior at the modified boundaries; QA for observable behaviours. |
+| Concurrency, cancellation and resources | Targeted analysis of the transitions and owners; separate orchestration of the resources shared between agents. |
+| Performance, migrations and rollback | Analysis proportionate to the risk and to the real consumers, with no systematic audit. |
+| Accessibility and selector contracts | Developer and QA, which tests the keyboard path, the focus and the accessible name when the change touches them. The designer measures contrast, keyboard path, visible focus, role and name, target size on the modified surface. |
+| Fidelity to the design reference (`figma`, `ticket-mockup` or `live-neighbours`) and responsive behaviour | Designer through `figma-review`, when the pilot triggers the design review and the app is reachable, with observation of the frame and correction limited to the ticket. |
+| Documentation and decisions | `document-change` within the authorised write scope. |
+| Reproducible results | `collect-evidence`; interpretation separate for each role. |
+| Freshness and traceability | Evidence contract, snapshots, immutable identifiers and supersession. |
 
-L'analyse d'impact autonome et le diagnostic de bugs dédié restent des évolutions possibles. Leurs principes sont appliqués dans les rôles actuels ; aucune nouvelle étape obligatoire n'est ajoutée pour eux.
+Standalone impact analysis and dedicated bug diagnosis remain possible evolutions. Their principles are applied in the current roles; no new mandatory step is added for them.
 
-## Indépendance de la revue
+## Independence of the review
 
-La méthode d'autovérification du développeur n'est pas le plan de revue. Les reviewers commencent par la spécification, les consommateurs et le code ; ils formulent leurs attentes et leurs contre-exemples avant de consulter les conclusions de l'auteur. Le senior consigne cette base initiale dans son rapport. QA l'écrit dans `qa-plan.md` et le designer dans `design-inventory.md`, avant d'ouvrir les rapports de l'auteur, que le brief ne transmet que par chemin. Ils confrontent ensuite leurs résultats à ces rapports.
+The developer's self-check method is not the review plan. Reviewers start from the specification, the consumers and the code; they state their expectations and their counterexamples before looking at the author's conclusions. The senior records this initial baseline in its report. QA writes it in `qa-plan.md` and the designer in `design-inventory.md`, before opening the author's reports, which the brief passes only by path. They then compare their results with those reports.
 
-`collect-evidence` peut être partagé : il décrit comment exécuter un contrôle et conserver le résultat, sans choisir les scénarios ni juger leur suffisance. Partager une recette d'accès à un état ne signifie pas partager le résultat attendu ; les stubs et les fixtures restent contestables.
+`collect-evidence` can be shared: it describes how to run a check and keep the result, without choosing the scenarios or judging whether they are enough. Sharing a recipe for reaching a state does not mean sharing the expected result; stubs and fixtures stay open to challenge.
 
-Le senior reste correctif, en deux phases : diagnostic indépendant, puis corrections justifiées. QA vérifie le code final après ces corrections. Au niveau 0, une correction du senior déclenche une vérification QA ciblée, ou demeure explicitement non vérifiée si le budget de revue l'empêche. Au niveau 1, une reprise faite après QA reçoit la même passe ciblée sur les critères qu'elle touche.
+The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
 
-Les reviewers reçoivent les preuves de l'auteur (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) par chemin. Le brief ne recopie jamais leurs valeurs. Une fois son plan écrit, QA lit aussi la section `## À vérifier par la QA` de la revue design et la section `## Risques restants` du senior, transmises par chemin, et les teste comme hypothèses. Ces hypothèses ne bornent pas sa couverture.
+Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. Once its plan is written, QA also reads the `## À vérifier par la QA` section of the design review and the `## Risques restants` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
 
-L'indépendance ne garantit pas l'absence de biais. Un diagnostic déjà présent dans le brief est déclaré comme tel, puis une explication concurrente est examinée. Les reprises exposent nécessairement les constats du tour précédent. Aucun quota de défauts n'est imposé.
+Independence does not guarantee the absence of bias. A diagnosis already present in the brief is declared as such, then a competing explanation is examined. Reworks necessarily expose the findings of the previous round. No quota of defects is imposed.
 
-## Niveaux de revue
+## Review tiers
 
-Le pilote choisit le niveau d'après la taille du diff (étape 7 de `commands/implement.md`).
+The pilot picks the tier from the size of the diff (step 7 of `commands/implement.md`).
 
-| Niveau | Déroulé | Modèle des reviewers |
+| Tier | Sequence | Reviewer model |
 | --- | --- | --- |
-| 0 | Un passage de `senior-reviewer`, sans orchestrateur ni boucle de reprise. Le pilote lance lui-même les contrôles généraux. | Sonnet, par surcharge à l'appel. |
-| 1 | `senior-reviewer`, puis `designer-reviewer` si le pilote a déclenché la revue design et que l'application est joignable, puis `qa-reviewer`, une fois chacun. Le pilote enchaîne les agents et fait pour eux ce que l'orchestrateur fait au niveau 2. | Sonnet, par surcharge à l'appel. |
-| 2 | `review-orchestrator` conduit la boucle complète. | Opus, le modèle par défaut de `senior-reviewer` et `qa-reviewer`. L'orchestrateur ne passe aucune surcharge. |
+| 0 | One pass of `senior-reviewer`, with no orchestrator and no rework loop. The pilot runs the general checks itself. | Sonnet, by override at the call. |
+| 1 | `senior-reviewer`, then `designer-reviewer` if the pilot triggered the design review and the application is reachable, then `qa-reviewer`, once each. The pilot chains the agents and does for them what the orchestrator does at tier 2. | Sonnet, by override at the call. |
+| 2 | `review-orchestrator` runs the full loop. | Opus, the default model of `senior-reviewer` and `qa-reviewer`. The orchestrator passes no override. |
 
-`designer-reviewer` tourne sur Sonnet, son modèle par défaut, à tous les niveaux : son travail est surtout de la mesure.
+`designer-reviewer` runs on Sonnet, its default model, at every tier: its work is mostly measurement.
 
-L'appelant du designer prend l'identifiant de snapshot du code avant et après la revue, puis publie `design-evidence.json`. Quand le diff ajoute ou modifie des fichiers de test, l'appelant de QA crée le worktree jetable et le supprime au retour de QA. Au niveau 2 l'appelant est l'orchestrateur, aux niveaux 0 et 1 le pilote. La création et la suppression de ce worktree sont les seules opérations git de l'orchestrateur. Ce worktree jetable est créé hors du dépôt, dans un répertoire temporaire, jamais sous `.claude/worktrees/`, et l'appelant ne supprime que celui-là.
+The caller of the designer takes the code snapshot identifier before and after the review, then publishes `design-evidence.json`. When the diff adds or modifies test files, the caller of QA creates the disposable worktree and removes it when QA returns. At tier 2 the caller is the orchestrator, at tiers 0 and 1 the pilot. Creating and removing this worktree are the only git operations of the orchestrator. This disposable worktree is created outside the repository, in a temporary directory, never under `.claude/worktrees/`, and the caller removes only that one.
 
-## Worktree du run
+## Run worktree
 
-Lancé depuis la console, chaque run travaille dans son propre worktree git du dépôt cible. La console le crée avant d'ouvrir la session, dans `<dépôt>/.claude/worktrees/<id du run>`, détaché sur le HEAD du checkout principal, et y démarre Claude Code. Plusieurs tickets du même dépôt peuvent donc tourner en même temps. Un second lancement sur un ticket déjà en cours attend en file. Si le worktree ne peut pas être créé, le run ne démarre pas.
+Launched from the console, each run works in its own git worktree of the target repository. The console creates it before opening the session, in `<repository>/.claude/worktrees/<run id>`, detached at the HEAD of the main checkout, and starts Claude Code in it. Several tickets of the same repository can therefore run at the same time. A second launch on a ticket already running waits in the queue. If the worktree cannot be created, the run does not start.
 
-La console passe ces variables à la session :
+The console passes these variables to the session:
 
-| Variable | Valeur |
+| Variable | Value |
 | --- | --- |
-| `IMPL_RUN_WORKTREE` | Le worktree du run. |
-| `IMPL_SOURCE_REPOSITORY` | Le checkout principal. |
-| `IMPL_SOURCE_BRANCH` | La branche du checkout principal au lancement. Absente sur un HEAD détaché. |
-| `IMPL_WORKTREE_DEPENDENCIES` | `symlink` dès qu'un répertoire de dépendances est un lien, `clone` quand tous sont des copies. Absente quand aucun n'a été repris. |
+| `IMPL_RUN_WORKTREE` | The worktree of the run. |
+| `IMPL_SOURCE_REPOSITORY` | The main checkout. |
+| `IMPL_SOURCE_BRANCH` | The branch of the main checkout at launch. Absent on a detached HEAD. |
+| `IMPL_WORKTREE_DEPENDENCIES` | `symlink` as soon as one dependency directory is a link, `clone` when all are copies. Absent when none was brought over. |
 
-| Élément | Dans le worktree |
+| Item | In the worktree |
 | --- | --- |
-| Répertoires de dépendances ignorés (`node_modules` par défaut, réglage `IMPL_WORKTREE_DEPENDENCY_DIRS`) | Copie de ceux du checkout principal, en copy-on-write quand le système de fichiers le permet : une installation y reste dans le worktree. Lien symbolique seulement si la copie échoue. |
-| Fichiers ignorés `.env*` et `.claude/settings.local.json` (réglage `IMPL_WORKTREE_COPY_FILES`) | Copiés depuis le checkout principal. |
-| Sorties de build (`.next`, `dist`) | Rien n'est fourni. Le premier build a lieu dans le worktree. |
-| `.claude/tasks/` | Propre au run, dans le worktree. |
+| Ignored dependency directories (`node_modules` by default, setting `IMPL_WORKTREE_DEPENDENCY_DIRS`) | A copy of those of the main checkout, copy-on-write when the filesystem allows it: an install there stays in the worktree. A symbolic link only if the copy fails. |
+| Ignored files `.env*` and `.claude/settings.local.json` (setting `IMPL_WORKTREE_COPY_FILES`) | Copied from the main checkout. |
+| Build outputs (`.next`, `dist`) | Nothing is provided. The first build happens in the worktree. |
+| `.claude/tasks/` | Specific to the run, in the worktree. |
 
-Le répertoire `.claude/worktrees/` et les liens sont ajoutés au `.git/info/exclude` du dépôt et n'entrent jamais dans un commit.
+The `.claude/worktrees/` directory and the links are added to the repository's `.git/info/exclude` and never enter a commit.
 
-Règles que `commands/implement.md` applique dans ce mode (section « Run worktree ») :
+Rules `commands/implement.md` applies in this mode (section "Run worktree"):
 
-- Le pilote reste dans le worktree du début à la fin. Il n'écrit, ne range (`git stash`) et ne change de branche nulle part dans le checkout principal. Il ne fait aucun `git stash` : la liste des stashs est commune à tous les worktrees du dépôt.
-- La branche du ticket est créée sans passer par la base : `git fetch origin`, puis `git switch -c <branche> --no-track origin/<base>`. `git checkout <base>` échoue dans un worktree lié dès que le checkout principal tient cette branche. Quand la base n'existe pas sur le remote, la branche part de la référence locale.
-- Une branche de ticket qui existe déjà n'est jamais écrasée (`-B` et `--force` sont interdits). Si elle est sortie dans un autre worktree, le pilote prend un nom suffixé. Si elle existe seulement en local ou sur le remote, il demande à l'utilisateur s'il continue dessus ou s'il prend un nom suffixé.
-- Un répertoire de dépendances en lien symbolique n'est jamais modifié à travers le lien. `IMPL_WORKTREE_DEPENDENCIES` dit s'il y a un lien, et `test -L node_modules` le vérifie quand la variable est absente. Si la tâche ajoute, retire ou met à jour une dépendance, ou si le lockfile diffère de la base, le développeur remplace d'abord le lien par une installation réelle dans le worktree. Sinon l'installation modifierait le checkout principal et les runs en parallèle. La règle est dans `agents/developer.md` et dans `skills/collect-evidence/references/commands.md`, que lisent ceux qui lancent les contrôles.
-- Deux runs du même dépôt peuvent se disputer le port du serveur de développement. Le pilote démarre l'application sur un port libre et transmet l'URL réelle aux reviewers, qui n'utilisent jamais le port par défaut de leur propre chef.
-- Le pilote ne supprime ni le worktree du run ni la branche du ticket. La console retire le worktree après la fin de la session, quand le run est terminé, que la merge request existe et n'est pas en draft, que le workflow n'est pas bloqué, que la synchronisation d'archive a reçu sa réponse, que l'arbre est propre et que HEAD est sur une branche du remote. La synchronisation d'archive reste donc avant la suppression de `.claude/tasks/`. Dans tous les autres cas, la console conserve le worktree avec la raison et propose sa suppression à l'utilisateur, avec une confirmation quand du travail serait perdu. Elle ne supprime jamais la branche. Au démarrage, elle applique les mêmes règles aux worktrees des runs précédents.
+- The pilot stays in the worktree from start to end. It does not write, stash (`git stash`) or switch branches anywhere in the main checkout. It runs no `git stash` at all: the list of stashes is common to every worktree of the repository.
+- The ticket's branch is created without going through the base: `git fetch origin`, then `git switch -c <branch> --no-track origin/<base>`. `git checkout <base>` fails in a linked worktree as soon as the main checkout holds that branch. When the base does not exist on the remote, the branch starts from the local reference.
+- A ticket branch that already exists is never overwritten (`-B` and `--force` are forbidden). If it is checked out in another worktree, the pilot takes a suffixed name. If it exists only locally or on the remote, it asks the user whether to continue on it or take a suffixed name.
+- A dependency directory that is a symbolic link is never modified through the link. `IMPL_WORKTREE_DEPENDENCIES` says whether there is a link, and `test -L node_modules` checks it when the variable is absent. If the task adds, removes or updates a dependency, or if the lockfile differs from the base, the developer first replaces the link with a real install in the worktree. Otherwise the install would modify the main checkout and the runs in parallel. The rule is in `agents/developer.md` and in `skills/collect-evidence/references/commands.md`, which those who run the checks read.
+- Two runs of the same repository may fight over the port of the development server. The pilot starts the application on a free port and passes the real URL to the reviewers, who never use the default port on their own initiative.
+- The pilot removes neither the worktree of the run nor the ticket's branch. The console removes the worktree after the session ends, when the run is over, the merge request exists and is not a draft, the workflow is not blocked, the archive sync has received its answer, the tree is clean and HEAD is on a branch of the remote. The archive sync therefore stays before the deletion of `.claude/tasks/`. In every other case, the console keeps the worktree with the reason and offers its removal to the user, with a confirmation when work would be lost. It never deletes the branch. On start, it applies the same rules to the worktrees of earlier runs.
 
-Sans `IMPL_RUN_WORKTREE`, c'est-à-dire quand le plugin est utilisé sans la console, le déroulé dans le checkout est inchangé. Seule exception : une session déjà placée dans un worktree lié (`git rev-parse --git-dir` et `--git-common-dir` diffèrent) applique les mêmes règles.
+Without `IMPL_RUN_WORKTREE`, that is when the plugin is used without the console, the sequence in the checkout is unchanged. One exception: a session already placed in a linked worktree (`git rev-parse --git-dir` and `--git-common-dir` differ) applies the same rules.
 
-## Ordonnancement d'un lot de tickets
+## Scheduling a batch of tickets
 
-`commands/schedule.md` compare les tickets d'un lot avant leur lancement. La console l'appelle quand plusieurs URL de tickets sont collées dans le formulaire, une fois par dépôt et par lot.
+`commands/schedule.md` compares the tickets of a batch before they are launched. The console calls it when several ticket URLs are pasted in the form, once per repository and per batch.
 
-La commande tourne sans terminal (`claude -p`, Sonnet), depuis le checkout principal. Elle reçoit deux chemins absolus : un fichier d'entrée écrit par la console et le fichier de sortie à écrire. Le contrat des deux fichiers et les règles de validation sont dans `contracts/schedule.md`.
+The command runs with no terminal (`claude -p`, Sonnet), from the main checkout. It receives two absolute paths: an input file written by the console and the output file to write. The contract of both files and the validation rules are in `contracts/schedule.md`.
 
-- L'entrée liste les tickets à prédire (`tickets`) : les nouveaux, et ceux du dépôt dont une analyse précédente a échoué. Elle liste aussi les prédictions déjà faites pour les tickets en file, en cours ou en attente de merge (`known`). Les prédictions connues servent à la comparaison et ne sont pas recalculées.
-- L'agent `ticket-scheduler` (Sonnet) lit chaque nouveau ticket avec `glab`, cherche dans le dépôt ce que le ticket toucherait, puis écrit pour chacun des fichiers, des zones, une confiance et un résumé d'une phrase.
-- Il relie par une arête deux tickets qui ne peuvent pas tourner en même temps. `overlap` signale des fichiers communs ou une zone étroite commune. `depends_on` signale qu'un ticket a besoin du résultat de l'autre, d'après un lien GitLab « blocks » ou le texte du ticket, et donne l'ordre. Deux tickets du même grand module sans fichier commun n'ont pas d'arête.
-- Une confiance `low` veut dire que le ticket ne permet aucune prédiction. La console le traite alors comme en conflit avec tous les tickets du dépôt.
-- L'agent ne modifie rien dans le dépôt : pas d'édition, pas de changement de branche, pas d'installation. Le fichier de sortie est le seul fichier écrit, hors du dépôt et hors du plugin : Claude Code refuse à une session toute écriture dans le dossier du plugin qu'elle a chargé. La console place donc les deux fichiers dans un dossier du répertoire temporaire du système, réservé à l'utilisateur, ou sous `schedule/` quand le dossier de données est hors du plugin (`IMPL_DATA_DIR`). Le contenu des tickets ne va dans aucun fichier suivi.
-- Un lot vide donne `{ "tickets": [], "edges": [] }` sans lancer l'agent. Une sortie qui ne respecte pas le contrat après une reprise est supprimée, et la console lit un fichier absent comme un ordonnancement en échec.
+- The input lists the tickets to predict (`tickets`): the new ones, and those of the repository whose earlier analysis failed. It also lists the predictions already made for the tickets queued, running or waiting for their merge (`known`). The known predictions are used for the comparison and are not computed again.
+- The `ticket-scheduler` agent (Sonnet) reads each new ticket with `glab`, looks in the repository for what the ticket would touch, then writes for each one files, areas, a confidence and a one-sentence summary.
+- It links with an edge two tickets that cannot run at the same time. `overlap` flags common files or a narrow common area. `depends_on` flags that one ticket needs the result of the other, from a GitLab "blocks" link or the text of the ticket, and gives the order. Two tickets of the same large module with no common file have no edge.
+- A `low` confidence means the ticket allows no prediction. The console then treats it as in conflict with every ticket of the repository.
+- The agent modifies nothing in the repository: no edit, no branch switch, no install. The output file is the only file written, outside the repository and outside the plugin: Claude Code refuses a session any write in the directory of the plugin it loaded. The console therefore puts both files in a directory of the system's temporary directory, private to the user, or under `schedule/` when the data directory is outside the plugin (`IMPL_DATA_DIR`). Ticket content goes into no tracked file.
+- An empty batch gives `{ "tickets": [], "edges": [] }` without starting the agent. An output that does not follow the contract after one retry is deleted, and the console reads a missing file as a failed scheduling.
 
-### Ce que la console fait du résultat
+### What the console does with the result
 
-Le détail des modules est dans `console/README.md`, section « Lot de tickets et ordonnancement ».
+The detail of the modules is in `console/README.md`, section "Batch of tickets and scheduling".
 
-- La console ne lance pas d'analyse pour un ticket seul dans son dépôt quand aucune prédiction n'y est connue. Un ticket ajouté à côté de tickets déjà prédits est analysé, même lancé seul.
-- Les analyses d'un même dépôt passent l'une après l'autre et ne prennent aucune des places de `IMPL_MAX_CONCURRENT_RUNS`. Le délai est `IMPL_SCHEDULE_TIMEOUT_MINUTES` (5 minutes par défaut). Passé ce délai, la session est tuée.
-- La console ne lit pas le code de sortie. Elle valide le fichier de sortie en entier et le refuse à la première règle du contrat qui échoue.
-- Un fichier absent ou refusé, un délai dépassé ou un arrêt de la console pendant l'analyse marquent les tickets en échec d'analyse. Un ticket en échec d'analyse, comme un ticket `low`, est en conflit avec tous les tickets de son dépôt : ils passent un par un. L'analyse suivante du dépôt reprend les tickets en échec encore en file, en cours ou en attente de merge, et remplace leur prédiction si elle réussit. Aucune analyse n'est relancée pour eux seuls.
-- Deux tickets de dépôts différents ne sont jamais en conflit, quoi que disent les arêtes. La règle est dans la console, pas dans l'agent.
-- Un ticket en conflit avec un run en cours attend. Quand ce run se termine avec une merge request, le ticket attend qu'elle soit mergée. Une merge request fermée sans merge, ou un run terminé sans merge request, libère le ticket.
-- Pour une arête `depends_on`, le premier ticket de `order` passe devant le second dans la file.
-- Un ticket retenu n'occupe pas de place. Les tickets derrière lui qui ne sont en conflit avec rien démarrent.
+- The console starts no analysis for a ticket alone in its repository when no prediction is known there. A ticket added beside tickets already predicted is analysed, even when launched alone.
+- The analyses of one repository run one after the other and take none of the slots of `IMPL_MAX_CONCURRENT_RUNS`. The timeout is `IMPL_SCHEDULE_TIMEOUT_MINUTES` (5 minutes by default). Past it, the session is killed.
+- The console does not read the exit code. It validates the output file as a whole and refuses it at the first rule of the contract that fails.
+- A missing or refused file, an exceeded timeout or a stop of the console during the analysis mark the tickets as failed analysis. A ticket whose analysis failed, like a `low` ticket, conflicts with every ticket of its repository: they run one at a time. The next analysis of the repository takes the failed tickets still queued, running or waiting for their merge, and replaces their prediction if it succeeds. No analysis is started for them alone.
+- Two tickets of different repositories never conflict, whatever the edges say. That rule is in the console, not in the agent.
+- A ticket in conflict with a run in progress waits. When that run ends with a merge request, the ticket waits for it to be merged. A merge request closed without a merge, or a run ended without a merge request, releases the ticket.
+- For a `depends_on` edge, the first ticket of `order` goes ahead of the second in the queue.
+- A held ticket takes no slot. The tickets behind it that conflict with nothing start.
 
-La veille des merge requests n'utilise ni cette commande ni aucun agent. Le serveur Node appelle `glab api` toutes les 60 secondes (`IMPL_MERGE_POLL_MS`), seulement pour les merge requests qu'un ticket en file attend. Cet appel n'ouvre pas de session Claude et ne consomme aucun token. Un appel en échec donne un état inconnu, qui retient le ticket comme une merge request ouverte.
+Watching the merge requests uses neither this command nor any agent. The Node server calls `glab api` every 60 seconds (`IMPL_MERGE_POLL_MS`), only for the merge requests a queued ticket is waiting for. That call opens no Claude session and uses no tokens. A failed call gives an unknown state, which holds the ticket like an open merge request.
 
-L'utilisateur peut passer outre depuis la file : départ depuis la base, qui ignore l'ordonnancement, ou départ empilé, décrit ci-dessous. Il peut aussi changer l'ordre de la file ou en retirer un ticket.
+The user can override from the queue: a start from the base, which ignores the schedule, or a stacked start, described below. The user can also change the order of the queue or remove a ticket from it.
 
-### Départ empilé
+### Stacked start
 
-Un ticket retenu par un autre peut partir avant que la merge request du premier soit mergée. C'est une décision de l'utilisateur, prise dans la file (« Empiler sur `<branche>` »), jamais un choix de la console. Elle est proposée quand la branche du premier ticket est connue. La console passe alors `IMPL_BASE_BRANCH`, le nom de cette branche.
+A ticket held by another one can start before the first one's merge request is merged. It is a decision of the user, taken in the queue ("Empiler sur `<branche>`"), never a choice of the console. It is offered when the branch of the first ticket is known. The console then passes `IMPL_BASE_BRANCH`, the name of that branch.
 
-- `commands/implement.md` ne pose pas la question de la branche de base à l'étape 2. La base est cette branche.
-- L'étape 3 crée la branche du ticket depuis `origin/<base>` après le fetch, ou depuis la référence locale, avec les règles du worktree du run. Le pilote ne sort jamais la branche de base et n'y écrit pas. Si elle n'existe ni sur le remote ni en local, il s'arrête et le signale.
-- La merge request cible cette branche. Sa description dit qu'elle est empilée et sur quelle branche.
-- La description porte `Closes #<iid>` malgré la cible. Quand la première merge request est mergée et sa branche supprimée, GitLab recible la seconde vers la branche où la première a été mergée. Il ferme le ticket seulement quand les commits atteignent la branche par défaut. Toute autre cible qui n'est pas la branche par défaut garde `Related to`.
+- `commands/implement.md` does not ask the base branch question at step 2. The base is that branch.
+- Step 3 creates the ticket's branch from `origin/<base>` after the fetch, or from the local reference, with the rules of the run worktree. The pilot never checks out the base branch and does not write to it. If it exists neither on the remote nor locally, it stops and says so.
+- The merge request targets that branch. Its description says it is stacked and on which branch.
+- The description carries `Closes #<iid>` despite the target. When the first merge request is merged and its branch deleted, GitLab retargets the second to the branch the first was merged into. It closes the ticket only when the commits reach the default branch. Any other target that is not the default branch keeps `Related to`.
 
-Sans `IMPL_BASE_BRANCH`, rien ne change.
+Without `IMPL_BASE_BRANCH`, nothing changes.
 
-## Méthode QA
+## QA method
 
-Le contrat est `contracts/qa.md`, la méthode `skills/review-change/references/behavioral-qa.md`. `qa-reviewer` déclare ses outils (`Bash`, `Read`, `Glob`, `Grep`, `Write`, `Skill` et Playwright) et n'a pas `Edit`.
+The contract is `contracts/qa.md`, the method `skills/review-change/references/behavioral-qa.md`. `qa-reviewer` declares its tools (`Bash`, `Read`, `Glob`, `Grep`, `Write`, `Skill` and Playwright) and has no `Edit`.
 
-- QA écrit `qa-plan.md` avant d'ouvrir un rapport d'auteur. Ce plan contient la matrice de comportement par critère, les classes de la grille de risques que le changement déclenche et les hypothèses de défaut, chacune avec son déclencheur et le résultat attendu.
-- La grille de risques compte huit classes : saisie utilisateur, appel réseau, état persistant, travail asynchrone, données ou migration, permissions, sécurité observable, accessibilité. Le rapport dit pour chaque classe si elle est testée, non applicable (avec la raison) ou non testée (avec l'obstacle).
-- QA travaille par ordre de risque. Les observations des critères et les tentatives de mise en échec passent en premier, les contrôles généraux en dernier. QA reprend un contrôle général sans le relancer quand l'appelant fournit son résultat avec l'identifiant de snapshot du code et que cet identifiant est celui du début de sa session.
-- Chaque critère reçoit au moins une tentative de mise en échec exécutée. Les tentatives figurent dans la section `## Tentatives de mise en échec` du rapport et dans `qa-evidence.json`, sous forme d'items `"kind": "attempt"`. Une tentative seulement lue dans le code ne compte pas pour ce minimum.
-- Un critère est MET seulement sur une observation que QA a exécutée dans sa session, sur le code livré. Une lecture de code ou la confirmation d'une preuve du développeur donne UNVERIFIED, sauf si le contrôle requis du critère a la méthode `static_analysis`.
-- QA écrit le rapport et les preuves après chaque bloc de travail, pour qu'un arrêt laisse un résultat utilisable. Jusqu'au dernier bloc, le verdict écrit est `INCONCLUSIVE`.
-- La section `## Rapprochement` dit ce que le plan, les rapports du développeur et du senior et les hypothèses transmises ont ajouté ou changé par rapport à `qa-plan.md`.
-- Une passe ciblée reçoit un mandat : des identifiants de critères, ou le comportement qu'une correction a changé. Le plan, les tables, le minimum de tentatives et le verdict ne couvrent que ce mandat. Les autres critères sont listés HORS MANDAT et `qa-evidence.json` cite le mandat dans un tableau `"mandate"` à sa racine.
+- QA writes `qa-plan.md` before opening an author's report. This plan holds the behaviour matrix per criterion, the classes of the risk grid the change triggers and the defect hypotheses, each with its trigger and the expected result.
+- The risk grid has eight classes: user input, network call, persistent state, asynchronous work, data or migration, permissions, observable security, accessibility. The report says for each class whether it is tested, not applicable (with the reason) or not tested (with the obstacle).
+- QA works in order of risk. The observations of the criteria and the break attempts come first, the general checks last. QA reuses a general check without running it again when the caller provides its result with the code snapshot identifier and that identifier is the one at the start of its session.
+- Each criterion gets at least one executed break attempt. The attempts appear in the `## Tentatives de mise en échec` section of the report and in `qa-evidence.json`, as items with `"kind": "attempt"`. An attempt only read in the code does not count towards this minimum.
+- A criterion is MET only on an observation QA executed in its session, on the delivered code. A reading of the code or the confirmation of a piece of the developer's evidence gives UNVERIFIED, unless the required check of the criterion has the `static_analysis` method.
+- QA writes the report and the evidence after each block of work, so a stop leaves a usable result. Until the last block, the verdict written is `INCONCLUSIVE`.
+- The `## Rapprochement` section says what the plan, the reports of the developer and the senior and the hypotheses passed on added or changed compared with `qa-plan.md`.
+- A focused pass receives a mandate: criterion identifiers, or the behaviour a fix changed. The plan, the tables, the minimum of attempts and the verdict cover only that mandate. The other criteria are listed HORS MANDAT and `qa-evidence.json` cites the mandate in a `"mandate"` array at its root.
 
-QA reçoit toujours de son appelant la référence de base et `git diff --stat <base>...HEAD`. Il reçoit aussi un worktree git jetable quand le diff ajoute ou modifie des fichiers de test, c'est-à-dire des fichiers que le lanceur de tests du dépôt collecte. Il y annule le correctif ou y réinjecte le défaut pour vérifier que les tests nouveaux ou modifiés passent au rouge : un test resté vert ne discrimine rien et devient un P1. Il y rejoue aussi une commande en échec sur la base, seule façon de montrer qu'un échec est préexistant. Les preuves sur le code livré restent prises dans le checkout livré, c'est-à-dire le worktree du run quand il en a un. Sans worktree, la sonde est non applicable : ce n'est ni un obstacle, ni un scénario manquant, ni un avertissement. La comparaison avec la base est alors indisponible, et un contrôle en échec compte contre le diff.
+QA always receives from its caller the base reference and `git diff --stat <base>...HEAD`. It also receives a disposable git worktree when the diff adds or modifies test files, that is files the repository's test runner collects. There it reverts the fix or reinjects the defect to check that the new or modified tests turn red: a test that stays green discriminates nothing and becomes a P1. There it also replays a failing command on the base, the only way to show that a failure is pre-existing. Evidence on the delivered code is still taken in the delivered checkout, that is the worktree of the run when it has one. Without a worktree, the probe is not applicable: it is neither an obstacle, nor a missing scenario, nor a warning. The comparison with the base is then unavailable, and a failing check counts against the diff.
 
-Les verdicts QA sont `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` et `FAIL`. Le verdict est `INCONCLUSIVE` quand un critère est UNVERIFIED, ou quand un critère est MET sans tentative de mise en échec exécutée et sans obstacle nommé.
+The QA verdicts are `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` and `FAIL`. The verdict is `INCONCLUSIVE` when a criterion is UNVERIFIED, or when a criterion is MET with no executed break attempt and no named obstacle.
 
-## Méthode design
+## Design method
 
-Le contrat est `contracts/design.md`, la méthode `skills/figma-review/`. Malgré son nom, cette skill s'applique avec ou sans Figma. Il ne lit pas le code du produit.
+The contract is `contracts/design.md`, the method `skills/figma-review/`. Despite its name, this skill applies with or without Figma. The designer does not read the product code.
 
-Le pilote décide de la revue design en dimensionnant la revue, d'après le diff, et annonce sa décision avec sa raison en une ligne. Avec des frames Figma, la revue a lieu dès que le changement est visible dans l'interface. Sans Figma (niveaux `ticket-mockup` et `live-neighbours`), elle a lieu seulement quand le diff modifie un composant d'interface partagé ou crée un écran ou une route. Un composant partagé est un fichier d'interface importé par plus d'un écran ou d'une route, ou rangé dans les répertoires d'interface partagée ou de design system du dépôt. Une revue hors déclencheur n'est pas une revue ratée : elle ne donne pas de ligne « design non vérifié ».
+The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. With Figma frames, the review happens as soon as the change is visible in the interface. Without Figma (levels `ticket-mockup` and `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design non vérifié" line.
 
-| Niveau de référence | Source | Sévérité |
+| Reference level | Source | Severity |
 | --- | --- | --- |
-| `figma` | Frames fournies et lisibles. | Échelle complète. |
-| `ticket-mockup` | Maquettes ou captures jointes au ticket. | Un écart établi sur l'image seule est P2 au plus, noté « à confirmer ». Il passe P1 ou P0 quand un contrôle objectif échoue sur le même élément. |
-| `live-neighbours` | 2 ou 3 écrans déjà livrés, et `design-reference.md` quand le pilote le fournit. | Un écart est P1 au plus. Des écrans voisins en désaccord ne donnent aucune référence. |
+| `figma` | Frames provided and readable. | Full scale. |
+| `ticket-mockup` | Mockups or captures attached to the ticket. | A gap established on the image alone is P2 at most, noted "à confirmer". It becomes P1 or P0 when an objective check fails on the same element. |
+| `live-neighbours` | 2 or 3 screens already shipped, and `design-reference.md` when the pilot provides it. | A gap is P1 at most. Neighbouring screens that disagree give no reference. |
 
-Le designer utilise le niveau le plus haut que le brief permet et le déclare en tête du rapport. Une propriété que ce niveau laisse ouverte est jugée au niveau suivant. Le pilote écrit `design-reference.md` quand le dépôt a des fichiers de tokens, un document de marque ou une bibliothèque de composants, avec leurs chemins et les valeurs utiles, pour que le designer n'ouvre pas le code source.
+The designer uses the highest level the brief allows and declares it at the top of the report. A property that level leaves open is judged at the next level. The pilot writes `design-reference.md` when the repository has token files, a brand document or a component library, with their paths and the useful values, so the designer does not open the source code.
 
-- Le designer écrit `design-inventory.md` à partir de la référence et du brief, avant d'ouvrir une preuve d'auteur. Il mesure ensuite chaque ligne lui-même, puis rapproche ses résultats des mesures du développeur.
-- Les contrôles objectifs s'appliquent à tous les niveaux, sans référence design (`skills/figma-review/references/objective-checks.md`). Ils couvrent les invariants de mise en page, la matrice d'états, le design d'interaction mesurable dans le navigateur, l'accessibilité, les thèmes, les libellés et les routes consommatrices.
-- Les invariants de mise en page (pas de défilement horizontal de la page, pas de texte qui déborde sans ellipse ni défilement, pas d'enfant hors de son parent, pas de chevauchement non voulu) sont mesurés à chaque largeur requise : celles du brief, sinon 360, 768 et 1280, plus la largeur exacte de chaque frame fournie. Ils sont mesurés avec le contenu normal, puis avec la valeur la plus longue plausible, une valeur vide, et zéro, un et plusieurs éléments.
-- La matrice d'états couvre huit états par élément interactif modifié : repos, survol, focus clavier, actif, désactivé, chargement, vide, erreur.
-- L'accessibilité est mesurée sur la surface modifiée : contraste (4,5 pour le texte, 3 pour le grand texte, le contour des contrôles et les indicateurs de focus), parcours clavier, focus visible, rôle et nom accessible, taille de cible de 24 px CSS au moins.
-- Le thème sombre et le mouvement réduit sont rejoués quand l'application les prend en charge. Leur absence est notée dans la méthode sans devenir un constat.
-- Chaque libellé de l'inventaire est comparé à la chaîne de la référence, casse et ponctuation comprises.
-- Le brief liste 3 à 5 routes qui consomment les composants partagés que le diff modifie. Le designer ouvre chacune et n'en ajoute aucune.
-- Chaque constat cite sa référence : nœud Figma, fichier de maquette, écran voisin et valeur mesurée, token de `design-reference.md`, seuil WCAG ou invariant nommé. Une remarque sans référence va dans « Observations sans référence », section non bloquante limitée à trois lignes.
+- The designer writes `design-inventory.md` from the reference and the brief, before opening any author's evidence. It then measures each line itself, then compares its results with the developer's measurements.
+- The objective checks apply at every level, without a design reference (`skills/figma-review/references/objective-checks.md`). They cover the layout invariants, the state matrix, the interaction design measurable in the browser, accessibility, themes, labels and consumer routes.
+- The layout invariants (no horizontal scroll of the page, no text overflowing without ellipsis or scroll, no child outside its parent, no unintended overlap) are measured at each required width: those of the brief, otherwise 360, 768 and 1280, plus the exact width of each frame provided. They are measured with normal content, then with the longest plausible value, an empty value, and zero, one and several items.
+- The state matrix covers eight states per modified interactive element: rest, hover, keyboard focus, active, disabled, loading, empty, error.
+- Accessibility is measured on the modified surface: contrast (4.5 for text, 3 for large text, the outline of controls and focus indicators), keyboard path, visible focus, role and accessible name, target size of at least 24 CSS px.
+- The dark theme and reduced motion are replayed when the application supports them. Their absence is noted in the method without becoming a finding.
+- Each label of the inventory is compared with the string of the reference, case and punctuation included.
+- The brief lists 3 to 5 routes that consume the shared components the diff modifies. The designer opens each one and adds none.
+- Each finding cites its reference: Figma node, mockup file, neighbouring screen and measured value, token of `design-reference.md`, WCAG threshold or named invariant. A remark with no reference goes into "Observations sans référence", a non-blocking section limited to three lines.
 
-Le rapport contient une matrice de couverture, avec une ligne par écran, viewport et état ou cas de contenu requis. Une cellule est mesurée seulement si le designer l'a atteinte dans l'application, a lu ses valeurs et a gardé la paire de captures. Le verdict est `INCONCLUSIVE` quand un viewport requis ou un état explicitement requis n'est pas atteint, quand la couverture mesurée est sous 80 %, ou quand aucun niveau de référence n'a pu être établi.
+The report contains a coverage matrix, with one row per screen, viewport and required state or content case. A cell is measured only if the designer reached it in the application, read its values and kept the pair of captures. The verdict is `INCONCLUSIVE` when a required viewport or an explicitly required state is not reached, when the measured coverage is under 80%, or when no reference level could be established.
 
-Un verdict design `INCONCLUSIVE`, ou une revue déclenchée mais non lancée parce que l'application était injoignable, ne bloque pas READY. La synthèse de revue l'écrit sous `## Design non vérifié` avec la raison. Le pilote reporte la mention « design non vérifié » dans la description de la merge request, le commentaire de review et le rapport final.
+A design verdict of `INCONCLUSIVE`, or a review triggered but not started because the application was unreachable, does not block READY. The review summary writes it under `## Design non vérifié` with the reason. The pilot carries the words "design non vérifié" into the merge request description, the review comment and the final report.
 
-## Handoff et stabilité
+## Handoff and stability
 
-`how` et `why` restent en lecture seule et retournent leurs résultats à l'appelant. Le pilote peut les conserver dans `investigation-context.md`. Il contrôle question, dépôt, révision et état local pertinent avant réutilisation ; une révision identique ne suffit pas si des fichiers ont changé. Chaque skill garde son propre `references/epistemics.md` et `why` s'arrête si `how` est indisponible.
+`how` and `why` stay read-only and return their results to the caller. The pilot can keep them in `investigation-context.md`. It checks the question, the repository, the revision and the relevant local state before reuse; an identical revision is not enough if files have changed. Each skill keeps its own `references/epistemics.md` and `why` stops if `how` is unavailable.
 
-Le pilote possède les rapports développeur consolidés et la recette navigateur commune. Chaque développeur écrit sous son suffixe, y compris `browser-recipe-<suffix>.md`. Les mesures sur l'application attendent la fin des éditions concurrentes. Une continuation de mesure conserve l'historique d'implémentation et alloue de nouveaux identifiants de preuve avec `supersedes` ; l'agrégation est idempotente par identifiant.
+The pilot owns the consolidated developer reports and the common browser recipe. Each developer writes under its suffix, including `browser-recipe-<suffix>.md`. Measurements on the application wait for the concurrent edits to end. A continuation of measurement keeps the implementation history and allocates new evidence identifiers with `supersedes`; the aggregation is idempotent per identifier.
 
-Le designer écrit `design-inventory.md`, `designer-review.md` et `design-evidence.json.tmp`. Son appelant ajoute le snapshot de fin réellement observé, puis publie atomiquement `design-evidence.json`. Une version manquante ou instable n'est pas présentée comme vérifiée. Les consommateurs de la console continuent à lire les mêmes fichiers finaux.
+The designer writes `design-inventory.md`, `designer-review.md` and `design-evidence.json.tmp`. Its caller adds the end snapshot actually observed, then publishes `design-evidence.json` atomically. A missing or unstable version is not presented as verified. The consumers in the console keep reading the same final files.
 
-La boucle complète comprend un tour initial et au plus deux reprises, QA en dernier, dans la limite temporelle existante. Une correction invalide les preuves affectées : même une dimension précédemment verte peut devoir être rejouée. Un verdict QA `INCONCLUSIVE` ne sort jamais en READY. L'orchestrateur lève l'obstacle nommé et relance QA quand la limite de tours le permet. Sinon la revue est BLOCKED et la MR part en draft, avec chaque critère non observé et son obstacle.
+The full loop has an initial round and at most two reworks, QA last, within the existing time limit. A fix invalidates the evidence it affects: even a dimension that was green before may have to be replayed. A QA verdict of `INCONCLUSIVE` never exits as READY. The orchestrator lifts the named obstacle and starts QA again when the round limit allows it. Otherwise the review is BLOCKED and the MR is opened as a draft, with each unobserved criterion and its obstacle.
 
-## Compatibilité et validation
+## Compatibility and validation
 
-- Les noms d'agents, commandes, fichiers finaux et champs JSON restent compatibles avec la console. Elle lit aussi `qa-plan.md`, `design-inventory.md`, le champ `kind` des items de preuve et les champs `status` et `mandate` de `qa-evidence.json`.
-- Le brief d'une tâche garde son chemin concret, par exemple `developer-report-T1.md`. Le moteur s'en sert pour associer la délégation à la carte de suivi.
-- Les références de contrat restent distinctes des capacités réutilisables. Leurs schémas ne sont pas copiés dans chaque skill.
-- Les tests de composition vérifient les références, les préchargements, la portabilité des références `how`/`why` et la lecture des exemples de contrats par les parseurs réels.
-- Les tests de structure ne prouvent pas le comportement d'un modèle. Les essais fonctionnels doivent couvrir au minimum une petite correction, un contre-exemple indépendant, une source manquante, une preuve rafraîchie, un modèle périmé et `why` privé de `how`.
-- Une exécution réelle avec Figma, Playwright et GitLab reste nécessaire pour valider les intégrations de bout en bout ; les tests de la console utilisent un moteur simulé.
+- The names of agents, commands, final files and JSON fields stay compatible with the console. It also reads `qa-plan.md`, `design-inventory.md`, the `kind` field of the evidence items and the `status` and `mandate` fields of `qa-evidence.json`.
+- The brief of a task keeps its concrete path, for example `developer-report-T1.md`. The engine uses it to pair the delegation with the tracking card.
+- Contract references stay distinct from reusable capabilities. Their schemas are not copied into each skill.
+- The composition tests check the references, the preloads, the portability of the `how`/`why` references and the reading of the contract examples by the real parsers.
+- Structure tests do not prove the behaviour of a model. Functional trials have to cover at least a small fix, an independent counterexample, a missing source, refreshed evidence, an outdated model and `why` deprived of `how`.
+- A real run with Figma, Playwright and GitLab is still needed to validate the integrations end to end; the console's tests use a simulated engine.
 
-### Vérification de la réorganisation, 30 septembre 2026
+### Check of the reorganisation, 30 September 2026
 
-Typecheck, build, 395 tests unitaires et 54 tests d'intégration passent. Les dix skills passent le validateur de structure. Claude Code découvre les six agents et les quatorze commandes/skills du plugin.
+Typecheck, build, 395 unit tests and 54 integration tests pass. The ten skills pass the structure validator. Claude Code discovers the six agents and the fourteen commands and skills of the plugin.
 
-Un essai réel de `review-change` sur une fixture isolée détecte un seuil `> 18` contraire à la spécification `>= 18`. Le reviewer charge la référence de méthode, établit le contre-exemple avant de consulter le rapport auteur rassurant, puis distingue son constat statique d'un test exécuté. Cet essai utilise le mode `auto` du Harness, sans hooks ni connexions MCP.
+A real trial of `review-change` on an isolated fixture detects a `> 18` threshold contrary to the `>= 18` specification. The reviewer loads the method reference, establishes the counterexample before looking at the reassuring author's report, then distinguishes its static finding from an executed test. This trial uses the `auto` mode of the harness, with no hooks and no MCP connections.
 
-Dans un mode restrictif comme `dontAsk`, une référence du plugin située hors du dépôt cible peut être refusée faute d'autorisation de lecture. Le chargement du catalogue ne prouve donc pas à lui seul que les fichiers annexes sont accessibles. Respecter le refus et signaler la méthode indisponible ; les permissions de l'hôte restent applicables. Voir la [documentation des permissions de Claude Code](https://code.claude.com/docs/en/permissions).
+In a restrictive mode such as `dontAsk`, a reference of the plugin located outside the target repository can be refused for lack of read permission. Loading the catalogue therefore does not prove on its own that the ancillary files are reachable. Respect the refusal and report the method as unavailable; the host's permissions still apply. See the [Claude Code permissions documentation](https://code.claude.com/docs/en/permissions).
 
-### Vérification de la refonte des reviewers, 2 octobre 2026
+### Check of the reviewer rework, 2 October 2026
 
-Typecheck, build, 443 tests unitaires et 59 tests d'intégration passent sur la branche `feat/reviewer-detection`. Le dépôt compte onze skills. Aucun run sur un ticket réel n'a encore exercé les nouvelles règles de revue QA et design.
+Typecheck, build, 443 unit tests and 59 integration tests pass on the `feat/reviewer-detection` branch. The repository has eleven skills. No run on a real ticket has yet exercised the new QA and design review rules.
 
-### Vérification de la commande d'ordonnancement, 3 octobre 2026
+### Check of the scheduling command, 3 October 2026
 
-Essai réel de `/implementation-harness:schedule` avec `claude -p` (Claude Code 2.1.288), depuis un dépôt git jetable, sur un lot vide. La commande du plugin est résolue en mode non interactif, le fichier de sortie contient `{ "tickets": [], "edges": [] }` et le processus sort avec le code 0 en 9 à 12 secondes.
+A real trial of `/implementation-harness:schedule` with `claude -p` (Claude Code 2.1.288), from a disposable git repository, on an empty batch. The plugin's command is resolved in non-interactive mode, the output file contains `{ "tickets": [], "edges": [] }` and the process exits with code 0 in 9 to 12 seconds.
 
 ```bash
-claude -p --plugin-dir <plugin> --add-dir <plugin> --add-dir <répertoire de sortie> \
+claude -p --plugin-dir <plugin> --add-dir <plugin> --add-dir <output directory> \
   --model sonnet --permission-mode dontAsk --permission-prompts none \
-  --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <répertoire de sortie>/*)" \
-  --output-format json -- "/implementation-harness:schedule <entrée> <sortie>"
+  --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <output directory>/*)" \
+  --output-format json -- "/implementation-harness:schedule <input> <output>"
 ```
 
-- `--permission-mode auto` fonctionne aussi, sans liste d'outils.
-- `--allowedTools` accepte plusieurs valeurs. Écrit en arguments séparés, il absorbe le prompt et `claude -p` sort avec le code 1 (« Input must be provided »). La liste va dans un seul argument séparé par des virgules, et `--` précède le prompt.
-- En `dontAsk` sans `Write` dans la liste, l'écriture est refusée et le processus sort quand même avec le code 0. Le code de sortie ne dit donc rien du résultat : la console lit le fichier de sortie.
-- Un second essai avec une URL de ticket inventée a exercé l'agent : il est lancé depuis la session non interactive, `glab` passe la liste d'outils, et le ticket illisible sort en `low`. Aucun ticket réel n'a été lu, donc la qualité des prédictions n'est pas vérifiée.
+- `--permission-mode auto` works too, with no tool list.
+- `--allowedTools` accepts several values. Written as separate arguments, it swallows the prompt and `claude -p` exits with code 1 ("Input must be provided"). The list goes in a single argument separated by commas, and `--` comes before the prompt.
+- In `dontAsk` without `Write` in the list, the write is refused and the process still exits with code 0. The exit code therefore says nothing about the result: the console reads the output file.
+- A second trial with an invented ticket URL exercised the agent: it is started from the non-interactive session, `glab` passes the tool list, and the unreadable ticket comes out as `low`. No real ticket was read, so the quality of the predictions is not verified.
 
-### Vérification de l'ordonnancement des lots, 3 octobre 2026
+### Check of batch scheduling, 3 October 2026
 
-Typecheck et build passent, ainsi que 627 tests unitaires. La suite d'intégration donne 68 tests réussis et 1 échec, `terminal.spec.ts:12`, déjà en échec avant ce changement et sans lien avec les lots.
+Typecheck and build pass, as do 627 unit tests. The integration suite gives 68 tests passed and 1 failure, `terminal.spec.ts:12`, already failing before this change and unrelated to batches.
 
-Ces tests remplacent `claude` et `glab` par les simulateurs de `console/tests/fake-claude/`. L'ordonnancement n'a pas encore tourné sur une vraie instance GitLab : ni la lecture d'un ticket réel par l'agent, ni l'appel `glab api` de la veille des merge requests, ni un départ empilé.
+These tests replace `claude` and `glab` with the stand-ins of `console/tests/fake-claude/`. At that date the scheduling had not run on a real GitLab instance: neither the reading of a real ticket by the agent, nor the `glab api` call of the merge request watch, nor a stacked start.
+
+### Real trial of batch scheduling, 3 October 2026
+
+Three tickets of a small test repository, with the real Claude Code and a real GitLab project.
+
+- Each run worked in its own worktree and left the main checkout untouched. Two runs ran in parallel on the same repository.
+- The analysis session answered in about 30 seconds. The conflict of this trial came from an analysis that failed, so the tickets of the repository ran one at a time: no conflict between two tickets both analysed without failure has been observed yet.
+- The merge request watch released the held ticket about 10 seconds after the merge on GitLab, and the ticket that started then contained the merged code.
+- The queue and the watch were restored after a restart of the console.
+
+Not tried for real: the stacked start, the forced start from the base, the new analysis of a ticket whose analysis failed, a ticket with a QA or design review, and Linux.

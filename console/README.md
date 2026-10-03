@@ -1,263 +1,268 @@
 # Implementation Harness
 
-Interface locale pour piloter la commande `/implementation-harness:implement` avec l’exécutable Claude Code installé sur la machine. Le harnais n’utilise pas directement l’API Anthropic et ne demande aucune clé API. Le [README principal](../README.md#installation-en-une-commande) présente l’installation et l’usage quotidien avec `impl`.
+Local interface for driving the `/implementation-harness:implement` command with the Claude Code executable installed on the machine. The harness does not use the Anthropic API directly and needs no API key. The [main README](../README.md#one-command-installation) covers installation and day-to-day use with `impl`.
 
-## Prérequis
+The interface is in French. Labels and messages are quoted here as they appear on screen.
 
-- Claude Code installé et connecté (`claude --version`)
-- Node.js 22.12 ou plus récent
-- `glab` installé et authentifié pour accéder aux tickets et merge requests GitLab
-- les MCP utilisés par le workflow : Playwright pour les mesures du développeur, la revue design et la QA, Figma quand un ticket fournit des frames
+## Requirements
 
-`node-pty` est un module natif. Sur une nouvelle machine, son installation peut nécessiter les outils de compilation du système, par exemple Xcode Command Line Tools sur macOS.
+- Claude Code installed and logged in (`claude --version`)
+- Node.js 22.12 or later
+- `glab` installed and authenticated, to reach the GitLab tickets and merge requests
+- the MCP servers the workflow uses: Playwright for the developer's measurements, the design review and QA, Figma when a ticket provides frames
 
-## Lancer la console
+`node-pty` is a native module. On a new machine, installing it may need the system's build tools, for example the Xcode Command Line Tools on macOS.
 
-Depuis ce dossier :
+## Start the console
+
+From this directory:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Puis ouvrir <http://127.0.0.1:3210>.
+Then open <http://127.0.0.1:3210>.
 
-Renseigner le chemin local du projet et l’URL du ticket. Plusieurs URL, une par ligne, lancent un lot (voir [Lot de tickets et ordonnancement](#lot-de-tickets-et-ordonnancement)). Le harnais crée un worktree git du projet pour ce run (`<projet>/.claude/worktrees/<id du run>`, voir le [README principal](../README.md#un-worktree-par-run)) et y démarre Claude Code avec le plugin voisin :
+Enter the local path of the project and the ticket URL. Several URLs, one per line, start a batch (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)). The harness creates a git worktree of the project for the run (`<project>/.claude/worktrees/<run id>`, see the [main README](../README.md#one-worktree-per-run)) and starts Claude Code in it with the neighbouring plugin:
 
 ```bash
-claude --plugin-dir /chemin/vers/implementation-harness "/implementation-harness:implement <ticket>"
+claude --plugin-dir /path/to/implementation-harness "/implementation-harness:implement <ticket>"
 ```
 
-La commande et les agents restent dans le dossier `implementation-harness`; rien n’est installé dans `~/.claude`.
+The command and the agents stay in the `implementation-harness` directory; nothing is installed in `~/.claude`.
 
-## Ce que montrent les panneaux
+## What the panels show
 
-Le panneau de discussion est lu dans le transcript de la session, et Claude Code n’y écrit un message qu’une fois revenue l’action qui l’a suivi. Un paragraphe peut donc y arriver avec une minute de retard sur le terminal, qui est la seule vue en direct. Tant que la session produit de la sortie, le panneau affiche « Claude écrit… » pour dire que le dernier message visible n’est pas le dernier état du run.
+The conversation panel is read from the session transcript, and Claude Code writes a message there only once the action that followed it has returned. A paragraph can therefore arrive a minute later than in the terminal, which is the only live view. While the session produces output, the panel shows "Claude écrit…" (Claude is writing) to say that the last visible message is not the latest state of the run.
 
-Dans un dossier que Claude Code n’a jamais ouvert, la session commence par sa demande de confiance, avant tout hook et tout transcript. La console la reconnaît dans la sortie du terminal et l’affiche dans la conversation comme une décision : « Claude Code demande de faire confiance à ce dossier », le chemin, puis « Faire confiance et continuer » ou « Refuser ». Elle ne répond jamais à ta place, n’écrit dans aucun fichier de configuration de Claude Code et ne passe aucun drapeau qui saute la question : elle tape dans le terminal la réponse que tu as choisie. La carte disparaît dès que la demande n’est plus à l’écran, que tu aies répondu ici ou dans l’onglet Terminal. Un refus ferme la session, et le run finit « Arrêté » avec sa raison, sans incident. La détection est écrite pour le texte de Claude Code 2.1.288 (`server/engine/trust-prompt.ts`) : si une version le reformule, rien ne s’affiche et la réponse se donne dans l’onglet Terminal, comme avant.
+In a directory Claude Code has never opened, the session starts with its trust prompt, before any hook and any transcript. The console recognises it in the terminal output and shows it in the conversation as a decision: "Claude Code demande de faire confiance à ce dossier", the path, then "Faire confiance et continuer" (trust and continue) or "Refuser" (refuse). It never answers for you, writes to no Claude Code configuration file and passes no flag that skips the question: it types into the terminal the answer you chose. The card disappears as soon as the prompt is no longer on screen, whether you answered here or in the Terminal tab. A refusal closes the session, and the run ends "Arrêté" (stopped) with its reason, with no incident. The detection is written for the wording of Claude Code 2.1.288 (`server/engine/trust-prompt.ts`): if a version rewords it, nothing shows and the answer is given in the Terminal tab, as before.
 
-Le flux d’activité ne garde que les jalons du workflow : agents, documents, branche, merge request, décisions attendues. Le détail des commandes reste dans le terminal.
+The activity feed keeps only the milestones of the workflow: agents, documents, branch, merge request, pending decisions. The detail of the commands stays in the terminal.
 
-Le harnais ne réclame l’attention que quand il est arrêté : une décision attendue, une demande de permission, un incident (plus aucune action en cours, résultat manquant, session interrompue), la fin ou l’échec du run. Un simple silence n’est qu’un doute, signalé une fois.
+The harness asks for attention only when it is stopped: a pending decision, a permission request, an incident (no action in progress any more, a missing result, an interrupted session), the end or the failure of the run. Silence alone is only a doubt, flagged once.
 
-## Qui peut faire avancer ce run ?
+## Who can move this run forward?
 
-La santé d’un run est une projection à part de son statut (`server/run-health.ts`, logique pure, horloge injectée). Elle ne lit que des signaux structurés : fin de tour du pilote (`Stop`), début et fin des sous-agents, appels d’outils appariés par `tool_use_id` et rattachés à leur agent (`agent_id`), type des notifications (`permission_prompt`, `elicitation_dialog`), appels en arrière-plan (`run_in_background`, `Monitor`), documents archivés, et `workflow-state.json`, que le pilote écrit à chaque transition pour dire ce qu’il attend (contrat dans `commands/implement.md`, section « Workflow state »). La sortie du terminal, un spinner compris, n’est jamais une progression.
+The health of a run is a projection separate from its status (`server/run-health.ts`, pure logic, injected clock). It reads only structured signals: the end of the pilot's turn (`Stop`), the start and end of subagents, tool calls paired by `tool_use_id` and attached to their agent (`agent_id`), the type of the notifications (`permission_prompt`, `elicitation_dialog`), background calls (`run_in_background`, `Monitor`), archived documents, and `workflow-state.json`, which the pilot writes at each transition to say what it is waiting for (contract in `commands/implement.md`, section "Workflow state"). Terminal output, a spinner included, is never progress.
 
-| Situation observée | Santé | Ce que montre la console |
+| Situation observed | Health | What the console shows |
 |---|---|---|
-| Question, confiance du dossier, permission ou saisie attendue | attente | le panneau de question ou de confiance, ou « Ouvrir le terminal » |
-| Agent, commande ou tâche de fond au travail | sain ou attente | rien ; au-delà du seuil de silence, un doute |
-| Silence prolongé (`IMPL_STALL_MINUTES`, 10 par défaut) | doute | « Aucune progression observée », sans rien arrêter ni relancer |
-| Le pilote a rendu la main, rien ne tourne, rien n’est attendu, workflow inachevé | incident après 60 s | « Plus aucune action en cours » |
-| Un agent a fini sans le fichier que son contrat exige, et personne n’a pris la suite | incident après 30 s | « Rapport QA attendu », « Plan de test QA attendu », « Inventaire design attendu », « Rapport de T3 attendu »… |
-| Aucune tâche restante exécutable (dépendance absente ou circulaire) | incident | « Plan bloqué par ses dépendances » |
-| Session sortie avant un résultat, quel que soit son code | interruption | « Session interrompue » |
+| A question, folder trust, a permission or an input is awaited | waiting | the question or trust panel, or "Ouvrir le terminal" |
+| An agent, a command or a background task is working | healthy or waiting | nothing; past the silence threshold, a doubt |
+| Prolonged silence (`IMPL_STALL_MINUTES`, 10 by default) | doubt | "Aucune progression observée", without stopping or restarting anything |
+| The pilot handed back, nothing runs, nothing is awaited, the workflow is unfinished | incident after 60 s | "Plus aucune action en cours" |
+| An agent ended without the file its contract requires, and nobody took over | incident after 30 s | "Rapport QA attendu", "Plan de test QA attendu", "Inventaire design attendu", "Rapport de T3 attendu"… |
+| No remaining task can run (missing or circular dependency) | incident | "Plan bloqué par ses dépendances" |
+| The session exited before a result, whatever its code | interruption | "Session interrompue" |
 
-Les fichiers exigés sont `planner-output.json` pour `ticket-planner`, `qa-report.md`, `qa-evidence.json` et `qa-plan.md` pour `qa-reviewer`, `designer-review.md`, `design-evidence.json` et `design-inventory.md` pour `designer-reviewer`, `review-summary.md` pour `review-orchestrator`.
+The required files are `planner-output.json` for `ticket-planner`, `qa-report.md`, `qa-evidence.json` and `qa-plan.md` for `qa-reviewer`, `designer-review.md`, `design-evidence.json` and `design-inventory.md` for `designer-reviewer`, `review-summary.md` for `review-orchestrator`.
 
-Une attente déclarée dans `workflow-state.json` ne masque jamais un blocage longtemps : `await_agent` sans agent actif reste une absence de prochaine action, les autres attentes deviennent un doute au seuil de silence. Une fin déclarée n’est prise que si elle tient face au livrable (merge request vue, ou blocages écrits). Sans ce fichier (prompts anciens), le détecteur s’en tient aux hooks et le dit dans son diagnostic. Après une mise en veille de la machine, toutes les grâces repartent du réveil.
+A wait declared in `workflow-state.json` never hides a block for long: `await_agent` with no active agent is still an absence of next action, the other waits become a doubt at the silence threshold. A declared end is accepted only if it holds against the deliverable (merge request seen, or blockers written). Without this file (older prompts), the detector relies on the hooks alone and says so in its diagnosis. After the machine sleeps, every grace period restarts from the wake-up.
 
-Un incident est unique par cause stable (empreinte), notifié une fois, enregistré dans `run.json` et clos seulement sur l’événement qui lève sa cause : le pilote agit de nouveau, le fichier arrive, ou l’utilisateur le classe. Les actions proposées sont seulement celles qui peuvent s’exécuter :
+An incident is unique per stable cause (fingerprint), notified once, recorded in `run.json` and closed only on the event that lifts its cause: the pilot acts again, the file arrives, or the user dismisses it. The actions offered are only the ones that can run:
 
-- **Demander la continuation** : session active, pilote au repos, aucun agent, outil, question ni permission en cours. La console soumet à la session existante une instruction qui lui demande de relire le contexte, le plan, les rapports et l’état Git, de garder fichiers et commits, et de ne pas repartir de l’étape 1. L’incident reste ouvert, « continuation demandée », jusqu’à ce que la reprise soit observée.
-- **Ouvrir le terminal**, **Arrêter**, **Classer comme faux positif** (avec un motif), et le diagnostic repliable.
+- **Demander la continuation** (ask to continue): active session, pilot idle, no agent, tool, question or permission in progress. The console submits to the existing session an instruction asking it to read the context, the plan, the reports and the Git state again, to keep files and commits, and not to start over from step 1. The incident stays open, "continuation demandée", until the resumption is observed.
+- **Ouvrir le terminal** (open the terminal), **Arrêter** (stop), **Classer comme faux positif** (dismiss as a false positive, with a reason), and the collapsible diagnosis.
 
-Chaque action part avec la révision de l’incident affichée et un identifiant de requête. Le serveur revérifie tout juste avant l’effet, refuse une action décidée sur un état qui a bougé, et n’exécute qu’une fois une requête envoyée par deux fenêtres. La décision est écrite avant l’effet ; après un arrêt entre les deux, elle reste « issue inconnue » et n’est jamais rejouée.
+Each action is sent with the revision of the incident shown and a request identifier. The server checks everything again right before the effect, refuses an action decided on a state that has moved, and runs only once a request sent by two windows. The decision is written before the effect; after a stop between the two, it stays "issue inconnue" (outcome unknown) and is never replayed.
 
-Au redémarrage, un run trouvé en cours reçoit un incident d’interruption, une seule fois, et sa question sans session est gardée comme contexte. Les runs restés avec un incident ouvert apparaissent sous « Interrompus », en lecture seule, par des routes séparées (`/api/archive/…`). Ils n’ont ni session, ni place, ni ticket tenu. Les classer les retire de la liste ; leur archive reste sur disque. Un run sans incident ouvert dont le worktree est encore sur le disque apparaît à part, sous « Worktrees conservés » (voir [Worktree d’un run](#worktree-dun-run)). `/?demo=incident` joue un run dont le pilote rend la main sans suite, pour voir le détecteur et la continuation sans dépôt. `/?demo=batch` joue un lot de trois tickets inventés, dont deux en conflit.
+On restart, a run found in progress gets one interruption incident, once, and its question without a session is kept as context. Runs left with an open incident appear under "Interrompus", read-only, through separate routes (`/api/archive/…`). They have no session, no slot and hold no ticket. Dismissing them removes them from the list; their archive stays on disk. A run with no open incident whose worktree is still on disk appears separately, under "Worktrees conservés" (see [Worktree of a run](#worktree-of-a-run)). `/?demo=incident` plays a run whose pilot hands back with nothing next, to see the detector and the continuation without a repository. `/?demo=batch` plays a batch of three invented tickets, two of them in conflict.
 
-Limites : aucune reprise d’une session Claude Code perdue (le contrat moteur ne le permet pas encore), aucun superviseur LLM, aucun agent recréé automatiquement.
+Limits: no resumption of a lost Claude Code session (the engine contract does not allow it yet), no LLM supervisor, no agent recreated automatically.
 
-## Preuves par critère d’acceptation
+## Evidence per acceptance criterion
 
-L’onglet Preuves montre ce qui a été vérifié, critère par critère. Il part du registre des critères que le pilote écrit après la clarification (`.claude/tasks/acceptance-criteria.json`), des liens entre tâches et critères du plan (`criterion_ids` dans `planner-output.json`) et des fichiers de preuves (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). Le registre est décrit dans `commands/implement.md` (« Write the acceptance criteria registry »), les fichiers de preuves dans `contracts/` (`evidence.md`, `qa.md`, `design.md`, `pilot-evidence.md`).
+The Preuves (evidence) tab shows what was verified, criterion by criterion. It starts from the register of criteria the pilot writes after clarification (`.claude/tasks/acceptance-criteria.json`), from the links between tasks and criteria in the plan (`criterion_ids` in `planner-output.json`) and from the evidence files (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). The register is described in `commands/implement.md` ("Write the acceptance criteria registry"), the evidence files in `contracts/` (`evidence.md`, `qa.md`, `design.md`, `pilot-evidence.md`).
 
-Chaque critère prend un état calculé par le serveur (`server/acceptance.ts`), dans cet ordre de priorité :
+Each criterion takes a state computed by the server (`server/acceptance.ts`), in this order of priority:
 
-| État | Quand |
+| State | When |
 |---|---|
-| Échec | un contrôle requis a un résultat négatif sur le code actuel, ou de version inconnue |
-| Bloqué | aucun échec, mais un contrôle requis est empêché par un obstacle nommé (`blocker`) |
-| Non vérifié | un contrôle n’a pas de preuve, sa preuve est ancienne, de version inconnue, non concluante, confirme une preuve absente, ou un échec antérieur n’a pas été explicitement remplacé |
-| Vérifié | chaque contrôle requis a un résultat positif pris sur le code actuel, sans échec restant à côté |
+| Échec (failed) | a required check has a negative result on the current code, or on an unknown version |
+| Bloqué (blocked) | no failure, but a required check is prevented by a named obstacle (`blocker`) |
+| Non vérifié (unverified) | a check has no evidence, its evidence is old, of unknown version, inconclusive, confirms evidence that is absent, or an earlier failure was not explicitly replaced |
+| Vérifié (verified) | every required check has a positive result taken on the current code, with no failure left beside it |
 
-Règles qui en découlent :
+Rules that follow:
 
-- Une tâche « Terminé » dans Suivi veut dire qu’un rapport existe, jamais qu’un critère est vérifié. Un lint ou un typecheck vert reste une vérification générale, rattachée à aucun critère.
-- Un succès ne remplace un échec que s’il le nomme dans `supersedes`, contrôle la même chose et a été pris sur le code actuel. Sinon l’échec reste affiché et le critère non vérifié.
-- La version du code est l’identifiant que calcule `hooks/code-snapshot.mjs` : l’arbre git du répertoire de travail, fichiers non suivis compris, fichiers ignorés et documents du workflow exclus, calculé dans un index jetable. Commiter l’état mesuré garde le même identifiant, toute modification le change. Le workflow l’appelle via `IMPL_CODE_SNAPSHOT` et chaque appel est journalisé dans `snapshots.jsonl` ; un identifiant absent de ce journal est affiché « Version inconnue ». Le serveur recalcule l’identifiant courant à chaque nouveau document et au plus toutes les 15 secondes quand l’onglet le demande.
-- Un résultat que le développeur rapporte sur son propre travail porte la mention « Résultat rapporté » ; une confirmation vaut ce qu’elle confirme, sur la version où cette preuve a été prise.
-- Une tentative de mise en échec est un item de preuve QA marqué `"kind": "attempt"`. Quand elle trouve un défaut (`fail`), elle compte contre le critère qu’elle cite. Quand elle ne trouve rien, elle est listée sous ce critère avec la mention « Aucun défaut trouvé », sans couleur verte et sans compter comme vérification. Une tentative seulement lue dans le code est affichée « Lue, non exécutée ». Une tentative qui ne cite aucun critère produit un avertissement dans le diagnostic.
-- Le verdict que QA déclare dans `qa-evidence.json` (`status`) apparaît dans la synthèse de l’onglet : « Validé », « Validé avec réserves », « Non concluant » ou « Échec », avec le tour et le mandat s’il y en a un. Le serveur compare ce verdict aux preuves (`qaVerdictConsistency`). Un `PASS` ou `PASS_WITH_WARNINGS` écrit alors qu’un critère n’a aucune observation exécutée par QA sur le code actuel affiche un avertissement qui nomme ces critères. Une confirmation, une tentative et une preuve remplacée ne comptent pas comme observation. Une passe ciblée (`mandate` à la racine du fichier) ne répond que des critères de son mandat.
-- Le serveur note la première arrivée de chaque document du run (`artifactArrivals` dans `run.json`). Quand `qa-plan.md` ou `design-inventory.md` n’est pas arrivé avant le rapport correspondant, l’onglet affiche une remarque : rien ne montre que le plan a été écrit en premier. Cette remarque ne change aucun verdict. Ces deux fichiers ne font pas avancer le rail d’étapes, parce qu’un reviewer les écrit avant de commencer.
-- Un run sans registre (ancien run resté sur l’ancien contrat) affiche « Traçabilité par critère indisponible pour ce run » et garde ses rapports lisibles. Des critères reconstruits depuis un ancien plan sont signalés comme tels et restent non vérifiés.
+- A task marked "Terminé" in Suivi means a report exists, never that a criterion is verified. A green lint or typecheck is a general check, attached to no criterion.
+- A success replaces a failure only if it names it in `supersedes`, checks the same thing and was taken on the current code. Otherwise the failure stays shown and the criterion unverified.
+- The version of the code is the identifier `hooks/code-snapshot.mjs` computes: the git tree of the working directory, untracked files included, ignored files and workflow documents excluded, computed in a throwaway index. Committing the measured state keeps the same identifier, any modification changes it. The workflow calls it through `IMPL_CODE_SNAPSHOT` and each call is logged in `snapshots.jsonl`; an identifier absent from that log is shown as "Version inconnue". The server recomputes the current identifier at each new document and at most every 15 seconds when the tab asks for it.
+- A result the developer reports on its own work carries the note "Résultat rapporté" (reported result); a confirmation is worth what it confirms, on the version where that evidence was taken.
+- A break attempt is a QA evidence item marked `"kind": "attempt"`. When it finds a defect (`fail`), it counts against the criterion it cites. When it finds nothing, it is listed under that criterion with the note "Aucun défaut trouvé" (no defect found), with no green colour and without counting as a verification. An attempt only read in the code is shown as "Lue, non exécutée" (read, not executed). An attempt that cites no criterion produces a warning in the diagnosis.
+- The verdict QA declares in `qa-evidence.json` (`status`) appears in the summary of the tab: "Validé", "Validé avec réserves", "Non concluant" or "Échec", with the round and the mandate if there is one. The server compares this verdict with the evidence (`qaVerdictConsistency`). A `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no observation executed by QA on the current code shows a warning that names those criteria. A confirmation, an attempt and replaced evidence do not count as an observation. A focused pass (`mandate` at the root of the file) answers only for the criteria of its mandate.
+- The server records the first arrival of each document of the run (`artifactArrivals` in `run.json`). When `qa-plan.md` or `design-inventory.md` did not arrive before the corresponding report, the tab shows a remark: nothing shows that the plan was written first. This remark changes no verdict. These two files do not move the step rail, because a reviewer writes them before starting.
+- A run without a register (an older run still on the old contract) shows "Traçabilité par critère indisponible pour ce run" and keeps its reports readable. Criteria rebuilt from an old plan are flagged as such and stay unverified.
 
-`server/evidence-archive.ts` archive chaque version utile de ces fichiers sous un chemin immuable, avec son empreinte et sa date de réception, et copie dans cette version les captures qu’elle cite : une capture remplacée au tour 2 sous le même nom reste distincte de celle du tour 1. Une même preuve vue deux fois (fichier par tâche puis fichier fusionné, copie `-roundN`) compte une fois grâce à son identifiant. Un fichier surpris à moitié écrit devient un diagnostic et la dernière version valide reste en vigueur. Avant de supprimer `.claude/tasks/`, le workflow écrit `archive-sync-request.json` et attend `archive-sync-ack.json` : le serveur a alors tout réarchivé.
+`server/evidence-archive.ts` archives each useful version of these files under an immutable path, with its hash and the date it was received, and copies into that version the captures it cites: a capture replaced in round 2 under the same name stays distinct from the one of round 1. The same evidence seen twice (a per-task file then a merged file, a `-roundN` copy) counts once thanks to its identifier. A file caught half written becomes a diagnosis and the last valid version stays in force. Before deleting `.claude/tasks/`, the workflow writes `archive-sync-request.json` and waits for `archive-sync-ack.json`: the server has then archived everything again.
 
-Le même calcul produit `acceptance-summary.md` et `acceptance-summary.json`, que le serveur dépose dans `.claude/tasks/` pour la merge request : une phrase de bilan et les critères non vérifiés pour la description, le tableau détaillé pour le commentaire de review. Quand le verdict QA contredit les preuves, la synthèse contient une ligne « Verdict QA à confirmer » et le JSON un champ `qaWarning`. Les captures y sont nommées par leur chemin local et marquées comme telles, parce que le workflow ne les lie dans GitLab qu’après upload.
+The same computation produces `acceptance-summary.md` and `acceptance-summary.json`, which the server puts in `.claude/tasks/` for the merge request: a one-sentence summary and the unverified criteria for the description, the detailed table for the review comment. When the QA verdict contradicts the evidence, the summary contains a line "Verdict QA à confirmer" and the JSON a `qaWarning` field. The captures are named there by their local path and marked as such, because the workflow links them in GitLab only after upload.
 
-Limites de cette version : aucune commande n’est encore corrélée à son résultat par les événements du moteur, tout résultat reste donc déclaré par l’agent qui l’écrit ; le serveur ne peut pas vérifier le contenu d’une preuve, seulement sa cohérence et sa version.
+Limits of this version: no command is yet correlated to its result by the engine's events, so every result is still declared by the agent that writes it; the server cannot check the content of a piece of evidence, only its consistency and its version.
 
-## Worktree d’un run
+## Worktree of a run
 
-Chaque run de ticket travaille dans son propre worktree git, `<projet>/.claude/worktrees/<id du run>`, que le serveur crée avant d’ouvrir la session. Le [README principal](../README.md#un-worktree-par-run) décrit ce que le worktree reçoit du checkout principal. Le mode démo n’en crée pas.
+Each ticket run works in its own git worktree, `<project>/.claude/worktrees/<run id>`, which the server creates before opening the session. The [main README](../README.md#one-worktree-per-run) describes what the worktree takes from the main checkout. Demo mode creates none.
 
-Plusieurs tickets d’un même dépôt tournent en parallèle. Le verrou porte sur le couple dépôt et ticket : un second lancement sur un ticket déjà en cours part en file d’attente avec la raison « ticket déjà en cours », et démarre quand le run qui tient ce ticket a rendu sa session. `IMPL_MAX_CONCURRENT_RUNS` borne toujours le nombre total de sessions. Deux tickets d’un lot que l’analyse juge en conflit ne tournent pas ensemble (voir [Lot de tickets et ordonnancement](#lot-de-tickets-et-ordonnancement)).
+Several tickets of one repository run in parallel. The lock is on the pair repository and ticket: a second launch on a ticket already running goes to the queue with the reason "ticket déjà en cours", and starts when the run holding that ticket has given up its session. `IMPL_MAX_CONCURRENT_RUNS` still bounds the total number of sessions. Two tickets of a batch that the analysis judges in conflict do not run together (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)).
 
-Deux réglages décident de ce que le worktree reprend du checkout principal :
+Two settings decide what the worktree takes from the main checkout:
 
-| Variable | Effet | Défaut |
+| Variable | Effect | Default |
 |---|---|---|
-| `IMPL_WORKTREE_DEPENDENCY_DIRS` | noms des dossiers de dépendances ignorés par Git, repris à toute profondeur : copiés en copy-on-write, liés par un lien symbolique si la copie échoue | `node_modules` |
-| `IMPL_WORKTREE_COPY_FILES` | fichiers copiés : un motif de nom comme `.env*` pour des fichiers ignorés par Git, ou un chemin depuis la racine du dépôt | `.env*,.claude/settings.local.json` |
+| `IMPL_WORKTREE_DEPENDENCY_DIRS` | names of the dependency directories Git ignores, taken at any depth: copied copy-on-write, linked with a symbolic link if the copy fails | `node_modules` |
+| `IMPL_WORKTREE_COPY_FILES` | files copied: a name pattern such as `.env*` for files Git ignores, or a path from the root of the repository | `.env*,.claude/settings.local.json` |
 
-La session reçoit `IMPL_RUN_WORKTREE`, `IMPL_SOURCE_REPOSITORY`, `IMPL_SOURCE_BRANCH` (absente quand le checkout principal est sur un HEAD détaché) et `IMPL_WORKTREE_DEPENDENCIES` : `symlink` dès qu’un dossier de dépendances est lié, `clone` quand tous sont copiés, absente quand aucun n’a été repris.
+The session receives `IMPL_RUN_WORKTREE`, `IMPL_SOURCE_REPOSITORY`, `IMPL_SOURCE_BRANCH` (absent when the main checkout is on a detached HEAD) and `IMPL_WORKTREE_DEPENDENCIES`: `symlink` as soon as one dependency directory is linked, `clone` when all are copied, absent when none was brought over.
 
-Une fois la session fermée, le serveur décide du sort du worktree (`worktreeRemoval` dans `server/domain.ts`, logique pure). Il le supprime seul quand le run est terminé, que la merge request existe et n’est pas en draft, que le workflow n’est pas bloqué, que l’archive des preuves a été confirmée, que l’arbre est propre et que HEAD est sur une branche du remote. Sinon l’état du run passe à « Worktree conservé » avec la raison. La branche n’est jamais supprimée.
+Once the session is closed, the server decides what happens to the worktree (`worktreeRemoval` in `server/domain.ts`, pure logic). It removes it on its own when the run is over, the merge request exists and is not a draft, the workflow is not blocked, the evidence archive has been confirmed, the tree is clean and HEAD is on a branch of the remote. Otherwise the state of the run becomes "Worktree conservé" with the reason. The branch is never deleted.
 
-Un worktree conservé se supprime depuis la vue du run, avec le bouton **Supprimer le worktree**, dès que la session est fermée. La page envoie `worktree.remove` et reçoit `worktree.result` : `removed`, `refused` avec le motif, ou `confirm` avec ce qui serait perdu (changements non commités, changements non poussés). La suppression n’a alors lieu qu’après confirmation. Le serveur ne supprime qu’un chemin placé directement sous `.claude/worktrees/`.
+A kept worktree is removed from the run view, with the **Supprimer le worktree** button, as soon as the session is closed. The page sends `worktree.remove` and receives `worktree.result`: `removed`, `refused` with the reason, or `confirm` with what would be lost (uncommitted changes, unpushed changes). The removal then happens only after confirmation. The server only removes a path directly under `.claude/worktrees/`.
 
-Un run fermé ou relu après un redémarrage reste listé sous « Worktrees conservés » tant que son worktree est sur le disque. Au démarrage, avant de lister les archives, le serveur applique les mêmes règles aux worktrees des runs précédents. Un worktree dont la session a été coupée par l’arrêt de la console est marqué conservé à l’arrêt, et son sort est décidé au démarrage suivant.
+A run closed or read back after a restart stays listed under "Worktrees conservés" while its worktree is on disk. On start, before listing the archives, the server applies the same rules to the worktrees of earlier runs. A worktree whose session was cut by the console stopping is marked kept at the stop, and decided on at the next start.
 
-## Lot de tickets et ordonnancement
+## Batch of tickets and scheduling
 
-Le [README principal](../README.md#lancer-plusieurs-tickets-dun-coup) décrit l’usage : coller un lot, lire la file, forcer un départ. Cette section décrit ce que fait le serveur.
+The [main README](../README.md#launch-several-tickets-at-once) describes the use: pasting a batch, reading the queue, forcing a start. This section describes what the server does.
 
-### Entrée du lot
+### Batch intake
 
-Dès que le champ du ticket contient deux URL, le formulaire envoie `batch.submit` (`issueUrls`, `instruction`). `lib/ticket-urls.ts` lit le collage de la même façon dans le formulaire et sur le serveur. `server/ticket-source.ts` résout chaque URL vers son checkout principal. C’est le seul module qui sait que le lot a été collé, et l’endroit où brancher plus tard une récupération par labels ou assignee. Une URL invalide ou un ticket sans checkout refuse le lot entier.
+As soon as the ticket field holds two URLs, the form sends `batch.submit` (`issueUrls`, `instruction`). `lib/ticket-urls.ts` reads the paste the same way in the form and on the server. `server/ticket-source.ts` resolves each URL to its main checkout. It is the only module that knows the batch was pasted, and the place where a retrieval by label or assignee would plug in later. An invalid URL or a ticket with no checkout refuses the whole batch.
 
-Le registre reçoit une liste de tickets résolus (`enqueueBatch`). Il écarte ceux qu’il a déjà, sur la clé dépôt et ticket, les autres entrent en file sous un même `batchId`, et la page reçoit `batch.result` (`accepted`, `duplicates`).
+The registry receives a list of resolved tickets (`enqueueBatch`). It drops the ones it already has, on the key repository and ticket, the others enter the queue under one `batchId`, and the page receives `batch.result` (`accepted`, `duplicates`).
 
-### Analyse
+Tickets an outside watcher found take the same path once the user accepts them: `server/ticket-proposals.ts` reads the watcher's file, `proposal.accept` resolves the URLs and calls `enqueueBatch` (format in `contracts/ticket-proposals.md`).
 
-Pour chaque dépôt qui a au moins deux nouveaux tickets, ou un nouveau ticket à côté de prédictions déjà connues, `server/schedule-analysis.ts` écrit `input.json` dans le dossier d’analyse (`scheduleRoot`, voir plus bas) et demande au moteur une session sans terminal (`startSchedule`) :
+### Analysis
+
+For each repository that has at least two new tickets, or one new ticket beside predictions already known, `server/schedule-analysis.ts` writes `input.json` in the analysis directory (`scheduleRoot`, see below) and asks the engine for a session with no terminal (`startSchedule`):
 
 ```bash
 claude -p --plugin-dir <plugin> --model sonnet --permission-mode dontAsk \
-  --allowedTools "<liste fermée, en lecture>" -- "/implementation-harness:schedule <entrée> <sortie>"
+  --allowedTools "<closed list, read-only>" -- "/implementation-harness:schedule <input> <output>"
 ```
 
-La liste complète des arguments est dans `scheduleArguments` (`server/engine/claude-code.ts`). La session tourne dans le checkout principal, sans les variables des hooks, donc elle ne remonte rien à la console. Son code de sortie n’est pas lu. Le serveur juge le résultat sur `output.json`, validé en bloc contre `contracts/schedule.md` (`validateSchedule` dans `server/domain.ts`). Les analyses d’un même dépôt passent l’une après l’autre, hors de `IMPL_MAX_CONCURRENT_RUNS`.
+The full list of arguments is in `scheduleArguments` (`server/engine/claude-code.ts`). The session runs in the main checkout, without the hook variables, so it reports nothing to the console. Its exit code is not read. The server judges the result on `output.json`, validated as a whole against `contracts/schedule.md` (`validateSchedule` in `server/domain.ts`). The analyses of one repository run one after the other, outside `IMPL_MAX_CONCURRENT_RUNS`.
 
-| Issue de l’analyse | Effet |
+| Outcome of the analysis | Effect |
 |---|---|
-| Fichier valide | les prédictions et les arêtes sont gardées, le dossier d’analyse est supprimé |
-| Fichier absent, illisible ou refusé | tickets marqués « Analyse en échec », en conflit avec tous les tickets de leur dépôt |
-| Délai dépassé (`IMPL_SCHEDULE_TIMEOUT_MINUTES`, 5 par défaut) | session tuée, même repli |
-| Console arrêtée pendant l’analyse | même repli au démarrage suivant |
-| Confiance `low` sur un ticket | « Prédiction peu fiable », ce ticket passe seul sur son dépôt |
+| Valid file | the predictions and the edges are kept, the analysis directory is deleted |
+| File missing, unreadable or refused | tickets marked "Analyse en échec", in conflict with every ticket of their repository |
+| Timeout exceeded (`IMPL_SCHEDULE_TIMEOUT_MINUTES`, 5 by default) | session killed, same fallback |
+| Console stopped during the analysis | same fallback at the next start |
+| `low` confidence on a ticket | "Prédiction peu fiable", this ticket runs alone on its repository |
 
-Les tickets en échec d’analyse encore en file, en cours ou en attente de merge repartent dans l’analyse suivante de leur dépôt, comme tickets à prédire et non comme `known`. Leur prédiction est remplacée si elle réussit, et ils restent en échec sinon. Aucune analyse n’est ouverte pour eux seuls.
+Tickets whose analysis failed and that are still queued, running or waiting for their merge go into the next analysis of their repository, as tickets to predict and not as `known`. Their prediction is replaced if it succeeds, and they stay failed otherwise. No analysis is opened for them alone.
 
-Chaque analyse a son dossier `<id>/` sous `scheduleRoot` (`server/config.ts`). Quand le dossier de données est dans le plugin, `scheduleRoot` est `implementation-harness-<utilisateur>/schedule/` sous le dossier temporaire du système, réservé à l’utilisateur : Claude Code refuse à une session toute écriture dans le dossier du plugin qu’elle a chargé. Un dossier de données hors du plugin (`IMPL_DATA_DIR`) les garde sous `schedule/`. Après un échec, le dossier d’analyse reste avec `session.log`, la fin de la sortie de la session. `scheduleRoot` est vidé à chaque démarrage. Ces fichiers contiennent du contenu de tickets.
+Each analysis has its `<id>/` directory under `scheduleRoot` (`server/config.ts`). When the data directory is inside the plugin, `scheduleRoot` is `implementation-harness-<user>/schedule/` under the system's temporary directory, private to the user: Claude Code refuses a session any write in the directory of the plugin it loaded. A data directory outside the plugin (`IMPL_DATA_DIR`) keeps them under `schedule/`. After a failure, the analysis directory stays with `session.log`, the end of the session's output. `scheduleRoot` is emptied at each start. These files hold ticket content.
 
-### Raisons d’attente
+### Reasons for waiting
 
-`describeQueue` (`server/domain.ts`, logique pure) donne à chaque entrée de la file sa raison, dans cet ordre :
+`describeQueue` (`server/domain.ts`, pure logic) gives each queue entry its reason, in this order:
 
-| `reason` | Ligne affichée | Quand |
+| `reason` | Row shown | When |
 |---|---|---|
-| `ticket` | « En attente, ticket déjà en cours » | un run tient le même ticket |
-| `slot` | « Départ forcé, dès qu’une place est libre » ou « Départ empilé sur … » | l’entrée a été forcée |
-| `analysis` | « Analyse en cours » | la session d’analyse n’a pas répondu |
-| `conflict` | « En attente, conflit avec #217 en cours » | un run en cours est en conflit |
-| `merge` | « Attend que la MR !12 soit mergée (#217) » | la merge request d’un run fini est ouverte |
-| `merge_unknown` | « État de la MR !12 inconnu (#217) » | GitLab n’a pas pu être interrogé |
-| `dependency` | « Dépend de #217, encore en file » | une arête `depends_on` vers une entrée devant elle |
-| `order` | « Passe après #217 » | un autre conflit avec une entrée devant elle |
-| `slot` | « En attente, toutes les places sont prises » | rien d’autre ne la retient |
+| `ticket` | "En attente, ticket déjà en cours" | a run holds the same ticket |
+| `slot` | "Départ forcé, dès qu’une place est libre" or "Départ empilé sur …" | the entry was forced |
+| `analysis` | "Analyse en cours" | the analysis session has not answered |
+| `conflict` | "En attente, conflit avec #217 en cours" | a run in progress conflicts |
+| `merge` | "Attend que la MR !12 soit mergée (#217)" | the merge request of a finished run is open |
+| `merge_unknown` | "État de la MR !12 inconnu (#217)" | GitLab could not be asked |
+| `dependency` | "Dépend de #217, encore en file" | a `depends_on` edge to an entry ahead of it |
+| `order` | "Passe après #217" | another conflict with an entry ahead of it |
+| `slot` | "En attente, toutes les places sont prises" | nothing else holds it |
 
-`cause` dit pourquoi deux tickets sont séparés : `overlap`, `depends_on`, `analysis_failed` ou `low_confidence`. `detail` porte la phrase de l’agent, ou celle du serveur pour les deux dernières causes, qui dit si l’analyse en échec ou la prédiction peu fiable est celle du ticket qui attend ou celle de l’autre. Seules les entrées `slot` démarrent (`startableEntries`), dans la limite des places libres. Une entrée retenue n’occupe pas de place et celles qui la suivent passent devant.
+`cause` says why two tickets are kept apart: `overlap`, `depends_on`, `analysis_failed` or `low_confidence`. `detail` carries the agent's sentence, or the server's for the last two causes, which says whether the failed analysis or the unreliable prediction belongs to the ticket that waits or to the other one. Only `slot` entries start (`startableEntries`), within the free slots. A held entry takes no slot and the ones after it go ahead.
 
-### Veille des merge requests
+### Merge request watch
 
-Quand un run ordonnancé se termine avec une merge request, le registre garde une veille (`MergeWatch`) et les tickets en conflit attendent le merge. `server/merge-watch.ts` interroge GitLab avec `fetchMergeRequestStatus` (`server/ticket.ts`) :
+When a scheduled run ends with a merge request, the registry keeps a watch (`MergeWatch`) and the tickets in conflict wait for the merge. `server/merge-watch.ts` asks GitLab with `fetchMergeRequestStatus` (`server/ticket.ts`):
 
 ```bash
-glab api --hostname <hôte> projects/<projet>/merge_requests/<iid>
+glab api --hostname <host> projects/<project>/merge_requests/<iid>
 ```
 
-C’est un appel du serveur Node. **Il n’ouvre aucune session Claude et ne consomme aucun token.** Il part toutes les `IMPL_MERGE_POLL_MS` millisecondes (60 000 par défaut, variable d’environnement hors `impl config`), une fois par merge request et par intervalle, et seulement pour les veilles qui retiennent une entrée de la file. Sans ticket en attente, il n’y a ni minuteur ni appel.
+It is a call made by the Node server. **It opens no Claude session and uses no tokens.** It goes out every `IMPL_MERGE_POLL_MS` milliseconds (60,000 by default, an environment variable outside `impl config`), once per merge request and per interval, and only for the watches that hold a queue entry. With no ticket waiting, there is no timer and no call.
 
-| Réponse | Effet |
+| Answer | Effect |
 |---|---|
-| `merged` | la veille est levée, les tickets retenus repartent, bandeau « Merge request mergée » |
-| `closed` | même libération, bandeau « Merge request fermée sans être mergée » |
-| `opened`, `locked` | le ticket continue d’attendre |
-| échec de `glab` (réseau, jeton, binaire absent) | état inconnu, le ticket reste retenu et la ligne passe en orange |
+| `merged` | the watch is lifted, the held tickets go, banner "Merge request mergée" |
+| `closed` | same release, banner "Merge request fermée sans être mergée" |
+| `opened`, `locked` | the ticket keeps waiting |
+| `glab` failure (network, token, missing binary) | unknown state, the ticket stays held and the row turns orange |
 
-Un run qui se termine sans merge request libère tout de suite les tickets qui l’attendaient. Une veille que plus rien n’attend est oubliée au bout d’une semaine.
+A run that ends without a merge request releases at once the tickets that were waiting for it. A watch nothing waits on any more is forgotten after a week.
 
-### Actions sur la file
+### Actions on the queue
 
-| Message | Effet |
+| Message | Effect |
 |---|---|
-| `queue.force`, `mode: "base"` | l’entrée ignore l’ordonnancement et part de la branche de base dès qu’une place est libre |
-| `queue.force`, `mode: "stacked"` | l’entrée part de la branche du ticket qu’elle attend ; la session reçoit `IMPL_BASE_BRANCH` et sa merge request cible cette branche. Refusé tant que cette branche n’est pas connue |
-| `queue.move` | place l’entrée avant une autre, ou en fin de file (`before: null`). Une dépendance passe toujours avant le ticket qui en a besoin |
-| `queue.cancel` | retire l’entrée |
+| `queue.force`, `mode: "base"` | the entry ignores the schedule and starts from the base branch as soon as a slot is free |
+| `queue.force`, `mode: "stacked"` | the entry starts from the branch of the ticket it waits for; the session receives `IMPL_BASE_BRANCH` and its merge request targets that branch. Refused while that branch is not known |
+| `queue.move` | puts the entry before another one, or at the end of the queue (`before: null`). A dependency always goes before the ticket that needs it |
+| `queue.cancel` | removes the entry |
 
-Une entrée forcée reste soumise au verrou par ticket et au nombre de places.
+A forced entry is still subject to the per-ticket lock and to the number of slots.
 
-### Persistance
+### Persistence
 
-`data/queue.json` contient `{ version: 2, queue, tickets, edges, watches }`. Il est écrit en entier puis renommé. L’ancien format, un simple tableau de lancements, se charge toujours. Au démarrage, les entrées qui n’attendaient qu’une place repartent, celles qui attendent une merge request continuent de l’attendre. Rien du mode démo n’y est écrit.
+`data/queue.json` holds `{ version: 2, queue, tickets, edges, watches }`. It is written whole, then renamed. The old format, a plain array of launches, still loads. On start, the entries that were only waiting for a slot go, the ones waiting for a merge request keep waiting for it. Nothing from demo mode is written there.
 
-### Limites
+### Limits
 
-Aucun essai sur une vraie instance GitLab n’a encore eu lieu. Les tests unitaires injectent les réponses, et la suite d’intégration remplace `claude` et `glab` par les simulateurs de `tests/fake-claude/`. La commande `/implementation-harness:schedule` a été lancée en vrai sur un lot vide et sur une URL inventée (voir `docs/engineering-workflow.md`), sans ticket réel. L’appel `glab api` de la veille et le départ empilé n’ont tourné que contre ces simulateurs.
+The unit tests inject the answers, and the integration suite replaces `claude` and `glab` with the stand-ins of `tests/fake-claude/`. One real trial took place, on three tickets of a small test repository (see `docs/engineering-workflow.md`): the analysis, the `glab api` call of the watch and the release after a merge ran against a real GitLab. The stacked start and the forced start from the base only ran against the stand-ins, and no conflict has yet been found for real between two tickets both analysed without failure.
 
-## Architecture du serveur
+## Server architecture
 
-| Module | Rôle |
+| Module | Role |
 |---|---|
-| `server/index.ts` | serveur HTTP et WebSocket, cycle de vie du run |
-| `server/registry.ts` | runs tenus, file d’attente, verrou par ticket et nombre de sessions, état de l’ordonnancement |
-| `server/ticket-source.ts` | d’où vient un lot : aujourd’hui des URL collées, résolues vers leur checkout |
-| `server/schedule-analysis.ts` | une session d’analyse par dépôt, jugée sur son fichier de sortie |
-| `server/merge-watch.ts` | minuteur qui lit l’état des merge requests attendues, sans session Claude |
-| `server/ticket.ts` | appels `glab api` : titre d’un ticket, état d’une merge request |
-| `server/run-worktrees.ts` | worktree d’un run, de sa création à sa suppression, et réconciliation au démarrage |
-| `server/worktree.ts` | appels git : worktrees des runs et worktrees d’auto-amélioration |
-| `server/engine/` | **la seule partie qui sait quel agent est piloté** (voir son README) |
-| `server/hooks.ts` | applique les événements du moteur à l’état du run |
-| `server/session-prompt.ts` | la demande de confiance du dossier : affichée, répondue, partie d’elle-même, refusée |
-| `server/transcript.ts` | suit le fichier de dialogue de la session |
-| `server/artifacts.ts` | archive les documents produits avant leur nettoyage |
-| `server/acceptance.ts` | couverture des critères d’acceptation, cohérence du verdict QA, logique pure, et synthèse de merge request |
-| `server/evidence-archive.ts` | versions immuables des registres, plans, preuves et captures d’un run |
-| `server/acceptance-runtime.ts` | ingestion, identification du code, recalcul et synthèse remise au workflow |
-| `server/run-health.ts` | qui peut faire avancer un run : signaux, matrice de détection, logique pure |
-| `server/run-incidents.ts` | vie d’un incident, validation des actions, lecture des archives, logique pure |
-| `server/run-monitor.ts` | ordonnanceur unique de la santé des runs vivants |
-| `server/run-archive.ts` | runs d’un processus précédent restés avec un incident ou un worktree sur le disque, en lecture seule, hors suppression du worktree |
-| `server/workflow-state.ts` | lecture de `workflow-state.json` et vérification d’une fin déclarée |
-| `server/self-improvement.ts` | retours, auto-audit et boucle d’amélioration |
-| `server/domain.ts` | logique pure, sans agent ni système de fichiers |
+| `server/index.ts` | HTTP and WebSocket server, lifecycle of the run |
+| `server/registry.ts` | runs held, queue, per-ticket lock and number of sessions, state of the schedule |
+| `server/ticket-source.ts` | where a batch comes from: today pasted URLs, resolved to their checkout |
+| `server/ticket-proposals.ts` | tickets an outside watcher found, read from its file and kept until the user decides |
+| `server/schedule-analysis.ts` | one analysis session per repository, judged on its output file |
+| `server/merge-watch.ts` | timer that reads the state of the awaited merge requests, with no Claude session |
+| `server/ticket.ts` | `glab api` calls: title of a ticket, state of a merge request |
+| `server/run-worktrees.ts` | worktree of a run, from its creation to its removal, and reconciliation on start |
+| `server/worktree.ts` | git calls: run worktrees and self-improvement worktrees |
+| `server/engine/` | **the only part that knows which agent is driven** (see its README) |
+| `server/hooks.ts` | applies the engine's events to the state of the run |
+| `server/session-prompt.ts` | the folder trust prompt: shown, answered, gone on its own, refused |
+| `server/transcript.ts` | follows the dialogue file of the session |
+| `server/artifacts.ts` | archives the documents produced before they are cleaned up |
+| `server/acceptance.ts` | coverage of the acceptance criteria, consistency of the QA verdict, pure logic, and merge request summary |
+| `server/evidence-archive.ts` | immutable versions of the registers, plans, evidence and captures of a run |
+| `server/acceptance-runtime.ts` | ingestion, identification of the code, recomputation and summary handed to the workflow |
+| `server/run-health.ts` | who can move a run forward: signals, detection matrix, pure logic |
+| `server/run-incidents.ts` | life of an incident, validation of the actions, reading of the archives, pure logic |
+| `server/run-monitor.ts` | single scheduler of the health of live runs |
+| `server/run-archive.ts` | runs of an earlier process left with an incident or a worktree on disk, read-only, apart from removing the worktree |
+| `server/workflow-state.ts` | reading of `workflow-state.json` and check of a declared end |
+| `server/self-improvement.ts` | feedback, self-audit and improvement loop |
+| `server/domain.ts` | pure logic, with no agent and no filesystem |
 
-`server/domain.ts` et `server/engine/` sont les deux endroits testables sans rien lancer, et la plus grande part de la logique s’y trouve.
+`server/domain.ts` and `server/engine/` are the two places testable without starting anything, and most of the logic is there.
 
-## Copier sur une autre machine
+## Copying to another machine
 
-Copier ou cloner le dossier `implementation-harness` complet, puis exécuter les commandes d’installation ci-dessus dans `implementation-harness/console`. Le chemin du dépôt traité est choisi dans l’interface, il peut donc être différent sur chaque machine.
+Copy or clone the whole `implementation-harness` directory, then run the install commands above in `implementation-harness/console`. The path of the repository to work on is chosen in the interface, so it can differ on each machine.
 
-## Données locales
+## Local data
 
-Chaque exécution est conservée dans `console/data/runs/<run-id>/` :
+Each run is kept in `console/data/runs/<run-id>/`:
 
-- `run.json` contient l’état, les agents et le journal d’activité;
-- `terminal.log` contient la sortie brute du terminal;
-- `artifacts/` reçoit une copie des documents produits dans `.claude/tasks/` avant leur nettoyage. Seuls les documents lisibles y sont copiés : les captures et les assets téléchargés restent dans le worktree du run, sous `.claude/tasks/assets/`, sauf celles qu’un fichier de preuves cite;
-- `evidence/` garde chaque version du registre, du plan et des fichiers de preuves (`<fichier>/v<n>.json`), les captures de chaque version (`<fichier>/v<n>/assets/…`) et leur index (`index.json`);
-- `acceptance/` contient la dernière synthèse de couverture, en Markdown et en JSON;
-- `snapshots.jsonl` journalise chaque identifiant de code pris par la session.
+- `run.json` holds the state, the agents and the activity log;
+- `terminal.log` holds the raw output of the terminal;
+- `artifacts/` receives a copy of the documents produced in `.claude/tasks/` before they are cleaned up. Only readable documents are copied there: the captures and the downloaded assets stay in the worktree of the run, under `.claude/tasks/assets/`, except the ones an evidence file cites;
+- `evidence/` keeps each version of the register, the plan and the evidence files (`<file>/v<n>.json`), the captures of each version (`<file>/v<n>/assets/…`) and their index (`index.json`);
+- `acceptance/` holds the latest coverage summary, in Markdown and in JSON;
+- `snapshots.jsonl` logs each code identifier taken by the session.
 
-`run.json` est écrit en entier puis renommé, une écriture après l’autre. Une lecture ne voit donc jamais un fichier à moitié écrit, et le dernier état publié est celui qui reste.
+`run.json` is written whole then renamed, one write after the other. A read therefore never sees a half-written file, and the last state published is the one that stays.
 
-`data/queue.json` garde la file et son ordonnancement. Les fichiers d’une analyse de lot en cours ou en échec sont hors du plugin, dans le dossier d’analyse décrit plus haut.
+`data/queue.json` keeps the queue and its schedule. The files of a batch analysis in progress or failed are outside the plugin, in the analysis directory described above.
 
-Le dossier `data/` est ignoré par Git.
+The `data/` directory is ignored by Git.
 
-Au démarrage, le serveur referme tout run resté sur un statut non terminal (`starting`, `running`, `attention`). `ctx.state` repart vide à chaque lancement, donc un run que le processus précédent n’a pas pu clore lui-même (arrêt brutal, `impl restart`) resterait sinon marqué `running`. Le serveur le reclasse `failed` avec un message qui l’explique, distinct d’un échec de l’agent.
+On start, the server closes every run left on a non-terminal status (`starting`, `running`, `attention`). `ctx.state` starts empty at each launch, so a run the previous process could not close itself (a hard stop, `impl restart`) would otherwise stay marked `running`. The server reclassifies it `failed` with a message that explains it, distinct from a failure of the agent.

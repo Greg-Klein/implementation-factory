@@ -74,7 +74,7 @@ Runtime data lives in `console/data/runs/<run-id>/` (`run.json`, `metrics.json`,
 
 ## Conventions
 
-- Code, identifiers, comments and commit messages in English. User-facing UI text and READMEs in French.
+- Code, identifiers, comments, commit messages, READMEs and `docs/` in English. User-facing UI text in French: the documentation quotes interface labels as they appear on screen, and the reports the workflow writes stay in French.
 - UI styling and wording follow `brand/README.md` (tokens, type scale, components, tone). A screen that departs from it is fixed, or the brand book is updated in the same commit.
 - Commits: conventional prefixes (`fix:`, `feat:`, `chore:`), subject describes the behavior change in plain words. `self-improvement: apply improvements from self-improvement-<id>` is reserved for the improvement loop.
 - Server modules are ESM and import siblings with the `.js` suffix (Jest maps it back).

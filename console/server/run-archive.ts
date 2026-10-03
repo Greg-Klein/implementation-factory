@@ -2,13 +2,18 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeArchivedRun, openIncident } from "./run-incidents.js";
 import { RunSession } from "./run-session.js";
-import type { RunSummary } from "./types.js";
+import type { RunState, RunSummary } from "./types.js";
+
+/** What keeps a run of an earlier session in the list: an incident nobody closed, or a worktree still on disk. */
+function worthShowing(state: RunState) {
+  return Boolean(openIncident(state.incidents)) || state.worktree?.state === "kept";
+}
 
 /**
  * Runs of an earlier process that ended with an open incident, typically a
- * session lost to a crash or a restart. They are read back from their
- * archive so the user can see what happened, and nothing more: no session, no
- * slot, no checkout, no instruction. They never enter the registry, which is
+ * session lost to a crash or a restart, or that left a worktree on disk. They
+ * are read back from their archive so the user can see what happened and
+ * remove that worktree, and nothing more: no session, no slot, no instruction. They never enter the registry, which is
  * what keeps them out of the queue and the concurrency ceiling.
  */
 export class RunArchive {
@@ -22,13 +27,21 @@ export class RunArchive {
       if (live.has(runId) || runId.startsWith("demo-")) return;
       try {
         const state = normalizeArchivedRun(JSON.parse(await readFile(path.join(runsDirectory, runId, "run.json"), "utf8")), runId);
-        if (!state || !openIncident(state.incidents)) return;
+        if (!state || !worthShowing(state)) return;
         const session = new RunSession(runId, { ...state, archived: true });
         await session.evidence.restore().catch(() => false);
         session.acceptanceView = session.evidence.hasInputs ? session.evidence.view() : null;
         this.runs.set(runId, session);
       } catch { /* an unreadable archive stays on disk, out of the list */ }
     }));
+  }
+
+  /** A run the user closed while its worktree is still on disk: it stays readable, with the removal on offer. */
+  adopt(state: RunState) {
+    if (!state.id || !worthShowing(state)) return undefined;
+    const session = new RunSession(state.id, { ...state, archived: true, sessionActive: false, pendingQuestion: undefined });
+    this.runs.set(state.id, session);
+    return session;
   }
 
   get(runId: string | undefined) {
@@ -39,9 +52,9 @@ export class RunArchive {
     return [...this.runs.values()].map((session) => session.summary()).sort((left, right) => (right.startedAt ?? "").localeCompare(left.startedAt ?? ""));
   }
 
-  /** Once its last incident is closed, a run has nothing left to show here: its archive stays on disk. */
+  /** Once its last incident is closed and its worktree gone, a run has nothing left to show here: its archive stays on disk. */
   release(runId: string) {
     const session = this.runs.get(runId);
-    if (session && !openIncident(session.state.incidents)) this.runs.delete(runId);
+    if (session && !worthShowing(session.state)) this.runs.delete(runId);
   }
 }

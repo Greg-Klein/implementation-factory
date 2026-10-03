@@ -59,7 +59,7 @@ export function acknowledgeDemoInstruction(session: RunSession) {
 /**
  * The state a demo run starts from. The registry gives it a slot and a place in
  * the queue like any other run, so the simulated checkout is a real address as
- * far as the repository lock is concerned.
+ * far as the ticket lock is concerned. It has no worktree: nothing here is a git repository.
  */
 export const DEMO_CWD = "~/workspace/acme-dashboard";
 /** The incident scenario runs on a checkout of its own, so it can play beside the main demonstration. */
@@ -67,15 +67,47 @@ export const INCIDENT_DEMO_CWD = "~/workspace/acme-exports";
 
 export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") {
   if (scenario === "incident") return {
-    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: "Exporter le tableau des factures en CSV",
+    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, repository: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: "Exporter le tableau des factures en CSV",
     instruction: "Démonstration d'incident : aucun dépôt ne sera modifié.", startedAt: now(),
     action: "Lecture du ticket GitLab",
   };
   return {
-    status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
+    status: "running" as const, phase: 1, cwd: DEMO_CWD, repository: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
     instruction: "Mode démonstration, aucun dépôt ne sera modifié.", startedAt: now(),
     action: "Lecture du ticket GitLab",
   };
+}
+
+/**
+ * The batch of the demonstration: three invented tickets of the simulated
+ * repository, and the schedule a scheduling session would have returned for
+ * them. Two of them touch the same file, so one waits for the other's merge
+ * request; the third runs beside them.
+ */
+export const DEMO_BATCH = {
+  tickets: [
+    { issueUrl: "ticket-simule://IH-42", title: "Ajouter les préférences de notification", confidence: "high" as const, files: ["src/settings/notification-preferences.tsx", "src/settings/notification-preferences.test.tsx"], summary: "Ajoute un panneau de préférences de notification dans les réglages du compte." },
+    { issueUrl: "ticket-simule://IH-43", title: "Proposer un résumé hebdomadaire par e-mail", confidence: "medium" as const, files: ["src/settings/notification-preferences.tsx", "src/emails/weekly-digest.tsx"], summary: "Ajoute au panneau des préférences le choix d'un résumé hebdomadaire par e-mail." },
+    { issueUrl: "ticket-simule://IH-44", title: "Exporter le journal d'audit en CSV", confidence: "high" as const, files: ["src/audit/export.ts", "src/audit/export.test.ts"], summary: "Ajoute un export CSV au journal d'audit." },
+  ],
+  edges: [{ a: "ticket-simule://IH-42", b: "ticket-simule://IH-43", kind: "overlap" as const, reason: "Les deux tickets modifient le panneau des préférences de notification." }],
+};
+
+function demoTicket(session: RunSession) {
+  const reference = session.state.issueUrl.replace("ticket-simule://", "");
+  const position = DEMO_BATCH.tickets.findIndex((ticket) => ticket.issueUrl === session.state.issueUrl);
+  return {
+    reference,
+    // The first ticket keeps the branch and the merge request the demonstration has always shown.
+    branch: position <= 0 ? "feat/ih-42-notification-preferences" : `feat/${reference.toLowerCase()}`,
+    mergeRequest: `acme-dashboard/-/merge_requests/${128 + Math.max(position, 0)}`,
+  };
+}
+
+/** The state one ticket of the demonstration batch starts from: the regular simulated workflow, under its own ticket. */
+export function demoBatchLaunchState(issueUrl: string) {
+  const ticket = DEMO_BATCH.tickets.find((candidate) => candidate.issueUrl === issueUrl);
+  return { ...demoLaunchState("workflow"), issueUrl, ...(ticket ? { ticketTitle: ticket.title } : {}) };
 }
 
 /**
@@ -157,7 +189,7 @@ export function startDemoRun(session: RunSession) {
   // The simulated code has two versions: the one the first review measured, and the one after the rework.
   for (const id of Object.values(DEMO_SNAPSHOTS)) session.evidence.rememberSnapshot(id, session.state.startedAt ?? now());
   session.evidence.currentSnapshot = { id: DEMO_SNAPSHOTS.implementation, capturedAt: now() };
-  session.activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
+  session.activity("system", "Ticket simulé chargé", `${demoTicket(session).reference} · ${session.state.ticketTitle ?? "Ajouter les préférences de notification"}`);
   session.publish();
   demoTerminal(session, "Lecture du ticket GitLab simulé…");
   scheduleDemo(session, demoStepDuration, () => {
@@ -203,9 +235,9 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, 0, () => {
     session.state.phase = 3;
     session.state.action = "Création de la branche";
-    session.state.branch = "feat/ih-42-notification-preferences";
+    session.state.branch = demoTicket(session).branch;
     writeDemoDocument(session, "acceptance-criteria.json", JSON.stringify(demoAcceptance.criteria, null, 2));
-    session.activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
+    session.activity("system", "Branche de démonstration préparée", session.state.branch);
     session.publish();
     demoTerminal(session, "Branche et plan de travail préparés.");
   });
@@ -310,8 +342,8 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, demoStepDuration * 9, () => {
     session.state.phase = 9;
     session.state.action = "Ouverture de la merge request";
-    session.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
-    session.activity("system", "Merge request draft ouverte (démo)", "acme-dashboard/-/merge_requests/128");
+    session.state.mergeRequestUrl = `ticket-simule://${demoTicket(session).mergeRequest}`;
+    session.activity("system", "Merge request draft ouverte (démo)", demoTicket(session).mergeRequest);
     session.activity("system", "Rapport de review publié", "Review 2/2 · bloquée sur AC4");
     session.publish();
     demoTerminal(session, "Rapport final publié dans la merge request simulée.");

@@ -20,6 +20,8 @@ import { detectProjectDirectory, discoverRepositories } from "./repository.js";
 import { mergeNeedsRestart } from "./domain.js";
 import { branchIsMerged, changedPaths, findWorktree, headCommit, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { registry } from "./registry.js";
+import { resolvePastedTickets } from "./ticket-source.js";
+import { reconcileRunWorktrees } from "./run-worktrees.js";
 import { engine } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
 
@@ -117,10 +119,24 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, {
       type: "notice", level: "info", at: now(), queuedId: outcome.queued.id,
       title: "Run mis en file",
-      detail: `${path.basename(outcome.queued.cwd)} démarrera dès qu'une place et son dépôt seront libres.`,
+      detail: outcome.queued.reason === "ticket"
+        ? `Ce ticket est déjà en cours sur ${path.basename(outcome.queued.repository)}. Le run démarrera quand celui qui le tient aura rendu sa session.`
+        : outcome.queued.reason === "slot"
+          ? `${path.basename(outcome.queued.repository)} démarrera dès qu'une place sera libre.`
+          : outcome.queued.reason === "analysis"
+            ? `${path.basename(outcome.queued.repository)} : le ticket est comparé à ceux déjà en file ou en cours sur ce dépôt avant de démarrer.`
+            : `${path.basename(outcome.queued.repository)} : le ticket attend un autre ticket du même dépôt. La file dit lequel.`,
     });
     return;
   }
+  if (message.type === "batch.submit") {
+    // The source of the tickets ends here: past this line a batch is a list of resolved tickets.
+    const tickets = await resolvePastedTickets(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
+    const outcome = await registry.enqueueBatch(tickets, { instruction: message.instruction });
+    send(socket, { type: "batch.result", batchId: outcome.batchId, accepted: outcome.entries.length, duplicates: outcome.duplicates });
+    return;
+  }
+  if (message.type === "demo.start" && message.scenario === "batch") { registry.startDemoBatch(); return; }
   if (message.type === "demo.start") {
     const session = registry.startDemo(message.scenario === "incident" ? "incident" : "workflow");
     const subscription = clients.get(socket);
@@ -134,6 +150,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "run.stop") { registry.stop(message.runId); return; }
   if (message.type === "run.close") { await registry.close(message.runId); return; }
   if (message.type === "queue.cancel") { registry.cancelQueued(message.queuedId); return; }
+  if (message.type === "queue.force") { registry.forceQueued(message.queuedId, message.mode === "stacked" ? "stacked" : "base", typeof message.onto === "string" ? message.onto : undefined); return; }
+  if (message.type === "queue.move") { registry.moveQueued(message.queuedId, typeof message.before === "string" ? message.before : null); return; }
+  if (message.type === "worktree.remove") {
+    const result = await registry.removeWorktree(message.runId, message.force === true);
+    send(socket, { type: "worktree.result", runId: message.runId, ...result });
+    return;
+  }
   if (message.type === "question.answer") {
     const session = registry.get(message.runId);
     if (!session) throw new Error("Ce run n'existe plus.");
@@ -168,8 +191,10 @@ await reconcileInterruptedRuns(dataRoot);
 // Commits landed by hand while the console was down move the harness just as a
 // promotion does, and nothing would replay the waiting branches onto them.
 await realignPendingImprovements().catch(() => undefined);
+// Worktrees left by the runs of an earlier process: pruned, removed or kept with their reason.
+await reconcileRunWorktrees(dataRoot).catch(() => undefined);
 await registry.restoreQueue();
-// Runs an earlier process left with an open incident, read back for consultation only.
+// Runs an earlier process left with an open incident or a worktree on disk, read back for consultation.
 await registry.archive.load(dataRoot);
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
@@ -312,7 +337,7 @@ wss.on("connection", (socket) => {
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined });
-      if (message?.type === "run.start" || message?.type === "demo.start") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
+      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
     }
   });
   socket.on("close", () => clients.delete(socket));

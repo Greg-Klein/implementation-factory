@@ -197,8 +197,30 @@ export type WorkflowState = {
 };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
+/**
+ * `active`: a session is working in it; `kept`: the session is gone and the
+ * directory is still on disk, for the reason `detail` gives; `removed`: gone,
+ * by the console or because it had vanished.
+ */
+export type RunWorktreeState = "active" | "kept" | "removed";
+/**
+ * The git worktree a run works in, inside its source repository.
+ * `dependencies`: how the dependency directories got there, a copy-on-write
+ * `clone` the run owns, or a `symlink` into the main checkout an install would write through.
+ */
+export type RunWorktree = { path: string; state: RunWorktreeState; detail?: string; dependencies?: "clone" | "symlink" };
 export type RunState = {
-  id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
+  id: string | null; status: RunStatus; phase: number;
+  /** Where the session runs: the run's worktree, or the checkout itself for a run older than worktrees and for the demonstration. */
+  cwd: string;
+  /** The checkout the ticket was launched on. Absent on archives written before worktrees: read through `sourceRepository`. */
+  repository?: string;
+  worktree?: RunWorktree;
+  /** When the console confirmed the pre-cleanup archive of the evidence, which a worktree removal waits for. */
+  archiveSyncedAt?: string;
+  issueUrl: string; instruction: string;
+  /** The branch a stacked run was started on, handed to the workflow as `IMPL_BASE_BRANCH`. */
+  baseBranch?: string;
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
   sessionActive: boolean;
@@ -241,7 +263,7 @@ export type RunState = {
  * the rest arrives only for the run the page has opened.
  */
 export type RunSummary = {
-  id: string; status: RunStatus; phase: number; cwd: string; issueUrl: string; ticketTitle?: string;
+  id: string; status: RunStatus; phase: number; cwd: string; repository: string; worktree?: RunWorktree; issueUrl: string; ticketTitle?: string;
   startedAt: string | null; endedAt: string | null;
   branch?: string; mergeRequestUrl?: string; error?: string; action?: string;
   sessionActive: boolean;
@@ -257,7 +279,7 @@ export type RunSummary = {
   evidenceUpdatedAt?: string;
   /** Acceptance figures only, and only once the run wrote a criteria registry. */
   acceptance?: AcceptanceCounts;
-  /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
+  /** Whether this run still holds its slot and its ticket, which is what the queue waits on. */
   holdsRepository: boolean;
   health?: RunHealth;
   /** The open incident, as little of it as a row and a notification need. */
@@ -266,13 +288,68 @@ export type RunSummary = {
   archived?: boolean;
 };
 
+/**
+ * How sure the scheduling agent is of what a ticket would touch. A `low`
+ * ticket gave nothing to search for, so it runs alone on its repository.
+ */
+export type ScheduleConfidence = "high" | "medium" | "low";
+/**
+ * What the console knows of a ticket it scheduled, kept for as long as the
+ * ticket is queued, running or waiting for its merge request to be merged.
+ * `analysis: "failed"`: the scheduling session gave no usable result, for the
+ * reason `failure` says, and the ticket is then treated as conflicting with
+ * every other ticket of its repository. See contracts/schedule.md.
+ */
+export type ScheduledTicket = {
+  issueUrl: string; repository: string; analysis: "done" | "failed";
+  areas: string[]; files: string[]; confidence?: ScheduleConfidence; summary?: string; failure?: string;
+};
+/** Two tickets of one repository that must not run together. `order`: for `depends_on`, the ticket to implement first, then the other. */
+export type ScheduleEdge = { repository: string; a: string; b: string; kind: "overlap" | "depends_on"; order?: [string, string]; reason: string };
+/**
+ * The merge request of a finished run that tickets may have to wait for.
+ * `state`: `unknown` when GitLab could not be asked, which holds as an open one does.
+ */
+export type MergeWatch = { issueUrl: string; repository: string; mergeRequestUrl: string; branch?: string; runId?: string; state: "open" | "unknown"; since: string; checkedAt?: string };
+/**
+ * The user starting a held ticket anyway. `base`: from the base branch, the
+ * edges ignored. `stacked`: on the branch of the ticket named by `onto`,
+ * handed to the workflow as `IMPL_BASE_BRANCH`.
+ */
+export type QueueForce = { mode: "base" } | { mode: "stacked"; baseBranch: string; onto: string };
+
 /** A launch the console accepted but has not started yet, kept in the order it was asked. */
-export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
+/**
+ * `repository`: the checkout the run will take a worktree of. `cwd` is the same path until it starts, kept for queues written before worktrees.
+ * `batchId`: the paste it came with. `analysing`: its scheduling session has not answered yet. `demo`: a simulated ticket, never written to disk.
+ */
+export type QueuedRun = { id: string; cwd: string; repository: string; issueUrl: string; instruction: string; queuedAt: string; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
+/**
+ * What a queued launch waits for. `slot`: a free place. `ticket`: the run
+ * already on the same ticket. `analysis`: its scheduling session. `conflict`:
+ * a run in progress it must not run beside. `merge`: the merge request of a
+ * finished run, `merge_unknown` when GitLab does not say whether it is merged.
+ * `dependency` and `order`: a ticket still ahead of it in the queue, that it
+ * needs or that it conflicts with.
+ */
+export type QueueReason = "slot" | "ticket" | "analysis" | "conflict" | "merge" | "merge_unknown" | "dependency" | "order";
+/** Why two tickets are kept apart: an edge of the schedule, or a ticket that runs alone on its repository. */
+export type QueueCause = "overlap" | "depends_on" | "analysis_failed" | "low_confidence";
+/** The ticket a queued launch waits behind. `branch`: what a stacked start would be cut from, when it is known. */
+export type QueueBlocker = { issueUrl: string; runId?: string; queuedId?: string; mergeRequestUrl?: string; branch?: string };
 /**
  * Why a queued launch has not started, computed when the queue is read rather
  * than stored: a run ending changes the answer for every entry behind it.
+ * `blockedBy`: the run holding it back, on the same ticket or on a conflicting one.
+ * `detail`: the sentence that justifies `cause`, the scheduling agent's own for an edge.
+ * `summary`, `confidence`, `analysisFailure`: what the schedule says of the ticket itself.
  */
-export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
+export type QueuedRunView = QueuedRun & {
+  reason: QueueReason; blockedBy?: string; blocking?: QueueBlocker; cause?: QueueCause; detail?: string;
+  summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
+};
+/** A ticket whose checkout is known. Whatever found the tickets, a paste today, hands the registry a list of these. */
+export type ResolvedTicket = { repository: string; issueUrl: string };
 
 /** Everything every open page is told about, whichever run it has opened. */
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. */
@@ -295,8 +372,25 @@ export type ClientMessage =
   | { type: "run.stop"; runId: string }
   | { type: "run.close"; runId: string }
   | { type: "queue.cancel"; queuedId: string }
-  /** `scenario`: the regular workflow, or the pilot handing back with nothing next. */
-  | { type: "demo.start"; scenario?: "workflow" | "incident" }
+  /**
+   * Several tickets at once, each resolved to its checkout from its URL. The
+   * instruction applies to every ticket of the batch. Answered with `batch.result`.
+   */
+  | { type: "batch.submit"; issueUrls: string[]; instruction?: string }
+  /**
+   * Starts a held ticket anyway, as soon as a place is free. `base`: from the
+   * base branch, ignoring the schedule. `stacked`: on the branch of the ticket `onto` names.
+   */
+  | { type: "queue.force"; queuedId: string; mode: "base" | "stacked"; onto?: string }
+  /** Moves a waiting launch right before another one, or to the end of the queue with `before: null`. */
+  | { type: "queue.move"; queuedId: string; before: string | null }
+  /**
+   * Removes the worktree of a run whose session is gone, live or archived. Without
+   * `force` the server answers `confirm` when work would be lost, and removes nothing.
+   */
+  | { type: "worktree.remove"; runId: string; force?: boolean }
+  /** `scenario`: the regular workflow, the pilot handing back with nothing next, or a batch of three tickets with one conflict. */
+  | { type: "demo.start"; scenario?: "workflow" | "incident" | "batch" }
   | { type: "feedback.submit"; runId: string; body: string }
   | { type: "question.answer"; runId: string; answers: Record<string, string> }
   /** The user's decision on the prompt the page was shown, typed into the session by the engine. */
@@ -324,7 +418,11 @@ export type ServerMessage =
    * launch a notice is about, so the page can drop it once that launch is gone.
    */
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
+  /** What became of a batch, answered to the page that pasted it. `duplicates`: tickets already queued, running or waiting for their merge, left out. */
+  | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
   | { type: "error"; message: string; runId?: string }
+  /** What became of a worktree removal, answered to the page that asked. `risks`: what a forced removal would lose. */
+  | { type: "worktree.result"; runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] }
   /** What became of an incident action, answered to the page that asked. */
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };

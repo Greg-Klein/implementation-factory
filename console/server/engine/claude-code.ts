@@ -7,7 +7,7 @@ import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../do
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import { createTrustPromptWatcher, trustAnswerKeys } from "./trust-prompt.js";
-import type { Engine, EngineEvent, EngineSession, StartOptions } from "./types.js";
+import type { Engine, EngineEvent, EngineSession, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
 
 /** Long enough for the paste to be read before the submission keystroke arrives. */
 const SUBMIT_DELAY_MS = 150;
@@ -214,10 +214,10 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   return undefined;
 }
 
-function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
+function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
-  const sessionName = `implementation-harness ${path.basename(cwd)}`;
+  const sessionName = `implementation-harness ${sessionLabel}`;
   // --remote-control takes an optional name, so leaving it empty would let the
   // parser swallow the prompt that follows as that name.
   const remote = remoteControl ? ["--remote-control", sessionName] : [];
@@ -260,6 +260,68 @@ function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment
   };
 }
 
+/** What a scheduling session may do: read the tickets and the repository, write its output file, and nothing else. */
+const SCHEDULE_TOOLS = [
+  "Read", "Write", "Glob", "Grep", "Agent", "Skill",
+  "Bash(glab issue view *)", "Bash(glab api *)",
+  "Bash(git log *)", "Bash(git show *)", "Bash(git grep *)", "Bash(git ls-files *)", "Bash(git rev-parse *)",
+  "Bash(ls *)",
+];
+
+/**
+ * The arguments of a headless scheduling session. `--allowedTools` is variadic:
+ * the list goes as one comma-separated argument and `--` closes the options,
+ * or the flag swallows the prompt. The session may remove its own output file,
+ * which is how the command reports an output it could not make valid.
+ */
+export function scheduleArguments({ pluginDir, inputPath, outputPath }: Pick<ScheduleOptions, "pluginDir" | "inputPath" | "outputPath">) {
+  const outputDirectory = path.dirname(outputPath);
+  return [
+    "-p",
+    "--plugin-dir", pluginDir,
+    "--add-dir", pluginDir,
+    "--add-dir", outputDirectory,
+    "--model", "sonnet",
+    "--permission-mode", "dontAsk",
+    "--permission-prompts", "none",
+    "--allowedTools", [...SCHEDULE_TOOLS, `Bash(rm ${outputDirectory}/*)`].join(","),
+    "--output-format", "json",
+    "--", `/implementation-harness:schedule ${inputPath} ${outputPath}`,
+  ];
+}
+
+/**
+ * The environment of a scheduling session. The plugin hooks load there too
+ * and must stay silent: without a run identifier and a hook address they post
+ * nothing, even when the console itself was started from inside a run.
+ */
+export function scheduleEnvironment<T extends Record<string, string | undefined>>(environment: T): T {
+  const cleaned = { ...environment };
+  for (const key of ["IMPL_RUN_ID", "IMPL_HARNESS_HOOK_URL", "IMPL_HOOK_SPOOL"]) delete cleaned[key];
+  return cleaned;
+}
+
+const SCHEDULE_LOG = 20_000;
+
+function startSchedule(options: ScheduleOptions): ScheduleSession | undefined {
+  const executable = findExecutable("claude");
+  if (!executable) return undefined;
+  // Standard input closed: an open one is read as the prompt.
+  const child = spawnChild(executable, scheduleArguments(options), { cwd: options.repository, env: scheduleEnvironment(sessionEnvironment()), stdio: ["ignore", "pipe", "pipe"] });
+  let log = "";
+  let timedOut = false;
+  const keep = (chunk: Buffer) => { log = (log + chunk.toString()).slice(-SCHEDULE_LOG); };
+  child.stdout.on("data", keep);
+  child.stderr.on("data", keep);
+  const finished = new Promise<{ timedOut: boolean; log: string }>((resolve) => {
+    const timeout = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, options.timeoutMs);
+    const done = () => { clearTimeout(timeout); resolve({ timedOut, log }); };
+    child.once("close", done);
+    child.once("error", (error) => { log += `\n${error.message}`; done(); });
+  });
+  return { finished, kill: () => { child.kill("SIGKILL"); } };
+}
+
 export const claudeCode: Engine = {
   id: "claude-code",
   label: "Claude Code",
@@ -277,6 +339,7 @@ export const claudeCode: Engine = {
   questionAnswer: (input, answers): HookOutput => ({
     hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { ...input, answers } },
   }),
+  startSchedule,
   startSelfImprovement: ({ worktreeName, feedbackDirectory, runId }) => {
     const executable = findExecutable("claude");
     if (!executable) return undefined;

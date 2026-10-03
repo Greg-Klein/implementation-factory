@@ -72,6 +72,6 @@ describe("Claude Code plugin metadata", () => {
     const manifest = JSON.parse(readFileSync(path.join(pluginRoot, ".claude-plugin/plugin.json"), "utf8"));
     expect(manifest.name).toBe("implementation-harness");
     const names = definitions("commands").map((file) => frontmatter(file).name);
-    expect(names.sort()).toEqual(["implement", "improve", "rebase", "review"]);
+    expect(names.sort()).toEqual(["implement", "improve", "rebase", "review", "schedule"]);
   });
 });

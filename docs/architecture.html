@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implementation Harness, schéma de fonctionnement</title>
+<style>
+  :root {
+    --paper: #f3f4ef; --surface: #fafbf7; --raised: #ffffff; --sunken: #f1f3ee;
+    --ink: #1c211f; --muted: #707873; --line: #d8dcd5; --line-strong: #b9bfb8;
+    --accent: #477a62; --accent-soft: #dce9e0; --accent-strong: #2f5546;
+    --doc: #3f6d8a; --doc-soft: #e3edf3;
+    --warn-bg: #fffbeb; --warn-line: #e8c96a; --warn: #92400e;
+    --err-bg: #fef2f2; --err-line: #f3b4b4; --err: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #101412; --surface: #151917; --raised: #1c211e; --sunken: #121614;
+      --ink: #e2e7e2; --muted: #949c97; --line: #2a312d; --line-strong: #46504a;
+      --accent: #7fb096; --accent-soft: #1e3028; --accent-strong: #b3d3c1;
+      --doc: #85afc9; --doc-soft: #1b2831;
+      --warn-bg: #2a2110; --warn-line: #6b5520; --warn: #f5cf6b;
+      --err-bg: #2b1616; --err-line: #6b2c2c; --err: #f19999;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0; color: var(--ink); background: var(--paper);
+    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px; line-height: 1.55;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
+  header.page { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 8px; }
+  .over { font-size: 10px; text-transform: uppercase; letter-spacing: .16em; color: var(--muted); margin: 0 0 6px; }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em; }
+  p { margin: 0; }
+  .lead { color: var(--muted); max-width: 78ch; }
+  section { border-top: 1px solid var(--line); padding-top: 24px; margin-top: 28px; }
+  header.page + section { border-top: 0; margin-top: 16px; }
+  .caption { color: var(--muted); max-width: 86ch; margin-bottom: 14px; }
+  code, .mono { font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: .86em; }
+  code { background: var(--accent-soft); color: var(--accent-strong); padding: 1px 5px; border-radius: 5px; }
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
+  figure svg { display: block; width: 100%; min-width: 900px; height: auto; }
+
+  /* SVG vocabulary */
+  .box { fill: var(--raised); stroke: var(--line-strong); stroke-width: 1; }
+  .zone { fill: var(--sunken); stroke: var(--line); stroke-width: 1; }
+  .term { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+  .ask { fill: var(--warn-bg); stroke: var(--warn-line); stroke-width: 1; }
+  .docbox { fill: var(--doc-soft); stroke: var(--doc); stroke-width: 1; }
+  .later { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
+  .t { fill: var(--ink); font-size: 13px; font-weight: 600; }
+  .s { fill: var(--muted); font-size: 11px; }
+  .m { fill: var(--ink); font-size: 10.5px; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  .md { fill: var(--doc); font-size: 10.5px; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  .z { fill: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
+  .l { fill: var(--ink); font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+  .lz { stroke: var(--sunken); }
+  .a { fill: none; stroke: var(--accent); stroke-width: 1.6; marker-end: url(#arr); }
+  .aq { fill: none; stroke: var(--warn); stroke-width: 1.6; marker-end: url(#arr-q); }
+  .ad { fill: none; stroke: var(--doc); stroke-width: 1.6; stroke-dasharray: 2 3; marker-end: url(#arr-d); }
+  .an { fill: none; stroke: var(--muted); stroke-width: 1.4; marker-end: url(#arr-n); }
+  #arr path { fill: var(--accent); } #arr-q path { fill: var(--warn); }
+  #arr-d path { fill: var(--doc); } #arr-n path { fill: var(--muted); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend svg { width: 34px; height: 10px; min-width: 0; }
+
+  ol.steps { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 10px; }
+  ol.steps li { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  ol.steps .n { font-family: "Geist Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: var(--accent); font-weight: 600; }
+  ol.steps h3 { font-size: 13px; margin: 2px 0 4px; font-weight: 600; }
+  ol.steps p { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  ol.steps .f { display: block; margin-top: 6px; font-family: "Geist Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; color: var(--doc); overflow-wrap: anywhere; }
+  ol.steps li.you { border-color: var(--warn-line); background: var(--warn-bg); }
+  ol.steps li.you .n { color: var(--warn); }
+
+  .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+  .chip { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--raised); font-size: 12px; color: var(--muted); }
+  .chip b { display: block; color: var(--ink); font-size: 12px; margin-bottom: 2px; }
+  .chip.warn { background: var(--warn-bg); border-color: var(--warn-line); } .chip.warn b { color: var(--warn); }
+  .chip.err { background: var(--err-bg); border-color: var(--err-line); } .chip.err b { color: var(--err); }
+
+  .tag { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; border: 1.2px dotted var(--muted); color: var(--muted); border-radius: 999px; padding: 2px 9px; margin-left: 8px; vertical-align: 2px; }
+  .latercard { border: 1.2px dotted var(--muted); border-radius: 10px; padding: 14px 16px; background: var(--raised); max-width: 560px; }
+  .latercard h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  .latercard ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--muted); }
+  .latercard li { margin: 3px 0; }
+  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
+    <marker id="arr-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
+    <marker id="arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
+    <marker id="arr-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
+  </defs>
+</svg>
+<main>
+  <header class="page">
+    <p class="over">Implementation Harness</p>
+    <h1>Comment fonctionne le harnais</h1>
+    <p class="lead">Une console locale qui lance le vrai binaire <code>claude</code> sur un ticket GitLab et rend visible ce qu’il fait. Aucun appel direct à l’API, aucune clé : tout passe par la session Claude Code et ses hooks.</p>
+  </header>
+
+  <section>
+    <h2>1. Le trajet d’un run</h2>
+    <p class="caption">Tu colles l’URL d’un ticket, le serveur retrouve le dépôt, crée un worktree git pour ce run et y ouvre une session Claude Code dans un PTY. Le checkout principal n’est pas touché. Chaque hook de la session revient au serveur, qui met à jour l’état du run et le pousse à l’interface. Une question du workflow bloque la session jusqu’à ta réponse.</p>
+    <figure>
+      <svg viewBox="0 0 1140 720" role="img" aria-label="Trajet d’un run entre l’interface, le serveur, le worktree du run et la session Claude Code">
+        <!-- ticket -->
+        <rect class="box" x="30" y="24" width="220" height="56" rx="8"/>
+        <text class="t" x="46" y="48">Ticket GitLab</text>
+        <text class="s" x="46" y="66">une URL collée dans la console</text>
+        <path class="a" d="M140 80V128"/>
+        <text class="l" x="196" y="108">URL du ticket</text>
+
+        <!-- UI -->
+        <rect class="box" x="30" y="130" width="220" height="570" rx="8"/>
+        <text class="t" x="46" y="158">Interface React</text>
+        <text class="s" x="46" y="176">Next.js, 127.0.0.1:3210</text>
+        <text class="s" x="46" y="407">vue du run, terminal,</text>
+        <text class="s" x="46" y="422">suivi, preuves</text>
+        <text class="s" x="46" y="547">carte de question,</text>
+        <text class="s" x="46" y="562">« À toi de jouer »</text>
+        <text class="s" x="46" y="656">documents du run</text>
+
+        <!-- server -->
+        <rect class="zone" x="330" y="100" width="480" height="600" rx="10"/>
+        <text class="z" x="348" y="124">Serveur Node · console/server</text>
+
+        <rect class="box" x="350" y="145" width="180" height="70" rx="8"/>
+        <text class="t" x="364" y="170">registry.ts</text>
+        <text class="s" x="364" y="187">runs et file d’attente</text>
+        <text class="m" x="364" y="203">data/queue.json</text>
+
+        <rect class="box" x="630" y="145" width="160" height="70" rx="8"/>
+        <text class="t" x="644" y="170">run-worktrees.ts</text>
+        <text class="s" x="644" y="187">crée le worktree,</text>
+        <text class="s" x="644" y="203">reprend les dépendances</text>
+
+        <rect class="box" x="630" y="240" width="160" height="215" rx="8"/>
+        <text class="t" x="644" y="265">server/engine</text>
+        <text class="s" x="644" y="313">seul code qui connaît</text>
+        <text class="s" x="644" y="328">Claude Code</text>
+        <text class="s" x="644" y="357">traduit le hook</text>
+        <text class="s" x="644" y="372">en EngineEvent</text>
+
+        <rect class="box" x="350" y="380" width="180" height="70" rx="8"/>
+        <text class="t" x="364" y="405">RunSession</text>
+        <text class="s" x="364" y="422">état, archive, terminal</text>
+        <text class="s" x="364" y="437">hooks.ts applique</text>
+
+        <rect class="ask" x="350" y="515" width="440" height="70" rx="8"/>
+        <text class="t" x="364" y="541">Pont de question</text>
+        <text class="s" x="364" y="558">le hook PreToolUse attend ta réponse (3600 s au plus)</text>
+        <text class="s" x="364" y="573">jamais rejoué ni mis en attente sur disque</text>
+
+        <rect class="docbox" x="350" y="620" width="440" height="64" rx="8"/>
+        <text class="t" x="364" y="645">artifacts.ts, surveillance et copie</text>
+        <text class="md" x="364" y="665">data/runs/&lt;run-id&gt;/artifacts/</text>
+
+        <!-- run worktree, with the session inside -->
+        <rect class="docbox" x="900" y="130" width="230" height="570" rx="10"/>
+        <text class="t" x="914" y="156">Worktree du run</text>
+        <text class="md" x="914" y="174">.claude/worktrees/&lt;run-id&gt;</text>
+        <text class="s" x="914" y="192">dans le dépôt cible, HEAD détaché</text>
+
+        <rect class="term" x="912" y="210" width="206" height="380" rx="8"/>
+        <text class="t" x="927" y="238">Session Claude Code</text>
+        <text class="s" x="927" y="255">dans un PTY, lancée ici</text>
+        <text class="m" x="927" y="296">claude --plugin-dir …</text>
+        <text class="m" x="927" y="312">/…:implement &lt;ticket&gt;</text>
+        <text class="m" x="927" y="336">IMPL_RUN_ID</text>
+        <text class="m" x="927" y="352">IMPL_RUN_WORKTREE</text>
+
+        <rect class="box" x="927" y="385" width="176" height="60" rx="8"/>
+        <text class="t" x="940" y="409">hooks/emit.mjs</text>
+        <text class="s" x="940" y="427">à chaque hook de la session</text>
+
+        <rect class="ask" x="927" y="520" width="176" height="62" rx="8"/>
+        <text class="t" x="940" y="544">AskUserQuestion</text>
+        <text class="s" x="940" y="562">question bloquante</text>
+
+        <rect class="box" x="912" y="620" width="206" height="64" rx="8"/>
+        <text class="t" x="927" y="645">Documents du workflow</text>
+        <text class="md" x="927" y="665">.claude/tasks/</text>
+
+        <!-- run flow -->
+        <path class="a" d="M250 180H348"/>
+        <text class="l" x="299" y="172">run.start</text>
+        <path class="a" d="M530 180H628"/>
+        <text class="l lz" x="580" y="172">1. prépare</text>
+        <path class="a" d="M790 180H898"/>
+        <text class="l" x="852" y="172">git worktree add</text>
+        <path class="a" d="M440 215V275H628"/>
+        <text class="l lz" x="534" y="267">2. démarre la session</text>
+        <path class="a" d="M790 275H910"/>
+        <text class="l" x="850" y="267">ouvre le PTY</text>
+        <path class="a" d="M927 415H792"/>
+        <text class="l" x="855" y="407">POST du hook</text>
+        <path class="a" d="M630 415H532"/>
+        <text class="l lz" x="581" y="407">EngineEvent</text>
+        <path class="a" d="M350 415H252"/>
+        <text class="l" x="300" y="407">état du run</text>
+        <text class="l" x="300" y="433">WebSocket</text>
+
+        <!-- question loop -->
+        <path class="aq" d="M927 537H792"/>
+        <text class="l" x="855" y="529">question</text>
+        <path class="aq" d="M790 565H925"/>
+        <text class="l" x="855" y="583">updatedInput</text>
+        <path class="aq" d="M350 537H252"/>
+        <text class="l" x="300" y="529">question</text>
+        <path class="aq" d="M250 565H348"/>
+        <text class="l" x="300" y="583">réponse</text>
+
+        <!-- documents -->
+        <path class="ad" d="M1015 590V618"/>
+        <path class="ad" d="M912 652H792"/>
+        <text class="l" x="855" y="644">documents</text>
+        <path class="ad" d="M350 652H252"/>
+        <text class="l" x="300" y="644">documents</text>
+      </svg>
+    </figure>
+    <div class="legend">
+      <span><svg viewBox="0 0 34 10"><path class="a" d="M1 5H31"/></svg>flux du run (hooks, événements, état)</span>
+      <span><svg viewBox="0 0 34 10"><path class="aq" d="M1 5H31"/></svg>question, réponse ou décision, c’est à toi</span>
+      <span><svg viewBox="0 0 34 10"><path class="ad" d="M1 5H31"/></svg>documents produits par une session</span>
+      <span><svg viewBox="0 0 34 10"><path class="an" d="M1 5H31"/></svg>enchaînement simple</span>
+      <span><svg viewBox="0 0 34 10"><rect x="1" y="1" width="32" height="8" rx="2" class="later"/></svg>prévu, pas commencé</span>
+    </div>
+    <div class="chips">
+      <div class="chip"><b>Ce que reçoit le worktree</b>Les dossiers de dépendances ignorés par Git, copiés ou liés depuis le checkout principal, et les fichiers <span class="mono">.env*</span>. Pas les sorties de build.</div>
+      <div class="chip"><b>Si le worktree ne peut pas être créé</b>Le run ne démarre pas. Le serveur ne se rabat jamais sur le checkout principal.</div>
+      <div class="chip"><b>Après la session</b>Supprimé quand le run est terminé, la MR ouverte hors draft, les preuves archivées, l’arbre propre et la branche poussée. Sinon conservé avec sa raison. La branche n’est jamais supprimée.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Le workflow <span class="mono">/implementation-harness:implement</span></h2>
+    <p class="caption">Dix étapes, conduites par un pilote qui délègue à des agents spécialisés. La seule étape interactive est la deuxième. Chaque étape laisse des fichiers dans <code>.claude/tasks/</code>, que la console archive et affiche.</p>
+    <ol class="steps">
+      <li><span class="n">01</span><h3>Lire le ticket</h3><p>Le ticket et tous les documents liés.</p></li>
+      <li class="you"><span class="n">02 · à toi</span><h3>Questions</h3><p>Seule étape interactive. Le pilote écrit ensuite le registre des critères, avec des identifiants stables AC1, AC2…</p><span class="f">acceptance-criteria.json</span></li>
+      <li><span class="n">03</span><h3>Branche dédiée</h3><p>Créée dans le worktree du run, depuis la branche de base choisie.</p></li>
+      <li><span class="n">04</span><h3>Plan et découpage</h3><p><span class="mono">ticket-planner</span> sur un ticket complexe, le pilote seul sur un ticket simple. Chaque tâche cite ses critères.</p><span class="f">planner-output.json</span></li>
+      <li><span class="n">05</span><h3>Implémentation</h3><p>Une tâche à la fois, par des agents <span class="mono">developer</span>, puis fusion de leurs rapports et appel nominal contre le plan.</p><span class="f">developer-report-&lt;id&gt;.md, dev-evidence.json</span></li>
+      <li><span class="n">06</span><h3>App joignable et mesures</h3><p>Le changement est mesuré dans l’application qui tourne, sur du code figé.</p><span class="f">state.json, captures</span></li>
+      <li><span class="n">07</span><h3>Mise à l’épreuve</h3><p>Revues indépendantes, dimensionnées selon la taille du diff (détail ci-dessous).</p><span class="f">senior-review.md, qa-report.md, designer-review.md</span></li>
+      <li><span class="n">08</span><h3>Merge request</h3><p>Description préparée depuis la synthèse des preuves. Les critères en échec ou non vérifiés y restent visibles.</p><span class="f">acceptance-summary.md</span></li>
+      <li><span class="n">09</span><h3>Revue consolidée</h3><p>Un commentaire de revue publié sur la MR, avec les captures.</p><span class="f">review-summary.md (niveau 2)</span></li>
+      <li><span class="n">10</span><h3>Rapport final</h3><p>Résumé dans le terminal, fin déclarée, archive synchronisée, puis nettoyage.</p><span class="f">workflow-state.json</span></li>
+    </ol>
+    <figure>
+      <svg viewBox="0 0 1100 176" role="img" aria-label="Ordre des revues à l’étape 7">
+        <text class="z" x="10" y="18">Étape 7, ordre des revues</text>
+        <rect class="box" x="10" y="34" width="200" height="104" rx="8"/>
+        <text class="t" x="24" y="58">senior-reviewer</text>
+        <text class="s" x="24" y="76">diagnostic indépendant,</text>
+        <text class="s" x="24" y="91">puis corrections justifiées</text>
+        <text class="md" x="24" y="118">senior-review.md</text>
+
+        <rect class="box" x="300" y="34" width="240" height="104" rx="8"/>
+        <text class="t" x="314" y="58">designer-reviewer</text>
+        <text class="s" x="314" y="76">si le changement est visible dans l’UI</text>
+        <text class="md" x="314" y="102">1. design-inventory.md</text>
+        <text class="md" x="314" y="118">2. designer-review.md</text>
+
+        <rect class="box" x="630" y="34" width="220" height="104" rx="8"/>
+        <text class="t" x="644" y="58">qa-reviewer</text>
+        <text class="s" x="644" y="76">cherche les défauts sur le code final</text>
+        <text class="md" x="644" y="98">1. qa-plan.md</text>
+        <text class="md" x="644" y="113">2. qa-report.md</text>
+        <text class="md" x="663" y="128">qa-evidence.json</text>
+
+        <rect class="docbox" x="924" y="34" width="166" height="104" rx="8"/>
+        <text class="t" x="938" y="58">Preuves</text>
+        <text class="s" x="938" y="76">statut par critère</text>
+        <text class="s" x="938" y="91">AC1 … ACn</text>
+        <text class="md" x="938" y="118">acceptance-summary.md</text>
+
+        <path class="an" d="M210 86H298"/>
+        <text class="l" x="255" y="78">code corrigé</text>
+        <path class="an" d="M540 86H628"/>
+        <text class="l" x="585" y="78">à vérifier</text>
+        <path class="ad" d="M850 86H922"/>
+        <text class="l" x="886" y="78">preuves</text>
+        <text class="s" x="10" y="166">Chaque reviewer écrit ses attentes (plan, inventaire) avant de lire les conclusions de l’auteur. Niveau 0 : senior seul. Niveau 1 : une passe chacun. Niveau 2 : review-orchestrator conduit la boucle.</text>
+      </svg>
+    </figure>
+  </section>
+
+  <section>
+    <h2>3. La santé d’un run</h2>
+    <p class="caption">Le serveur ne se fie pas au silence. Il lit des signaux précis, les évalue à chaque tick et ouvre un incident quand quelque chose demande une décision. Une action sur un incident est enregistrée avant d’être exécutée.</p>
+    <figure>
+      <svg viewBox="0 0 1100 196" role="img" aria-label="Des signaux du run au bandeau d’incident">
+        <rect class="box" x="10" y="20" width="230" height="130" rx="8"/>
+        <text class="t" x="24" y="44">Signaux du run</text>
+        <text class="s" x="24" y="64">fin de tour du pilote</text>
+        <text class="s" x="24" y="80">appels d’outil appariés</text>
+        <text class="s" x="24" y="96">sous-agent ou pilote, appels de fond</text>
+        <text class="m" x="24" y="122">RunSession.signals</text>
+        <text class="m" x="24" y="138">workflow-state.json</text>
+
+        <rect class="box" x="330" y="20" width="200" height="130" rx="8"/>
+        <text class="t" x="344" y="44">run-health.ts</text>
+        <text class="m" x="344" y="64">evaluateRunHealth</text>
+        <text class="s" x="344" y="84">logique pure, horloge injectée</text>
+        <text class="s" x="344" y="116">appelée par run-monitor.ts,</text>
+        <text class="s" x="344" y="131">seul ordonnanceur, à chaque tick</text>
+
+        <rect class="box" x="620" y="20" width="200" height="130" rx="8"/>
+        <text class="t" x="634" y="44">run-incidents.ts</text>
+        <text class="s" x="634" y="64">dédoublonnage par empreinte</text>
+        <text class="s" x="634" y="80">résolu par l’événement qui le lève</text>
+        <text class="s" x="634" y="116">runs à incident ouvert servis</text>
+        <text class="m" x="634" y="132">/api/archive/*</text>
+
+        <rect class="ask" x="910" y="20" width="180" height="130" rx="8"/>
+        <text class="t" x="924" y="44">Bandeau d’incident</text>
+        <text class="s" x="924" y="64">cause en une phrase</text>
+        <text class="s" x="924" y="80">prochaine action attendue</text>
+        <text class="s" x="924" y="96">actions possibles</text>
+
+        <path class="a" d="M240 70H328"/>
+        <text class="l" x="285" y="62">signaux</text>
+        <path class="a" d="M530 70H618"/>
+        <text class="l" x="575" y="62">constat</text>
+        <path class="a" d="M820 70H908"/>
+        <text class="l" x="865" y="62">incident</text>
+        <path class="aq" d="M910 118H822"/>
+        <text class="l" x="865" y="138">incident.action</text>
+        <text class="s" x="10" y="182">Contrats de fichiers : un agent qui termine sans le fichier que son contrat exige (planner-output.json, qa-report.md, designer-review.md, review-summary.md…) lève un incident.</text>
+      </svg>
+    </figure>
+    <div class="chips">
+      <div class="chip warn"><b class="mono">suspected_stall</b>Le silence seul n’est qu’un doute. Une fin de tour en plein workflow ne suffit plus à réclamer ton attention.</div>
+      <div class="chip err"><b class="mono">failed + lost_session</b>La session s’arrête avant d’avoir déclaré un résultat. Le run est interrompu, pas en erreur de workflow.</div>
+      <div class="chip"><b>Hooks perdus</b><span class="mono">emit.mjs</span> réessaie une fois, puis met l’événement en attente dans <span class="mono">hooks-spool.jsonl</span>, rejoué au hook suivant et à chaque tick.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. La boucle d’auto-amélioration</h2>
+    <p class="caption">Le harnais travaille aussi sur son propre dépôt, une amélioration à la fois. Rien n’est poussé ni mergé tout seul : le bouton de merge de l’interface est la seule voie de promotion. Un merge qui touche <code>console/</code> ou <code>bin/</code> demande un <code>impl restart</code>.</p>
+    <figure>
+      <svg viewBox="0 0 1100 130" role="img" aria-label="Boucle d’auto-amélioration">
+        <rect class="box" x="10" y="20" width="168" height="90" rx="8"/>
+        <text class="t" x="22" y="44">Feedback, auto-audit</text>
+        <text class="s" x="22" y="64">ton retour, ou un audit</text>
+        <text class="s" x="22" y="79">autonome en fin de run</text>
+        <text class="s" x="22" y="97">audits mis en file</text>
+
+        <rect class="box" x="238" y="20" width="168" height="90" rx="8"/>
+        <text class="t" x="250" y="44">Worktree</text>
+        <text class="m" x="250" y="64">self-improvement-&lt;id&gt;</text>
+        <text class="s" x="250" y="82">commandes improve</text>
+        <text class="s" x="250" y="97">et review</text>
+
+        <rect class="box" x="466" y="20" width="168" height="90" rx="8"/>
+        <text class="t" x="478" y="44">Rebase automatique</text>
+        <text class="s" x="478" y="64">quand HEAD bouge</text>
+        <text class="s" x="478" y="82">commande rebase</text>
+
+        <rect class="box" x="694" y="20" width="168" height="90" rx="8"/>
+        <text class="t" x="706" y="44">Simulation de merge</text>
+        <text class="m" x="706" y="64">git merge-tree</text>
+        <text class="m" x="706" y="79">--write-tree</text>
+        <text class="s" x="706" y="97">sans toucher au dépôt</text>
+
+        <rect class="term" x="922" y="20" width="168" height="90" rx="8"/>
+        <text class="t" x="934" y="44">Bouton de merge</text>
+        <text class="s" x="934" y="64">dans l’interface,</text>
+        <text class="s" x="934" y="79">c’est toi qui décides</text>
+
+        <path class="an" d="M178 65H236"/><text class="l" x="208" y="57">lance</text>
+        <path class="an" d="M406 65H464"/><text class="l" x="436" y="57">suit</text>
+        <path class="an" d="M634 65H692"/><text class="l" x="664" y="57">vérifie</text>
+        <path class="an" d="M862 65H920"/><text class="l" x="892" y="57">propose</text>
+      </svg>
+    </figure>
+  </section>
+
+  <section>
+    <h2>5. Un lot de tickets</h2>
+    <p class="caption">Tu colles plusieurs URL d’un coup. Pour chaque dépôt, une session d’analyse prédit ce que chaque ticket toucherait et relie ceux qui ne peuvent pas tourner ensemble. Le serveur lance ce qui n’est en conflit avec rien, 3 runs à la fois au plus, et retient les autres jusqu’à ce que la MR attendue soit mergée.</p>
+    <figure>
+      <svg viewBox="0 0 1100 310" role="img" aria-label="Du lot collé aux runs : analyse, graphe de conflits, ordonnanceur, tickets retenus, veille des merge requests et dérogation">
+        <rect class="box" x="10" y="30" width="160" height="90" rx="8"/>
+        <text class="t" x="22" y="54">Lot de tickets</text>
+        <text class="s" x="22" y="72">plusieurs URL collées</text>
+        <text class="m" x="22" y="103">batch.submit</text>
+
+        <rect class="term" x="240" y="30" width="200" height="90" rx="8"/>
+        <text class="t" x="252" y="54">Session d’analyse</text>
+        <text class="m" x="252" y="72">claude -p, Sonnet</text>
+        <text class="s" x="252" y="89">agent ticket-scheduler,</text>
+        <text class="s" x="252" y="104">lecture seule, une par dépôt</text>
+
+        <rect class="docbox" x="510" y="30" width="180" height="90" rx="8"/>
+        <text class="t" x="522" y="54">Graphe de conflits</text>
+        <text class="s" x="522" y="72">fichiers communs, ou</text>
+        <text class="s" x="522" y="87">dépendance, avec la raison</text>
+        <text class="md" x="522" y="106">output.json</text>
+
+        <rect class="box" x="760" y="30" width="170" height="90" rx="8"/>
+        <text class="t" x="772" y="54">Ordonnanceur</text>
+        <text class="s" x="772" y="72">domain.ts, logique pure</text>
+        <text class="s" x="772" y="87">3 runs à la fois au plus</text>
+
+        <rect class="box" x="975" y="30" width="115" height="90" rx="8"/>
+        <text class="t" x="987" y="54">Runs</text>
+        <text class="s" x="987" y="72">un worktree</text>
+        <text class="s" x="987" y="87">chacun</text>
+
+        <rect class="box" x="760" y="200" width="170" height="90" rx="8"/>
+        <text class="t" x="772" y="224">Ticket retenu</text>
+        <text class="s" x="772" y="242">attend que la MR de</text>
+        <text class="s" x="772" y="257">l’autre soit mergée,</text>
+        <text class="s" x="772" y="272">sans occuper de place</text>
+
+        <rect class="box" x="510" y="200" width="180" height="90" rx="8"/>
+        <text class="t" x="522" y="224">Veille des MR</text>
+        <text class="m" x="522" y="242">glab api, chaque minute</text>
+        <text class="s" x="522" y="259">appel du serveur Node,</text>
+        <text class="s" x="522" y="274">ni session Claude ni token</text>
+
+        <rect class="box" x="240" y="200" width="200" height="90" rx="8"/>
+        <text class="t" x="252" y="224">GitLab</text>
+        <text class="s" x="252" y="242">état de la merge request</text>
+        <text class="m" x="252" y="262">merged · closed · opened</text>
+
+        <rect class="ask" x="975" y="200" width="115" height="90" rx="8"/>
+        <text class="t" x="987" y="224">Dérogation</text>
+        <text class="s" x="987" y="242">départ empilé,</text>
+        <text class="s" x="987" y="257">ou depuis la base</text>
+        <text class="s" x="987" y="272">à toi de décider</text>
+
+        <rect class="later" x="10" y="200" width="160" height="90" rx="8"/>
+        <text class="t" x="22" y="224">Filtre GitLab</text>
+        <text class="s" x="22" y="242">labels, assignee</text>
+        <text class="s" x="22" y="272">plus tard</text>
+
+        <path class="an" d="M170 75H238"/><text class="l" x="204" y="67">par dépôt</text>
+        <path class="ad" d="M440 75H508"/><text class="l" x="474" y="67">JSON</text>
+        <path class="an" d="M690 75H758"/><text class="l" x="724" y="67">arêtes</text>
+        <path class="a" d="M930 75H973"/><text class="l" x="952" y="67">lance</text>
+        <path class="an" d="M800 120V198"/><text class="l" x="756" y="163">en conflit</text>
+        <path class="an" d="M890 200V122"/><text class="l" x="926" y="163">repart</text>
+        <path class="an" d="M690 245H758"/><text class="l" x="724" y="237">MR mergée</text>
+        <path class="an" d="M510 245H442"/><text class="l" x="476" y="237">interroge</text>
+        <path class="aq" d="M975 245H932"/><text class="l" x="954" y="237">force</text>
+        <path class="an" stroke-dasharray="2 4" d="M90 200V122"/><text class="l" x="126" y="163">plus tard</text>
+      </svg>
+    </figure>
+    <div class="chips">
+      <div class="chip"><b>Ce que coûte l’analyse</b>Une session Claude Code sur Sonnet par dépôt et par lot, 5 minutes au plus par défaut. Elle ne prend aucune des 3 places.</div>
+      <div class="chip"><b>La veille ne coûte aucun token</b>C’est le serveur qui appelle <span class="mono">glab api</span>, seulement tant qu’un ticket attend une MR. Si GitLab ne répond pas, le ticket reste retenu.</div>
+      <div class="chip warn"><b>Analyse en échec ou peu fiable</b>Fichier absent ou refusé, délai dépassé, ticket trop vague : les tickets de ce dépôt passent un par un.</div>
+      <div class="chip warn"><b>Dérogation</b>Depuis la base : la seconde MR devra sans doute être reprise à la main. Empilé : la MR cible la branche de l’autre ticket et se merge après elle.</div>
+      <div class="chip"><b>Limite</b>Pas encore exercé sur une vraie instance GitLab : les tests remplacent <span class="mono">claude</span> et <span class="mono">glab</span> par des simulateurs.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>6. Ce qui reste à faire <span class="tag">plus tard</span></h2>
+    <p class="caption">Un seul bloc n’est pas commencé. Il apparaît en pointillés dans le schéma du lot.</p>
+    <div class="latercard">
+      <h3>Tickets tirés de GitLab</h3>
+      <ul>
+        <li>Récupérer les tickets par labels ou assignee, sans coller d’URL.</li>
+        <li><span class="mono">ticket-source.ts</span> est le seul module qui sait d’où vient un lot. Cette entrée s’y branchera sans refaire la file.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>Schéma établi le 3 octobre 2026 à partir du dépôt <span class="mono">implementation-harness</span>. Les sections 1 à 5 décrivent le code en place, la section 6 ce qui n’est pas commencé.</footer>
+</main>
+</body>
+</html>

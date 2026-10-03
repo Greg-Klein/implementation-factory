@@ -3,7 +3,7 @@ import path from "node:path";
 import { broadcast, now } from "./context.js";
 import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
-import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
@@ -116,7 +116,7 @@ export async function saveFeedback(session: RunSession, body: string) {
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
     id, runId: session.id, createdAt: now(), status: "pending", feedback,
-    issueUrl: session.state.issueUrl, projectDirectory: session.state.cwd,
+    issueUrl: session.state.issueUrl, projectDirectory: sourceRepository(session.state),
   }, null, 2));
   session.activity("artifact", "Retour ajouté à la boucle d’auto-amélioration", `${id}.json`);
   session.publish();

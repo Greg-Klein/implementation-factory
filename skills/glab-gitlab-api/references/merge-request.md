@@ -6,7 +6,7 @@ The caller must authorize publication and supply the source/target branches, tic
 
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
-Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-harness:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2.
+Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-harness:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one: the relative paths and `:fullpath` resolve from there. Never delete the local branch or remove a worktree after the push; `remove_source_branch` only concerns GitLab, at merge time.
 
 ```bash
 git push -u origin <branch>
@@ -46,6 +46,7 @@ Rules:
 - **Always link the MR to its ticket**, without exception. Two things, both required:
   - the full ticket URL on the first line of the description, so the link is visible and clickable whatever GitLab does with keywords
   - the keyword: `Closes #<iid>` when the target is the project's default branch, `Related to #<iid>` otherwise (a merge into a feature branch closes nothing, so `Closes` would be a lie)
+  - one exception, the stacked merge request: when the caller says the base came from `IMPL_BASE_BRANCH`, write `Closes #<iid>` although the target is another ticket's branch. When that other merge request is merged and its branch deleted, GitLab retargets this one to the branch it was merged into, the default branch in the normal case. GitLab closes the issue only when the commits reach the default branch, so the keyword does nothing before that and is true when it acts. Every other non-default target keeps `Related to`
   - both go into the description file before the merge request is created, so the link is there from the first second
 - **Never merge the MR yourself.** The user merges.
 - **"Livré" means deployed to production**, in the description and in the step 9 comment alike. A ticket whose merge request is open, or merged into a feature branch or `develop`, is not "livré": name the stage it reached ("MR ouverte", "mergé dans `<branch>`").
@@ -58,6 +59,8 @@ Description template (`.claude/tasks/mr-description.md`). **Keep it short.** A r
 <full ticket URL>
 
 Closes #<iid> or Related to #<iid>, according to target
+
+Stacked merge request only: "Empilée sur `<base branch>` (!<iid of its merge request> when known) : à merger après elle. GitLab la recible alors vers la branche où l'autre a été mergée."
 
 ## Résumé
 

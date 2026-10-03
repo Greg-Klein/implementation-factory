@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, heldBySchedule, mergeRequestLabel, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -156,5 +156,112 @@ describe("a session waiting on the folder trust prompt", () => {
     expect(runStatusBadge({ status: "attention", sessionPrompt: prompt })).toEqual({ label: "À toi de jouer", tone: "decision" });
     expect(terminalExitStatus(1, true)).toBe("stopped");
     expect(runStatusBadge({ status: "stopped" })).toEqual({ label: "Arrêté", tone: "stopped" });
+  });
+});
+
+describe("a run working in a worktree", () => {
+  const worktree = "/work/acme-dashboard/.claude/worktrees/2026-10-03T08-00-00-000Z-abcd1234";
+  const run = { cwd: worktree, repository: "/work/acme-dashboard", issueUrl: "https://gitlab.com/acme/dashboard/-/issues/42" };
+
+  it("should be named after its repository and ticket, never after the worktree directory", () => {
+    expect(runLabel(run)).toBe("acme-dashboard #42");
+  });
+
+  it("should still name a run archived before worktrees after its checkout", () => {
+    expect(runLabel({ cwd: "/work/legacy/", issueUrl: "https://gitlab.com/acme/legacy/-/issues/7" })).toBe("legacy #7");
+  });
+
+  it("should show where the active worktree is, from the repository", () => {
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "active" } })).toBe(".claude/worktrees/2026-10-03T08-00-00-000Z-abcd1234");
+    expect(worktreeLabel({ cwd: "/work/legacy" })).toBeUndefined();
+  });
+
+  it("should say why a worktree is kept, and that a removed one is gone", () => {
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "kept", detail: "Worktree conservé : changements non poussés" } })).toBe("Worktree conservé : changements non poussés");
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "removed" } })).toBe("Worktree supprimé");
+  });
+
+  it("should offer the removal only for a worktree still on disk whose session is gone", () => {
+    expect(canRemoveWorktree({ status: "stopped", sessionActive: false, worktree: { path: worktree, state: "kept" } })).toBe(true);
+    expect(canRemoveWorktree({ status: "completed", sessionActive: true, worktree: { path: worktree, state: "kept" } })).toBe(false);
+    expect(canRemoveWorktree({ status: "running", sessionActive: true, worktree: { path: worktree, state: "active" } })).toBe(false);
+    expect(canRemoveWorktree({ status: "completed", sessionActive: false, worktree: { path: worktree, state: "removed" } })).toBe(false);
+    expect(canRemoveWorktree({ status: "completed", sessionActive: false })).toBe(false);
+  });
+
+  it("should tell a launch waiting on its own ticket from one waiting on a slot", () => {
+    expect(queueReason({ reason: "ticket" })).toBe("ticket déjà en cours");
+    expect(queueReason({ reason: "slot" })).toBe("toutes les places sont prises");
+  });
+});
+
+describe("what a queued ticket waits for", () => {
+  const blocking = { issueUrl: "https://gitlab.com/acme/shop/-/issues/217", mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/12", branch: "feat/217" };
+
+  it("should name the ticket it is in conflict with while that one runs", () => {
+    expect(queueStatus({ reason: "conflict", blocking })).toBe("En attente, conflit avec #217 en cours");
+  });
+
+  it("should name the merge request it waits for and the ticket behind it", () => {
+    expect(queueReason({ reason: "merge", blocking })).toBe("attend que la MR !12 soit mergée (#217)");
+    expect(queueStatus({ reason: "merge", blocking })).toBe("Attend que la MR !12 soit mergée (#217)");
+    expect(mergeRequestLabel("ticket-simule://acme-dashboard/-/merge_requests/128")).toBe("MR !128");
+  });
+
+  it("should say so when the state of that merge request is unknown", () => {
+    expect(queueStatus({ reason: "merge_unknown", blocking })).toBe("État de la MR !12 inconnu (#217)");
+  });
+
+  it("should tell a dependency from a plain order among queued tickets", () => {
+    expect(queueStatus({ reason: "dependency", blocking })).toBe("Dépend de #217, encore en file");
+    expect(queueStatus({ reason: "order", blocking })).toBe("Passe après #217");
+  });
+
+  it("should say the batch is being analysed", () => {
+    expect(queueStatus({ reason: "analysis" })).toBe("Analyse en cours");
+  });
+
+  it("should say a forced ticket only waits for a place, and on which branch it is stacked", () => {
+    expect(queueStatus({ reason: "slot", forced: { mode: "base" } })).toBe("Départ forcé, dès qu’une place est libre");
+    expect(queueStatus({ reason: "slot", forced: { mode: "stacked", baseBranch: "feat/217", onto: blocking.issueUrl } })).toBe("Départ empilé sur feat/217, dès qu’une place est libre");
+    expect(queueStatus({ reason: "slot" })).toBe("En attente, toutes les places sont prises");
+  });
+
+  it("should offer an override only when the schedule is what holds the ticket", () => {
+    expect(["analysis", "conflict", "merge", "merge_unknown", "dependency", "order"].every((reason) => heldBySchedule({ reason: reason as "order" }))).toBe(true);
+    expect(heldBySchedule({ reason: "slot" })).toBe(false);
+    expect(heldBySchedule({ reason: "ticket" })).toBe(false);
+  });
+
+  it("should mark a ticket that runs alone on its repository, and say why", () => {
+    expect(scheduleMark({ analysisFailure: "délai de 5 min dépassé" })).toMatchObject({ label: "Analyse en échec", title: expect.stringContaining("délai de 5 min dépassé") });
+    expect(scheduleMark({ confidence: "low" })?.label).toBe("Prédiction peu fiable");
+    expect(scheduleMark({ confidence: "high" })).toBeUndefined();
+  });
+});
+
+describe("the queue as it is shown", () => {
+  const entry = (id: string, repository: string, batchId?: string) => ({ id, cwd: repository, repository, issueUrl: `https://gitlab.com/acme/x/-/issues/${id.slice(1)}`, queuedAt: "2026-10-01T10:00:00.000Z", ...(batchId ? { batchId } : {}) });
+
+  it("should group by batch, then by repository, in the order asked", () => {
+    const groups = queueGroups([entry("q1", "/work/shop", "b1"), entry("q2", "/work/api", "b1"), entry("q3", "/work/shop", "b1"), entry("q4", "/work/shop", "b2")]);
+    expect(groups.map((group) => [group.batchId, group.count])).toEqual([["b1", 3], ["b2", 1]]);
+    expect(groups[0].repositories.map((bucket) => [bucket.name, bucket.entries.map((queued) => queued.id)])).toEqual([["shop", ["q1", "q3"]], ["api", ["q2"]]]);
+  });
+
+  it("should leave a launch made alone as a group of its own", () => {
+    const groups = queueGroups([entry("q1", "/work/shop"), entry("q2", "/work/shop")]);
+    expect(groups.map((group) => [group.batchId, group.count])).toEqual([[undefined, 1], [undefined, 1]]);
+  });
+
+  it("should move a row one step among the rows shown with it", () => {
+    const queued = [{ id: "a1" }, { id: "b1" }, { id: "a2" }, { id: "b2" }, { id: "a3" }];
+    const siblings = [{ id: "a1" }, { id: "a2" }, { id: "a3" }];
+    expect(queueMoveTarget(queued, siblings, "a2", "up")).toBe("a1");
+    expect(queueMoveTarget(queued, siblings, "a1", "up")).toBeUndefined();
+    // Down lands right after the next sibling: in front of whatever follows it.
+    expect(queueMoveTarget(queued, siblings, "a1", "down")).toBe("b2");
+    expect(queueMoveTarget(queued, siblings, "a2", "down")).toBeNull();
+    expect(queueMoveTarget(queued, siblings, "a3", "down")).toBeUndefined();
   });
 });

@@ -1,9 +1,9 @@
 "use client";
 
-import { ChatCircleDotsIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, FolderDashedIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
-import { holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
-import type { IncidentAction, IncidentResult, RunIncident, RunState } from "@/lib/types";
+import { canRemoveWorktree, holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
+import type { IncidentAction, IncidentResult, RunIncident, RunState, WorktreeResult } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
 import { EvidencePanel } from "./evidence-panel";
@@ -11,6 +11,7 @@ import { IncidentPanel } from "./incident-panel";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 import { TrackingPanel } from "./tracking-panel";
+import { WorktreePanel } from "./worktree-panel";
 
 type Tab = "conversation" | "suivi" | "terminal" | "preuves";
 
@@ -24,15 +25,19 @@ export type RunViewActions = {
   stop: () => void;
   close: () => void;
   incident: (incident: RunIncident, action: IncidentAction, reason?: string) => void;
+  /** `force`: sent again once the user confirmed that uncommitted or unpushed work may go. */
+  removeWorktree: (force: boolean) => void;
+  dismissWorktreeResult: () => void;
 };
 
-export function RunView({ run, connected, writing, terminalRef, actions, incidentResult }: {
+export function RunView({ run, connected, writing, terminalRef, actions, incidentResult, worktreeResult }: {
   run: RunState;
   connected: boolean;
   writing: boolean;
   terminalRef: Ref<TerminalHandle>;
   actions: RunViewActions;
   incidentResult?: IncidentResult;
+  worktreeResult?: WorktreeResult;
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
@@ -98,7 +103,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[196px_minmax(0,1fr)_300px]">
       <PhaseRail run={run} />
       <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2 sm:h-12 sm:flex-nowrap sm:py-0">
+        <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2">
           <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">
             {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--tab-selected)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
             {([["conversation", "Conversation"], ["suivi", "Suivi"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
@@ -113,18 +118,20 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/*
-              A workflow that reached its end still holds its checkout while the
+              A workflow that reached its end still holds its slot while the
               session sits at its prompt. The queue takes it back on its own as
               soon as a launch waits on it; until then the session is the user's
               to keep or to give up, hence an action of its own, named for what
               it frees rather than for what it stops.
             */}
-            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient ce dépôt. Elle se fermera d'elle-même si un run en file l'attend." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
+            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient une place. Elle se fermera d'elle-même si un run en file l'attend." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
             {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
             {run.archived && <span title="Run d’une session précédente, relu depuis son archive : il n’a plus de session et ne reçoit aucune instruction." className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">Archive</span>}
+            {canRemoveWorktree(run) && <button type="button" disabled={!connected} onClick={() => actions.removeWorktree(false)} title="Supprime le répertoire de travail de ce run. La branche et ses commits restent dans le dépôt. Une confirmation est demandée si du travail n'est ni commité ni poussé." className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><FolderDashedIcon size={12} className="shrink-0" /> Supprimer le worktree</button>}
             {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
           </div>
         </div>
+        <WorktreePanel result={worktreeResult && worktreeResult.runId === run.id && canRemoveWorktree(run) ? worktreeResult : undefined} connected={connected} onConfirm={() => actions.removeWorktree(true)} onDismiss={actions.dismissWorktreeResult} />
         <IncidentPanel run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} sessionPrompt={run.sessionPrompt} connected={connected} onAnswerPrompt={actions.answerPrompt} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />

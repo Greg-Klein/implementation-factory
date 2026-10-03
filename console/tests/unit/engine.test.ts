@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { claudeCode, END_REPORTED_TOOLS } from "../../server/engine/claude-code";
+import { claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment } from "../../server/engine/claude-code";
 import { engine } from "../../server/engine/index";
 
 describe("engine contract", () => {
@@ -139,5 +139,48 @@ describe("signals the health monitor reads from Claude Code", () => {
     expect(new Set(post)).toEqual(END_REPORTED_TOOLS);
     const pre = hooks.hooks.PreToolUse.map((entry) => entry.matcher ?? "").join("|").split("|");
     expect(pre).toEqual(expect.arrayContaining(["Bash", "Monitor", "Agent"]));
+  });
+});
+
+describe("the headless scheduling session", () => {
+  const options = { pluginDir: "/opt/harness", inputPath: "/data/schedule/call-1/input.json", outputPath: "/data/schedule/call-1/output.json" };
+  const args = scheduleArguments(options);
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1];
+
+  it("should run without a terminal, on Sonnet, asking nothing", () => {
+    expect(args[0]).toBe("-p");
+    expect(valueOf("--model")).toBe("sonnet");
+    expect(valueOf("--permission-mode")).toBe("dontAsk");
+    expect(valueOf("--permission-prompts")).toBe("none");
+    expect(valueOf("--output-format")).toBe("json");
+  });
+
+  it("should load the plugin and reach the plugin and the output directory", () => {
+    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : [])).toEqual(["/opt/harness", "/data/schedule/call-1"]);
+  });
+
+  it("should pass the allowed tools as one argument, so the variadic flag cannot swallow the prompt", () => {
+    const tools = valueOf("--allowedTools");
+    expect(args.filter((arg) => arg === "--allowedTools")).toHaveLength(1);
+    expect(tools.split(",")).toEqual([
+      "Read", "Write", "Glob", "Grep", "Agent", "Skill",
+      "Bash(glab issue view *)", "Bash(glab api *)",
+      "Bash(git log *)", "Bash(git show *)", "Bash(git grep *)", "Bash(git ls-files *)", "Bash(git rev-parse *)",
+      "Bash(ls *)", "Bash(rm /data/schedule/call-1/*)",
+    ]);
+    // Nothing that writes to the repository or to GitLab.
+    expect(tools).not.toMatch(/Edit|git (?:checkout|switch|commit|push|fetch|stash)|glab mr/);
+    expect(args[args.indexOf("--allowedTools") + 2]).not.toMatch(/^Bash/);
+  });
+
+  it("should close the options before the prompt, which is the schedule command with its two paths", () => {
+    expect(args.at(-2)).toBe("--");
+    expect(args.at(-1)).toBe("/implementation-harness:schedule /data/schedule/call-1/input.json /data/schedule/call-1/output.json");
+  });
+
+  it("should keep the plugin hooks silent: no run identifier, no hook address, no spool", () => {
+    expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HARNESS_HOOK_URL: "http://127.0.0.1:3210/api/hooks?token=x", IMPL_HOOK_SPOOL: "/data/runs/run-1/hooks-spool.jsonl" }))
+      .toEqual({ PATH: "/usr/bin" });
   });
 });

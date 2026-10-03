@@ -42,7 +42,7 @@ Chaining shorter sleeps to get around the block does not work either. This has a
 
 Read the run instruction, if there is one, **before** reading the ticket: it changes what you are looking for, and it may already answer a question you would otherwise have asked.
 
-Resolve the local checkout for the ticket's project first (see "Repository resolution" below) and `cd` into it. Do not touch git yet, this step is read only.
+Resolve the local checkout for the ticket's project first (see "Repository resolution" below) and `cd` into it. In worktree mode (see "Run worktree" below) you are already in it: the run worktree is the checkout, so stay there and resolve nothing. Do not touch git yet, this step is read only.
 
 Always use `glab`, never WebFetch, for anything GitLab.
 
@@ -90,7 +90,8 @@ An obvious behaviour is not a gap. A close button closes the modal, a cancel but
 
 A single interaction with **AskUserQuestion**, carrying everything you will ever need:
 
-1. **Base branch.** `git fetch`, then list candidates: current branch, `develop`, `main`/`master`, plus any existing branch related to the ticket or its epic. Recommend `develop` when it exists, always allow a custom answer.
+1. **Base branch.** `git fetch`, then list candidates: current branch, `develop`, `main`/`master`, plus any existing branch related to the ticket or its epic. Recommend `develop` when it exists, always allow a custom answer. In worktree mode the run worktree is detached and has no current branch: offer instead the branch the main checkout was on, `IMPL_SOURCE_BRANCH` when it is set, else `git -C <main checkout> branch --show-current`, and leave that candidate out when both are empty.
+   **When `IMPL_BASE_BRANCH` is set, do not ask this one.** The console started this ticket on top of another ticket's branch that is not merged yet (a stacked start): the base is that branch, as given. List no candidates and recommend nothing. If the questions below leave nothing to ask, skip the interaction altogether.
 2. **The blocking questions from step 1**, up to three per batch. Phrase each one as a real decision with concrete options, never as an open essay question. Give a recommended option first when you have a defensible one, and say what it implies.
 3. **Repository path**, if the checkout could not be resolved in step 1.
 4. **How to exercise the change at runtime**, whenever something outside the repository decides whether step 6 can measure anything: a backend flag that has to be on, a test account, which environment the local app talks to, the exact input that triggers the server side branch you are touching. Read the repository's local runtime configuration first (see step 6) and ask only what it leaves open. Collect foreseeable prerequisites here; a later unresolved decision still returns to the user, and a verification ruled impossible for want of one sentence is a verification nobody does.
@@ -110,11 +111,13 @@ Then, and only then, touch git:
 - If the working tree is dirty, do not stop and do not discard anything: `git stash push -u -m "implementation-harness-<iid>"`, note it, and mention the stash name in the final report.
 - `git checkout <base>` and `git pull`.
 
+In worktree mode, run neither of those two: no stash, no `git checkout <base>`, no `git pull`. Run `git fetch origin` and go to step 3, which creates the branch from the fetched base. The run worktree starts clean, and the uncommitted changes of the main checkout stay there, out of this run.
+
 ---
 
 ## Step 3 - Create the dedicated branch
 
-Always implement on a dedicated branch, created from the base branch chosen in step 2.
+Always implement on a dedicated branch, created from the base branch chosen in step 2, or from `IMPL_BASE_BRANCH` when it is set.
 
 ```
 <type>-<iid>-<slug>
@@ -125,7 +128,19 @@ Always implement on a dedicated branch, created from the base branch chosen in s
 
 Example: `feat-217-conversation-history-sidebar`
 
-Record the base branch. The merge request will target it, whatever it is.
+In worktree mode, create it without ever checking out the base. `git checkout <base>` fails in a linked worktree as soon as the main checkout, or another run, has that branch checked out:
+
+```bash
+git fetch origin
+git switch -c <branch> --no-track origin/<base>
+```
+
+- When the base is not on the remote (`git rev-parse --verify --quiet refs/remotes/origin/<base>` prints nothing), start from the local ref: `git switch -c <branch> <base>`. Do the same when the local `<base>` holds commits `origin/<base>` does not and the remote holds none the local lacks: those commits are what the user is building on. Say which ref you started from.
+- **A ticket branch that already exists is never overwritten**: no `-B`, no `--force`, no `--ignore-other-worktrees`, no deletion. Check before creating: `git worktree list --porcelain` (checked out in another worktree), `git show-ref --verify --quiet refs/heads/<branch>` (local), `git rev-parse --verify --quiet refs/remotes/origin/<branch>` (remote). If it is checked out in another worktree, another run or the user is working on it: take a suffixed name (`<branch>-2`, then `-3`) and say so. If it exists only locally or on the remote, ask the user with `AskUserQuestion` whether to continue on it (`git switch <branch>`, or `git switch -c <branch> --track origin/<branch>` when it is only on the remote) or to work on a suffixed name. An existing branch nobody explained is a git state, not a detail.
+
+With `IMPL_BASE_BRANCH`, the same commands and the same rules apply with that branch as `<base>`: `origin/<base>` after the fetch, the local ref as fallback. The branch usually belongs to a run that is still open and is checked out in its worktree, which is one more reason never to check it out. Never commit on it, rebase it or push it: it is another ticket's branch. If it exists neither on the remote nor locally, stop and report. Never fall back to another base on your own: the ticket was queued behind that branch because it needs its code.
+
+Record the base branch. The merge request will target it, whatever it is. A stacked merge request targets the other ticket's branch, and GitLab retargets it to the branch that one was merged into, normally the default branch, once it is merged and its branch deleted.
 
 Then move the ticket to **In progress**, unless it already is. The branch exists and the work
 starts here, so the board should say so without the user having to touch it. See "Setting the ticket status" below: it is a native work item field, not a label, and it is only reachable through
@@ -175,6 +190,7 @@ Each `developer` invocation must receive:
 - the requirement to self-check observable behavior on frozen code and return the report, evidence and scoped recipe specified by its output contract
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
 - the method routing in the developer definition, without copying skill bodies; when a measurement-only continuation is needed, explicitly prohibit code edits
+- **in worktree mode, the path of the run worktree as the only place it writes**, and the dependency rule of "Run worktree" below when its task adds, removes or upgrades a dependency
 
 ### Implementation method
 
@@ -215,6 +231,8 @@ Three archived runs opened their review with a hole here: nine planned tasks and
 
 For a change observable in the running app, use `implementation-harness:collect-evidence` with its browser reference. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
 
+In worktree mode, never assume the default port. Another run of the same repository, or the user's own dev server in the main checkout, may already hold it, and an app that answers there serves another checkout's code. Check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started. Build outputs (`.next`, `dist`) are not provisioned in the worktree, so a first build there is expected.
+
 Record URL, route and a secure credential reference in `.claude/tasks/state.json`, never the secret itself. Use headless browsers. Measure the committed, frozen code; no editing agent runs during measurement. Observable includes requests, redirects, storage and events, not only pixels.
 
 Preserve the developers' actual measurements, captures and reproduction recipe for later reconciliation by reviewers. Pass paths, not an approving verdict or the author's diagnosis in the review brief. A reviewer forms its own expectations before opening those reports. If live access is unavailable, report the established obstacle and keep indirect evidence available without representing it as a fresh observation.
@@ -235,7 +253,7 @@ If the senior corrects code, its verdict is not independent evidence about its o
 
 Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
 
-**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when you decided it runs and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. For QA, pass the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id. Only when the diff adds or modifies test files (a file the repository's test runner collects, among those `git diff --name-only <base>` and `git status --porcelain` list), also create a throwaway worktree (`git worktree add --detach <directory outside the repository> HEAD`), pass its path, and remove it (`git worktree remove --force`) when QA returns. The same holds for a reviewer you invoke at tier 0.
+**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when you decided it runs and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. For QA, pass the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id. Only when the diff adds or modifies test files (a file the repository's test runner collects, among those `git diff --name-only <base>` and `git status --porcelain` list), also create a throwaway worktree (`git worktree add --detach <fresh directory outside the repository> HEAD`, in a system temporary directory for instance, never under `.claude/worktrees/`), pass its path, and remove that one and only that one (`git worktree remove --force <its path>`) when QA returns. The same holds for a reviewer you invoke at tier 0.
 
 A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, and you merge what it wrote into `developer-report.md` and `dev-evidence.json` the same way as at the end of a batch. At tier 2 the orchestrator does that merge for you.
 
@@ -290,9 +308,11 @@ A design verdict `INCONCLUSIVE`, or a design review you decided to run and skipp
 
 ## Step 8 - Merge request
 
-Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use `implementation-harness:glab-gitlab-api` with [the delivery recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch and open the MR against the chosen base. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge.
+Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use `implementation-harness:glab-gitlab-api` with [the delivery recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge.
 
 Then set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
+
+A commit made after the merge request exists is pushed too. In worktree mode the console keeps the run worktree as long as HEAD is not on the remote.
 
 ## Step 9 - Publish the consolidated review
 
@@ -330,9 +350,11 @@ printf '{"requestId":"%s"}\n' "$REQUEST_ID" > .claude/tasks/archive-sync-request
 
 The answer lists the versions kept and any capture still missing. Report a missing one, or an answer that never came, in the final report: the evidence of this run would be lost with the directory. Without `IMPL_RUN_ID` there is no console to archive anything; skip the request.
 
-**Always clean `.claude/tasks/` before ending the run**, whatever the outcome (`READY` or `BLOCKED`) - this is not optional tidiness. Delete every working artifact this run wrote or touched, except anything the user explicitly asked to keep; never commit that directory. Leftover files from a run are not inert: `.claude/tasks/` is not scoped per ticket, so a stale `ticket-context.md`, `planner-output.json`, or `developer-report-*.md` from an earlier, unrelated run will be sitting there the next time `/implementation-harness:implement` starts, ready to be misread as belonging to the current ticket. Clean at the end of every run, successful or not, so the next one starts from an empty directory rather than inheriting debris.
+**Always clean `.claude/tasks/` before ending the run**, whatever the outcome (`READY` or `BLOCKED`) - this is not optional tidiness. Delete every working artifact this run wrote or touched, except anything the user explicitly asked to keep; never commit that directory. In worktree mode the directory is the run worktree's own `.claude/tasks/`, never the main checkout's, and the console removes the worktree only when this cleanup left it clean. Leftover files from a run are not inert: outside a run worktree `.claude/tasks/` is not scoped per ticket, so a stale `ticket-context.md`, `planner-output.json`, or `developer-report-*.md` from an earlier, unrelated run will be sitting there the next time `/implementation-harness:implement` starts, ready to be misread as belonging to the current ticket. Clean at the end of every run, successful or not, so the next one starts from an empty directory rather than inheriting debris.
 
-**Name the directory by its absolute path, spelled out, in the removal itself.** Resolve the root once (`git rev-parse --show-toplevel`), then write the literal path, for example `rm -rf /abs/path/to/repo/.claude/tasks`: no `cd` chained before the `rm` in the same command, no shell variable, no relative path or relative glob. Claude Code's built-in removal check cannot resolve a relative target behind a `cd` or a variable, so it holds the run on a permission prompt nobody answers, denies it after two minutes, and the directory stays. The same check refuses to remove the shell's working directory or any of its ancestors, and a shell that `cd`ed into `.claude/tasks/` during the run is sitting exactly there. So move it out first, in a Bash call of its own (`cd /abs/path/to/repo`, the working directory carries over to the next call), and run the removal in the next call. If the check still refuses, do not work around it: put the exact command in the final report and leave it to the user.
+**Name the directory by its absolute path, spelled out, in the removal itself.** Resolve the root once (`git rev-parse --show-toplevel`, which answers the run worktree in worktree mode), then write the literal path, for example `rm -rf /abs/path/to/repo/.claude/tasks`: no `cd` chained before the `rm` in the same command, no shell variable, no relative path or relative glob. Claude Code's built-in removal check cannot resolve a relative target behind a `cd` or a variable, so it holds the run on a permission prompt nobody answers, denies it after two minutes, and the directory stays. The same check refuses to remove the shell's working directory or any of its ancestors, and a shell that `cd`ed into `.claude/tasks/` during the run is sitting exactly there. So move it out first, in a Bash call of its own (`cd /abs/path/to/repo`, the working directory carries over to the next call), and run the removal in the next call. If the check still refuses, do not work around it: put the exact command in the final report and leave it to the user.
+
+**In worktree mode, stop there.** Check `git status --short` and that HEAD is on the remote (`git rev-parse HEAD` against `git rev-parse origin/<branch>`), and report anything left uncommitted or unpushed. Never remove the run worktree and never delete the ticket branch: the console removes the worktree itself after the session ends, once the archive sync above was answered, the merge request exists, the tree is clean and HEAD is pushed. A blocked run that ends on a draft merge request keeps its worktree.
 
 ---
 
@@ -348,7 +370,26 @@ For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-r
 
 ## Repository resolution
 
-The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket). If the current directory already is the right repository, stay there. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping GitLab project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping GitLab project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+
+---
+
+## Run worktree
+
+**Worktree mode** applies in two cases:
+
+- `IMPL_RUN_WORKTREE` is set. The console created a linked git worktree of the target repository for this run, at `<repository>/.claude/worktrees/<run-id>`, detached at the HEAD of the main checkout, and started you inside it. `IMPL_SOURCE_REPOSITORY` is the main checkout.
+- `IMPL_RUN_WORKTREE` is unset, but the session already sits in a linked worktree: `git rev-parse --path-format=absolute --git-dir --git-common-dir` prints two different paths. The main checkout is then the first entry of `git worktree list`.
+
+In every other case the plugin runs in the checkout itself and nothing in this section applies.
+
+In worktree mode:
+
+- **The run worktree is the repository of this run.** `.claude/tasks/`, the code, the commands, the agents and the app all live there. Never `cd` to the main checkout to write code, and never stash, switch, pull, commit or clean there. Reading it (`git -C <main checkout> …`) is allowed.
+- **Other tickets of the same repository may be running at the same time**, each in its own worktree. Branches, the stash and symlinked dependency directories are shared with them and with the main checkout. So never `git stash`: the stash list belongs to every worktree at once, and the worktree starts clean anyway. Where the git preflight says to stash, commit what is yours or stop and report instead.
+- **What the console provisioned.** Ignored dependency directories (`node_modules`) are a copy of the main checkout's when the filesystem allows it, else a symlink to them. `.env*` files and `.claude/settings.local.json` are copies. The links are listed in `.git/info/exclude` and are never staged. Build outputs are not provisioned.
+- **A symlinked dependency directory is never written through.** If `node_modules`, or another dependency directory, is a symlink in the worktree (`IMPL_WORKTREE_DEPENDENCIES=symlink` says at least one is, `clone` says none is; when it is unset, or to check one directory, `test -L node_modules`) and the task adds, removes or upgrades a dependency, or the lockfile differs from the base, replace the link with a real install inside the worktree first: `rm node_modules` on the link itself, with no trailing slash and no `-r` (a trailing slash deletes the content of the main checkout), then the repository's documented install command. Otherwise the install rewrites the dependencies of the main checkout and of every parallel run. When it is a real directory, install normally. Run your own gates after that replacement, never before.
+- **Never remove the run worktree, never delete the ticket branch**, and never run `git worktree prune`. The console removes the worktree after the session ends.
 
 ---
 
@@ -392,7 +433,7 @@ You are the only one allowed to touch git, so you are the only one who can break
 
 1. `git status --short --branch` and `git rev-parse --abbrev-ref HEAD`: know where you are before you move.
 2. Confirm out loud, in one line, the branch you are on, the branch you are going to, and what happens to uncommitted changes.
-3. If uncommitted changes would be lost or carried somewhere unintended, stash them under a named stash (`implementation-harness-<iid>`) first, and verify with `git stash list` that it landed.
+3. If uncommitted changes would be lost or carried somewhere unintended, stash them under a named stash (`implementation-harness-<iid>`) first, and verify with `git stash list` that it landed. Not in worktree mode, where nothing is ever stashed: see "Run worktree".
 4. Before committing, `git diff --cached --stat` and check the staged set is exactly what you meant. Never `git add -A` blindly: never stage `.claude/tasks/`, `.env` files, lockfile churn you did not cause, or unrelated files.
 5. Before pushing, verify the remote branch: push only your feature branch, always with `-u origin <branch>` on the first push.
 
@@ -402,12 +443,13 @@ Never, whatever the situation, whoever asks:
 - amending or rebasing commits that are not yours from this run
 - resolving a conflict by discarding one side
 - deleting or rewriting a branch you did not create in this run, unless the user names it
+- in worktree mode: removing the run worktree, deleting the ticket branch, or overwriting an existing branch (`-B`, `--force`)
 
 Not on your own initiative, but allowed when **the user asks for it explicitly**. Announce the move, state the preconditions you checked, then do it:
 
 - **rebasing the run's own branch and force-pushing it.** Requires `--force-with-lease`, never bare `--force`, and a check beforehand that the remote holds nothing you do not have. Re-run the tests after the rebase: it replays your commits onto code you have never compiled against
 - **committing or pushing on `develop`, `main`, `master` or the base branch.** Default to a feature branch and a merge request every time. The user may have a reason you cannot see, typically that the MR is already merged and the branch is gone
-- **deleting the run's own branch**, once it is merged or abandoned
+- **deleting the run's own branch**, once it is merged or abandoned, outside worktree mode
 
 The distinction that matters: the first list destroys work with no way back, the second is ordinary version control that simply must not happen behind the user's back. Refusing an explicit request, citing a rule of your own, is not safety, it is obstruction.
 
@@ -421,11 +463,12 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Never invent what the ticket does not say: deduce the obvious, ask for the decisions, guess nothing
 - Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down
 - One ticket, one dedicated branch, always
-- The MR always targets the branch chosen in step 2
+- In worktree mode the run stays in its worktree from the first step to the last: nothing is written, stashed or switched in the main checkout, and the run worktree and the ticket branch are left in place for the console
+- The MR always targets the branch chosen in step 2, or `IMPL_BASE_BRANCH` when the console set it, in which case the base branch question is not asked
 - Developers run in parallel only on strictly disjoint file scopes, and sequentially the moment those scopes overlap. While a batch is in flight the branch is a moving target: a repository-wide gate measures that, not any one task, so nobody concludes from it until the batch is done
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
-- Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2, when the diff touches test files
+- Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2, when the diff touches test files. It is never the run worktree and never sits under `.claude/worktrees/`
 - The ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code

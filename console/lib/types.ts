@@ -15,8 +15,17 @@ export type PlanTaskStatus = "todo" | "in_progress" | "done";
 export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[]; summary?: string; description?: string; filePaths?: string[] };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
+/** Mirrors RunWorktree in server/types.ts. */
+export type RunWorktree = { path: string; state: "active" | "kept" | "removed"; detail?: string; dependencies?: "clone" | "symlink" };
+/** What became of a worktree removal this page asked for. */
+export type WorktreeResult = { runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] };
 export type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
+  /** The checkout the ticket was launched on; `cwd` is the worktree the session runs in. Absent on older archives. */
+  repository?: string;
+  /** The branch a stacked run was started on. */
+  baseBranch?: string;
+  worktree?: RunWorktree;
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. Absent on states built before this field existed. */
   sessionActive?: boolean;
@@ -49,7 +58,7 @@ export type RunState = {
  * length of a run.
  */
 export type RunSummary = {
-  id: string; status: Status; phase: number; cwd: string; issueUrl: string; ticketTitle?: string;
+  id: string; status: Status; phase: number; cwd: string; repository?: string; worktree?: RunWorktree; issueUrl: string; ticketTitle?: string;
   startedAt: string | null; endedAt: string | null;
   branch?: string; mergeRequestUrl?: string; error?: string; action?: string;
   sessionActive: boolean;
@@ -67,8 +76,17 @@ export type RunSummary = {
   incident?: { id: string; kind: IncidentKind; title: string; revision: number };
   archived?: boolean;
 };
-export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
-export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
+/** Mirrors the queue and schedule types of server/types.ts. */
+export type ScheduleConfidence = "high" | "medium" | "low";
+export type QueueForce = { mode: "base" } | { mode: "stacked"; baseBranch: string; onto: string };
+export type QueuedRun = { id: string; cwd: string; repository?: string; issueUrl: string; instruction: string; queuedAt: string; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
+export type QueueReason = "slot" | "ticket" | "analysis" | "conflict" | "merge" | "merge_unknown" | "dependency" | "order";
+export type QueueCause = "overlap" | "depends_on" | "analysis_failed" | "low_confidence";
+export type QueueBlocker = { issueUrl: string; runId?: string; queuedId?: string; mergeRequestUrl?: string; branch?: string };
+export type QueuedRunView = QueuedRun & {
+  reason: QueueReason; blockedBy?: string; blocking?: QueueBlocker; cause?: QueueCause; detail?: string;
+  summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
+};
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. */
 export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
@@ -79,6 +97,8 @@ export type ServerMessage =
   | { type: "terminal.output"; runId: string; data: string }
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   | { type: "error"; message: string; runId?: string }
+  | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
+  | ({ type: "worktree.result" } & WorktreeResult)
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };

@@ -10,12 +10,73 @@
 // tests), and waits for an answer: Enter on the option under the cursor, the
 // arrows to move it, Escape to leave. Only the frame is the real one. How the
 // real dialog redraws and what it does with each key was not observed.
-import { appendFileSync, readFileSync, realpathSync } from "node:fs";
+//
+// Called with `-p` and the schedule command, it stands in for a headless
+// scheduling session instead: it reads the input file and writes the output
+// file of contracts/schedule.md, shaped by the fixture FAKE_CLAUDE_SCHEDULE
+// names, then exits, and never draws the dialog: a headless session has no terminal
+// to draw it on. Without a fixture file every ticket is predicted with
+// high confidence and no edge. The fixture is JSON:
+//   { "mode": "fail" }     exits without writing anything
+//   { "mode": "hang" }     never answers, for the console to time out
+//   { "mode": "invalid" }  writes a file the contract refuses
+//   { "edges": [{ "a": 1, "b": 2, "kind": "overlap", "reason": "…" }], "confidence": { "3": "low" } }
+// where tickets are named by their number. Tickets are invented by the tests.
+import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+const argv = process.argv.slice(2);
+const scheduleCall = argv.includes("-p") ? (argv[argv.indexOf("--") + 1] ?? "").match(/^\/implementation-harness:schedule (\S+) (\S+)$/) : null;
+if (argv.includes("-p")) {
+  // A prompt swallowed by a variadic flag never reaches this point as the schedule command.
+  if (!scheduleCall) process.exit(2);
+  const [, inputPath, outputPath] = scheduleCall;
+  const fixtureFile = process.env.FAKE_CLAUDE_SCHEDULE;
+  const fixture = fixtureFile && existsSync(fixtureFile) ? JSON.parse(readFileSync(fixtureFile, "utf8")) : {};
+  const input = JSON.parse(readFileSync(inputPath, "utf8"));
+  // What the session was started with, for a test to check it reports to no run.
+  if (process.env.FAKE_CLAUDE_INPUT_DIR) {
+    try {
+      appendFileSync(path.join(process.env.FAKE_CLAUDE_INPUT_DIR, "schedule-calls.jsonl"), `${JSON.stringify({
+        cwd: process.cwd(), argv, input, runId: process.env.IMPL_RUN_ID ?? null, hookUrl: process.env.IMPL_HARNESS_HOOK_URL ?? null,
+      })}\n`);
+    } catch { /* the test reads what it can */ }
+  }
+  if (fixture.mode === "hang") {
+    setInterval(() => {}, 1 << 30);
+  } else {
+    if (fixture.mode === "invalid") writeFileSync(outputPath, JSON.stringify({ tickets: [] }));
+    else if (fixture.mode !== "fail") {
+      const number = (url) => url.split("/").pop();
+      const urls = [...input.tickets, ...(input.known ?? [])].map((ticket) => ticket.issue_url);
+      const url = (iid) => urls.find((candidate) => number(candidate) === String(iid));
+      writeFileSync(outputPath, JSON.stringify({
+        tickets: input.tickets.map((ticket) => ({
+          issue_url: ticket.issue_url, areas: [], files: [`src/ticket-${number(ticket.issue_url)}.ts`],
+          confidence: fixture.confidence?.[number(ticket.issue_url)] ?? "high",
+          summary: `Ticket ${number(ticket.issue_url)} du lot de test.`,
+        })),
+        // An edge needs both its tickets in the input, and at least one of them new.
+        edges: (fixture.edges ?? []).filter((edge) => url(edge.a) && url(edge.b) && [edge.a, edge.b].some((iid) => input.tickets.some((ticket) => ticket.issue_url === url(iid)))).map((edge) => ({
+          a: url(edge.a), b: url(edge.b), kind: edge.kind,
+          ...(edge.order ? { order: edge.order.map(url) } : {}), reason: edge.reason,
+        })),
+      }));
+    }
+    process.stdout.write(JSON.stringify({ type: "result", result: fixture.mode === "fail" ? "schedule failed: fixture" : "schedule: done" }));
+    process.exit(fixture.mode === "fail" ? 1 : 0);
+  }
+} else {
 const inputDirectory = process.env.FAKE_CLAUDE_INPUT_DIR;
 if (inputDirectory && process.env.IMPL_RUN_ID) {
   const log = path.join(inputDirectory, `${process.env.IMPL_RUN_ID}.log`);
+  // Where the console started the session and what it told it about its worktree, for a test to read.
+  try {
+    writeFileSync(path.join(inputDirectory, `${process.env.IMPL_RUN_ID}.session.json`), JSON.stringify({
+      cwd: process.cwd(), worktree: process.env.IMPL_RUN_WORKTREE, repository: process.env.IMPL_SOURCE_REPOSITORY,
+      branch: process.env.IMPL_SOURCE_BRANCH, dependencies: process.env.IMPL_WORKTREE_DEPENDENCIES, baseBranch: process.env.IMPL_BASE_BRANCH, argv,
+    }));
+  } catch { /* the test reads what it can */ }
   process.stdin.on("data", (chunk) => { try { appendFileSync(log, chunk); } catch { /* the test reads what it can */ } });
 }
 const quit = () => process.exit(0);
@@ -54,4 +115,5 @@ if (!untrusted) {
     ready();
   };
   process.stdin.on("data", onKey);
+}
 }

@@ -139,8 +139,9 @@ function readWorkflowState(session: RunSession, content: string) {
  * run to misread as its own (`ticket-context.md`, `planner-output.json`, a
  * stale `developer-report-*.md`). Every run therefore starts from an empty
  * task directory itself, rather than trusting the previous one to have ended
- * cleanly. Safe with several runs going, because a checkout is held by one run
- * at a time: see runHoldsRepository and the registry that enforces it.
+ * cleanly. Safe with several runs going, because each run works in a worktree
+ * of its own: the directory cleared here belongs to this run alone. A fresh
+ * worktree only has one when the repository tracks files under it.
  */
 export async function clearTaskDirectory(cwd: string) {
   await rm(engine.taskDirectory(cwd), { recursive: true, force: true });

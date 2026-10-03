@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
-import { elapsedLabel, runStatusBadge, type StatusBadge } from "@/lib/run-state";
+import { elapsedLabel, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 
@@ -38,6 +38,8 @@ export function PhaseRail({ run }: { run: RunState }) {
   const now = useNow(Boolean(run.startedAt) && !run.endedAt);
   const finished = run.status === "completed";
   const badge = runStatusBadge(run);
+  const repository = sourceRepository(run);
+  const worktree = worktreeLabel(run);
 
   return (
     <aside aria-label="Progression du run" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
@@ -60,7 +62,28 @@ export function PhaseRail({ run }: { run: RunState }) {
           {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, "!")} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
         </div>
       )}
-      <div className="mt-6 border-t border-[var(--line)] pt-4"><p className="truncate font-mono text-[10px] text-[var(--muted)]" title={run.cwd}>{run.cwd}</p>{run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}</div>
+      <div className="mt-6 border-t border-[var(--line)] pt-4">
+        <dl className="space-y-2">
+          <div>
+            <dt className="text-[10px] font-semibold text-[var(--muted)]">Dépôt</dt>
+            <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={repository}>{repository}</dd>
+          </div>
+          {run.baseBranch && (
+            <div>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">Empilé sur</dt>
+              <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.baseBranch}>{run.baseBranch}</dd>
+            </div>
+          )}
+          {worktree && run.worktree && (
+            <div>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">Worktree</dt>
+              <dd className={`font-mono text-[10px] ${run.worktree.state === "active" ? "truncate text-[var(--ink)]" : "leading-4 text-[var(--muted)]"}`} title={run.worktree.path}>{worktree}</dd>
+              {run.worktree.state === "active" && run.worktree.dependencies === "symlink" && <dd className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Dépendances liées au checkout principal</dd>}
+            </div>
+          )}
+        </dl>
+        {run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}
+      </div>
     </aside>
   );
 }

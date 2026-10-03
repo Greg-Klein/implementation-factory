@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createGitCheckout, dataDirectory } from "../fixtures";
-import { artifact, resetRun, runDemoToCompletion, startRun } from "./helpers";
+import { artifact, resetRun, runDemoToCompletion, runDirectory, startRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -58,12 +58,14 @@ test("should follow a real run from a failed round to a replaced one, and keep b
   const checkout = createGitCheckout("evidence-rounds");
   await page.goto("/");
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
-  const snapshot = takeSnapshot(checkout.directory, runId);
+  // The run works in a worktree of the checkout: its task directory and its code are there.
+  const worktree = await runDirectory(request, runId);
+  const snapshot = takeSnapshot(worktree, runId);
 
-  writeTask(checkout.directory, "acceptance-criteria.json", registry);
-  writeTask(checkout.directory, "planner-output.json", { criteria_revision: 1, tasks: [{ id: "T1", title: "Conserver le filtre", criterion_ids: ["AC1"] }, { id: "T2", title: "Afficher l’erreur", criterion_ids: ["AC2"] }] });
-  writeTask(checkout.directory, "assets/result.png", "round-1");
-  writeTask(checkout.directory, "qa-evidence.json", {
+  writeTask(worktree, "acceptance-criteria.json", registry);
+  writeTask(worktree, "planner-output.json", { criteria_revision: 1, tasks: [{ id: "T1", title: "Conserver le filtre", criterion_ids: ["AC1"] }, { id: "T2", title: "Afficher l’erreur", criterion_ids: ["AC2"] }] });
+  writeTask(worktree, "assets/result.png", "round-1");
+  writeTask(worktree, "qa-evidence.json", {
     schemaVersion: 2, source: "qa", round: 1, criteriaRevision: 1, codeSnapshot: { atStart: snapshot, atEnd: snapshot },
     items: [
       { id: "QA-R1-1", label: "Filtre après retour", verdict: "fail", criterionIds: ["AC1"], actual: "filtre vidé", screenshot: "assets/result.png" },
@@ -76,8 +78,8 @@ test("should follow a real run from a failed round to a replaced one, and keep b
   await expect(page.getByTestId("acceptance-sentence")).toHaveText("0 critère vérifié sur 2 · 1 échec · 1 bloqué");
 
   // Round two rewrites the same report and the same capture name.
-  writeTask(checkout.directory, "assets/result.png", "round-2");
-  writeTask(checkout.directory, "qa-evidence.json", {
+  writeTask(worktree, "assets/result.png", "round-2");
+  writeTask(worktree, "qa-evidence.json", {
     schemaVersion: 2, source: "qa", round: 2, criteriaRevision: 1, codeSnapshot: { atStart: snapshot, atEnd: snapshot },
     items: [
       { id: "QA-R2-1", label: "Filtre après retour", verdict: "pass", criterionIds: ["AC1"], actual: "filtre conservé", screenshot: "assets/result.png", supersedes: ["QA-R1-1"] },
@@ -97,20 +99,20 @@ test("should follow a real run from a failed round to a replaced one, and keep b
   await expect(page.getByTestId("criterion-AC1").getByText("remplacée par QA-R2-1")).toBeVisible();
 
   // The summary the workflow reads before the merge request says the same thing.
-  await expect.poll(() => existsSync(path.join(taskDirectory(checkout.directory), "acceptance-summary.md"))).toBe(true);
-  expect(readFileSync(path.join(taskDirectory(checkout.directory), "acceptance-summary.md"), "utf8")).toContain("1 critère vérifié sur 2 · 1 bloqué");
+  await expect.poll(() => existsSync(path.join(taskDirectory(worktree), "acceptance-summary.md"))).toBe(true);
+  expect(readFileSync(path.join(taskDirectory(worktree), "acceptance-summary.md"), "utf8")).toContain("1 critère vérifié sur 2 · 1 bloqué");
 
   // The code moves after the measurement: the evidence is now stale.
-  writeFileSync(path.join(checkout.directory, "app.ts"), "export const answer = 43;\n");
-  writeTask(checkout.directory, "qa-evidence-round2.json", readFileSync(path.join(taskDirectory(checkout.directory), "qa-evidence.json"), "utf8"));
+  writeFileSync(path.join(worktree, "app.ts"), "export const answer = 43;\n");
+  writeTask(worktree, "qa-evidence-round2.json", readFileSync(path.join(taskDirectory(worktree), "qa-evidence.json"), "utf8"));
   await expect.poll(async () => statusOf(await coverage(request, runId), "AC1")).toBe("unverified");
   expect((await coverage(request, runId)).criteria[0].checks[0].evidence[0].freshness).toBe("stale");
 
   // Before cleaning up, the workflow asks for a confirmed archive, then deletes its directory.
-  writeTask(checkout.directory, "archive-sync-request.json", { requestId: "sync-e2e" });
-  const acknowledgement = path.join(taskDirectory(checkout.directory), "archive-sync-ack.json");
+  writeTask(worktree, "archive-sync-request.json", { requestId: "sync-e2e" });
+  const acknowledgement = path.join(taskDirectory(worktree), "archive-sync-ack.json");
   await expect.poll(() => existsSync(acknowledgement) && readFileSync(acknowledgement, "utf8").includes("sync-e2e")).toBe(true);
-  rmSync(taskDirectory(checkout.directory), { recursive: true, force: true });
+  rmSync(taskDirectory(worktree), { recursive: true, force: true });
   const afterCleanup = await coverage(request, runId);
   expect(afterCleanup.criteria.map((criterion) => criterion.id)).toEqual(["AC1", "AC2"]);
   expect(await capture(1)).toBe("round-1");
@@ -122,10 +124,12 @@ test("should keep the criteria and evidence of two runs apart", async ({ page, r
   await page.goto("/");
   const firstRun = await startRun(page, request, first.directory, first.issueUrl);
   const secondRun = await startRun(page, request, second.directory, second.issueUrl);
+  const firstWorktree = await runDirectory(request, firstRun);
+  const secondWorktree = await runDirectory(request, secondRun);
 
-  writeTask(first.directory, "acceptance-criteria.json", { schemaVersion: 1, criteria: [{ id: "AC1", text: "Premier ticket" }] });
-  writeTask(second.directory, "acceptance-criteria.json", { schemaVersion: 1, criteria: [{ id: "AC1", text: "Second ticket" }, { id: "AC2", text: "Second ticket, bis" }] });
-  writeTask(first.directory, "qa-evidence.json", { schemaVersion: 2, source: "qa", items: [{ id: "QA-R1-1", label: "Premier", verdict: "fail", criterionIds: ["AC1"] }] });
+  writeTask(firstWorktree, "acceptance-criteria.json", { schemaVersion: 1, criteria: [{ id: "AC1", text: "Premier ticket" }] });
+  writeTask(secondWorktree, "acceptance-criteria.json", { schemaVersion: 1, criteria: [{ id: "AC1", text: "Second ticket" }, { id: "AC2", text: "Second ticket, bis" }] });
+  writeTask(firstWorktree, "qa-evidence.json", { schemaVersion: 2, source: "qa", items: [{ id: "QA-R1-1", label: "Premier", verdict: "fail", criterionIds: ["AC1"] }] });
 
   await expect.poll(async () => (await coverage(request, firstRun)).criteria.map((criterion) => [criterion.id, criterion.status])).toEqual([["AC1", "failed"]]);
   await expect.poll(async () => (await coverage(request, secondRun)).criteria.map((criterion) => [criterion.id, criterion.status])).toEqual([["AC1", "unverified"], ["AC2", "unverified"]]);
@@ -135,7 +139,9 @@ test("should keep an older run without a criteria registry readable", async ({ p
   const checkout = createGitCheckout("evidence-legacy");
   await page.goto("/");
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
-  writeTask(checkout.directory, "qa-evidence.json", { source: "qa", status: "PASS", items: [{ label: "Lint", verdict: "pass", command: "npm run lint", actual: "0 avertissement" }] });
+  // The run works in a worktree of the checkout: its task directory and its code are there.
+  const worktree = await runDirectory(request, runId);
+  writeTask(worktree, "qa-evidence.json", { source: "qa", status: "PASS", items: [{ label: "Lint", verdict: "pass", command: "npm run lint", actual: "0 avertissement" }] });
   await expect.poll(async () => ((await (await request.get(`/api/runs/${runId}`)).json()) as { state: { artifacts: string[] } }).state.artifacts).toContain("qa-evidence.json");
 
   await page.evaluate((id) => new Promise<void>((resolve) => {

@@ -1,15 +1,18 @@
 import { execFile } from "node:child_process";
+import { copyFile, lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 import { promisify } from "node:util";
 import { pluginRoot } from "./config.js";
+import { excludeLine, isRunWorktreePath, RUN_WORKTREES_DIRECTORY, withExcludeLines, worktreeProvisioning, type WorktreeFacts } from "./domain.js";
 
 const exec = promisify(execFile);
 
 export type Worktree = { path: string; branch?: string };
 
-/** Every worktree registered against the harness checkout, the primary one included. */
-export async function listWorktrees(): Promise<Worktree[]> {
-  const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
+/** Every worktree registered against a checkout, the primary one included. The harness checkout unless another is named. */
+export async function listWorktrees(repository: string = pluginRoot): Promise<Worktree[]> {
+  const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: repository });
   return stdout.split("\n\n").flatMap((block) => {
     const lines = block.split("\n");
     const worktreePath = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
@@ -24,8 +27,8 @@ export async function listWorktrees(): Promise<Worktree[]> {
  * is the only handle that stays what the harness asked for, whichever engine
  * created it.
  */
-export async function findWorktree(name: string): Promise<Worktree | undefined> {
-  return (await listWorktrees()).find((worktree) => path.basename(worktree.path) === name);
+export async function findWorktree(name: string, repository: string = pluginRoot): Promise<Worktree | undefined> {
+  return (await listWorktrees(repository)).find((worktree) => path.basename(worktree.path) === name);
 }
 
 /** The point where the worktree left the branch the harness itself runs on. */
@@ -83,7 +86,10 @@ export async function branchMergesCleanly(repository: string, branch: string) {
   return await exec("git", ["-C", repository, "merge-tree", "--write-tree", "HEAD", branch], { maxBuffer: 8 * 1024 * 1024 }).then(() => true, () => false);
 }
 
-/** Drops the worktree and the branch it was on, once its fate is settled. */
+/**
+ * Drops an improvement worktree and the branch it was on, once its fate is
+ * settled. Never used on the worktree of a ticket: see removeRunWorktree.
+ */
 export async function removeWorktree(repository: string, worktree: Worktree) {
   await exec("git", ["worktree", "remove", "--force", "--force", worktree.path], { cwd: repository });
   if (worktree.branch) await exec("git", ["-C", repository, "branch", "-D", worktree.branch]).catch(() => undefined);
@@ -134,4 +140,152 @@ export async function rebaseWorktree(worktree: Worktree, onto: string) {
     await exec("git", ["rebase", "--abort"], { cwd: worktree.path }).catch(() => undefined);
     return false;
   });
+}
+
+/**
+ * The main checkout behind a directory, which may be a sub-directory of it or
+ * one of its linked worktrees. The worktrees of the runs and the ticket lock
+ * both hang on that one path, so a launch from a linked worktree lands on the
+ * same repository as a launch from its root.
+ */
+export async function mainCheckout(directory: string) {
+  try {
+    const common = (await exec("git", ["-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"])).stdout.trim();
+    if (path.basename(common) === ".git") return path.dirname(common);
+    return (await exec("git", ["-C", directory, "rev-parse", "--show-toplevel"])).stdout.trim();
+  } catch {
+    throw new Error(`Le répertoire du projet n'est pas un dépôt git : ${directory}`);
+  }
+}
+
+/** The branch checked out in a checkout, undefined on a detached HEAD. */
+export async function currentBranch(repository: string) {
+  const branch = await exec("git", ["-C", repository, "symbolic-ref", "--quiet", "--short", "HEAD"]).then(({ stdout }) => stdout.trim(), () => "");
+  return branch || undefined;
+}
+
+/**
+ * Makes git ignore paths in every worktree of the repository, through the
+ * `info/exclude` of its common directory. A tracked `.gitignore` is never
+ * touched, and lines already there are not written twice.
+ */
+export async function ensureExcluded(repository: string, lines: string[]) {
+  if (lines.length === 0) return;
+  const common = (await exec("git", ["-C", repository, "rev-parse", "--path-format=absolute", "--git-common-dir"])).stdout.trim();
+  const file = path.join(common, "info", "exclude");
+  const next = withExcludeLines(await readFile(file, "utf8").catch(() => ""), lines);
+  if (next === undefined) return;
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, next);
+}
+
+/**
+ * A worktree for one run, detached at the commit the checkout is on. No
+ * network and no branch: the workflow creates the ticket branch itself, from
+ * the base it chooses. The directory holding the worktrees is excluded first,
+ * so the main checkout never shows them as untracked.
+ */
+export async function createRunWorktree(repository: string, worktreePath: string) {
+  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Chemin de worktree refusé : ${worktreePath}`);
+  await ensureExcluded(repository, [excludeLine(RUN_WORKTREES_DIRECTORY, { directory: true })]);
+  await mkdir(path.dirname(worktreePath), { recursive: true });
+  await exec("git", ["-C", repository, "worktree", "add", "--detach", worktreePath, "HEAD"], { maxBuffer: 8 * 1024 * 1024 });
+}
+
+/** A copy-on-write copy of a directory, which costs no disk until one side changes. Fails where the platform has none. */
+async function cloneDirectory(source: string, target: string) {
+  if (process.platform === "darwin") await exec("cp", ["-c", "-R", source, target], { timeout: 180_000 });
+  else if (process.platform === "linux") await exec("cp", ["--reflink=auto", "-R", source, target], { timeout: 180_000 });
+  else throw new Error("no copy-on-write copy on this platform");
+}
+
+const missing = (target: string) => lstat(target).then(() => false, () => true);
+
+export type ProvisionOptions = {
+  /** Names of the ignored directories to bring over, at any depth: dependencies, never build outputs. */
+  dependencyDirectories: string[];
+  /** Ignored files to copy, by name (`.env*`), or by path from the root when the pattern holds a slash. */
+  copyFiles: string[];
+  /** Replaced in tests, to exercise the fallback. */
+  clone?: (source: string, target: string) => Promise<void>;
+};
+
+/**
+ * Gives a fresh worktree the untracked files it lacks, from the main checkout
+ * and without reinstalling anything. Dependency directories are cloned
+ * copy-on-write, so an install inside the worktree stays inside it; where the
+ * clone fails they are symlinked instead, and an install then writes through
+ * to the main checkout. A gitignore pattern such as `node_modules/` does not
+ * match a symlink, so each link is excluded by its own path, or the worktree
+ * would look dirty and the link could be committed. Configuration files are
+ * plain copies. A path the worktree already has is left alone.
+ */
+export async function provisionWorktree(repository: string, worktreePath: string, options: ProvisionOptions) {
+  const { stdout } = await exec("git", ["-C", repository, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], { maxBuffer: 64 * 1024 * 1024 });
+  const plan = worktreeProvisioning(stdout.split("\0").filter(Boolean), options.dependencyDirectories, options.copyFiles);
+  const clone = options.clone ?? cloneDirectory;
+  const cloned: string[] = [];
+  const linked: string[] = [];
+  const copied: string[] = [];
+  for (const relative of plan.directories) {
+    const source = path.join(repository, relative);
+    const target = path.join(worktreePath, relative);
+    if (!(await missing(target))) continue;
+    await mkdir(path.dirname(target), { recursive: true });
+    try {
+      await clone(source, target);
+      cloned.push(relative);
+    } catch {
+      await rm(target, { recursive: true, force: true });
+      await symlink(source, target, "dir");
+      linked.push(relative);
+    }
+  }
+  const excluded = linked.map((relative) => excludeLine(relative));
+  for (const relative of [...plan.files, ...plan.paths]) {
+    const source = path.join(repository, relative);
+    const target = path.join(worktreePath, relative);
+    if (!(await missing(target))) continue;
+    const file = await lstat(source).then((stats) => stats.isFile(), () => false);
+    if (!file) continue;
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(source, target);
+    copied.push(relative);
+    // A path named outright is copied whether git ignores it or not, and must not dirty the worktree.
+    if (plan.paths.includes(relative)) excluded.push(excludeLine(relative));
+  }
+  await ensureExcluded(repository, excluded);
+  const dependencies = linked.length > 0 ? "symlink" as const : cloned.length > 0 ? "clone" as const : undefined;
+  return { cloned, linked, copied, dependencies };
+}
+
+/** Whether the commit a worktree is on already sits on a remote-tracking branch. Read from local refs, no network. */
+export async function worktreeIsPushed(worktreePath: string) {
+  const { stdout } = await exec("git", ["-C", worktreePath, "for-each-ref", "--contains", "HEAD", "--count=1", "refs/remotes"]);
+  return stdout.trim() !== "";
+}
+
+/** What decides whether a run worktree may go. Anything git cannot answer counts as work that could be lost. */
+export async function worktreeFacts(worktreePath: string): Promise<WorktreeFacts> {
+  const exists = await lstat(worktreePath).then((stats) => stats.isDirectory(), () => false);
+  if (!exists) return { exists: false, clean: true, pushed: true };
+  const clean = await worktreeIsClean({ path: worktreePath }).catch(() => false);
+  const pushed = await worktreeIsPushed(worktreePath).catch(() => false);
+  return { exists, clean, pushed };
+}
+
+/** Forgets the worktrees whose directory is gone. */
+export async function pruneWorktrees(repository: string) {
+  await exec("git", ["-C", repository, "worktree", "prune"]);
+}
+
+/**
+ * Removes the worktree of a run, and only that: the branch it was on stays,
+ * with every commit it holds. Without `force` git refuses a worktree holding
+ * uncommitted work, which is the caller's cue to ask before losing it.
+ */
+export async function removeRunWorktree(repository: string, worktreePath: string, { force = false }: { force?: boolean } = {}) {
+  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Chemin de worktree refusé : ${worktreePath}`);
+  await exec("git", ["-C", repository, "worktree", "remove", ...(force ? ["--force"] : []), worktreePath]);
+  await pruneWorktrees(repository).catch(() => undefined);
 }

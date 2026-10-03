@@ -1,14 +1,22 @@
 import { describe, expect, it } from "@jest/globals";
-import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, sessionsToReleaseForQueue, summarizeRun } from "../../server/domain";
+import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, runLockKey, sessionsToReleaseForQueue, sourceRepository, summarizeRun } from "../../server/domain";
 import type { QueuedRun, RunState } from "../../server/types";
 
+const TICKET = "https://gitlab.com/acme/app/-/issues/266";
+const OTHER_TICKET = "https://gitlab.com/acme/app/-/issues/258";
+
 function state(overrides: Partial<RunState> = {}): RunState {
-  return { ...emptyState(), id: "run-1", cwd: "/work/repo-a", issueUrl: "https://gitlab.com/acme/app/-/issues/258", ...overrides };
+  return { ...emptyState(), id: "run-1", cwd: "/work/repo-a/.claude/worktrees/run-1", repository: "/work/repo-a", issueUrl: OTHER_TICKET, ...overrides };
 }
 
+/** A waiting launch. Its `cwd` follows its repository unless a test sets it apart: the two are the same path until the run starts. */
 function queued(overrides: Partial<QueuedRun> = {}): QueuedRun {
-  return { id: "q1", cwd: "/work/repo-a", issueUrl: "https://gitlab.com/acme/app/-/issues/266", instruction: "", queuedAt: "2026-09-18T10:00:00.000Z", ...overrides };
+  const repository = overrides.repository ?? overrides.cwd ?? "/work/repo-a";
+  return { id: "q1", issueUrl: TICKET, instruction: "", queuedAt: "2026-09-18T10:00:00.000Z", ...overrides, cwd: overrides.cwd ?? repository, repository };
 }
+
+/** The lock a run on that repository and ticket holds. */
+const key = (repository: string, issueUrl = TICKET) => runLockKey({ cwd: repository, repository, issueUrl });
 
 describe("how many runs the console may hold", () => {
   it("should take the configured ceiling when it is a usable count", () => {
@@ -28,7 +36,32 @@ describe("how many runs the console may hold", () => {
   });
 });
 
-describe("the checkout a run holds", () => {
+describe("what two launches must not share", () => {
+  it("should give two tickets of one repository different locks", () => {
+    expect(key("/work/repo-a", TICKET)).not.toBe(key("/work/repo-a", OTHER_TICKET));
+  });
+
+  it("should give the same ticket of the same repository one lock, however the URL was pasted", () => {
+    expect(key("/work/repo-a", `${TICKET}?tab=notes#note_12`)).toBe(key("/work/repo-a", TICKET));
+    expect(key("/work/repo-a/", `  ${TICKET}/ `)).toBe(key("/work/repo-a", TICKET));
+  });
+
+  it("should tell the same ticket number of two repositories apart", () => {
+    expect(key("/work/repo-a", TICKET)).not.toBe(key("/work/repo-b", TICKET));
+  });
+
+  it("should lock on the repository, never on the worktree the session runs in", () => {
+    const running = { cwd: "/work/repo-a/.claude/worktrees/run-1", repository: "/work/repo-a", issueUrl: TICKET };
+    expect(runLockKey(running)).toBe(key("/work/repo-a", TICKET));
+  });
+
+  it("should read the checkout of a run archived before worktrees from its cwd", () => {
+    expect(sourceRepository({ cwd: "/work/repo-a" })).toBe("/work/repo-a");
+    expect(runLockKey({ cwd: "/work/repo-a", issueUrl: TICKET })).toBe(key("/work/repo-a", TICKET));
+  });
+});
+
+describe("the place a run holds", () => {
   it("should hold it for as long as the workflow is going", () => {
     expect(runHoldsRepository({ status: "starting", sessionActive: false })).toBe(true);
     expect(runHoldsRepository({ status: "running", sessionActive: true })).toBe(true);
@@ -70,6 +103,8 @@ describe("what the side list is told about a run", () => {
       id: "run-1", status: "attention", phase: 6, branch: "feat/258",
       pendingQuestionId: "q9", pendingQuestionCount: 2, runningAgents: 1,
       lastMessageId: "m1", lastMessageAuthor: "claude", holdsRepository: true,
+      // The row is named after the repository, the worktree only says where the session runs.
+      repository: "/work/repo-a", cwd: "/work/repo-a/.claude/worktrees/run-1",
     });
     // The list is pushed to every page on every event of every run: it must not
     // grow with the length of a run.
@@ -78,27 +113,42 @@ describe("what the side list is told about a run", () => {
     expect(summary).not.toHaveProperty("artifacts");
   });
 
+  it("should carry the worktree and what became of it", () => {
+    const worktree = { path: "/work/repo-a/.claude/worktrees/run-1", state: "kept" as const, detail: "Worktree conservé : changements non poussés" };
+    expect(summarizeRun(state({ worktree })).worktree).toEqual(worktree);
+    expect(summarizeRun(state())).not.toHaveProperty("worktree");
+  });
+
+  it("should name the checkout of an older archive as its repository", () => {
+    expect(summarizeRun(state({ cwd: "/work/legacy", repository: undefined })).repository).toBe("/work/legacy");
+  });
+
   it("should report no pending decision when nothing is waiting", () => {
     expect(summarizeRun(state())).toMatchObject({ pendingQuestionCount: 0, pendingQuestionId: undefined });
   });
 });
 
 describe("why a queued launch is still waiting", () => {
-  it("should name the run holding its checkout rather than the slot count", () => {
-    const holders = new Map([["/work/repo-a", "run-1"]]);
-    expect(describeQueue([queued()], holders)).toEqual([expect.objectContaining({ reason: "repository", blockedBy: "run-1" })]);
+  it("should name the run already on its ticket rather than the slot count", () => {
+    const holders = new Map([[key("/work/repo-a"), "run-1"]]);
+    expect(describeQueue([queued()], holders)).toEqual([expect.objectContaining({ reason: "ticket", blockedBy: "run-1" })]);
   });
 
-  it("should fall back on the slot count when nothing holds its checkout", () => {
-    const [described] = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([["/work/repo-a", "run-1"]]));
+  it("should fall back on the slot count when nothing holds its ticket", () => {
+    const [described] = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([[key("/work/repo-a"), "run-1"]]));
     expect(described.reason).toBe("slot");
     expect(described.blockedBy).toBeUndefined();
   });
 
+  it("should not hold a second ticket of the same repository back for the first", () => {
+    const holders = new Map([[key("/work/repo-a", OTHER_TICKET), "run-1"]]);
+    expect(describeQueue([queued()], holders)).toEqual([expect.objectContaining({ reason: "slot" })]);
+  });
+
   it("should answer per entry, since two waiting launches rarely wait on the same thing", () => {
-    const holders = new Map([["/work/repo-a", "run-1"]]);
+    const holders = new Map([[key("/work/repo-a"), "run-1"]]);
     const described = describeQueue([queued({ id: "q1" }), queued({ id: "q2", cwd: "/work/repo-c" })], holders);
-    expect(described.map((entry) => entry.reason)).toEqual(["repository", "slot"]);
+    expect(described.map((entry) => entry.reason)).toEqual(["ticket", "slot"]);
   });
 
   it("should keep the order the launches were asked in", () => {
@@ -108,8 +158,9 @@ describe("why a queued launch is still waiting", () => {
 });
 
 /** A run as the release decision reads it, finished and still holding its session unless said otherwise. */
-function held(overrides: Partial<{ id: string; cwd: string; status: RunState["status"]; sessionActive: boolean; endedAt: string | null }> = {}) {
-  return { id: "run-1", cwd: "/work/repo-a", status: "completed" as const, sessionActive: true, endedAt: "2026-09-18T11:00:00.000Z", ...overrides };
+function held(overrides: Partial<{ id: string; cwd: string; issueUrl: string; status: RunState["status"]; sessionActive: boolean; endedAt: string | null }> = {}) {
+  const repository = overrides.cwd ?? "/work/repo-a";
+  return { id: "run-1", issueUrl: TICKET, status: "completed" as const, sessionActive: true, endedAt: "2026-09-18T11:00:00.000Z", ...overrides, repository, cwd: `${repository}/.claude/worktrees/${overrides.id ?? "run-1"}` };
 }
 
 describe("the finished sessions the queue takes back", () => {
@@ -121,7 +172,11 @@ describe("the finished sessions the queue takes back", () => {
     expect(sessionsToReleaseForQueue([held()], [queued()], 3)).toEqual(["run-1"]);
   });
 
-  it("should leave a run that is still working, whoever is waiting for its checkout", () => {
+  it("should leave the finished run of another ticket of the same repository, which blocks nobody", () => {
+    expect(sessionsToReleaseForQueue([held({ issueUrl: OTHER_TICKET })], [queued()], 3)).toEqual([]);
+  });
+
+  it("should leave a run that is still working, whoever is waiting for its ticket", () => {
     expect(sessionsToReleaseForQueue([held({ status: "running" })], [queued()], 3)).toEqual([]);
     expect(sessionsToReleaseForQueue([held({ status: "attention" })], [queued()], 3)).toEqual([]);
   });
@@ -130,7 +185,7 @@ describe("the finished sessions the queue takes back", () => {
     expect(sessionsToReleaseForQueue([held({ sessionActive: false })], [queued()], 3)).toEqual([]);
   });
 
-  it("should take the oldest finished session when the queue is short of a slot rather than of that checkout", () => {
+  it("should take the oldest finished session when the queue is short of a slot rather than of that ticket", () => {
     const runs = [
       held({ id: "run-1", cwd: "/work/repo-a", endedAt: "2026-09-18T11:00:00.000Z" }),
       held({ id: "run-2", cwd: "/work/repo-b", endedAt: "2026-09-18T10:00:00.000Z" }),

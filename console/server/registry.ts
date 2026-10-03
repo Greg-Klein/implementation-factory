@@ -1,17 +1,20 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { broadcast, now } from "./context.js";
-import { dataRoot, healthPolicy, hookToken, hostname, maxConcurrentRuns, pluginRoot, port, queueFile } from "./config.js";
-import { closeAbandonedAgents, describeQueue, exitReport, runInProgress, sessionsToReleaseForQueue, terminalExitStatus } from "./domain.js";
+import { broadcast, broadcastToViewers, now } from "./context.js";
+import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, queueFile } from "./config.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
 import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
-import { acknowledgeDemoInstruction, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
+import { acknowledgeDemoInstruction, DEMO_BATCH, DEMO_CWD, demoBatchLaunchState, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
-import { fetchTicketTitle } from "./ticket.js";
+import { fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
+import { analyseTickets, clearScheduleFiles, type AnalysisResult } from "./schedule-analysis.js";
+import { MergeWatcher } from "./merge-watch.js";
+import type { ScheduleSession } from "./engine/types.js";
 import { engine } from "./engine/index.js";
 import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
 import { snapshotScript } from "./code-snapshot.js";
@@ -21,13 +24,28 @@ import { healthInput, RunMonitor } from "./run-monitor.js";
 import { checkIncidentAction, CONTINUATION_INSTRUCTION, withDecision } from "./run-incidents.js";
 import { pilotActs } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
-import type { HarnessSnapshot, IncidentAction, QueuedRun, RunIncident } from "./types.js";
+import { discardRunWorktree, prepareRunWorktree, removeWorktreeOnRequest, settleRunWorktree, type WorktreeRemovalResult } from "./run-worktrees.js";
+import { currentBranch, mainCheckout } from "./worktree.js";
+import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, ScheduledTicket, ScheduleEdge } from "./types.js";
 
 export type IncidentActionRequest = { runId: string; incidentId: string; expectedRevision: number; requestId: string; action: IncidentAction; reason?: string };
 export type IncidentActionResult = { outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type LaunchRequest = { cwd: string; issueUrl: string; instruction?: string };
-export type LaunchOutcome = { started: RunSession } | { queued: QueuedRun };
+export type LaunchOutcome = { started: RunSession } | { queued: QueuedRunView };
+/** What became of a batch: what was queued, what was left out as already known, and what started at once. */
+export type BatchOutcome = { batchId: string; entries: QueuedRun[]; duplicates: string[]; started: RunSession[] };
+
+/** A merge request nothing waits for any more is forgotten after a week: its ticket then stops being compared against. */
+const WATCH_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
+/** How many steps of the demonstration a simulated merge request takes to be merged. */
+const DEMO_MERGE_STEPS = 4;
+
+const plural = (count: number, one: string, many: string) => `${count} ${count > 1 ? many : one}`;
+
+function mergeRequestReference(mergeRequestUrl: string) {
+  return `MR !${mergeRequestUrl.split("/").filter(Boolean).pop()}`;
+}
 
 function runIdentifier() {
   return `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
@@ -37,19 +55,47 @@ function runIdentifier() {
  * Every run the console is holding, and the launches waiting for room. Two
  * ceilings, both enforced here and nowhere else:
  *
- * - one run per checkout, because two agent sessions in the same working tree
- *   fight over the branch, over `.claude/tasks` and over each other's edits;
+ * - one run per ticket of a repository. Every run works in a git worktree of
+ *   its own, so two tickets of one repository no longer share a working tree,
+ *   but two sessions on the same ticket would fight over its branch and its
+ *   merge request;
  * - `maxConcurrentRuns` sessions in total, because each one is a full Claude
  *   Code session with its own quota and its own CPU.
  *
  * A launch that hits either one is queued rather than refused, and the queue is
- * drained the moment a run lets go of its checkout. A run whose workflow is over
+ * drained the moment a run lets go of its ticket. A run whose workflow is over
  * is made to let go, rather than waited for: see releaseFinishedSessions.
+ *
+ * A third thing holds a queued ticket back, and takes no slot while it does:
+ * the schedule. Tickets that arrive together are analysed, one headless
+ * session per repository, and two tickets of one repository that would touch
+ * the same code never run together: the second waits until the merge request
+ * of the first is merged. The registry does not know where a batch came from:
+ * `enqueueBatch` takes tickets already resolved to their checkout.
  */
 export class RunRegistry {
   private readonly sessions = new Map<string, RunSession>();
   private queue: QueuedRun[] = [];
+  /** What the scheduling sessions said of the tickets still queued, running or awaited, and the edges between them. */
+  private tickets: ScheduledTicket[] = [];
+  private edges: ScheduleEdge[] = [];
+  /** The merge requests of finished runs that tickets wait for, or may have to. */
+  private watches: MergeWatch[] = [];
+  /** Runs whose end has been taken into account, so it is once. */
+  private readonly settled = new Set<string>();
+  /** One analysis at a time per repository: the next one compares against what this one predicted. */
+  private readonly analysisChains = new Map<string, Promise<void>>();
+  private readonly analysisSessions = new Set<ScheduleSession>();
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>();
+  private queueWrites: Promise<void> = Promise.resolve();
   private shuttingDown = false;
+  /** Asks GitLab about the merge requests the queue waits for, and only those. */
+  readonly mergeWatcher = new MergeWatcher({
+    held: () => heldWatches(this.queue, this.context()).filter((watch) => !isSimulatedTicket(watch.issueUrl)),
+    check: (watch) => fetchMergeRequestStatus(watch.mergeRequestUrl, watch.repository),
+    apply: (watch, status) => this.applyMergeStatus(watch, status),
+    intervalMs: mergePollMs,
+  });
   /** Watches every run this registry holds, and only those. */
   readonly monitor = new RunMonitor(() => this.all(), healthPolicy);
   /** Runs of an earlier process left with an open incident: readable, never live. */
@@ -68,10 +114,10 @@ export class RunRegistry {
     return [...this.sessions.values()];
   }
 
-  /** The run holding each checkout right now, which is what a queued launch waits on. */
+  /** The run holding each ticket right now, by lock key, which is what a queued launch waits on. */
   private holders() {
     const holders = new Map<string, string>();
-    for (const session of this.sessions.values()) if (session.holdsRepository) holders.set(session.state.cwd, session.id);
+    for (const session of this.sessions.values()) if (session.holdsRepository) holders.set(runLockKey(session.state), session.id);
     return holders;
   }
 
@@ -79,11 +125,48 @@ export class RunRegistry {
     return [...this.sessions.values()].filter((session) => session.holdsRepository).length;
   }
 
+  /** What the queue is scheduled against, beside the ticket locks and the slots. */
+  private context(): ScheduleContext {
+    return {
+      runs: [...this.sessions.values()].map(({ id, state }) => ({ id, cwd: state.cwd, repository: state.repository, issueUrl: state.issueUrl, status: state.status, branch: state.branch, mergeRequestUrl: state.mergeRequestUrl })),
+      tickets: this.tickets, edges: this.edges, watches: this.watches,
+    };
+  }
+
+  private describe() {
+    return describeQueue(this.queue, this.holders(), this.context());
+  }
+
+  /** Every ticket the console already has: queued, held by a run, or behind an unmerged merge request. */
+  private takenTickets() {
+    return [
+      ...this.queue.map(runLockKey), ...this.holders().keys(),
+      ...this.watches.map((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl })),
+    ];
+  }
+
+  /** The predictions a new analysis of this repository is compared against. See `known` in contracts/schedule.md. */
+  private knownTickets(repository: string, except: Set<string> = new Set()): KnownTicket[] {
+    const queued = new Set(this.queue.map(runLockKey));
+    const running = new Set([...this.sessions.values()].filter((session) => runInProgress(session.state.status)).map((session) => runLockKey(session.state)));
+    const awaited = new Set(this.watches.map((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl })));
+    return this.tickets.flatMap((ticket) => {
+      const key = runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl });
+      if (ticket.repository !== repository || ticket.analysis !== "done" || except.has(key)) return [];
+      const state = running.has(key) ? "running" as const : awaited.has(key) ? "awaiting_merge" as const : queued.has(key) ? "queued" as const : undefined;
+      return state ? [{ ticket, state }] : [];
+    });
+  }
+
+  private entry(ticket: ResolvedTicket, instruction: string | undefined, extra: Partial<QueuedRun> = {}): QueuedRun {
+    return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...extra };
+  }
+
   snapshot(): HarnessSnapshot {
     return {
       // Newest first, the order the side list reads in.
       runs: [...this.sessions.values()].map((session) => session.summary()).sort((left, right) => (right.startedAt ?? "").localeCompare(left.startedAt ?? "")),
-      queued: describeQueue(this.queue, this.holders()),
+      queued: this.describe(),
       maxConcurrentRuns,
       archived: this.archive.list(),
     };
@@ -101,25 +184,132 @@ export class RunRegistry {
   async launch(request: LaunchRequest): Promise<LaunchOutcome> {
     if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
     if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
-    const cwd = await resolveProjectDirectory(request.cwd, request.issueUrl);
+    // A path inside a linked worktree, or below the root, names the same repository as its main checkout.
+    const repository = await mainCheckout(await resolveProjectDirectory(request.cwd, request.issueUrl));
     if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
-    const entry: QueuedRun = {
-      id: `queued-${crypto.randomUUID().slice(0, 8)}`,
-      cwd,
-      issueUrl: request.issueUrl.trim(),
-      instruction: request.instruction?.trim() ?? "",
-      queuedAt: now(),
-    };
-    if (this.holders().has(cwd) || this.occupiedSlots() >= maxConcurrentRuns) {
-      this.queue = [...this.queue, entry];
-      // What blocks it may be a run that has already finished, and draining is
-      // where that is noticed and its session given up.
-      await this.drain();
-      return { queued: entry };
+    const entry = this.entry({ repository, issueUrl: request.issueUrl }, request.instruction);
+    // A ticket added beside others already predicted is compared against them before it may start.
+    const analysed = !this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length > 0;
+    if (!analysed && startableEntries([...this.queue, entry], this.holders(), this.context(), maxConcurrentRuns - this.occupiedSlots()).includes(entry)) {
+      const started = await this.start(entry);
+      this.publishSnapshot();
+      return { started };
     }
-    const started = await this.start(entry);
+    if (analysed) entry.analysing = true;
+    this.queue = [...this.queue, entry];
+    if (analysed) this.scheduleAnalysis(repository, [entry]);
+    const queued = this.describe().find((view) => view.id === entry.id)!;
+    // What blocks it may be a run that has already finished, and draining is
+    // where that is noticed and its session given up.
+    await this.drain();
+    return { queued };
+  }
+
+  /**
+   * Several tickets at once, whatever found them. A ticket the console already
+   * has, queued, running or behind an unmerged merge request, is left out. The
+   * new ones are queued at once and analysed per repository, except where
+   * there is nothing to compare: a single new ticket in a repository with no
+   * known prediction starts as a lone launch would.
+   */
+  async enqueueBatch(tickets: ResolvedTicket[], options: { instruction?: string } = {}): Promise<BatchOutcome> {
+    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
+    if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
+    const outcome = this.admit(tickets, options.instruction);
+    const before = new Set(this.sessions.keys());
+    await this.drain();
+    const keys = new Set(outcome.entries.map(runLockKey));
+    return { ...outcome, started: this.all().filter((session) => !before.has(session.id) && keys.has(runLockKey(session.state))) };
+  }
+
+  private admit(tickets: ResolvedTicket[], instruction: string | undefined, extra: Partial<QueuedRun> = {}) {
+    const { accepted, duplicates } = admitBatch(tickets, this.takenTickets());
+    if (accepted.length === 0) throw new Error(tickets.length > 1 ? "Ces tickets sont déjà en file, en cours ou en attente de fusion." : "Ce ticket est déjà en file, en cours ou en attente de fusion.");
+    const batchId = `batch-${crypto.randomUUID().slice(0, 8)}`;
+    const entries = accepted.map((ticket) => this.entry(ticket, instruction, { batchId, ...extra }));
+    const analyses: [string, QueuedRun[]][] = [];
+    for (const repository of new Set(entries.map((entry) => entry.repository))) {
+      const group = entries.filter((entry) => entry.repository === repository);
+      if (group.length < 2 && this.knownTickets(repository).length === 0) continue;
+      for (const entry of group) entry.analysing = true;
+      analyses.push([repository, group]);
+    }
+    this.queue = [...this.queue, ...entries];
+    for (const [repository, group] of analyses) this.scheduleAnalysis(repository, group);
     this.publishSnapshot();
-    return { started };
+    return { batchId, entries, duplicates: duplicates.map((ticket) => ticket.issueUrl) };
+  }
+
+  /** Queues the analysis of one repository's new tickets behind whatever analysis of that repository is still running. */
+  private scheduleAnalysis(repository: string, entries: QueuedRun[]) {
+    const next = (this.analysisChains.get(repository) ?? Promise.resolve()).then(() => this.analyse(repository, entries)).catch(() => undefined);
+    this.analysisChains.set(repository, next);
+    void next.then(() => { if (this.analysisChains.get(repository) === next) this.analysisChains.delete(repository); });
+  }
+
+  /**
+   * Runs the scheduling session and takes its answer. A failure, whatever it
+   * is, never frees the tickets to run together: each is recorded as failed,
+   * which keeps it apart from every other ticket of its repository.
+   */
+  private async analyse(repository: string, entries: QueuedRun[]) {
+    if (this.shuttingDown) return;
+    // A ticket cancelled meanwhile is not worth a prediction; one started by force still is.
+    const running = new Set([...this.sessions.values()].filter((session) => session.holdsRepository).map((session) => runLockKey(session.state)));
+    const pending = entries.filter((entry) => this.queue.some((queued) => queued.id === entry.id) || running.has(runLockKey(entry)));
+    if (pending.length === 0) return;
+    const keys = new Set(pending.map(runLockKey));
+    const urls = pending.map((entry) => entry.issueUrl);
+    let inFlight: ScheduleSession | null = null;
+    const track = (session: ScheduleSession | null) => {
+      if (inFlight) this.analysisSessions.delete(inFlight);
+      if (session) this.analysisSessions.add(session);
+      inFlight = session;
+    };
+    const result = pending.every((entry) => entry.demo)
+      ? await this.demoAnalysis(urls)
+      : await analyseTickets(repository, urls, this.knownTickets(repository, keys), track);
+    // Left as `analysing` on disk: the next start reads it back as a failed analysis.
+    if (this.shuttingDown) return;
+    this.tickets = this.tickets.filter((ticket) => !keys.has(runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
+    if (result.ok) {
+      this.tickets = [...this.tickets, ...result.schedule.tickets.map((prediction) => ({ ...prediction, repository, analysis: "done" as const }))];
+      const pair = (edge: { a: string; b: string }) => [ticketIdentity(edge.a), ticketIdentity(edge.b)].sort().join("\n");
+      const replaced = new Set(result.schedule.edges.map(pair));
+      this.edges = [...this.edges.filter((edge) => edge.repository !== repository || !replaced.has(pair(edge))), ...result.schedule.edges.map((edge) => ({ ...edge, repository }))];
+    } else {
+      this.tickets = [...this.tickets, ...pending.map((entry) => ({ issueUrl: entry.issueUrl, repository, analysis: "failed" as const, areas: [], files: [], failure: result.failure }))];
+      broadcast({ type: "notice", level: "attention", at: now(), title: "Analyse du lot en échec", detail: `${path.basename(repository)} : ${result.failure}. ${pending.length > 1 ? `Ses ${pending.length} tickets passent` : "Son ticket passe"} un par un, après les autres tickets du dépôt.` });
+    }
+    const analysed = new Set(pending.map((entry) => entry.id));
+    this.queue = this.queue.map((entry) => { if (!analysed.has(entry.id)) return entry; const { analysing: _analysing, ...rest } = entry; return rest; });
+    await this.drain();
+  }
+
+  /** The canned answer of the demonstration batch, after one step, so the "Analyse en cours" state shows. */
+  private async demoAnalysis(urls: string[]): Promise<AnalysisResult> {
+    await new Promise<void>((resolve) => this.later(demoStepDuration, resolve));
+    const asked = new Set(urls);
+    return { ok: true, schedule: {
+      tickets: DEMO_BATCH.tickets.filter((ticket) => asked.has(ticket.issueUrl)).map(({ issueUrl, files, confidence, summary }) => ({ issueUrl, areas: [], files, confidence, summary })),
+      edges: DEMO_BATCH.edges.filter((edge) => asked.has(edge.a) || asked.has(edge.b)),
+    } };
+  }
+
+  private later(delay: number, callback: () => void) {
+    const timer = setTimeout(() => { this.timers.delete(timer); callback(); }, delay);
+    timer.unref?.();
+    this.timers.add(timer);
+  }
+
+  /** The batch of the demonstration: three invented tickets, one conflict, no repository and no GitLab. */
+  startDemoBatch() {
+    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
+    const tickets = DEMO_BATCH.tickets.map((ticket) => ({ repository: DEMO_CWD, issueUrl: ticket.issueUrl }));
+    if (admitBatch(tickets, this.takenTickets()).accepted.length === 0) throw new Error("Le lot de démonstration est déjà en cours.");
+    const outcome = this.admit(tickets, "Mode démonstration, aucun dépôt ne sera modifié.", { demo: true });
+    void this.drain();
+    return outcome;
   }
 
   /**
@@ -129,7 +319,7 @@ export class RunRegistry {
   startDemo(scenario: "workflow" | "incident" = "workflow") {
     if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
     const launch = demoLaunchState(scenario);
-    if (this.holders().has(launch.cwd)) throw new Error("Une démonstration est déjà en cours.");
+    if (this.holders().has(runLockKey(launch))) throw new Error("Une démonstration est déjà en cours.");
     if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`Le harnais tient déjà ${maxConcurrentRuns} runs. Libère une place avant de lancer la démonstration.`);
     const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, launch));
     if (scenario === "incident") startIncidentDemoRun(session);
@@ -139,31 +329,121 @@ export class RunRegistry {
   }
 
   private register(session: RunSession) {
-    session.onChange = () => this.publishSnapshot();
+    session.onChange = () => { this.noteRunEnd(session); this.publishSnapshot(); };
     session.onSignal = () => this.monitor.poke(session);
     this.sessions.set(session.id, session);
     return session;
   }
 
+  /** Seen on every change of a run: the first one that finds its workflow over settles what waits behind it. */
+  private noteRunEnd(session: RunSession) {
+    if (this.settled.has(session.id) || runInProgress(session.state.status) || this.sessions.get(session.id) !== session) return;
+    this.settled.add(session.id);
+    this.runEnded(session);
+  }
+
+  /**
+   * A run reached its end. With a merge request, the tickets in conflict with
+   * it keep waiting, now for the merge: the merge request is watched. Without
+   * one there is nothing to merge, so they are released, and told so.
+   */
+  private runEnded(session: RunSession) {
+    const state = session.state;
+    const repository = sourceRepository(state);
+    const ticket = { cwd: repository, issueUrl: state.issueUrl };
+    const key = runLockKey(ticket);
+    const dependents = conflictingEntries(this.queue, ticket, this.context());
+    const scheduled = this.tickets.some((known) => runLockKey({ cwd: known.repository, issueUrl: known.issueUrl }) === key);
+    const mergeRequestUrl = state.mergeRequestUrl ?? state.workflow?.result?.mergeRequestUrl;
+    if (mergeRequestUrl && (dependents.length > 0 || scheduled)) {
+      const watch: MergeWatch = { issueUrl: ticketIdentity(state.issueUrl), repository, mergeRequestUrl, ...(state.branch ? { branch: state.branch } : {}), runId: session.id, state: "open", since: now() };
+      this.watches = [...this.watches.filter((known) => runLockKey({ cwd: known.repository, issueUrl: known.issueUrl }) !== key), watch];
+      // Nobody merges a simulated merge request: the demonstration does, a few steps later.
+      if (isSimulatedTicket(watch.issueUrl)) this.later(demoStepDuration * DEMO_MERGE_STEPS, () => void this.applyMergeStatus(watch, "merged"));
+    } else if (dependents.length > 0) {
+      broadcast({ type: "notice", level: "info", at: now(), title: "Ticket terminé sans merge request", detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} n'a ouvert aucune merge request : ${plural(dependents.length, "ticket ne l'attend plus", "tickets ne l'attendent plus")}.` });
+    }
+    void this.drain();
+  }
+
+  /** What GitLab said of a watched merge request: merged or closed releases what it held, anything else keeps holding. */
+  private async applyMergeStatus(watch: MergeWatch, status: MergeRequestStatus) {
+    const current = this.watches.find((known) => known.mergeRequestUrl === watch.mergeRequestUrl);
+    if (!current || this.shuttingDown) return;
+    const step = mergeWatchStep(current, status, now());
+    if (step.watch) {
+      this.watches = this.watches.map((known) => known === current ? step.watch! : known);
+      if (step.watch.state === current.state) return;
+      await this.persistQueue();
+      this.publishSnapshot();
+      return;
+    }
+    const released = conflictingEntries(this.queue, { cwd: current.repository, issueUrl: current.issueUrl }, this.context()).length;
+    this.watches = this.watches.filter((known) => known !== current);
+    const subject = `${mergeRequestReference(current.mergeRequestUrl)} (${path.basename(current.repository)} ${ticketReference(current.issueUrl)})`;
+    if (step.released === "merged") {
+      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: "Merge request mergée", detail: `${subject} : ${plural(released, "ticket repart", "tickets repartent")} de la base à jour.` });
+    } else {
+      broadcast({ type: "notice", level: "attention", at: now(), title: "Merge request fermée sans être mergée", detail: `${subject} : ${plural(released, "ticket ne l'attend plus et part", "tickets ne l'attendent plus et partent")} de la base.` });
+    }
+    await this.drain();
+  }
+
   private async start(entry: QueuedRun) {
+    if (entry.demo) {
+      const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, demoBatchLaunchState(entry.issueUrl)));
+      startDemoRun(session);
+      return session;
+    }
     const id = runIdentifier();
+    const repository = sourceRepository(entry);
+    // Registered before the worktree exists, so a second launch on the same
+    // ticket sees this one while git is still working. `cwd` stays the
+    // repository until the worktree is there: nothing may run in a path that is not.
     const session = this.register(new RunSession(id, {
-      status: "starting", phase: 1, cwd: entry.cwd, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(),
+      status: "starting", phase: 1, cwd: repository, repository, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(),
+      ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : {}),
     }));
-    session.activity("system", "Session créée", path.basename(entry.cwd));
+    session.activity("system", "Session créée", path.basename(repository));
+    if (entry.forced?.mode === "stacked") session.activity("attention", "Départ empilé", `Sur ${entry.forced.baseBranch}, la branche de ${ticketReference(entry.forced.onto)} : la merge request ciblera cette branche.`);
+    else if (entry.forced) session.activity("attention", "Départ forcé depuis la base", "L'ordonnancement du lot est ignoré pour ce ticket.");
     session.publish();
-    void fetchTicketTitle(entry.issueUrl, entry.cwd).then((title) => {
+    const abandon = async (message: string) => {
+      await session.dispose().catch(() => undefined);
+      this.sessions.delete(id);
+      this.publishSnapshot();
+      return new Error(message);
+    };
+    let prepared: Awaited<ReturnType<typeof prepareRunWorktree>>;
+    try {
+      prepared = await prepareRunWorktree(repository, id);
+    } catch (error) {
+      // Never a silent fall back on the main checkout: the run does not start at all.
+      const reason = error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : String(error);
+      throw await abandon(`Le worktree du run n'a pas pu être créé dans ${repository} : ${reason}`);
+    }
+    const worktree = prepared.worktree.path;
+    session.state.cwd = worktree;
+    session.state.worktree = prepared.worktree;
+    session.activity("system", "Worktree créé", [worktree, prepared.summary].filter(Boolean).join(" · "));
+    if (prepared.warning) session.activity("attention", "Dépendances non reprises dans le worktree", prepared.warning);
+    session.publish();
+    void fetchTicketTitle(entry.issueUrl, repository).then((title) => {
       if (!title) return;
       session.state.ticketTitle = title;
       session.publish();
     });
-    await clearTaskDirectory(entry.cwd);
+    const sourceBranch = await currentBranch(repository);
+    await clearTaskDirectory(worktree);
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
-    if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }
+    if (this.shuttingDown) {
+      await discardRunWorktree(repository, worktree);
+      throw await abandon("L'application est en cours de fermeture.");
+    }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
     session.engine = engine.start({
-      cwd: entry.cwd, runId: id, command, pluginDir: pluginRoot,
+      cwd: worktree, sessionLabel: path.basename(repository), runId: id, command, pluginDir: pluginRoot,
       hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
       hookSpool: hookSpoolPath(id),
       // The workflow identifies the code it verified with the same utility the
@@ -171,7 +451,15 @@ export class RunRegistry {
       environment: {
         IMPL_CODE_SNAPSHOT: snapshotScript(pluginRoot),
         IMPL_SNAPSHOT_LOG: snapshotLogPath(id),
-        IMPL_SNAPSHOT_EXCLUDE: snapshotExclusions(entry.cwd).join(","),
+        IMPL_SNAPSHOT_EXCLUDE: snapshotExclusions(worktree).join(","),
+        // Where the run works, and the checkout it was cut from: the workflow
+        // stays in the first and never edits the second.
+        IMPL_RUN_WORKTREE: worktree,
+        IMPL_SOURCE_REPOSITORY: repository,
+        ...(sourceBranch ? { IMPL_SOURCE_BRANCH: sourceBranch } : {}),
+        ...(prepared.worktree.dependencies ? { IMPL_WORKTREE_DEPENDENCIES: prepared.worktree.dependencies } : {}),
+        // A stacked start: the workflow cuts its branch from this one and targets it, always from the run's own worktree.
+        ...(entry.forced?.mode === "stacked" ? { IMPL_BASE_BRANCH: entry.forced.baseBranch } : {}),
       },
       onData: (data) => {
         session.appendTerminal(data);
@@ -213,8 +501,34 @@ export class RunRegistry {
     session.publish();
     // Diagnosed before the self-audit reads the run, so a lost session reaches it as an incident.
     void this.monitor.evaluate(session).then(() => { if (!this.shuttingDown) scheduleAutonomousReview(session); });
-    // The checkout and the slot are free now, which is what the queue waits on.
+    // Nothing works in the worktree any more: it goes if the run delivered, and is kept with its reason otherwise.
+    if (this.shuttingDown) this.keepWorktreeForRestart(session);
+    else void session.serializeHealth(() => settleRunWorktree(session));
+    // The ticket and the slot are free now, which is what the queue waits on.
     void this.drain();
+  }
+
+  /** A worktree left by a shutdown is decided at the next start, when git can be asked without racing the exit. */
+  private keepWorktreeForRestart(session: RunSession) {
+    const worktree = session.state.worktree;
+    if (worktree?.state === "active") session.state.worktree = { ...worktree, state: "kept", detail: worktreeKeptDetail(["console arrêtée avant la fin du run"]) };
+  }
+
+  /**
+   * Removes the worktree of a run whose session is gone, live or read back
+   * from its archive. One at a time per run, after whatever its health chain
+   * already holds, so two windows asking together remove it once.
+   */
+  async removeWorktree(runId: string, force: boolean): Promise<WorktreeRemovalResult> {
+    const session = this.readable(runId);
+    if (!session) return { outcome: "refused", message: "Ce run n'existe plus." };
+    const result = await session.serializeHealth(() => removeWorktreeOnRequest(session, force));
+    if (session.state.archived) {
+      await session.persist();
+      this.archive.release(session.id);
+      this.publishSnapshot();
+    }
+    return result;
   }
 
   stop(runId: string) {
@@ -256,10 +570,17 @@ export class RunRegistry {
         : incident);
       await session.persist();
     });
+    // The exit of the session may still be deciding what becomes of the worktree.
+    await session.serializeHealth(() => settleRunWorktree(session));
     await closeArtifactWatcher(session);
     await closeTranscript(session);
+    await session.persist();
     await session.dispose();
     this.sessions.delete(runId);
+    this.settled.delete(runId);
+    // A worktree still on disk keeps its run within reach, or nothing would offer its removal before the next start.
+    const adopted = session.state.worktree?.state === "kept" ? this.archive.adopt(session.archivedState()) : undefined;
+    if (adopted) broadcastToViewers(runId, { type: "run", state: adopted.state });
     this.publishSnapshot();
     await this.drain();
   }
@@ -336,13 +657,51 @@ export class RunRegistry {
     const remaining = this.queue.filter((entry) => entry.id !== queuedId);
     if (remaining.length === this.queue.length) throw new Error("Cette demande n'est plus en file.");
     this.queue = remaining;
-    void this.persistQueue();
-    this.publishSnapshot();
+    // What it was ahead of may no longer have anything to wait for.
+    void this.drain();
+  }
+
+  private queued(queuedId: string) {
+    const entry = this.queue.find((candidate) => candidate.id === queuedId);
+    if (!entry) throw new Error("Cette demande n'est plus en file.");
+    return entry;
+  }
+
+  /**
+   * Starts a held ticket anyway, as soon as a place is free and nothing else
+   * runs on that same ticket. `base`: from the base branch, whatever the
+   * schedule says. `stacked`: on the branch of the ticket it waits for, which
+   * has to exist already.
+   */
+  forceQueued(queuedId: string, mode: "base" | "stacked", onto?: string) {
+    const entry = this.queued(queuedId);
+    let forced: QueuedRun["forced"] = { mode: "base" };
+    if (mode === "stacked") {
+      const target = onto ?? this.describe().find((view) => view.id === queuedId)?.blocking?.issueUrl;
+      if (!target) throw new Error("Ce ticket n'attend aucun autre ticket : il n'y a pas de branche sur laquelle l'empiler.");
+      const key = runLockKey({ cwd: entry.repository, issueUrl: target });
+      const branch = [...this.sessions.values()].find((session) => runLockKey(session.state) === key)?.state.branch
+        ?? this.watches.find((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl }) === key)?.branch;
+      if (!branch) throw new Error(`La branche de ${ticketReference(target)} n'est pas encore connue : le départ empilé n'est pas possible.`);
+      forced = { mode: "stacked", baseBranch: branch, onto: ticketIdentity(target) };
+    }
+    this.queue = this.queue.map((candidate) => candidate === entry ? { ...entry, forced } : candidate);
+    void this.drain();
+  }
+
+  /** Moves a waiting launch right before another one, or to the end. A dependency still goes before the ticket that needs it. */
+  moveQueued(queuedId: string, before: string | null) {
+    const entry = this.queued(queuedId);
+    const others = this.queue.filter((candidate) => candidate !== entry);
+    const position = before === null ? others.length : others.findIndex((candidate) => candidate.id === before);
+    if (position < 0) throw new Error("Cette demande n'est plus en file.");
+    this.queue = [...others.slice(0, position), entry, ...others.slice(position)];
+    void this.drain();
   }
 
   /**
    * Starts everything the freed room allows, in the order the launches were
-   * asked for. An entry whose checkout is still held is stepped over rather than
+   * asked for. An entry whose ticket is still held is stepped over rather than
    * blocking the ones behind it: it is waiting on a different run, and holding
    * the whole queue for it would leave free slots idle.
    */
@@ -351,20 +710,30 @@ export class RunRegistry {
     if (this.shuttingDown) return;
     for (;;) {
       if (this.shuttingDown) break;
-      if (this.occupiedSlots() >= maxConcurrentRuns) break;
-      const holders = this.holders();
-      const index = this.queue.findIndex((entry) => !holders.has(entry.cwd));
-      if (index < 0) break;
-      const [entry] = this.queue.splice(index, 1);
+      const [entry] = startableEntries(this.queue, this.holders(), this.context(), maxConcurrentRuns - this.occupiedSlots());
+      if (!entry) break;
+      this.queue = this.queue.filter((candidate) => candidate.id !== entry.id);
       try {
         await this.start(entry);
       } catch (error) {
         broadcast({ type: "notice", level: "attention", title: "Run en file non démarré", detail: error instanceof Error ? error.message : String(error), at: now() });
       }
     }
+    if (this.shuttingDown) return;
     this.releaseFinishedSessions();
+    this.prune();
+    this.mergeWatcher.sync();
     await this.persistQueue();
     this.publishSnapshot();
+  }
+
+  /** Forgets what the schedule no longer needs: tickets that left the console, and merge requests nothing has waited on for a week. */
+  private prune() {
+    const held = new Set(heldWatches(this.queue, this.context()));
+    this.watches = this.watches.filter((watch) => held.has(watch) || Date.now() - Date.parse(watch.since) < WATCH_RETENTION_MS);
+    const live = new Set(this.takenTickets());
+    for (const session of this.sessions.values()) if (runInProgress(session.state.status)) live.add(runLockKey(session.state));
+    ({ tickets: this.tickets, edges: this.edges } = pruneSchedule(this.tickets, this.edges, live));
   }
 
   /**
@@ -373,8 +742,10 @@ export class RunRegistry {
    * session, which drains the queue again.
    */
   private releaseFinishedSessions() {
-    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, status: session.state.status, sessionActive: session.state.sessionActive, endedAt: session.state.endedAt }));
-    for (const runId of sessionsToReleaseForQueue(runs, this.queue, maxConcurrentRuns)) {
+    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, repository: session.state.repository, issueUrl: session.state.issueUrl, status: session.state.status, sessionActive: session.state.sessionActive, endedAt: session.state.endedAt }));
+    // An entry the schedule holds waits for a merge, not for a session: no session is closed for it.
+    const waiting = this.describe().filter((view) => view.reason === "slot" || view.reason === "ticket");
+    for (const runId of sessionsToReleaseForQueue(runs, waiting, maxConcurrentRuns)) {
       const session = this.sessions.get(runId);
       if (!session?.engine) continue;
       session.stoppedBy = "queue";
@@ -390,32 +761,38 @@ export class RunRegistry {
     return session;
   }
 
-  private async persistQueue() {
-    await mkdir(path.dirname(queueFile), { recursive: true }).catch(() => undefined);
-    await writeFile(queueFile, JSON.stringify(this.queue, null, 2)).catch(() => undefined);
+  /** The queue and its schedule, written whole and renamed into place, one write after the other. */
+  private persistQueue() {
+    const content = JSON.stringify(storedQueue({ queue: this.queue, tickets: this.tickets, edges: this.edges, watches: this.watches }), null, 2);
+    this.queueWrites = this.queueWrites.then(async () => {
+      await mkdir(path.dirname(queueFile), { recursive: true });
+      await writeFile(`${queueFile}.tmp`, content);
+      await rename(`${queueFile}.tmp`, queueFile);
+    }).catch(() => undefined);
+    return this.queueWrites;
   }
 
   /**
-   * The launches accepted before the console went down. They were queued because
-   * something else was running, and that something else did not survive the
-   * restart, so they start as soon as the server is listening.
+   * The launches accepted before the console went down, with the schedule they
+   * were held by. What was only waiting for a place starts as soon as the
+   * server is listening; what waits for a merge request keeps waiting for it.
    */
   async restoreQueue() {
-    try {
-      const stored = JSON.parse(await readFile(queueFile, "utf8")) as unknown;
-      this.queue = Array.isArray(stored) ? stored.filter((entry): entry is QueuedRun =>
-        Boolean(entry) && typeof entry === "object"
-        && typeof (entry as QueuedRun).id === "string"
-        && typeof (entry as QueuedRun).cwd === "string"
-        && typeof (entry as QueuedRun).issueUrl === "string") : [];
-    } catch {
-      this.queue = [];
-    }
+    let stored: unknown = [];
+    try { stored = JSON.parse(await readFile(queueFile, "utf8")) as unknown; } catch { /* no queue was left */ }
+    ({ queue: this.queue, tickets: this.tickets, edges: this.edges, watches: this.watches } = restoreQueueFile(stored));
+    // The sessions that were writing there are gone with the process that started them.
+    await clearScheduleFiles();
   }
 
   async shutdown() {
     this.shuttingDown = true;
     this.monitor.stop();
+    this.mergeWatcher.stop();
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    // Their tickets stay marked as being analysed, which the next start reads as a failed analysis.
+    for (const session of this.analysisSessions) session.kill();
     for (const session of this.sessions.values()) {
       session.stoppedBy = "user";
       if (runInProgress(session.state.status)) {
@@ -426,6 +803,7 @@ export class RunRegistry {
       session.state.sessionActive = false;
       session.state.action = undefined;
       session.state.sessionPrompt = undefined;
+      this.keepWorktreeForRestart(session);
       clearPendingQuestion(session);
       closeAgentsLeftBehind(session);
       await session.dispose().catch(() => undefined);

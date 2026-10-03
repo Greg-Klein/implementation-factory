@@ -1,12 +1,13 @@
 "use client";
 
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
+import { parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
-import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
+import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { NoticeStrip } from "./notice-strip";
 import { RunRail } from "./run-rail";
@@ -15,6 +16,11 @@ import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
 
 const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
+
+function batchNotice(accepted: number, duplicates: number): Notice {
+  const left = duplicates > 0 ? ` ${duplicates} déjà en file, en cours ou en attente de fusion ${duplicates > 1 ? "ont été ignorés" : "a été ignoré"}.` : "";
+  return { level: "info", at: new Date().toISOString(), title: "Lot mis en file", detail: `${accepted} ticket${accepted > 1 ? "s" : ""} ajouté${accepted > 1 ? "s" : ""}. La file dit lesquels démarrent et lesquels attendent.${left}` };
+}
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 
@@ -32,6 +38,9 @@ export function Harness() {
   const [cwd, setCwd] = useState("");
   const [issueUrl, setIssueUrl] = useState("");
   const [instruction, setInstruction] = useState("");
+  /** The ticket field holds one URL or several: two or more are sent as a batch. */
+  const parsedTickets = useMemo(() => parseTicketUrls(issueUrl), [issueUrl]);
+  const singleTicket = parsedTickets.tickets.length + parsedTickets.invalid.length <= 1;
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
@@ -40,6 +49,8 @@ export function Harness() {
   const [error, setError] = useState<string>();
   /** What became of the last incident action this page sent: a refusal is said next to the incident, not in a banner. */
   const [incidentResult, setIncidentResult] = useState<IncidentResult>();
+  /** What the server answered to a worktree removal: a confirmation to give, or a refusal. */
+  const [worktreeResult, setWorktreeResult] = useState<WorktreeResult>();
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
   const [theme, setTheme] = useState<Theme>("light");
@@ -85,6 +96,7 @@ export function Harness() {
     setOpenRunId(runId);
     setComposingRun(runId === null);
     if (runId === null) setRun(null);
+    setWorktreeResult(undefined);
     clearTerminal();
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "run.subscribe", runId }));
   }, []);
@@ -96,6 +108,7 @@ export function Harness() {
     setIssueUrl("");
     setInstruction("");
   }, []);
+  const clearLaunchFormRef = useRef(clearLaunchForm);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -129,6 +142,9 @@ export function Harness() {
         }
         if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
         if (message.type === "error") setError(message.message);
+        // The batch went in: the form is free for the next one, and the queue says the rest.
+        if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
+        if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
       socket.onclose = () => {
@@ -188,14 +204,15 @@ export function Harness() {
   }, []);
 
   useEffect(() => {
-    if (!TICKET_URL.test(issueUrl) || cwdRef.current.trim()) {
+    // A batch resolves each ticket to its own checkout on the server: nothing to detect here.
+    if (!singleTicket || !TICKET_URL.test(issueUrl) || cwdRef.current.trim()) {
       setDetectingProject(false);
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setDetectingProject(true);
-      fetch(`/api/repositories?issueUrl=${encodeURIComponent(issueUrl)}`, { signal: controller.signal })
+      fetch(`/api/repositories?issueUrl=${encodeURIComponent(issueUrl.trim())}`, { signal: controller.signal })
         .then((response) => response.json() as Promise<RepositoryResponse>)
         .then((result) => {
           setRepositories(result.repositories);
@@ -209,7 +226,7 @@ export function Harness() {
         .finally(() => { if (!controller.signal.aborted) setDetectingProject(false); });
     }, 180);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [issueUrl]);
+  }, [issueUrl, singleTicket]);
 
   /**
    * The tab, the favicon and the alerts speak for every run at once, not for the
@@ -273,12 +290,16 @@ export function Harness() {
 
   useEffect(() => {
     const demo = new URLSearchParams(window.location.search).get("demo");
-    if (!connected || demoStartedRef.current || (demo !== "1" && demo !== "incident")) return;
+    if (!connected || demoStartedRef.current || (demo !== "1" && demo !== "incident" && demo !== "batch")) return;
     demoStartedRef.current = true;
-    setComposingRun(false);
-    adoptNextRunRef.current = true;
-    clearTerminal();
-    send({ type: "demo.start", ...(demo === "incident" ? { scenario: "incident" } : {}) });
+    // The batch of the demonstration opens no run: its tickets show in the queue, then in the list.
+    if (demo === "batch") setComposingRun(true);
+    else {
+      setComposingRun(false);
+      adoptNextRunRef.current = true;
+      clearTerminal();
+    }
+    send({ type: "demo.start", ...(demo === "1" ? {} : { scenario: demo }) });
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
 
@@ -305,15 +326,24 @@ export function Harness() {
 
   const start = () => {
     setError(undefined);
+    if (parsedTickets.tickets.length > 1) {
+      // Stays on the form: a batch starts several runs, or none yet, and the list shows them.
+      setComposingRun(true);
+      unlockSound();
+      if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
+      send({ type: "batch.submit", issueUrls: parsedTickets.tickets, instruction });
+      return;
+    }
     setComposingRun(false);
     adoptNextRunRef.current = true;
     clearTerminal();
     unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
-    send({ type: "run.start", cwd, issueUrl, instruction });
+    send({ type: "run.start", cwd, issueUrl: issueUrl.trim(), instruction });
   };
 
-  const canStart = connected && issueUrl.trim().length > 0;
+  // One line is sent as it is, and the server says what is wrong with it; a batch goes only when every line is a ticket.
+  const canStart = connected && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0);
   const runId = run?.id ?? "";
 
   return (
@@ -329,7 +359,11 @@ export function Harness() {
           onOpen={openRun}
           onNew={newRun}
           onClose={(closedRunId) => send({ type: "run.close", runId: closedRunId })}
-          onCancelQueued={(queuedId) => send({ type: "queue.cancel", queuedId })}
+          queueActions={{
+            cancel: (queuedId) => send({ type: "queue.cancel", queuedId }),
+            force: (queuedId, mode, onto) => send({ type: "queue.force", queuedId, mode, ...(onto ? { onto } : {}) }),
+            move: (queuedId, before) => send({ type: "queue.move", queuedId, before }),
+          }}
         />
 
         <div className="flex min-w-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
@@ -381,15 +415,21 @@ export function Harness() {
                 close: () => send({ type: "run.close", runId }),
                 // Sent with the revision the page was shown, and an id of its own: the server
                 // refuses an action on a state that moved, and runs one request once.
+                removeWorktree: (force) => {
+                  setWorktreeResult(undefined);
+                  send({ type: "worktree.remove", runId, ...(force ? { force: true } : {}) });
+                },
+                dismissWorktreeResult: () => setWorktreeResult(undefined),
                 incident: (incident, action, reason) => {
                   setIncidentResult(undefined);
                   send({ type: "incident.action", runId, incidentId: incident.id, expectedRevision: incident.revision, requestId: requestIdentifier(), action, ...(reason ? { reason } : {}) });
                 },
               }}
               incidentResult={incidentResult}
+              worktreeResult={worktreeResult}
             />
           ) : (
-            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
+            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
           )}
         </div>
       </div>

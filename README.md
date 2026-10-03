@@ -1,6 +1,6 @@
 # Implementation Harness
 
-Implementation Harness est une interface locale pour piloter Claude Code pendant l’implémentation d’un ticket GitLab. On colle l’URL du ticket, le harnais détecte le checkout correspondant, ouvre un terminal Claude Code et rend visibles la progression, les agents, les outils et les livrables.
+Implementation Harness est une interface locale pour piloter Claude Code pendant l’implémentation d’un ticket GitLab. On colle l’URL du ticket, le harnais détecte le checkout correspondant, crée un worktree git pour ce run, y ouvre un terminal Claude Code et rend visibles la progression, les agents, les outils et les livrables. On peut aussi coller plusieurs tickets d’un coup : le harnais les met en file et retient ceux qui toucheraient le même code.
 
 Le dépôt contient un plugin Claude Code dont la commande `/implementation-harness:implement` orchestre le travail : lecture du ticket, questions de clarification, planification, implémentation, tests, revues spécialisées et préparation de la merge request. Le harnais est la couche visuelle de cette commande. Il utilise la connexion Claude Code déjà présente sur la machine et ne fait aucun appel direct à l’API Anthropic.
 
@@ -10,7 +10,7 @@ L’interface s’ouvre dans le navigateur avec la commande `impl`, qui sert la 
 
 Les agents définissent les responsabilités et les livrables. Les skills contiennent les méthodes, chargées selon le besoin. L’autovérification du développeur et la revue contradictoire suivent des démarches distinctes et partagent la collecte de preuves. Les formats que la console lit restent dans des contrats dédiés.
 
-Le plugin compte six agents :
+Six agents portent un run :
 
 | Agent | Rôle |
 |---|---|
@@ -20,6 +20,8 @@ Le plugin compte six agents :
 | `designer-reviewer` | revue design d’un changement visible dans l’interface, avec ou sans Figma, sans lire le code du produit |
 | `qa-reviewer` | validation indépendante du comportement final, sans modifier le code livré |
 | `review-orchestrator` | enchaîne les revues, route les corrections et écrit la synthèse de revue |
+
+Un septième agent, `ticket-scheduler`, ne participe à aucun run. La console l’appelle avant le démarrage d’un lot pour prédire ce que chaque ticket toucherait (voir [Lancer plusieurs tickets d’un coup](#lancer-plusieurs-tickets-dun-coup)).
 
 Le pilote choisit un niveau de revue d’après la taille du diff :
 
@@ -31,7 +33,7 @@ La QA écrit son plan de test dans `qa-plan.md` avant d’ouvrir les rapports de
 
 La revue design fonctionne sans Figma. Avec des frames Figma, elle a lieu dès que le changement est visible dans l’interface. Sans Figma, le pilote ne la déclenche que si le diff modifie un composant d’interface partagé ou crée un écran ou une route. Elle juge le changement contre la meilleure référence disponible : les frames Figma (`figma`), les maquettes jointes au ticket (`ticket-mockup`) ou les écrans déjà livrés de l’application (`live-neighbours`). Elle écrit son inventaire dans `design-inventory.md` avant de lire les mesures du développeur. Un verdict design `INCONCLUSIVE` ne bloque pas la livraison. La merge request, le commentaire de review et le rapport final le signalent par la mention « design non vérifié », avec la raison.
 
-Voir [Agents, skills et revue indépendante](docs/engineering-workflow.md) pour les capacités, les déclencheurs, la transmission du contexte, les méthodes de revue et les vérifications.
+Voir [Agents, skills et revue indépendante](docs/engineering-workflow.md) pour les capacités, les déclencheurs, la transmission du contexte, les méthodes de revue et les vérifications. Le [schéma de fonctionnement](docs/architecture.html) montre en une page le trajet d’un run, le workflow, la santé des runs, l’ordonnancement d’un lot et la boucle d’auto-amélioration. C’est un fichier HTML autonome, à ouvrir dans un navigateur depuis le checkout.
 
 ## Installation en une commande
 
@@ -93,7 +95,7 @@ Pour découvrir l’interface sans ticket ni appel à Claude Code :
 impl demo
 ```
 
-Cette commande ouvre un scénario local simulé avec progression, agents, documents générés et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. L’onglet Preuves y montre cinq critères dans tous les états possibles, dont un échec du premier tour remplacé au second et conservé dans l’historique avec sa capture. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle d’auto-amélioration. Le mode démo n’ajoute aucun contrôle à l’interface normale : la validation des améliorations et le champ de retour sont affichés comme en usage réel, marqués `démo`, et leurs actions restent simulées.
+Cette commande ouvre un scénario local simulé avec progression, agents, documents générés et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. L’onglet Preuves y montre cinq critères dans tous les états possibles, dont un échec du premier tour remplacé au second et conservé dans l’historique avec sa capture. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle d’auto-amélioration. Deux autres scénarios s’ouvrent par l’adresse, sur un serveur déjà lancé : `/?demo=incident` joue un run dont le pilote rend la main sans suite, et `/?demo=batch` un lot de trois tickets inventés dont deux touchent le même code. Le mode démo n’ajoute aucun contrôle à l’interface normale : la validation des améliorations et le champ de retour sont affichés comme en usage réel, marqués `démo`, et leurs actions restent simulées.
 
 Pour redémarrer un serveur déjà lancé :
 
@@ -109,7 +111,7 @@ Le navigateur s’ouvre sur <http://127.0.0.1:3210>.
 
 Dans la console :
 
-1. coller l’URL du ticket GitLab;
+1. coller l’URL du ticket GitLab, ou plusieurs URL, une par ligne (voir [Lancer plusieurs tickets d’un coup](#lancer-plusieurs-tickets-dun-coup));
 2. vérifier le projet détecté ou renseigner son chemin;
 3. ajouter si nécessaire une instruction propre à cette exécution;
 4. lancer le workflow et répondre aux décisions dans le panneau dédié ou échanger librement dans le terminal.
@@ -118,14 +120,14 @@ Dans la console :
 
 Le harnais tient plusieurs runs à la fois. La colonne de gauche les liste, du plus récent au plus ancien, et le run sélectionné s’affiche à droite. Chaque ligne donne le dépôt et le ticket, l’étape atteinte, ce que fait l’agent à cet instant, et une pastille orange quand une décision attend une réponse. Le bouton **+** en haut de la liste ramène au formulaire de lancement sans interrompre les runs en cours.
 
-Deux limites encadrent le parallélisme :
+Plusieurs tickets du même dépôt peuvent tourner en même temps, parce que chaque run travaille dans son propre worktree (voir [Un worktree par run](#un-worktree-par-run)). Deux limites encadrent le parallélisme, et l’ordonnancement d’un lot en ajoute une troisième, décrite plus bas :
 
-- **un run par dépôt**. Deux sessions Claude Code dans le même checkout se disputeraient la branche, le dossier `.claude/tasks` et leurs propres modifications. Un dépôt reste tenu tant que sa session est ouverte, y compris après la fin du workflow : la session attend encore à son prompt et peut toujours écrire;
+- **un seul run par ticket d’un dépôt.** Deux sessions sur le même ticket se disputeraient sa branche et sa merge request;
 - **`IMPL_MAX_CONCURRENT_RUNS` sessions au total** (3 par défaut). Chacune est une vraie session Claude Code, avec son quota et son CPU.
 
-Un lancement qui bute sur l’une des deux part en file d’attente, visible sous la liste avec la raison de l’attente, et démarre seul dès qu’une place et son dépôt se libèrent. Une demande dont le dépôt est encore occupé ne bloque pas celles qui la suivent. La file est enregistrée dans `queue.json`, sous le [dossier de données](#configuration), et survit à un redémarrage. Les demandes en attente démarrent dès que le serveur écoute à nouveau, sans que personne ne les relance. Une croix retire une demande de la file.
+Un lancement qui bute sur l’une des deux part en file d’attente, visible sous la liste avec la raison de l’attente, « ticket déjà en cours » ou « toutes les places sont prises ». Il démarre seul dès que le ticket ou une place se libère. La file est enregistrée dans `queue.json`, sous le [dossier de données](#configuration), avec l’ordonnancement qui la retient, et survit à un redémarrage. Les demandes qui n’attendaient qu’une place démarrent dès que le serveur écoute à nouveau, sans que personne ne les relance. Celles qui attendent une merge request continuent de l’attendre. Une croix retire une demande de la file.
 
-Un run terminé dont la session est encore ouverte garde sa place. Le bouton **Libérer la place** ferme cette session et laisse la file avancer. Une fois la session fermée, l’icône corbeille de sa ligne, ou le bouton **Fermer** de la vue, retire le run de la liste. Ses documents, sa conversation et son journal restent archivés dans `runs/<id>/`, sous le dossier de données.
+Un run terminé dont la session est encore ouverte garde sa place et son ticket. Le bouton **Libérer la place** ferme cette session et laisse la file avancer. Quand un lancement en file attend ce ticket ou cette place, le harnais ferme cette session de lui-même. Une fois la session fermée, l’icône corbeille de sa ligne, ou le bouton **Fermer** de la vue, retire le run de la liste. Ses documents, sa conversation et son journal restent archivés dans `runs/<id>/`, sous le dossier de données.
 
 Les notifications, le titre de l’onglet et son icône couvrent tous les runs à la fois, parce que le run qui réclame une réponse est rarement celui qu’on regarde. Les messages qui ne concernent aucun run en particulier (une demande mise en file, une amélioration rebasée) s’affichent dans un bandeau sous l’en-tête.
 
@@ -143,7 +145,94 @@ Le bouton haut-parleur de l’en-tête ajoute un signal sonore aux mêmes trois 
 
 L’interface émet le son à l’instant où la question devient bloquante. Un son demandé au modèle arrivait en avance et pouvait être oublié. Deux réserves à connaître : un navigateur interdit à une page d’émettre du son avant une interaction, donc le tout premier signal d’une session ouverte sans un clic reste muet, et deux onglets ouverts sur le harnais sonnent deux fois.
 
-Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Aucun fichier du plugin n’est copié dans `~/.claude`.
+Le harnais exécute Claude Code dans le worktree du run avec le plugin de ce dépôt. Aucun fichier du plugin n’est copié dans `~/.claude`.
+
+### Lancer plusieurs tickets d’un coup
+
+Le champ **Ticket GitLab** accepte plusieurs URL, une par ligne. Des URL séparées par des espaces, des virgules ou des points-virgules sur une même ligne sont lues aussi. Sous le champ, le formulaire indique le nombre de tickets reconnus, les doublons ignorés et les lignes qui ne sont pas une URL de ticket. Tant qu’une ligne est invalide, le lot ne part pas.
+
+À partir de deux tickets, le champ du répertoire disparaît : le dépôt de chaque ticket est détecté depuis son URL, dans les racines de `IMPL_SEARCH_ROOTS`. L’instruction particulière s’applique à tous les tickets du lot. Le bouton devient **Lancer les N tickets**.
+
+Le lot est accepté ou refusé en entier. Si un seul ticket n’a pas de checkout, rien n’est mis en file et le bandeau dit lequel. Un ticket que le harnais a déjà, en file, en cours ou derrière une merge request qu’il surveille, est ignoré, et le bandeau en donne le nombre.
+
+#### L’analyse du lot
+
+Avant de démarrer, le harnais compare les tickets d’un même dépôt. Il ouvre pour cela une session Claude Code sans terminal (`claude -p`, modèle Sonnet) dans le checkout principal, sur la commande `/implementation-harness:schedule`. L’agent `ticket-scheduler` lit chaque ticket avec `glab`, cherche dans le dépôt les fichiers que le ticket toucherait et relie les tickets qui ne peuvent pas tourner ensemble : ceux qui modifieraient les mêmes fichiers, et ceux dont l’un a besoin du résultat de l’autre. Cette session ne modifie rien dans le dépôt.
+
+- Il y a une session par dépôt et par lot. Elle ne compte pas dans `IMPL_MAX_CONCURRENT_RUNS`.
+- Un ticket seul dans son dépôt, sans autre ticket connu à comparer, démarre sans analyse.
+- Un ticket ajouté plus tard est comparé aux prédictions déjà faites pour les tickets en file, en cours ou en attente de merge. Elles ne sont pas recalculées.
+- Deux tickets de dépôts différents ne se retiennent jamais.
+- L’analyse a `IMPL_SCHEDULE_TIMEOUT_MINUTES` minutes (5 par défaut). Si elle échoue, dépasse ce délai ou rend un fichier invalide, les tickets concernés passent un par un sur leur dépôt et la file affiche « Analyse en échec ». Un redémarrage de la console pendant l’analyse a le même effet.
+- Un ticket trop vague pour être prédit est marqué « Prédiction peu fiable » et passe seul sur son dépôt.
+
+#### Ce que montre la file
+
+La file s’affiche sous les runs en cours, par lot (« Lot de 14:32 · 3 tickets en file »), puis par dépôt. Chaque ligne dit ce que le ticket attend :
+
+| Ligne | Ce que le ticket attend |
+|---|---|
+| « Analyse en cours » | la réponse de la session d’analyse |
+| « En attente, conflit avec #217 en cours » | #217 tourne et touche le même code |
+| « Attend que la MR !12 soit mergée (#217) » | le run de #217 est fini, sa merge request n’est pas encore mergée |
+| « État de la MR !12 inconnu (#217) » | GitLab ne répond pas ; le ticket reste retenu tant que l’état n’est pas connu |
+| « Dépend de #217, encore en file » | #217 doit passer avant, et n’a pas démarré |
+| « Passe après #217 » | les deux tickets sont en conflit, #217 est devant dans la file |
+| « En attente, ticket déjà en cours » | un run tient déjà ce ticket |
+| « En attente, toutes les places sont prises » | une place |
+
+Un ticket retenu par l’ordonnancement n’occupe aucune place, et les tickets derrière lui qui ne sont en conflit avec rien passent devant. Le dépliant **Pourquoi il attend** donne la raison écrite par l’agent et le résumé du ticket. Les flèches changent l’ordre des tickets d’un même dépôt, la croix retire un ticket de la file. Un ticket dont un autre dépend reste devant lui, quel que soit l’ordre choisi.
+
+Un ticket en conflit attend que la merge request de l’autre soit mergée, et pas seulement la fin de son run : il part alors de la base à jour. Si cette merge request est fermée sans être mergée, ou si le run se termine sans en ouvrir, le ticket est libéré et le bandeau le signale.
+
+#### Démarrer quand même
+
+Le dépliant propose deux départs forcés. Un ticket forcé attend encore une place libre, et ne démarre pas tant qu’un run tient le même ticket.
+
+- **Lancer depuis la base.** Le ticket part de la branche de base sans attendre l’autre. Les deux tickets touchent le même code, donc la seconde merge request devra sans doute être reprise à la main. Proposé aussi pendant l’analyse : rien ne dit encore si le ticket est en conflit.
+- **Empiler sur `<branche>`.** Le ticket part de la branche de l’autre ticket, et sa merge request cible cette branche. Elle ne peut être mergée qu’après celle de l’autre. Quand l’autre est mergée et sa branche supprimée, GitLab recible la seconde. Proposé seulement quand la branche de l’autre ticket existe déjà.
+
+#### Ce que ça coûte
+
+- **L’analyse** est une session Claude Code sur Sonnet, par dépôt et par lot. Elle consomme le quota du compte connecté, comme un run, et le délai d’analyse la borne.
+- **La veille des merge requests ne consomme aucun token.** C’est le serveur Node qui appelle `glab api` pour lire l’état de la merge request, sans ouvrir de session Claude. L’appel a lieu toutes les 60 secondes, seulement pour les merge requests qu’un ticket en file attend. Quand plus rien n’attend, le serveur n’interroge plus GitLab. `IMPL_MERGE_POLL_MS`, posée dans l’environnement de lancement, change cet intervalle.
+
+#### Limites
+
+- L’ordonnancement n’a pas encore tourné sur une vraie instance GitLab. Les tests remplacent `claude` et `glab` par des simulateurs. La commande d’analyse a été essayée en vrai sur un lot vide et sur une URL inventée, jamais sur un ticket réel : la qualité des prédictions n’est pas mesurée. La lecture de l’état d’une merge request par `glab` et le départ empilé n’ont été exercés que contre ces simulateurs.
+- Une prédiction reste une estimation faite avant d’écrire le code. Deux tickets jugés indépendants peuvent quand même entrer en conflit au merge.
+- Les tickets ne sont pas encore tirés de GitLab par labels ou par assignee : il faut coller les URL.
+
+### Un worktree par run
+
+Avant d’ouvrir la session, le harnais crée un worktree git du projet dans `<projet>/.claude/worktrees/<id du run>`, détaché sur le commit courant du checkout principal. Claude Code démarre dans ce dossier et y fait tout son travail : la branche du ticket, les commits, le dossier `.claude/tasks` et le serveur de développement. Le checkout principal n’est pas touché. Sa branche, ses modifications en cours et son stash restent tels quels, et on peut continuer à y travailler pendant le run.
+
+Ce que le worktree reçoit du checkout principal :
+
+- les dossiers de dépendances ignorés par Git, à toute profondeur (`node_modules` par défaut, réglage `IMPL_WORKTREE_DEPENDENCY_DIRS`). Ils sont copiés, en copy-on-write quand le système de fichiers le permet : la copie n’occupe alors pas de disque tant qu’aucun des deux côtés ne change, et une installation dans le worktree y reste. Si la copie échoue, le dossier est lié par un lien symbolique;
+- les fichiers ignorés par Git `.env*` et le fichier `.claude/settings.local.json` (réglage `IMPL_WORKTREE_COPY_FILES`), copiés.
+
+Le dossier `.claude/worktrees/` et les liens sont inscrits dans le `.git/info/exclude` du dépôt. Ils n’apparaissent pas dans `git status` et n’entrent dans aucun commit, et le `.gitignore` suivi n’est pas modifié. Les sorties de build (`.next`, `dist`) ne sont pas fournies, donc le premier build d’un run est complet. Quand un ticket change les dépendances et que `node_modules` est un lien, le workflow le remplace d’abord par une installation réelle dans le worktree, pour ne modifier ni le checkout principal ni les autres runs.
+
+Si le worktree ne peut pas être créé, le run ne démarre pas : le harnais ne se rabat jamais sur le checkout principal. Si les dépendances ne peuvent pas être reprises, le run démarre et le fil d’activité le signale.
+
+Deux runs du même projet peuvent vouloir le même port pour leur serveur de développement. Le workflow démarre le sien sur un port libre.
+
+Une fois la session fermée, le harnais supprime le worktree de lui-même quand toutes ces conditions sont réunies :
+
+- le run est terminé et le workflow n’est pas bloqué;
+- la merge request existe et n’est pas en draft;
+- l’archive des preuves a été confirmée;
+- l’arbre est propre;
+- le dernier commit est sur une branche du remote, d’après les références locales.
+
+La branche du ticket n’est jamais supprimée, et la merge request reste.
+
+Dans tous les autres cas le worktree est conservé, pour qu’on puisse reprendre le travail, et le fil d’activité en donne la raison, par exemple « aucune merge request » ou « changements non poussés ». Dès que sa session est fermée, la vue du run propose le bouton **Supprimer le worktree**. Si le worktree contient du travail non commité ou non poussé, le harnais dit ce qui serait perdu et demande une confirmation. Ce qui n’est pas commité est alors perdu, la branche et ses commits restent dans le dépôt.
+
+Un run retiré de la liste avec **Fermer**, ou laissé par un arrêt de la console, reste accessible tant que son worktree est sur le disque : il apparaît dans le groupe **Worktrees conservés** de la colonne de gauche, ou sous **Interrompus** s’il porte aussi un incident ouvert. Au démarrage, le harnais applique les mêmes règles aux worktrees des runs précédents : il supprime ceux qui remplissent les conditions, oublie ceux dont le dossier a disparu et conserve les autres avec leur raison.
+
+Lancé sans la console, le plugin travaille comme avant, directement dans le checkout.
 
 Quand Claude Code utilise `AskUserQuestion`, le harnais présente les décisions dans un panneau dédié : les choix suggérés peuvent remplir la réponse, qui reste éditable dans un champ de texte avant son envoi. La réponse est transmise à Claude Code par le hook en attente. Le terminal intégré reste visible et interactif pendant toute l’exécution pour les échanges libres et les commandes qui ne passent pas par ce panneau.
 
@@ -180,6 +269,9 @@ Les réglages disponibles :
 | `IMPL_HOST` | interface d’écoute ; hors boucle locale, la console est joignable depuis le réseau et le signale au démarrage | `127.0.0.1` |
 | `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
 | `IMPL_MAX_CONCURRENT_RUNS` | nombre de runs tenus en parallèle, de 1 à 10 ; au-delà, les lancements attendent en file | `3` |
+| `IMPL_SCHEDULE_TIMEOUT_MINUTES` | minutes laissées à l’analyse d’un lot de tickets, par dépôt, de 1 à 60 ; au-delà, les tickets de ce dépôt passent un par un | `5` |
+| `IMPL_WORKTREE_DEPENDENCY_DIRS` | noms des dossiers de dépendances ignorés par Git que le worktree d’un run reprend du checkout principal, à toute profondeur, séparés par des virgules ; pas de sorties de build | `node_modules` |
+| `IMPL_WORKTREE_COPY_FILES` | fichiers copiés du checkout principal vers le worktree d’un run, séparés par des virgules : un motif de nom comme `.env*` pour des fichiers ignorés par Git, ou un chemin depuis la racine du dépôt | `.env*,.claude/settings.local.json` |
 | `IMPL_STALL_MINUTES` | minutes sans progression avant que la console exprime un doute sur un run en cours (un doute seulement : rien n’est arrêté ni relancé) | `10` |
 | `IMPL_DEMO_STEP_MS` | durée d’une étape du mode démo | `5000` |
 
@@ -256,6 +348,7 @@ Le harnais n’annonce la fusion que si elle a déplacé sa branche. Git répond
 Claude Code reste le moteur du workflow. Le harnais ajoute :
 
 - un registre de runs (`console/server/registry.ts`) qui démarre, met en file et libère les sessions, chacune isolée dans sa `RunSession` avec son état, son terminal, ses surveillances de fichiers et sa question en attente;
+- un ordonnancement des lots : une session d’analyse par dépôt prédit ce que chaque ticket toucherait, le serveur retient les tickets en conflit et lit l’état des merge requests attendues avec `glab`, sans session Claude (voir `console/README.md`);
 - un pseudo-terminal interactif par run, relié à l’interface avec WebSocket. Chaque page s’abonne au run qu’elle affiche et ne reçoit que son terminal et son état, la liste des runs étant diffusée à toutes;
 - des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
 - un dossier de preuves par critère d’acceptation : le pilote écrit un registre de critères identifiés, chaque preuve les cite avec la version du code qu’elle a vérifiée, et le serveur calcule pour chaque critère s’il est vérifié, en échec, bloqué ou non vérifié, dans l’onglet Preuves comme dans la synthèse de la merge request. Une tentative de mise en échec de la QA qui ne trouve aucun défaut est affichée sous son critère sans compter comme vérification. Le serveur signale un verdict QA `PASS` ou `PASS_WITH_WARNINGS` écrit alors qu’un critère n’a aucune observation QA sur le code actuel (voir `console/README.md`);
@@ -270,7 +363,9 @@ Il y a une seule implémentation aujourd’hui, `claude-code`, et c’est délib
 
 `console/server/engine/README.md` documente le contrat membre par membre, le chemin complet d’une question bloquante, et ce qui reste couplé en dehors du serveur.
 
-Les données sont archivées dans `runs/<run-id>/`, sous le [dossier de données](#configuration) (`console/data/` depuis le dépôt) :
+La file et son ordonnancement sont dans `queue.json`. Les fichiers d’une analyse de lot sont dans `schedule/<id>/` : ils sont supprimés une fois la réponse lue, gardés après un échec pour le diagnostic, et effacés au démarrage suivant.
+
+Les données d’un run sont archivées dans `runs/<run-id>/`, sous le [dossier de données](#configuration) (`console/data/` depuis le dépôt) :
 
 - `run.json` contient l’état, les agents et l’activité;
 - `terminal.log` contient la sortie brute du terminal;
@@ -323,7 +418,7 @@ Le front utilise Next.js, React, TypeScript, Tailwind CSS et xterm.js. Le serveu
 
 ```text
 agents/       sous-agents Claude Code
-commands/     commandes /implementation-harness:implement, /implementation-harness:review, /implementation-harness:improve et /implementation-harness:rebase
+commands/     commandes /implementation-harness:implement, /implementation-harness:review, /implementation-harness:improve, /implementation-harness:rebase et /implementation-harness:schedule
 hooks/        événements envoyés au harnais local
 bin/          lanceur impl et commande impl config
 console/      interface Next.js et serveur PTY
@@ -331,7 +426,7 @@ console/server/engine/  la couche qui isole l'agent piloté, une implémentation
 contracts/    formats de sortie des agents et règles de preuve
 principles/   règles de décision communes aux agents
 skills/       méthodes chargées selon le besoin
-docs/         organisation des agents, des skills et de la revue
+docs/         organisation des agents, des skills et de la revue, schéma de fonctionnement (architecture.html)
 install.sh    installation et création des commandes globales
 install-remote.sh  clone ou mise à jour depuis la commande curl
 ```

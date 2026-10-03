@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { concurrencyLimit, permissionMode, positiveDuration } from "./domain.js";
+import { concurrencyLimit, listSetting, permissionMode, positiveDuration } from "./domain.js";
 import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,6 +21,8 @@ export const dataRoot = path.join(storageRoot, "runs");
 export const feedbackRoot = path.join(storageRoot, "feedback", "pending");
 /** The launches accepted but not started, kept across a restart of the console. */
 export const queueFile = path.join(storageRoot, "queue.json");
+/** The input and output files of the scheduling sessions. They hold ticket content: never anywhere tracked. */
+export const scheduleRoot = path.join(storageRoot, "schedule");
 export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 /** Port zero lets the OS bind a free port; agent hooks need the actual one. */
 export function setListeningPort(value: number) { port = value; }
@@ -32,6 +34,19 @@ export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);
+/**
+ * How long a scheduling session may take before its batch falls back on one
+ * ticket at a time. The millisecond form is for the integration suite.
+ */
+export const scheduleTimeoutMs = positiveDuration(process.env.IMPL_SCHEDULE_TIMEOUT_MS, positiveDuration(process.env.IMPL_SCHEDULE_TIMEOUT_MINUTES, 5) * 60_000);
+/** How often GitLab is asked whether a merge request tickets are waiting for has been merged. */
+export const mergePollMs = positiveDuration(process.env.IMPL_MERGE_POLL_MS, 60_000);
+/**
+ * What the worktree of a run takes from the main checkout: dependency
+ * directories by name, cloned or linked, and configuration files, copied.
+ */
+export const worktreeDependencyDirectories = listSetting(process.env.IMPL_WORKTREE_DEPENDENCY_DIRS, ["node_modules"]);
+export const worktreeCopyFiles = listSetting(process.env.IMPL_WORKTREE_COPY_FILES, [".env*", ".claude/settings.local.json"]);
 /**
  * The thresholds of the run health monitor (see run-health.ts). Only the
  * silence before a doubt is a user setting; the others are overridable for the

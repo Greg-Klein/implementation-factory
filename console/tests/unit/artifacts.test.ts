@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, reviewPlanNotes, watchedForArtifacts } from "../../server/domain";
+import { artifactWatchRoot, runWorktreePath, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, reviewPlanNotes, watchedForArtifacts } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -63,6 +63,17 @@ describe("artifact handling", () => {
     expect(watchedForArtifacts(taskRoot, path.resolve("/Users/someone/project/.claude/worktrees"))).toBe(false);
     expect(watchedForArtifacts(taskRoot, path.resolve("/Users/someone/project/.claude/settings.local.json"))).toBe(false);
     expect(watchedForArtifacts(taskRoot, `${taskRoot}-backup`)).toBe(false);
+  });
+
+  // Two runs of one repository each read their own task directory: the one in their worktree.
+  it("should follow the task directory of the run's own worktree, never the one of the main checkout or of another run", () => {
+    const taskRoot = (cwd: string) => path.join(cwd, ".claude", "tasks");
+    const first = taskRoot(runWorktreePath("/work/repo", "run-1"));
+    const second = taskRoot(runWorktreePath("/work/repo", "run-2"));
+    expect(artifactWatchRoot(first)).toBe(path.join("/work/repo", ".claude", "worktrees", "run-1", ".claude"));
+    expect(watchedForArtifacts(first, path.join(first, "planner-output.json"))).toBe(true);
+    expect(watchedForArtifacts(first, path.join(second, "planner-output.json"))).toBe(false);
+    expect(watchedForArtifacts(first, path.join(taskRoot("/work/repo"), "planner-output.json"))).toBe(false);
   });
 
   it("should map generated documents to workflow phases", () => {

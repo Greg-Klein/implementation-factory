@@ -120,6 +120,39 @@ describe("extracted artifact contracts", () => {
     expect(parsed.records[0].snapshotAtEnd).toBe("snap-final");
   });
 
+  it("should keep the schedule example valid under the rules its own contract states", () => {
+    const source = readFileSync(path.join(root, "contracts", "schedule.md"), "utf8");
+    const [input, output] = [...source.matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]));
+    const requested = input.tickets.map((ticket: { issue_url: string }) => ticket.issue_url);
+    const known = input.known.map((ticket: { issue_url: string }) => ticket.issue_url);
+    expect(output.tickets.map((ticket: { issue_url: string }) => ticket.issue_url)).toEqual(requested);
+    for (const ticket of output.tickets) {
+      expect(["low", "medium", "high"]).toContain(ticket.confidence);
+      expect(ticket.summary).not.toBe("");
+    }
+    const pairs = new Set<string>();
+    for (const edge of output.edges) {
+      expect(edge.a).not.toBe(edge.b);
+      expect([...requested, ...known]).toEqual(expect.arrayContaining([edge.a, edge.b]));
+      expect(requested.includes(edge.a) || requested.includes(edge.b)).toBe(true);
+      if (edge.kind === "depends_on") expect([...edge.order].sort()).toEqual([edge.a, edge.b].sort());
+      else expect(edge).toEqual(expect.objectContaining({ kind: "overlap" }));
+      if (edge.kind === "overlap") expect(edge.order).toBeUndefined();
+      expect(edge.reason).not.toBe("");
+      const pair = [edge.a, edge.b].sort().join(" ");
+      expect(pairs.has(pair)).toBe(false);
+      pairs.add(pair);
+    }
+    // The example has to exercise both kinds, or the console would be built against half a contract.
+    expect(output.edges.map((edge: { kind: string }) => edge.kind).sort()).toEqual(["depends_on", "overlap"]);
+  });
+
+  it("should keep the scheduling agent unable to edit the repository it reads", () => {
+    const tools = String(metadata(path.join(root, "agents", "ticket-scheduler.md")).tools).split(/,\s*/);
+    expect(tools).toEqual(expect.arrayContaining(["Read", "Write", "Bash"]));
+    expect(tools).not.toContain("Edit");
+  });
+
   it("should leave staged evidence inert until the caller publishes the final filename", () => {
     // Temporary JSON is not a document; phase mapping is only applied to archived documents.
     expect(isRunDocument("design-evidence.json.tmp")).toBe(false);

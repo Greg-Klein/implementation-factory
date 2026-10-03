@@ -22,7 +22,7 @@ Write `.claude/tasks/design-inventory.md` from the reference at that level and t
 
 Observation covers the relevant screen, its neighboring composition and the consumer routes the brief lists. Correction remains scoped to the authorized change; report pre-existing deviations separately. Every finding cites its reference; one that cannot goes to the capped non blocking section. Apply the specification policy and explicit waivers supplied by the pilot. Functional suspicions go under "À vérifier par la QA" with reproducible steps, never with a severity.
 
-Use the supplied recipe to reach states, checking simulation assumptions. Measure on frozen code, with an owned tab and the expected URL. Missing source values, unavailable states and a changing code snapshot are unverified, never PASS. Follow the risk order of the method and save the report and staged evidence after each step. Fill the coverage and state matrices; a required viewport or state you did not reach, or too few measured rows, makes the verdict INCONCLUSIVE under the contract.
+Use the supplied recipe to reach states, checking simulation assumptions. Measure on frozen code, with an owned tab and the URL the caller supplies, never a default port: parallel runs of the same repository each serve their own code on their own port. Missing source values, unavailable states and a changing code snapshot are unverified, never PASS. Follow the risk order of the method and save the report and staged evidence after each step. Fill the coverage and state matrices; a required viewport or state you did not reach, or too few measured rows, makes the verdict INCONCLUSIVE under the contract.
 
 ## Tool and output boundaries
 

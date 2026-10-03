@@ -58,10 +58,11 @@ async function collect(directory: string, depth: number, found: Map<string, Repo
     .map((entry) => collect(path.join(directory, entry.name), depth + 1, found)));
 }
 
-export async function discoverRepositories(): Promise<RepositoryOption[]> {
+export async function discoverRepositories({ fresh = false }: { fresh?: boolean } = {}): Promise<RepositoryOption[]> {
   // The scan runs again on every keystroke in the project field, so a short
-  // cache keeps a deep workspace from being walked over and over.
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.repositories;
+  // cache keeps a deep workspace from being walked over and over. `fresh`
+  // walks it anyway, for a caller about to refuse a ticket on a miss.
+  if (!fresh && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.repositories;
   const found = new Map<string, RepositoryOption>();
   await Promise.all(searchRoots().map((root) => collect(root, 0, found)));
   const repositories = [...found.values()].sort((left, right) => left.project.localeCompare(right.project));
@@ -84,7 +85,8 @@ export async function resolveProjectDirectory(input: string, issueUrl: string) {
   }
   const project = gitLabProjectPath(issueUrl);
   if (!project) throw new Error("L'URL du ticket GitLab n'est pas reconnue.");
-  const detected = await detectProjectDirectory(issueUrl);
+  // A checkout cloned a moment ago is not in the cached scan yet: look again before refusing.
+  const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;
   throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute sa racine à IMPL_SEARCH_ROOTS.`);
 }

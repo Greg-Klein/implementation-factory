@@ -2,6 +2,7 @@
 
 import { ArrowRightIcon, CheckIcon, FileTextIcon, FolderOpenIcon, GitBranchIcon, PlayIcon, RobotIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
+import type { ParsedTickets } from "@/lib/ticket-urls";
 import type { RepositoryOption } from "@/lib/types";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -92,11 +93,38 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
   );
 }
 
-export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart }: {
+/**
+ * What the ticket field holds, said back while the user types: how many URLs
+ * were recognised, and which lines are not one. Silent for a single ticket,
+ * which the field alone already shows.
+ */
+function TicketCount({ parsed }: { parsed: ParsedTickets }) {
+  const { tickets, invalid, duplicates } = parsed;
+  if (tickets.length + invalid.length < 2 && invalid.length === 0 && duplicates.length === 0) return null;
+  return (
+    <div id="ticket-count" aria-live="polite" className="-mt-3 mb-5 space-y-1 text-[11px] leading-4">
+      <p className="text-[var(--accent)]">
+        {tickets.length === 0 ? "Aucun ticket reconnu" : `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} reconnu${tickets.length > 1 ? "s" : ""}`}
+        {duplicates.length > 0 && <span className="text-[var(--muted)]"> · {duplicates.length} doublon{duplicates.length > 1 ? "s" : ""} ignoré{duplicates.length > 1 ? "s" : ""}</span>}
+      </p>
+      {invalid.length > 0 && (
+        <ul className="text-red-700">
+          {invalid.map((entry, index) => <li key={`${entry.line}-${index}`}>Ligne {entry.line} : <span className="break-all font-mono text-[10px]">{entry.text}</span> n’est pas une URL de ticket GitLab.</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart }: {
   cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
+  /** The ticket field as read by parseTicketUrls: two tickets or more make a batch. */
+  parsed: ParsedTickets;
   instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
   detectingProject: boolean; canStart: boolean; onStart: () => void;
 }) {
+  const batch = parsed.tickets.length > 1;
+  const lines = issueUrl.split("\n").length;
   return (
     <section className="scrollbar-thin grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(340px,.8fr)]">
       <div className="flex flex-col justify-between px-6 py-10 md:px-10 md:py-14 lg:px-[4vw]">
@@ -117,11 +145,27 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, se
             <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
           </div>
-          <Field label="Ticket GitLab"><input type="url" value={issueUrl} onChange={(event) => setIssueUrl(event.target.value)} placeholder="https://gitlab.com/…/-/issues/217" className="field text-sm" /></Field>
-          <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />
-          <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· facultatif</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
+          <label className="mb-5 block">
+            <span className="mb-2 block text-xs font-medium">Ticket GitLab <span className="font-normal text-[var(--muted)]">· un par ligne pour en lancer plusieurs</span></span>
+            <textarea
+              value={issueUrl}
+              onChange={(event) => setIssueUrl(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canStart) { event.preventDefault(); onStart(); } }}
+              placeholder="https://gitlab.com/…/-/issues/217"
+              rows={Math.min(Math.max(lines, 1), 8)}
+              spellCheck={false}
+              autoComplete="off"
+              aria-describedby="ticket-count"
+              className="field resize-none text-sm leading-5"
+            />
+          </label>
+          <TicketCount parsed={parsed} />
+          {batch
+            ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">Le dépôt de chaque ticket est détecté depuis son URL. Les tickets d’un même dépôt sont comparés avant de démarrer : ceux qui touchent le même code passent l’un après l’autre.</p>
+            : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />}
+          <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· {batch ? "facultatif, appliquée à tous les tickets du lot" : "facultatif"}</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
-            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> Lancer l’implémentation</span><ArrowRightIcon size={16} />
+            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Lancer les ${parsed.tickets.length} tickets` : "Lancer l’implémentation"}</span><ArrowRightIcon size={16} />
           </button>
         </form>
       </div>

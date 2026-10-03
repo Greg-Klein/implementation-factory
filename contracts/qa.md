@@ -131,7 +131,7 @@ An observation made only against a stub the developer wrote is `measured` only w
 
 ## Disposable worktree
 
-The caller always gives you the base ref and `git diff --stat <base>...HEAD`. It adds the path of a throwaway git worktree only when the diff adds or modifies test files. The worktree holds the last commit: copy over the files `git status --porcelain` lists in the delivered checkout before using it, and install dependencies there with the documented command when a check needs them. Nothing run there is evidence on the delivered code; criteria and gates are observed in the delivered checkout.
+The caller always gives you the base ref and `git diff --stat <base>...HEAD`. It adds the path of a throwaway git worktree only when the diff adds or modifies test files. The delivered checkout is the directory you were started in: the run worktree (`.claude/worktrees/<run-id>`) when the run has one, never the main checkout of the repository. The disposable worktree is a different directory, outside the repository. It holds the last commit: copy over the files `git status --porcelain` lists in the delivered checkout before using it, and install dependencies there with the documented command when a check needs them. Nothing run there is evidence on the delivered code; criteria and gates are observed in the delivered checkout.
 
 - **Discrimination probe.** Revert the fix or reinject the original defect in the worktree and run the new or changed tests. A test that stays green is a P1 `test non discriminant` under `Problèmes`; it is not a break attempt row.
 - **Base comparison.** Check out the base ref there, detached, and rerun a failing command. Only that shows a failure is pre-existing.

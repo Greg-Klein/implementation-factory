@@ -112,3 +112,30 @@ export async function startRun(page: Page, request: APIRequestContext, cwd: stri
   expect(started, "le run lancé doit apparaître").toBeDefined();
   return started!.id;
 }
+
+/**
+ * Where a run works: the worktree the console created for it, inside the
+ * checkout it was launched on. The workflow's task directory and the code it
+ * edits are there, not in the checkout.
+ */
+export async function runDirectory(request: APIRequestContext, runId: string) {
+  const body = await (await request.get(`/api/runs/${encodeURIComponent(runId)}`)).json() as { state: { cwd: string } };
+  return body.state.cwd;
+}
+
+/** Sends one message on a socket of its own and resolves with the first answer of the given type. */
+export async function sendAndWait<T>(page: Page, message: Record<string, unknown>, answerType: string): Promise<T> {
+  return await page.evaluate(({ message: outgoing, answerType: expected }) => new Promise<unknown>((resolve, reject) => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const timeout = window.setTimeout(() => { socket.close(); reject(new Error(`${expected} timeout`)); }, 8_000);
+    socket.addEventListener("open", () => socket.send(JSON.stringify(outgoing)));
+    socket.addEventListener("message", (event) => {
+      const incoming = JSON.parse(event.data) as { type: string };
+      if (incoming.type !== expected && incoming.type !== "error") return;
+      window.clearTimeout(timeout);
+      socket.close();
+      resolve(incoming);
+    });
+  }), { message, answerType }) as T;
+}

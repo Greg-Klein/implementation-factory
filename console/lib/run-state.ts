@@ -1,4 +1,5 @@
-import type { AcceptanceCounts, IncidentAction, RunIncident, RunState, Status } from "./types";
+import { ticketReference } from "./ticket-urls";
+import type { AcceptanceCounts, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
   return agents.filter((agent) => agent.status === "running");
@@ -77,15 +78,121 @@ export function elapsedLabel(start: string, end: string | undefined, now: number
 
 /**
  * How a run is named everywhere it is not alone: in the side list, in a
- * notification, in the reason a queued launch gives for waiting. The checkout is
- * what tells two runs apart at a glance, and the ticket number is what tells two
- * runs on the same checkout apart.
+ * notification, in the reason a queued launch gives for waiting. The repository
+ * is what tells two runs apart at a glance, and the ticket number is what tells
+ * two runs of the same repository apart. Named after the repository the ticket
+ * was launched on, never after `cwd`: that is a worktree, whose directory is the run id.
  */
-export function runLabel(run: { cwd: string; issueUrl: string }) {
-  const project = run.cwd.replace(/\/+$/, "").split("/").filter(Boolean).pop();
+export function runLabel(run: { cwd: string; repository?: string; issueUrl: string }) {
+  const project = sourceRepository(run).replace(/\/+$/, "").split("/").filter(Boolean).pop();
   const ticket = run.issueUrl.split(/[?#]/)[0].split("/").filter(Boolean).pop();
   const reference = ticket && /^\d+$/.test(ticket) ? `#${ticket}` : ticket;
   return [project, reference].filter(Boolean).join(" ") || run.issueUrl || "run";
+}
+
+/** The checkout a run was launched on. A run archived before worktrees ran in that checkout itself. */
+export function sourceRepository(run: { cwd: string; repository?: string }) {
+  return run.repository || run.cwd;
+}
+
+/**
+ * What the run panel says of the worktree: where it is while a session works
+ * in it, why it is still there once the session is gone, or that it is gone.
+ * The path is given from the repository, which the line above already names.
+ */
+export function worktreeLabel(run: { cwd: string; repository?: string; worktree?: RunWorktree }) {
+  const worktree = run.worktree;
+  if (!worktree) return undefined;
+  if (worktree.state === "removed") return worktree.detail ?? "Worktree supprimé";
+  if (worktree.state === "kept") return worktree.detail ?? "Worktree conservé";
+  const repository = sourceRepository(run).replace(/\/+$/, "");
+  return worktree.path.startsWith(`${repository}/`) ? worktree.path.slice(repository.length + 1) : worktree.path;
+}
+
+/** Whether the removal of the worktree can be offered: it is still on disk and no session works in it. */
+export function canRemoveWorktree(run: { status: Status; sessionActive?: boolean; worktree?: RunWorktree }) {
+  return run.worktree?.state === "kept" && !sessionAlive(run.status, run.sessionActive);
+}
+
+/** A merge request the way it is called, `MR !12`. */
+export function mergeRequestLabel(mergeRequestUrl: string | undefined) {
+  const number = mergeRequestUrl?.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  return number && /^\d+$/.test(number) ? `MR !${number}` : "MR";
+}
+
+type QueueWait = Pick<QueuedRunView, "reason"> & Partial<Pick<QueuedRunView, "blocking" | "forced">>;
+
+/** Why a queued launch waits, in the few words its row has room for. */
+export function queueReason(entry: QueueWait) {
+  const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : "un autre ticket";
+  if (entry.reason === "ticket") return "ticket déjà en cours";
+  if (entry.reason === "analysis") return "analyse en cours";
+  if (entry.reason === "conflict") return `conflit avec ${other} en cours`;
+  if (entry.reason === "merge") return `attend que la ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} soit mergée (${other})`;
+  if (entry.reason === "merge_unknown") return `état de la ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} inconnu (${other})`;
+  if (entry.reason === "dependency") return `dépend de ${other}, encore en file`;
+  if (entry.reason === "order") return `passe après ${other}`;
+  if (entry.forced?.mode === "stacked") return `départ empilé sur ${entry.forced.baseBranch}, dès qu’une place est libre`;
+  if (entry.forced) return "départ forcé, dès qu’une place est libre";
+  return "toutes les places sont prises";
+}
+
+/** The line a queued row shows: what it waits for, or that its batch is still being analysed. */
+export function queueStatus(entry: QueueWait) {
+  if (entry.reason === "analysis") return "Analyse en cours";
+  if (entry.reason === "merge" || entry.reason === "merge_unknown" || entry.reason === "dependency" || entry.reason === "order" || entry.forced) {
+    const reason = queueReason(entry);
+    return reason.charAt(0).toUpperCase() + reason.slice(1);
+  }
+  return `En attente, ${queueReason(entry)}`;
+}
+
+/** Whether the schedule holds the entry, as opposed to a slot or its own ticket: only then is there something to override. */
+export function heldBySchedule(entry: Pick<QueuedRunView, "reason">) {
+  return entry.reason !== "slot" && entry.reason !== "ticket";
+}
+
+/** What a queued row says of the ticket's own prediction, when it changes how the ticket is scheduled. */
+export function scheduleMark(entry: Pick<QueuedRunView, "analysisFailure" | "confidence">) {
+  if (entry.analysisFailure) return { label: "Analyse en échec", title: `Analyse en échec : ${entry.analysisFailure}. Ce ticket passe seul sur son dépôt.` };
+  if (entry.confidence === "low") return { label: "Prédiction peu fiable", title: "Le ticket ne dit pas assez ce qu’il touche. Il passe seul sur son dépôt." };
+  return undefined;
+}
+
+export type QueueGroup<T> = { key: string; batchId?: string; queuedAt: string; count: number; repositories: { repository: string; name: string; entries: T[] }[] };
+
+/**
+ * The queue as it is shown: by batch, then by repository, each in the order
+ * its first entry was asked. A launch made alone is a group of its own.
+ */
+export function queueGroups<T extends { id: string; cwd: string; repository?: string; batchId?: string; queuedAt: string }>(queued: T[]): QueueGroup<T>[] {
+  const groups: QueueGroup<T>[] = [];
+  for (const entry of queued) {
+    const key = entry.batchId ?? entry.id;
+    let group = groups.find((candidate) => candidate.key === key);
+    if (!group) groups.push(group = { key, ...(entry.batchId ? { batchId: entry.batchId } : {}), queuedAt: entry.queuedAt, count: 0, repositories: [] });
+    const repository = sourceRepository(entry);
+    let bucket = group.repositories.find((candidate) => candidate.repository === repository);
+    if (!bucket) group.repositories.push(bucket = { repository, name: repository.replace(/\/+$/, "").split("/").filter(Boolean).pop() ?? repository, entries: [] });
+    bucket.entries.push(entry);
+    group.count += 1;
+  }
+  return groups;
+}
+
+/**
+ * Where a row goes when it is moved one step among the rows shown with it, as
+ * the `before` of a `queue.move`: the entry it lands in front of, null for the
+ * end of the queue, undefined when it cannot move that way.
+ */
+export function queueMoveTarget(queued: { id: string }[], siblings: { id: string }[], id: string, direction: "up" | "down"): string | null | undefined {
+  const position = siblings.findIndex((entry) => entry.id === id);
+  if (position < 0) return undefined;
+  if (direction === "up") return position === 0 ? undefined : siblings[position - 1].id;
+  const next = siblings[position + 1];
+  if (!next) return undefined;
+  const others = queued.filter((entry) => entry.id !== id);
+  return others[others.findIndex((entry) => entry.id === next.id) + 1]?.id ?? null;
 }
 
 /** Whether a run is finished and no longer holds its session: the only state it can be closed from. */
@@ -103,7 +210,7 @@ export function noticeIsStale(notice: { queuedId?: string } | undefined, queued:
   return notice?.queuedId !== undefined && !queued.some((entry) => entry.id === notice.queuedId);
 }
 
-/** A run whose workflow is over but whose agent session is still up, holding its checkout against the queue. */
+/** A run whose workflow is over but whose agent session is still up, holding its slot and its ticket against the queue. */
 export function holdsIdleSession(run: { status: Status; sessionActive?: boolean }) {
   return !runInProgress(run.status) && run.sessionActive === true;
 }

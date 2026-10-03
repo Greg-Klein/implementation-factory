@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, hookToken, prepareDataDirectory, untrustedRoot } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, fakeGlabDirectory, hookToken, prepareDataDirectory, scheduleFixtureFile, untrustedRoot } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -21,6 +21,11 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
+  // What only a start of the console can show runs first, before any test hands the console back empty.
+  projects: [
+    { name: "boot", testMatch: /boot\.setup\.ts$/ },
+    { name: "console", testMatch: /\.spec\.ts$/, dependencies: ["boot"] },
+  ],
   webServer: {
     command: "npm run dev",
     env: {
@@ -42,7 +47,13 @@ export default defineConfig({
       FAKE_CLAUDE_INPUT_DIR: fakeClaudeInputDirectory,
       // Runs started under this directory open on the folder trust dialog.
       FAKE_CLAUDE_UNTRUSTED_ROOT: untrustedRoot,
-      // A launched run gets a stand-in session instead of a real Claude Code.
+      // What the stand-in scheduling session answers, and how long it is given before its batch runs one ticket at a time.
+      FAKE_CLAUDE_SCHEDULE: scheduleFixtureFile,
+      IMPL_SCHEDULE_TIMEOUT_MS: "4000",
+      // The stand-in `glab` sits next to the stand-in `claude`: the suite never reaches a real GitLab.
+      FAKE_GLAB_DIR: fakeGlabDirectory,
+      IMPL_MERGE_POLL_MS: "500",
+      // A launched run gets a stand-in session instead of a real Claude Code, and `glab` a stand-in too.
       PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },
     url: `http://127.0.0.1:${port}`,

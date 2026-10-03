@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { gitLabIssueEndpoint, gitLabProjectPath, gitRemoteProjects, permissionMode, positiveDuration } from "../../server/domain";
+import { gitLabIssueEndpoint, gitLabProjectPath, gitRemoteProjects, listSetting, permissionMode, positiveDuration } from "../../server/domain";
 
 describe("harness configuration", () => {
   it("should use positive durations and reject invalid overrides", () => {
@@ -14,6 +14,12 @@ describe("harness configuration", () => {
     expect(permissionMode("plan", "auto")).toBe("auto");
     expect(permissionMode("", "auto")).toBe("auto");
     expect(permissionMode(undefined, "auto")).toBe("auto");
+  });
+
+  it("should bring node_modules and the local configuration into a worktree unless told otherwise", () => {
+    expect(listSetting(undefined, ["node_modules"])).toEqual(["node_modules"]);
+    expect(listSetting("", [".env*", ".claude/settings.local.json"])).toEqual([".env*", ".claude/settings.local.json"]);
+    expect(listSetting("node_modules, vendor", ["node_modules"])).toEqual(["node_modules", "vendor"]);
   });
 
   it("should extract nested GitLab project paths from issue URLs", () => {

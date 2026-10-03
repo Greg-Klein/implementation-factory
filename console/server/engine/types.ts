@@ -37,7 +37,10 @@ export type EngineSession = {
 export type SessionPromptDecision = "accept" | "refuse";
 
 export type StartOptions = {
+  /** Where the session runs: the worktree of the run. */
   cwd: string;
+  /** What the session is named after: the repository the run belongs to, never the worktree directory. */
+  sessionLabel: string;
   runId: string;
   /** The workflow entry point, already built by the engine and logged by the caller. */
   command: string;
@@ -54,6 +57,25 @@ export type StartOptions = {
   /** What the agent says outside of its hooks: read off the terminal by the engine, the only code that knows what to look for. */
   onEvent?(event: EngineEvent): void;
 };
+
+/** One headless scheduling session: where it runs, and the two files of contracts/schedule.md. */
+export type ScheduleOptions = {
+  /** The main checkout of the repository the tickets belong to: the session runs there and reads it. */
+  repository: string;
+  pluginDir: string;
+  /** Absolute, outside the repository. `outputPath` is fresh for every call, so a stale file is never read as a result. */
+  inputPath: string;
+  outputPath: string;
+  /** After this long the session is killed and counts as failed. */
+  timeoutMs: number;
+};
+
+/**
+ * A scheduling session in flight. `finished` resolves when the process is
+ * gone, however it went: its exit code says nothing about success, only the
+ * output file does. `log` is the end of what it printed, kept for a diagnosis.
+ */
+export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: string }>; kill(): void };
 
 /**
  * One thing the agent reported, said in the harness's own words. Whatever
@@ -118,6 +140,12 @@ export type Engine = {
   event(payload: Record<string, unknown>): EngineEvent | undefined;
   /** What the agent expects back once the user has answered a question. */
   questionAnswer(input: Record<string, unknown>, answers: Record<string, string>): unknown;
+  /**
+   * Predicts, without a terminal, which tickets of a batch conflict in one
+   * repository. Reports nothing to the harness while it runs: no run owns it.
+   * Undefined when the agent is not installed.
+   */
+  startSchedule(options: ScheduleOptions): ScheduleSession | undefined;
   /** Runs the self-improvement workflow on its own, detached from any run. Undefined when the agent is not installed. */
   startSelfImprovement(options: { worktreeName: string; feedbackDirectory: string; runId: string }): BackgroundProcess | undefined;
   /** Replays an improvement branch git alone could not, inside the worktree it already lives in. Undefined when the agent is not installed. */

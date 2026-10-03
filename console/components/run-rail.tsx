@@ -1,9 +1,10 @@
 "use client";
 
-import { ArchiveIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { ArchiveIcon, FolderDashedIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RunSummary } from "@/lib/types";
+import { QueueList, type QueueActions } from "./queue-list";
 
 const PHASES = 10;
 
@@ -120,9 +121,9 @@ function HealthMark({ badge }: { badge: NonNullable<ReturnType<typeof healthBadg
 }
 
 /**
- * A run of an earlier session, read back from its archive because it ended
- * with an open incident. It has no session and takes no slot: the row opens
- * its diagnosis, nothing else.
+ * A run without a session, read back from its archive because it ended with an
+ * open incident or left a worktree on disk. It takes no slot: the row opens
+ * its diagnosis, or the removal of that worktree.
  */
 function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; selected: boolean; index: number; onOpen: () => void }) {
   return (
@@ -132,23 +133,11 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
         <ArchiveIcon size={11} className="mt-0.5 shrink-0 text-[var(--muted)]" aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[11px] font-medium text-[var(--ink)]">{run.ticketTitle ?? runLabel(run)}</span>
-          <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-red-700"><WarningCircleIcon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{run.incident?.title ?? "Session interrompue"}</span></span>
+          {run.incident || run.worktree?.state !== "kept"
+            ? <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-red-700"><WarningCircleIcon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{run.incident?.title ?? "Session interrompue"}</span></span>
+            : <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-[var(--muted)]" title={run.worktree.detail}><FolderDashedIcon size={10} className="shrink-0" aria-hidden /><span className="truncate">{run.worktree.detail ?? "Worktree conservé"}</span></span>}
         </span>
       </button>
-    </div>
-  );
-}
-
-function QueuedRow({ entry, index, onCancel }: { entry: QueuedRunView; index: number; onCancel: () => void }) {
-  const reason = entry.blockedBy ? "dépôt occupé" : "toutes les places sont prises";
-  return (
-    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className="reveal flex items-start gap-2.5 px-3.5 py-2">
-      <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full border border-[var(--muted)]" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] font-medium text-[var(--ink)]">{runLabel(entry)}</p>
-        <p className="mt-0.5 truncate text-[10px] text-[var(--muted)]" title={entry.blockedBy ? `Bloqué par le run ${entry.blockedBy}` : undefined}>En attente, {reason}</p>
-      </div>
-      <button type="button" onClick={onCancel} aria-label={`Retirer ${runLabel(entry)} de la file`} className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px"><XIcon size={11} /></button>
     </div>
   );
 }
@@ -163,7 +152,7 @@ function QueuedRow({ entry, index, onCancel }: { entry: QueuedRunView; index: nu
  * column as that run's progression, the two headings competed and the list read
  * as the top half of the progression rather than as the navigation it is.
  */
-export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, onClose, onCancelQueued }: {
+export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, onClose, queueActions }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
   archived?: RunSummary[];
@@ -172,9 +161,12 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
   onOpen: (runId: string) => void;
   onNew: () => void;
   onClose: (runId: string) => void;
-  onCancelQueued: (queuedId: string) => void;
+  queueActions: QueueActions;
 }) {
   const holding = runs.filter((run) => run.holdsRepository).length;
+  // An incident is a diagnosis to read; a worktree left on disk is housekeeping. Two groups, so neither hides the other.
+  const interrupted = archived.filter((run) => run.incident);
+  const leftovers = archived.filter((run) => !run.incident);
   const full = holding >= maxConcurrentRuns;
 
   return (
@@ -205,7 +197,7 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
           <div className="px-3.5 py-6 text-center">
             <div className="mx-auto grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ClockCounterClockwiseIcon size={14} /></div>
             <p className="mt-2.5 text-[11px] font-medium">Aucun run</p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Colle une URL de ticket. Le harnais en tient {maxConcurrentRuns} à la fois.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Colle une ou plusieurs URL de tickets. Le harnais en tient {maxConcurrentRuns} à la fois.</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--line)]">
@@ -213,23 +205,27 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
           </div>
         )}
 
-        {archived.length > 0 && (
+        {/* Right under the live runs: what waits is about to become one of them, the archives below are not. */}
+        <QueueList queued={queued} actions={queueActions} />
+
+        {interrupted.length > 0 && (
           <div role="group" aria-label="Runs interrompus" className="border-t border-[var(--line)]">
-            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs d’une session précédente, restés avec un incident ouvert. Lecture seule.">Interrompus · {archived.length}</p>
+            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs d’une session précédente, restés avec un incident ouvert. Lecture seule.">Interrompus · {interrupted.length}</p>
             <div className="divide-y divide-[var(--line)]">
-              {archived.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
+              {interrupted.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
             </div>
           </div>
         )}
 
-        {queued.length > 0 && (
-          <div role="group" aria-label="Runs en file d'attente" className="border-t border-[var(--line)] bg-[var(--sunken)]">
-            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">En file · {queued.length}</p>
+        {leftovers.length > 0 && (
+          <div role="group" aria-label="Worktrees conservés" className="border-t border-[var(--line)]">
+            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs sans session dont le worktree est encore sur le disque. Ouvre-les pour le supprimer.">Worktrees conservés · {leftovers.length}</p>
             <div className="divide-y divide-[var(--line)]">
-              {queued.map((entry, index) => <QueuedRow key={entry.id} entry={entry} index={index} onCancel={() => onCancelQueued(entry.id)} />)}
+              {leftovers.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
             </div>
           </div>
         )}
+
       </div>
     </aside>
   );

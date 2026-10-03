@@ -76,6 +76,14 @@ describe("env file writer", () => {
     expect(edit("", { IMPL_SEARCH_ROOTS: "~/l'atelier" })).toContain(`IMPL_SEARCH_ROOTS="~/l'atelier"`);
   });
 
+  it("should append the worktree settings with their comment, and keep a pattern with a star as written", () => {
+    const written = edit("IMPL_PORT='3210'\n", { IMPL_WORKTREE_COPY_FILES: ".env*,config/local.json", IMPL_WORKTREE_DEPENDENCY_DIRS: "node_modules,vendor" });
+    expect(written).toContain("IMPL_WORKTREE_COPY_FILES='.env*,config/local.json'\n");
+    expect(written).toContain("IMPL_WORKTREE_DEPENDENCY_DIRS='node_modules,vendor'\n");
+    expect(written).toMatch(/# Comma-separated names of ignored dependency directories[^\n]*\nIMPL_WORKTREE_DEPENDENCY_DIRS=/);
+    expect(readBack(written).loaded).toMatchObject({ IMPL_WORKTREE_COPY_FILES: ".env*,config/local.json", IMPL_WORKTREE_DEPENDENCY_DIRS: "node_modules,vendor" });
+  });
+
   it("should read back through loadEnvFile exactly what it wrote", () => {
     const written = edit("", { IMPL_SEARCH_ROOTS: "~/l'atelier,~/workspace", IMPL_HOST: "0.0.0.0" });
     const { parsed, loaded } = readBack(written);

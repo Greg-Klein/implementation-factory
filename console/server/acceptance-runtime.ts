@@ -28,7 +28,8 @@ export function snapshotExclusions(cwd: string) {
 
 async function identifyCode(session: RunSession, force: boolean) {
   const archive = session.evidence;
-  if (session.demo) return;
+  // A worktree that is gone has no code left to identify: the last snapshot taken in it stands.
+  if (session.demo || session.state.worktree?.state === "removed") return;
   for (const entry of await readSnapshotLog(snapshotLogPath(session.id))) archive.rememberSnapshot(entry.id, entry.capturedAt);
   if (!force && Date.now() - archive.snapshotTakenAt < SNAPSHOT_INTERVAL_MS) return;
   archive.snapshotTakenAt = Date.now();
@@ -131,6 +132,8 @@ export async function confirmArchiveSync(session: RunSession, requestPath: strin
     sentence: renderAcceptanceSummary(view).json.sentence,
   };
   await atomicWrite(path.join(taskRoot, SYNC_ACK_FILE), `${JSON.stringify(acknowledgement, null, 2)}\n`);
+  // What the removal of the worktree waits for: from here on, nothing it holds is the only copy.
+  session.state.archiveSyncedAt = acknowledgement.archivedAt;
   session.activity("artifact", "Archive des preuves confirmée", `${acknowledgement.versions} versions conservées`);
   session.publish();
 }

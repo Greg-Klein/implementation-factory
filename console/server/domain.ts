@@ -1,5 +1,9 @@
 import path from "node:path";
-import type { AgentState, PlanDelegation, PlanTask, QueuedRun, QueuedRunView, RunState, RunStatus, RunSummary } from "./types.js";
+import { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../lib/ticket-urls.js";
+import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge } from "./types.js";
+
+/** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
+export { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -517,43 +521,155 @@ export function emptyState(): RunState {
 }
 
 /**
- * Whether a run still holds the checkout it was started on. The workflow reaching
- * its last phase does not release it: the session stays open at its prompt, the
- * user keeps talking to it and it keeps writing to the same working tree. Only a
- * session that is gone frees the repository, which is what the queue waits on,
- * and what sessionsToReleaseForQueue takes back when someone is waiting.
+ * Whether a run still holds its slot and its ticket. The workflow reaching its
+ * last phase does not release them: the session stays open at its prompt, the
+ * user keeps talking to it and it keeps writing to its worktree. Only a session
+ * that is gone frees them, which is what the queue waits on, and what
+ * sessionsToReleaseForQueue takes back when someone is waiting.
  */
 export function runHoldsRepository(state: Pick<RunState, "status" | "sessionActive">) {
   return runInProgress(state.status) || state.sessionActive;
 }
 
+/** The checkout a run was launched on. A run archived before worktrees ran in that checkout itself. */
+export function sourceRepository(run: { repository?: string; cwd: string }) {
+  return run.repository || run.cwd;
+}
+
+/**
+ * What two launches must not share. Every run works in a worktree of its own,
+ * so two tickets of one repository no longer fight over a working tree; two runs
+ * on the same ticket would still fight over its branch and its merge request.
+ * The ticket is compared without its query or fragment, the way a pasted URL varies.
+ */
+export function runLockKey(run: { repository?: string; cwd: string; issueUrl: string }) {
+  return `${sourceRepository(run).replace(/\/+$/, "")}\n${ticketIdentity(run.issueUrl)}`;
+}
+
 /** A run as the release decision reads it: what it holds, and since when it has nothing left to do. */
-type HeldRun = { id: string; cwd: string; status: RunStatus; sessionActive: boolean; endedAt: string | null };
+type HeldRun = { id: string; cwd: string; repository?: string; issueUrl: string; status: RunStatus; sessionActive: boolean; endedAt: string | null };
+type Launch = { cwd: string; repository?: string; issueUrl: string };
 
 /**
  * The finished runs whose session has to go for the queue to move. Their
- * workflow is over but their session sits at its prompt, holding a checkout and
+ * workflow is over but their session sits at its prompt, holding a ticket and
  * a slot: harmless while nobody is waiting, which is why the session is kept,
  * and unacceptable the moment a queued launch needs exactly what it holds. So a
  * run with nothing left to do yields to one that has work, rather than waiting
  * for the user to notice and free the place by hand.
  */
-export function sessionsToReleaseForQueue(runs: HeldRun[], queue: QueuedRun[], maxConcurrentRuns: number) {
+export function sessionsToReleaseForQueue(runs: HeldRun[], queue: Launch[], maxConcurrentRuns: number) {
   if (queue.length === 0) return [];
   const idle = runs
     .filter((run) => runHoldsRepository(run) && !runInProgress(run.status))
     .sort((left, right) => (left.endedAt ?? "").localeCompare(right.endedAt ?? ""));
-  const awaited = new Set(queue.map((entry) => entry.cwd));
-  const released = new Set(idle.filter((run) => awaited.has(run.cwd)).map((run) => run.id));
+  const awaited = new Set(queue.map(runLockKey));
+  const released = new Set(idle.filter((run) => awaited.has(runLockKey(run))).map((run) => run.id));
   const held = runs.filter((run) => runHoldsRepository(run) && !released.has(run.id));
-  // Whoever is still waiting with its checkout free is waiting on a slot alone,
+  // Whoever is still waiting with its ticket free is waiting on a slot alone,
   // and the run that finished first is the one that has held one the longest.
-  const waitsOnSlot = queue.some((entry) => !held.some((run) => run.cwd === entry.cwd));
+  const heldKeys = new Set(held.map(runLockKey));
+  const waitsOnSlot = queue.some((entry) => !heldKeys.has(runLockKey(entry)));
   if (waitsOnSlot && held.length >= maxConcurrentRuns) {
     const oldest = idle.find((run) => !released.has(run.id));
     if (oldest) released.add(oldest.id);
   }
   return [...released];
+}
+
+/** Where the worktrees of the runs live inside a repository, ignored through `.git/info/exclude`. */
+export const RUN_WORKTREES_DIRECTORY = ".claude/worktrees";
+
+export function runWorktreePath(repository: string, runId: string) {
+  return path.join(repository, ...RUN_WORKTREES_DIRECTORY.split("/"), runId);
+}
+
+/** Whether a path is one the console itself would have created: nothing else is ever removed. */
+export function isRunWorktreePath(repository: string, candidate: string) {
+  const relative = path.relative(path.join(repository, ...RUN_WORKTREES_DIRECTORY.split("/")), candidate);
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative) && !relative.includes(path.sep);
+}
+
+/** A comma-separated setting read as a list; empty or absent falls back on the defaults. */
+export function listSetting(value: string | undefined, fallback: string[]) {
+  const entries = (value ?? "").split(",").map((entry) => entry.trim()).filter(Boolean);
+  return entries.length > 0 ? entries : fallback;
+}
+
+function nameMatches(pattern: string, name: string) {
+  const expression = pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+  return new RegExp(`^${expression}$`).test(name);
+}
+
+/**
+ * What a fresh worktree lacks and takes from the main checkout, chosen from
+ * the ignored entries git lists there (`ls-files --others --ignored
+ * --exclude-standard --directory`, a directory ending with a slash).
+ * `directories` are dependency directories matched by name at any depth;
+ * `files` are ignored files matched by name. A copy pattern holding a slash is
+ * a path from the root, returned in `paths` and taken whether git ignores it or
+ * not. Nothing under the worktrees directory is ever taken.
+ */
+export function worktreeProvisioning(ignoredEntries: string[], linkNames: string[], copyPatterns: string[]) {
+  const namePatterns = copyPatterns.filter((pattern) => !pattern.includes("/"));
+  const directories: string[] = [];
+  const files: string[] = [];
+  for (const entry of ignoredEntries) {
+    if (!entry || entry === `${RUN_WORKTREES_DIRECTORY}/` || entry.startsWith(`${RUN_WORKTREES_DIRECTORY}/`) || `${RUN_WORKTREES_DIRECTORY}/`.startsWith(entry)) continue;
+    const directory = entry.endsWith("/");
+    const relative = directory ? entry.slice(0, -1) : entry;
+    const name = relative.split("/").pop() ?? "";
+    if (directory) { if (linkNames.some((pattern) => nameMatches(pattern, name))) directories.push(relative); }
+    else if (namePatterns.some((pattern) => nameMatches(pattern, name))) files.push(relative);
+  }
+  const paths = copyPatterns.filter((pattern) => pattern.includes("/")).map((pattern) => pattern.replace(/^\/+/, "")).filter((pattern) => !pattern.split("/").includes(".."));
+  return { directories, files, paths };
+}
+
+/** A path written as a line of `.git/info/exclude`: anchored at the root, its glob characters taken literally. */
+export function excludeLine(relativePath: string, { directory = false }: { directory?: boolean } = {}) {
+  return `/${relativePath.replace(/[\\*?[\]]/g, "\\$&")}${directory ? "/" : ""}`;
+}
+
+/** The exclude file with the missing lines appended, or undefined when it already holds them all. */
+export function withExcludeLines(content: string, lines: string[]) {
+  const present = new Set(content.split("\n").map((line) => line.trim()));
+  const missing = [...new Set(lines)].filter((line) => !present.has(line));
+  if (missing.length === 0) return undefined;
+  return `${content}${content && !content.endsWith("\n") ? "\n" : ""}${missing.join("\n")}\n`;
+}
+
+/** What git says of a worktree on disk. `pushed`: its HEAD is on a remote-tracking branch. */
+export type WorktreeFacts = { exists: boolean; clean: boolean; pushed: boolean };
+
+/**
+ * Whether the worktree of a run may go, and how. `allowed`: its session is gone,
+ * so nothing is working in it. `automatic`: the console removes it on its own,
+ * which takes a finished run with a real merge request, its evidence archived,
+ * a clean tree and a HEAD the remote already has. `reasons` say why it is kept
+ * instead, and `risks` what a removal asked by hand would lose, which is what
+ * the interface asks a confirmation for. The branch is never part of a removal.
+ */
+export function worktreeRemoval(
+  run: Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt">,
+  facts: WorktreeFacts,
+): { allowed: boolean; automatic: boolean; reasons: string[]; risks: string[] } {
+  const allowed = !runHoldsRepository(run);
+  const risks = [...(facts.clean ? [] : ["changements non commités"]), ...(facts.pushed ? [] : ["changements non poussés"])];
+  const reasons: string[] = [];
+  if (!allowed) reasons.push("session encore ouverte");
+  const draft = run.workflow?.result?.delivery === "draft_merge_request";
+  if (!run.mergeRequestUrl) reasons.push("aucune merge request");
+  else if (draft || run.workflow?.state === "blocked") reasons.push("merge request en brouillon sur un run bloqué");
+  else if (run.status !== "completed") reasons.push("run non terminé");
+  if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push("archive des preuves non confirmée");
+  reasons.push(...risks);
+  return { allowed, automatic: facts.exists && reasons.length === 0, reasons, risks };
+}
+
+/** What the interface says of a worktree, in one line. */
+export function worktreeKeptDetail(reasons: string[]) {
+  return reasons.length > 0 ? `Worktree conservé : ${reasons.join(", ")}` : "Worktree conservé";
 }
 
 /**
@@ -572,6 +688,8 @@ export function summarizeRun(state: RunState): RunSummary {
     status: state.status,
     phase: state.phase,
     cwd: state.cwd,
+    repository: sourceRepository(state),
+    ...(state.worktree ? { worktree: state.worktree } : {}),
     issueUrl: state.issueUrl,
     ticketTitle: state.ticketTitle,
     startedAt: state.startedAt,
@@ -608,6 +726,17 @@ export function concurrencyLimit(value: string | undefined, fallback: number) {
 
 export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"] as const;
 
+/** The GitLab API path of the merge request a URL points at, with the host it lives on and its number. */
+export function gitLabMergeRequestEndpoint(mergeRequestUrl: string) {
+  try {
+    const url = new URL(mergeRequestUrl);
+    const match = url.pathname.match(/^\/(.+?)\/-\/merge_requests\/(\d+)/);
+    return match && /^https?:$/.test(url.protocol) ? { hostname: url.hostname, path: `projects/${encodeURIComponent(match[1])}/merge_requests/${match[2]}`, iid: match[2] } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * A run is meant to go all the way without a watcher, so it carries its
  * permission mode explicitly instead of inheriting whatever the machine that
@@ -618,18 +747,315 @@ export function permissionMode(value: string | undefined, fallback: string) {
   return mode && (permissionModes as readonly string[]).includes(mode) ? mode : fallback;
 }
 
+/** A ticket of the demonstration: it has no repository, no GitLab and nothing to keep across a restart. */
+export function isSimulatedTicket(issueUrl: string) {
+  return issueUrl.startsWith("ticket-simule://");
+}
+
+const CONFIDENCES: readonly string[] = ["high", "medium", "low"];
+const EDGE_KINDS: readonly string[] = ["overlap", "depends_on"];
+
+export type SchedulePrediction = { issueUrl: string; areas: string[]; files: string[]; confidence: ScheduleConfidence; summary: string };
+export type ScheduleOutputEdge = { a: string; b: string; kind: "overlap" | "depends_on"; order?: [string, string]; reason: string };
+export type ScheduleOutput = { tickets: SchedulePrediction[]; edges: ScheduleOutputEdge[] };
+/** `state`: where a known ticket stands, as the contract names it. */
+export type KnownTicket = { ticket: ScheduledTicket; state: "queued" | "running" | "awaiting_merge" };
+
+/** The input file of a scheduling session, as contracts/schedule.md defines it. */
+export function scheduleInput(repository: string, tickets: string[], known: KnownTicket[]) {
+  return {
+    repository,
+    tickets: tickets.map((issueUrl) => ({ issue_url: issueUrl })),
+    known: known.map(({ ticket, state }) => ({ issue_url: ticket.issueUrl, areas: ticket.areas, files: ticket.files, state })),
+  };
+}
+
+function strings(value: unknown) {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "") : [];
+}
+
 /**
- * Why a queued launch is still waiting, and what it is waiting for. A checkout
- * held by a run always wins over the slot count: naming the free slot as the
- * blocker when the real one is a run on the same repository sends the user to
- * stop the wrong session. The queue is drained the moment either frees up, so an
- * entry still in it is always blocked by one of the two.
+ * The output of a scheduling session held against the rules of
+ * contracts/schedule.md. The whole file is refused on the first rule that
+ * fails: a schedule that is partly wrong would let two conflicting tickets run
+ * together, which is worse than running the batch one ticket at a time.
+ * `error` is a French phrase, shown to the user as the reason of the failure.
  */
-export function describeQueue(queue: QueuedRun[], holders: Map<string, string>): QueuedRunView[] {
-  return queue.map((entry) => {
-    const blockedBy = holders.get(entry.cwd);
-    return blockedBy ? { ...entry, reason: "repository" as const, blockedBy } : { ...entry, reason: "slot" as const };
+export function validateSchedule(input: { tickets: string[]; known: string[] }, output: unknown): { ok: true; schedule: ScheduleOutput } | { ok: false; error: string } {
+  const refuse = (error: string) => ({ ok: false as const, error });
+  if (!output || typeof output !== "object" || Array.isArray(output)) return refuse("la sortie n'est pas un objet JSON");
+  const { tickets, edges } = output as { tickets?: unknown; edges?: unknown };
+  if (!Array.isArray(tickets) || !Array.isArray(edges)) return refuse("il manque le tableau tickets ou edges");
+  const expected = new Set(input.tickets);
+  const known = new Set(input.known);
+  const predictions: SchedulePrediction[] = [];
+  for (const raw of tickets) {
+    const ticket = (raw ?? {}) as Record<string, unknown>;
+    const issueUrl = ticket.issue_url;
+    if (typeof issueUrl !== "string" || !expected.has(issueUrl)) return refuse("un ticket de la sortie n'est pas dans l'entrée");
+    if (predictions.some((prediction) => prediction.issueUrl === issueUrl)) return refuse("un ticket apparaît deux fois");
+    if (typeof ticket.confidence !== "string" || !CONFIDENCES.includes(ticket.confidence)) return refuse("une confiance est hors des valeurs prévues");
+    if (typeof ticket.summary !== "string" || !ticket.summary.trim()) return refuse("un résumé est vide");
+    predictions.push({ issueUrl, areas: strings(ticket.areas), files: strings(ticket.files), confidence: ticket.confidence as ScheduleConfidence, summary: ticket.summary.trim() });
+  }
+  if (predictions.length !== expected.size) return refuse("un ticket de l'entrée n'a pas de prédiction");
+  const pairs = new Set<string>();
+  const links: ScheduleOutputEdge[] = [];
+  for (const raw of edges) {
+    const edge = (raw ?? {}) as Record<string, unknown>;
+    const { a, b, kind, order, reason } = edge;
+    if (typeof a !== "string" || typeof b !== "string" || ![a, b].every((url) => expected.has(url) || known.has(url))) return refuse("une arête cite un ticket inconnu");
+    if (a === b) return refuse("une arête relie un ticket à lui-même");
+    if (!expected.has(a) && !expected.has(b)) return refuse("une arête relie deux tickets déjà connus");
+    if (typeof kind !== "string" || !EDGE_KINDS.includes(kind)) return refuse("un type d'arête est hors des valeurs prévues");
+    if (typeof reason !== "string" || !reason.trim()) return refuse("une raison est vide");
+    const pair = [a, b].sort().join("\n");
+    if (pairs.has(pair)) return refuse("deux arêtes relient la même paire de tickets");
+    pairs.add(pair);
+    if (kind === "depends_on") {
+      const valid = Array.isArray(order) && order.length === 2 && ((order[0] === a && order[1] === b) || (order[0] === b && order[1] === a));
+      if (!valid) return refuse("une dépendance n'a pas d'ordre valide");
+      links.push({ a, b, kind, order: [order[0], order[1]], reason: reason.trim() });
+    } else {
+      if (order !== undefined) return refuse("un chevauchement porte un ordre");
+      links.push({ a, b, kind: "overlap", reason: reason.trim() });
+    }
+  }
+  return { ok: true, schedule: { tickets: predictions, edges: links } };
+}
+
+/**
+ * Splits a batch into what is new and what the console already has. A ticket
+ * is one repository and one ticket (see runLockKey): the same one is never
+ * queued twice, whether it sits in the queue, in a run or behind an unmerged
+ * merge request, and whatever found it, a paste or anything else.
+ */
+export function admitBatch(tickets: ResolvedTicket[], taken: Iterable<string>) {
+  const seen = new Set(taken);
+  const accepted: ResolvedTicket[] = [];
+  const duplicates: ResolvedTicket[] = [];
+  for (const ticket of tickets) {
+    const key = runLockKey({ cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl });
+    if (seen.has(key)) duplicates.push(ticket);
+    else { seen.add(key); accepted.push(ticket); }
+  }
+  return { accepted, duplicates };
+}
+
+/** A run as the schedule reads it: what it works on, whether it still works, and what a stacked start would be cut from. */
+export type ScheduleRun = { id: string; cwd: string; repository?: string; issueUrl: string; status: RunStatus; branch?: string; mergeRequestUrl?: string };
+/** Everything a queue is scheduled against, beside the ticket locks and the slots. */
+export type ScheduleContext = { runs?: ScheduleRun[]; tickets?: ScheduledTicket[]; edges?: ScheduleEdge[]; watches?: MergeWatch[] };
+
+type Conflict = { cause: QueueCause; detail: string; order?: [string, string] };
+type ScheduleIndex = { tickets: Map<string, ScheduledTicket>; edges: Map<string, ScheduleEdge> };
+
+function repositoryOf(launch: Launch) {
+  return sourceRepository(launch).replace(/\/+$/, "");
+}
+
+function pairKey(repository: string, left: string, right: string) {
+  return [repository.replace(/\/+$/, ""), ...[ticketIdentity(left), ticketIdentity(right)].sort()].join("\n");
+}
+
+function scheduleIndex(context: ScheduleContext): ScheduleIndex {
+  return {
+    tickets: new Map((context.tickets ?? []).map((ticket) => [runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl }), ticket])),
+    edges: new Map((context.edges ?? []).map((edge) => [pairKey(edge.repository, edge.a, edge.b), edge])),
+  };
+}
+
+/**
+ * Why two launches must not run together, or undefined when they may. Two
+ * tickets of different repositories never conflict, whatever the edges say:
+ * the rule is enforced here, not left to the scheduling agent. Within one
+ * repository, an edge keeps its two tickets apart, and a ticket whose analysis
+ * failed, or whose prediction is `low`, is kept apart from every other.
+ */
+function conflictBetween(index: ScheduleIndex, left: Launch, right: Launch): Conflict | undefined {
+  const repository = repositoryOf(left);
+  if (repository !== repositoryOf(right) || runLockKey(left) === runLockKey(right)) return undefined;
+  const edge = index.edges.get(pairKey(repository, left.issueUrl, right.issueUrl));
+  if (edge) return { cause: edge.kind, detail: edge.reason, ...(edge.order ? { order: edge.order } : {}) };
+  const sides = [left, right].flatMap((side) => index.tickets.get(runLockKey(side)) ?? []);
+  const failed = sides.find((ticket) => ticket.analysis === "failed");
+  if (failed) return { cause: "analysis_failed", detail: `L'analyse du lot a échoué${failed.failure ? ` (${failed.failure})` : ""} : les tickets de ce dépôt passent un par un.` };
+  const vague = sides.find((ticket) => ticket.confidence === "low");
+  if (vague) return { cause: "low_confidence", detail: `Prédiction peu fiable pour ${ticketReference(vague.issueUrl)} : il passe seul sur son dépôt.${vague.summary ? ` ${vague.summary}` : ""}` };
+  return undefined;
+}
+
+/**
+ * The order the queue is walked in: the order the launches were asked for,
+ * except that the first ticket of a `depends_on` edge goes before the second.
+ * A forced entry ignores the edges, so nothing is moved ahead of it. A cycle
+ * of dependencies falls back on the order asked.
+ */
+function priorityOrder(queue: QueuedRun[], index: ScheduleIndex) {
+  const remaining = [...queue];
+  const ordered: QueuedRun[] = [];
+  const mustFollow = (entry: QueuedRun, other: QueuedRun) => {
+    if (entry.forced) return false;
+    const order = conflictBetween(index, entry, other)?.order;
+    return order !== undefined && ticketIdentity(order[0]) === ticketIdentity(other.issueUrl);
+  };
+  while (remaining.length > 0) {
+    const position = remaining.findIndex((entry) => !remaining.some((other) => other !== entry && mustFollow(entry, other)));
+    ordered.push(...remaining.splice(Math.max(position, 0), 1));
+  }
+  return ordered;
+}
+
+function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext): QueuedRunView[] {
+  const index = scheduleIndex(context);
+  const running = (context.runs ?? []).filter((run) => runInProgress(run.status));
+  const ahead: QueuedRun[] = [];
+  const assess = (entry: QueuedRun): QueuedRunView => {
+    const own = index.tickets.get(runLockKey(entry));
+    const base = {
+      ...entry,
+      ...(own?.summary ? { summary: own.summary } : {}), ...(own?.confidence ? { confidence: own.confidence } : {}),
+      ...(own?.analysis === "failed" ? { analysisFailure: own.failure ?? "analyse en échec" } : {}),
+    };
+    const holder = holders.get(runLockKey(entry));
+    if (holder) return { ...base, reason: "ticket", blockedBy: holder };
+    // Forced by the user: the edges no longer hold it, the ticket lock and the slots still do.
+    if (entry.forced) return { ...base, reason: "slot" };
+    if (entry.analysing) return { ...base, reason: "analysis" };
+    for (const run of running) {
+      const conflict = conflictBetween(index, entry, run);
+      if (conflict) return { ...base, reason: "conflict", blockedBy: run.id, blocking: { issueUrl: run.issueUrl, runId: run.id, ...(run.branch ? { branch: run.branch } : {}), ...(run.mergeRequestUrl ? { mergeRequestUrl: run.mergeRequestUrl } : {}) }, cause: conflict.cause, detail: conflict.detail };
+    }
+    for (const watch of context.watches ?? []) {
+      const conflict = conflictBetween(index, entry, { cwd: watch.repository, issueUrl: watch.issueUrl });
+      if (conflict) return { ...base, reason: watch.state === "unknown" ? "merge_unknown" : "merge", blocking: { issueUrl: watch.issueUrl, mergeRequestUrl: watch.mergeRequestUrl, ...(watch.runId ? { runId: watch.runId } : {}), ...(watch.branch ? { branch: watch.branch } : {}) }, cause: conflict.cause, detail: conflict.detail };
+    }
+    for (const other of ahead) {
+      const conflict = conflictBetween(index, entry, other);
+      if (conflict) return { ...base, reason: conflict.cause === "depends_on" ? "dependency" : "order", blocking: { issueUrl: other.issueUrl, queuedId: other.id }, cause: conflict.cause, detail: conflict.detail };
+    }
+    return { ...base, reason: "slot" };
+  };
+  return priorityOrder(queue, index).map((entry) => {
+    const view = assess(entry);
+    ahead.push(entry);
+    return view;
   });
+}
+
+/**
+ * Why each queued launch is still waiting, and what it is waiting for, in the
+ * order the launches were asked. A run on the same ticket always wins over the
+ * rest: naming a free slot as the blocker when the real one is that run sends
+ * the user to stop the wrong session. Then come the analysis still running,
+ * a conflicting run in progress, the merge request of a finished one, and a
+ * conflicting ticket ahead in the queue. `holders` maps a lock key (see
+ * runLockKey) to the run holding it. An entry nothing of this holds waits on a
+ * slot alone, and starts as soon as one is free.
+ */
+export function describeQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext = {}): QueuedRunView[] {
+  const views = new Map(assessQueue(queue, holders, context).map((view) => [view.id, view]));
+  return queue.map((entry) => views.get(entry.id)!);
+}
+
+/**
+ * The entries that start now, `freeSlots` at most, in the order they start. A
+ * held entry takes no slot and the entries behind it that conflict with nothing
+ * pass it. Among conflicting entries the order asked is kept, a dependency
+ * first, so the one behind waits for the merge request of the one ahead.
+ */
+export function startableEntries(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext, freeSlots: number): QueuedRun[] {
+  if (freeSlots <= 0) return [];
+  const byId = new Map(queue.map((entry) => [entry.id, entry]));
+  return assessQueue(queue, holders, context).filter((view) => view.reason === "slot").slice(0, freeSlots).map((view) => byId.get(view.id)!);
+}
+
+/** The merge requests something in the queue is waiting for: the only ones worth asking GitLab about. */
+export function heldWatches(queue: QueuedRun[], context: ScheduleContext): MergeWatch[] {
+  const index = scheduleIndex(context);
+  const waiting = queue.filter((entry) => !entry.forced);
+  return (context.watches ?? []).filter((watch) => waiting.some((entry) => conflictBetween(index, entry, { cwd: watch.repository, issueUrl: watch.issueUrl })));
+}
+
+/** The queued entries that would be held behind a ticket, a run that just ended for instance. */
+export function conflictingEntries(queue: QueuedRun[], ticket: Launch, context: ScheduleContext): QueuedRun[] {
+  const index = scheduleIndex(context);
+  return queue.filter((entry) => !entry.forced && conflictBetween(index, entry, ticket));
+}
+
+export type MergeRequestStatus = "opened" | "merged" | "closed" | "unknown";
+
+/** The `state` GitLab gives a merge request, as the watch reads it. `locked` is a merge in progress, still open. */
+export function mergeRequestStatus(state: unknown): MergeRequestStatus {
+  if (state === "merged" || state === "closed") return state;
+  return state === "opened" || state === "locked" ? "opened" : "unknown";
+}
+
+/**
+ * What a watch becomes once GitLab answered. Merged, or closed without a
+ * merge: the watch is over and whatever it held is released. An answer that
+ * could not be had keeps holding, as `unknown`, so a failing `glab` never
+ * lets a conflicting ticket start on its own.
+ */
+export function mergeWatchStep(watch: MergeWatch, status: MergeRequestStatus, at: string): { watch?: MergeWatch; released?: "merged" | "closed" } {
+  if (status === "merged" || status === "closed") return { released: status };
+  return { watch: { ...watch, state: status === "opened" ? "open" : "unknown", checkedAt: at } };
+}
+
+/** What the schedule keeps: the tickets still queued, running or awaited, and the edges between two of them. */
+export function pruneSchedule(tickets: ScheduledTicket[], edges: ScheduleEdge[], live: Set<string>) {
+  const key = (repository: string, issueUrl: string) => runLockKey({ cwd: repository, issueUrl });
+  return {
+    tickets: tickets.filter((ticket) => live.has(key(ticket.repository, ticket.issueUrl))),
+    edges: edges.filter((edge) => live.has(key(edge.repository, edge.a)) && live.has(key(edge.repository, edge.b))),
+  };
+}
+
+export type StoredQueue = { queue: QueuedRun[]; tickets: ScheduledTicket[]; edges: ScheduleEdge[]; watches: MergeWatch[] };
+
+/** Why a batch whose analysis did not survive a restart runs one ticket at a time. */
+export const INTERRUPTED_ANALYSIS = "console redémarrée pendant l'analyse";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/** What `queue.json` holds: the queue and the schedule it is read against. Nothing simulated is written. */
+export function storedQueue(state: StoredQueue) {
+  return {
+    version: 2,
+    queue: state.queue.filter((entry) => !entry.demo),
+    tickets: state.tickets.filter((ticket) => !isSimulatedTicket(ticket.issueUrl)),
+    edges: state.edges.filter((edge) => !isSimulatedTicket(edge.a)),
+    watches: state.watches.filter((watch) => !isSimulatedTicket(watch.issueUrl)),
+  };
+}
+
+/**
+ * `queue.json` as read at start. The file was a bare array of launches before
+ * batches existed, and still loads. An entry whose analysis was running when
+ * the console went down never got its answer: it comes back as a failed
+ * analysis, so its repository runs one ticket at a time instead of silently in parallel.
+ */
+export function restoreQueueFile(stored: unknown): StoredQueue {
+  const list = (value: unknown) => (Array.isArray(value) ? value.filter(isRecord) : []);
+  const file = isRecord(stored) ? stored : { queue: stored };
+  const text = (value: unknown) => typeof value === "string" && value !== "";
+  const queue = list(file.queue)
+    .filter((entry) => text(entry.id) && text(entry.cwd) && text(entry.issueUrl) && entry.demo !== true)
+    // A queue written before worktrees named the checkout as `cwd` alone.
+    .map((entry) => ({ instruction: "", queuedAt: "", ...entry, repository: sourceRepository(entry as { cwd: string; repository?: string }) }) as QueuedRun);
+  const interrupted = queue.filter((entry) => entry.analysing);
+  const tickets = (list(file.tickets).filter((ticket) => text(ticket.issueUrl) && text(ticket.repository) && (ticket.analysis === "done" || ticket.analysis === "failed")) as ScheduledTicket[])
+    .map((ticket) => ({ ...ticket, areas: strings(ticket.areas), files: strings(ticket.files) }))
+    .filter((ticket) => !interrupted.some((entry) => runLockKey(entry) === runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
+  return {
+    queue: queue.map(({ analysing: _analysing, ...entry }) => entry),
+    tickets: [...tickets, ...interrupted.map((entry) => ({ issueUrl: entry.issueUrl, repository: entry.repository, analysis: "failed" as const, areas: [], files: [], failure: INTERRUPTED_ANALYSIS }))],
+    edges: list(file.edges).filter((edge) => text(edge.repository) && text(edge.a) && text(edge.b) && text(edge.reason) && EDGE_KINDS.includes(edge.kind as string)) as ScheduleEdge[],
+    watches: (list(file.watches).filter((watch) => text(watch.issueUrl) && text(watch.repository) && text(watch.mergeRequestUrl)) as MergeWatch[])
+      .map((watch) => ({ ...watch, state: watch.state === "open" ? "open" as const : "unknown" as const, since: text(watch.since) ? watch.since : "" })),
+  };
 }
 
 /**

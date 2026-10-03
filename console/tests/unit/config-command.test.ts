@@ -37,6 +37,8 @@ describe("impl config", () => {
     expect(stdout).toMatch(/IMPL_PORT\s+4321\s+\.env/);
     expect(stdout).toMatch(/IMPL_HOST\s+0\.0\.0\.0\s+shell/);
     expect(stdout).toMatch(/IMPL_SEARCH_ROOTS\s+~\/workspace\s+défaut/);
+    expect(stdout).toMatch(/IMPL_WORKTREE_DEPENDENCY_DIRS\s+node_modules\s+défaut/);
+    expect(stdout).toMatch(/IMPL_WORKTREE_COPY_FILES\s+\.env\*,\.claude\/settings\.local\.json\s+défaut/);
   });
 
   it("should let a shell variable win over the file", () => {
@@ -72,6 +74,14 @@ describe("impl config", () => {
     expect(stderr).toContain("bypassPermissions");
     expect(config(["set", "IMPL_PERMISSION_MODE=manual"], { IMPL_ENV_FILE: file }).code).toBe(0);
     expect(readFileSync(file, "utf8")).toContain("IMPL_PERMISSION_MODE='manual'");
+  });
+
+  it("should take a list of dependency directories and refuse an empty one", () => {
+    const file = envFile();
+    expect(config(["set", "IMPL_WORKTREE_DEPENDENCY_DIRS=node_modules,vendor"], { IMPL_ENV_FILE: file }).code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("IMPL_WORKTREE_DEPENDENCY_DIRS='node_modules,vendor'");
+    expect(config(["get", "IMPL_WORKTREE_DEPENDENCY_DIRS"], { IMPL_ENV_FILE: file }).stdout.trim()).toBe("node_modules,vendor");
+    expect(config(["set", "IMPL_WORKTREE_COPY_FILES= "], { IMPL_ENV_FILE: file }).code).toBe(1);
   });
 
   it("should write a valid value and point at the restart", () => {

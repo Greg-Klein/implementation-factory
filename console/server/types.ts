@@ -424,6 +424,8 @@ export type ClientMessage =
    * `force` the server answers `confirm` when work would be lost, and removes nothing.
    */
   | { type: "worktree.remove"; runId: string; force?: boolean }
+  /** Drops the runtime recipe kept for a repository. Its next run starts from none. */
+  | { type: "recipe.forget"; repository: string }
   /** `scenario`: the regular workflow, the pilot handing back with nothing next, or a batch of three tickets with one conflict. */
   | { type: "demo.start"; scenario?: "workflow" | "incident" | "batch" }
   | { type: "feedback.submit"; runId: string; body: string }
@@ -459,6 +461,8 @@ export type ServerMessage =
   | { type: "error"; message: string; runId?: string }
   /** What became of a worktree removal, answered to the page that asked. `risks`: what a forced removal would lose. */
   | { type: "worktree.result"; runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] }
+  /** Answered to the page that asked to forget a recipe. `forgotten` is false when there was none. */
+  | { type: "recipe.result"; repository: string; forgotten: boolean }
   /** What became of an incident action, answered to the page that asked. */
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 

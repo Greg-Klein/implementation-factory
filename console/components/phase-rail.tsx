@@ -35,7 +35,7 @@ function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; labe
     : <p title={title} className="flex items-center gap-1.5 px-1.5 py-1 text-[var(--ink)]">{body}</p>;
 }
 
-export function PhaseRail({ run }: { run: RunState }) {
+export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?: () => void }) {
   const now = useNow(Boolean(run.startedAt) && !run.endedAt);
   const finished = run.status === "completed";
   const badge = runStatusBadge(run);
@@ -68,6 +68,8 @@ export function PhaseRail({ run }: { run: RunState }) {
           <div>
             <dt className="text-[10px] font-semibold text-[var(--muted)]">Dépôt</dt>
             <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={repository}>{repository}</dd>
+            {/* A recipe belongs to a real checkout: the demonstration has none. */}
+            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="Ce que le harnais retient pour lancer l'application de ce dépôt" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Recette d&apos;exécution</button></dd>}
           </div>
           {run.baseBranch && (
             <div>

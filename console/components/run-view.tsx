@@ -28,6 +28,8 @@ export type RunViewActions = {
   /** `force`: sent again once the user confirmed that uncommitted or unpushed work may go. */
   removeWorktree: (force: boolean) => void;
   dismissWorktreeResult: () => void;
+  /** Opens what the console keeps about starting the app of this run's repository. */
+  openRecipe: () => void;
 };
 
 export function RunView({ run, connected, writing, terminalRef, actions, incidentResult, worktreeResult }: {
@@ -101,7 +103,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[196px_minmax(0,1fr)_300px]">
-      <PhaseRail run={run} />
+      <PhaseRail run={run} onOpenRecipe={actions.openRecipe} />
       <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
         <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2">
           <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">

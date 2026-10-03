@@ -3,7 +3,7 @@
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
-import { isWriting, noticeIsStale, sessionAlive } from "@/lib/run-state";
+import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import { parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
@@ -11,6 +11,7 @@ import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsRespon
 import { LaunchForm } from "./launch-form";
 import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
+import { RecipeDialog } from "./recipe-dialog";
 import { RunRail } from "./run-rail";
 import { RunView } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
@@ -52,6 +53,9 @@ export function Harness() {
   const [incidentResult, setIncidentResult] = useState<IncidentResult>();
   /** What the server answered to a worktree removal: a confirmation to give, or a refusal. */
   const [worktreeResult, setWorktreeResult] = useState<WorktreeResult>();
+  /** The repository whose runtime recipe is open, and a count that moves each time the server answered a request to forget one. */
+  const [recipeRepository, setRecipeRepository] = useState<string>();
+  const [recipeRevision, setRecipeRevision] = useState(0);
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
   const [theme, setTheme] = useState<Theme>("light");
@@ -156,6 +160,7 @@ export function Harness() {
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
+        if (message.type === "recipe.result") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
       socket.onclose = () => {
@@ -438,6 +443,7 @@ export function Harness() {
                   send({ type: "worktree.remove", runId, ...(force ? { force: true } : {}) });
                 },
                 dismissWorktreeResult: () => setWorktreeResult(undefined),
+                openRecipe: () => setRecipeRepository(sourceRepository(run)),
                 incident: (incident, action, reason) => {
                   setIncidentResult(undefined);
                   send({ type: "incident.action", runId, incidentId: incident.id, expectedRevision: incident.revision, requestId: requestIdentifier(), action, ...(reason ? { reason } : {}) });
@@ -447,10 +453,11 @@ export function Harness() {
               worktreeResult={worktreeResult}
             />
           ) : (
-            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
+            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} onOpenRecipe={setRecipeRepository} />
           )}
         </div>
       </div>
+      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => send({ type: "recipe.forget", repository: recipeRepository })} onClose={() => setRecipeRepository(undefined)} />}
     </main>
   );
 }

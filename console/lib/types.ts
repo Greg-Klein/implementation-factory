@@ -106,6 +106,7 @@ export type ServerMessage =
   | { type: "error"; message: string; runId?: string }
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   | ({ type: "worktree.result" } & WorktreeResult)
+  | { type: "recipe.result"; repository: string; forgotten: boolean }
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
@@ -113,6 +114,8 @@ export type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "git" }) | null;
 };
+/** The runtime recipe the console keeps for a repository, `null` when it has none. */
+export type RecipeResponse = { repository: string; recipe: { content: string; updatedAt: string } | null; error?: string };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
 export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string; kind?: string };

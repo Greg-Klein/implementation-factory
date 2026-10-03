@@ -58,6 +58,25 @@ describe("the runtime recipe of a repository", () => {
     expect(belongsToRun(statSync(seeded).mtimeMs, startedAt)).toBe(false);
   });
 
+  it("should show the recipe kept for a repository with its date, and nothing once it is forgotten", async () => {
+    const repository = "/work/readable";
+    const worktree = checkout("run-4");
+    const written = path.join(worktree, ".claude", "tasks", "runtime-recipe.md");
+    writeFileSync(written, "# Recette d'exécution\n\n## Lancer\n\n- `make dev`\n");
+    await recipes.keepRuntimeRecipe(new RunSession("run-recipe-4", { status: "running", phase: 6, cwd: worktree, repository }), written);
+
+    const kept = await recipes.readRuntimeRecipe(repository);
+    expect(kept?.content).toContain("make dev");
+    expect(Number.isNaN(Date.parse(kept?.updatedAt ?? ""))).toBe(false);
+    await expect(recipes.readRuntimeRecipe("/work/another")).resolves.toBeUndefined();
+
+    await expect(recipes.forgetRuntimeRecipe(repository)).resolves.toBe(true);
+    await expect(recipes.readRuntimeRecipe(repository)).resolves.toBeUndefined();
+    await expect(recipes.forgetRuntimeRecipe(repository)).resolves.toBe(false);
+    // The next run of that repository starts from none.
+    await expect(recipes.seedRuntimeRecipe(repository, checkout("run-5"))).resolves.toBe(false);
+  });
+
   it("should not keep an empty or oversized file", async () => {
     const repository = "/work/oversized";
     const worktree = checkout("run-3");

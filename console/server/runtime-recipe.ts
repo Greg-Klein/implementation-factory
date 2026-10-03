@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rename, stat, utimes } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, rm, stat, utimes } from "node:fs/promises";
 import path from "node:path";
 import { storageRoot } from "./config.js";
 import { RUNTIME_RECIPE_FILE, runtimeRecipeStore, sourceRepository } from "./domain.js";
@@ -44,4 +44,27 @@ export async function keepRuntimeRecipe(session: RunSession, source: string) {
   } catch (error) {
     session.activity("attention", "Recette d'exécution non conservée", error instanceof Error ? error.message : String(error));
   }
+}
+
+/** The recipe kept for a repository and when it was last written, for the person who wants to read it. */
+export async function readRuntimeRecipe(repository: string) {
+  const stored = runtimeRecipeStore(storageRoot, repository);
+  try {
+    const [content, written] = await Promise.all([readFile(stored, "utf8"), stat(stored)]);
+    return { content, updatedAt: written.mtime.toISOString() };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Drops the recipe of a repository, so its next run starts from none and
+ * writes a new one. A run already going keeps the copy it was handed. Returns
+ * whether there was one.
+ */
+export async function forgetRuntimeRecipe(repository: string) {
+  const stored = runtimeRecipeStore(storageRoot, repository);
+  const existed = await stat(stored).then((file) => file.isFile(), () => false);
+  if (existed) await rm(stored, { force: true });
+  return existed;
 }

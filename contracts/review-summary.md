@@ -31,6 +31,10 @@ READY | BLOCKED
 
 - `path/file.ts:42` - ce que c'est, ce qui serait mieux
 
+## Constats écartés
+
+- ce que le reviewer a relevé, qui l'a relevé, et la raison en une ligne (chemin d'appel inexistant, préférence sans défaut concret, hors du périmètre du ticket). « Aucun » quand rien n'a été écarté.
+
 ## Écarts de design préexistants (hors ticket, à reprendre dans un ticket de suivi)
 
 - élément et emplacement visuel, attendu selon la référence, mesuré, sévérité

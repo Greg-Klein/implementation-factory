@@ -2,9 +2,22 @@ import { appendFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { request } from "node:http";
 import process from "node:process";
+import { denial, guardDecision } from "./guard.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
+
+// Decided here, with or without a console: a refused call never happened, so
+// the harness is not told about a tool that will never report its end.
+try {
+  const refused = guardDecision(JSON.parse(input || "{}"));
+  if (refused) {
+    process.stdout.write(JSON.stringify(denial(refused)));
+    process.exit(0);
+  }
+} catch {
+  // A guard that cannot read the call lets it through.
+}
 
 const endpoint = process.env.IMPL_HARNESS_HOOK_URL;
 if (!endpoint) process.exit(0);

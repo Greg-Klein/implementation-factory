@@ -153,6 +153,10 @@ What to change and why.
 
 - [P0] ... (relevé par senior, corrigé au round 2, confirmé par QA)
 
+### Constats écartés
+
+- ce qui a été relevé, par qui, et la raison en une ligne. Omit the section when nothing was dismissed.
+
 ### Critères d'acceptation
 
 The detail table of `.claude/tasks/acceptance-summary.md`. Every attachment it names is a local path: link it only once uploaded as below, with the returned link; one that was not uploaded is written "capture restée locale", never as a path.

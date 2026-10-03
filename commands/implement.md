@@ -20,7 +20,7 @@ You are the pilot of this workflow. You own all human interaction and all git op
 
 **Everything the user reads from you is in French, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. This document is in English, and after a long run of tool calls that pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that French text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-harness:unslop`.
 
-**Every agent of this workflow is invoked under its qualified name `implementation-harness:<agent>`**, never under the bare name: `implementation-harness:ticket-planner`, `implementation-harness:developer`, `implementation-harness:senior-reviewer`, `implementation-harness:designer-reviewer`, `implementation-harness:qa-reviewer`, `implementation-harness:review-orchestrator`. A bare name resolves to whichever definition carries it, and an agent of the same name installed beside this plugin wins the dispatch: the run silently gets an older output contract. That is how nine design reviews out of ten ran under a definition forbidden to write `design-evidence.json`, which left the console's design evidence empty while the measurements sat in the report. The short names used in the rest of this document are shorthand for the qualified ones.
+**Every agent of this workflow is invoked under its qualified name `implementation-harness:<agent>`**, never under the bare name, which an agent of the same name installed beside this plugin would win. A hook refuses the bare name. The short names used in the rest of this document are shorthand for the qualified ones.
 
 This run is **as autonomous as possible**. Step 2 is the only planned interruption. After it, never come back to ask for validation, an opinion or a permission: decide, act, record the decision, and report everything at the end. When something goes wrong, prefer a recovery path over stopping.
 
@@ -67,6 +67,8 @@ How to read each kind of resource:
 | Epic / linked issues | `glab issue view`, `glab api groups/<group>/epics/<iid>` |
 | Anything with no API and no MCP (Notion, Docs, random web page) | **Playwright**: `browser_navigate` + `browser_snapshot` + `browser_take_screenshot`. This is the default fallback, never WebFetch |
 
+Read `.claude/tasks/runtime-recipe.md` when it exists: the console keeps it from earlier runs of this repository, under [the runtime recipe contract](${CLAUDE_PLUGIN_ROOT}/contracts/runtime-recipe.md). It says how the app is started, reached and driven. It is a starting point to check, and never ticket context.
+
 Write a consolidated `.claude/tasks/ticket-context.md` containing: what and why, acceptance criteria, edge cases, out of scope, Figma node URLs, local paths of downloaded assets, open questions. Store binaries under `.claude/tasks/assets/`.
 
 When two sources say different things, resolve the conflict with the shared specification policy and record the arbitration in the context file. Never carry a contradiction forward untouched.
@@ -77,6 +79,8 @@ Use `implementation-harness:clarify-spec` to audit the ticket for gaps: for ever
 
 - **Blocking**: the answer changes the code, and neither the codebase, the design, nor an existing pattern settles it. Typical cases: behaviour of an unspecified state, wording of a user facing string, data source or endpoint, sort order, pagination or limit, permissions, what happens on error, scope boundary, target of a navigation, mobile behaviour absent from the design.
 - **Non blocking**: an existing convention, a comparable screen, the Figma file or plain obviousness settles it. Write down the answer you derived and where it comes from.
+
+**What the app does today is not a gap either, it is a fact.** Read it or run it when that needs no running app (an existing test, a script, an endpoint already reachable) and record the answer with its source. When only the running app can show it, ask it at step 2 like any blocking question, mark it `observable` in `open-questions.md` with the measurement that will check it, and compare the answer with what step 6 measures: a contradiction goes back to the user before the review starts.
 
 An obvious behaviour is not a gap. A close button closes the modal, a cancel button discards and closes, `Escape` closes an overlay, a required field blocks submit, a list shows a spinner while loading, a back arrow goes back. Do not ask about those, implement them and note the deduction. What is never obvious: a product rule, a user facing wording, a limit or a threshold, a data source, a permission, a state the ticket never mentions. Those you ask.
 
@@ -94,7 +98,7 @@ A single interaction with **AskUserQuestion**, carrying everything you will ever
    **When `IMPL_BASE_BRANCH` is set, do not ask this one.** The console started this ticket on top of another ticket's branch that is not merged yet (a stacked start): the base is that branch, as given. List no candidates and recommend nothing. If the questions below leave nothing to ask, skip the interaction altogether.
 2. **The blocking questions from step 1**, up to three per batch. Phrase each one as a real decision with concrete options, never as an open essay question. Give a recommended option first when you have a defensible one, and say what it implies.
 3. **Repository path**, if the checkout could not be resolved in step 1.
-4. **How to exercise the change at runtime**, whenever something outside the repository decides whether step 6 can measure anything: a backend flag that has to be on, a test account, which environment the local app talks to, the exact input that triggers the server side branch you are touching. Read the repository's local runtime configuration first (see step 6) and ask only what it leaves open. Collect foreseeable prerequisites here; a later unresolved decision still returns to the user, and a verification ruled impossible for want of one sentence is a verification nobody does.
+4. **How to exercise the change at runtime**, whenever something outside the repository decides whether step 6 can measure anything: a backend flag that has to be on, a test account, which environment the local app talks to, the exact input that triggers the server side branch you are touching. Read the runtime recipe and the repository's local runtime configuration first (see step 6) and ask only what they leave open. Collect foreseeable prerequisites here; a later unresolved decision still returns to the user, and a verification ruled impossible for want of one sentence is a verification nobody does.
 
 Never ask what the run instruction already settles. Asking the user something they just wrote in the command is the fastest way to make the interruption feel useless.
 
@@ -156,6 +160,8 @@ Judge complexity from the ticket context.
 
 **Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` included: `{"criteria_revision": 1, "acceptance_criteria": ["AC1: …"], "tasks": [{"id": "T1", "title": "…", "summary": "…", "criterion_ids": ["AC1"], "dependencies": [], …}]}`.
 
+**A `fix` ticket is reproduced before it is fixed.** The task that fixes the defect opens with its reproduction, on the surface the ticket reports it on, and its developer records that observation as evidence before editing: a regression test seen failing, or a measurement of the faulty behaviour on the frozen base code. The same reproduction run after the fix is the evidence that closes the criterion. A defect nobody could reproduce is delivered with that fact stated, its criterion unverified, never as a verified fix.
+
 Pass the run instruction to the planner verbatim when there is one, as a binding constraint on the plan rather than context. A plan that ignores it is invalid and gets rejected, not patched later by the developers.
 
 **Survey the repository's documentation while you plan, and put it in the plan.** List what exists (`docs/`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, per-feature pages, doc indexes, `.env.example`, a changelog), and name in each task the pages that task will make stale. Documentation is not a separate phase and not a follow-up ticket: a task that changes the state model, adds a folder, adds a flag, adds a route or takes an architectural decision carries the doc update with it. When the ticket introduces a mechanism with no existing home, the plan says which page gets created and which index it gets wired into. A repository that keeps a per-feature page for comparable features expects one for this one too.
@@ -200,7 +206,7 @@ If a `developer` comes back with a specification question instead of a guess, it
 
 After each task, commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
 
-**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`), and no `Co-Authored-By` trailer, in a commit message, a commit trailer, a merge request description or a comment. That URL points at a transcript nobody on the merge request can open, and a commit message is permanent: taking it back means rewriting pushed history on a branch a merge request already tracks. The engine appends both on its own, so this rule overrides it, and it covers the `fix(...)` commits of step 7 as much as the ones here. Read the message back with `git log -1 --format=%B` right after committing: a trailer added behind you shows up there and nowhere else, certainly not in what you typed.
+**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`) and no `Co-Authored-By` trailer, in a commit message, a merge request description or a comment. The engine appends both on its own, so this rule overrides it, here and for the `fix(...)` commits of step 7. A hook refuses a `git commit` or a `glab` publication that carries one; a description passed from a file is yours to check.
 
 ### Merge the developers' output, at the end of every batch
 
@@ -217,19 +223,17 @@ After the batch stops editing, merge `browser-recipe-<suffix>.md` sections into 
 
 ### Close step 5 with a roll call against the plan
 
-The implementation phase is not over because the last agent you launched came back. It is over when every task in `planner-output.json` is accounted for. Before you open step 6, put the plan's task ids next to the `developer-report-<id>.md` files that exist and read the two lists against each other, in both directions:
+The implementation phase is over when every task in `planner-output.json` is accounted for, not when the last agent came back. A hook refuses to start a reviewer while a plan id has neither its `developer-report-<id>.md` nor a line in the merged `developer-report.md`:
 
-- **A plan id with no report is a task that never ran.** Launch it now, as step 5 describes, and commit it like any other. Do not push it into the review phase, do not demote it to a follow-up ticket, and do not conclude from the diff that it looks done anyway: the per-task report is what feeds the merged one the reviewers read, so a task without one is a task whose claims nobody reconciles.
-- **A report under an id the plan does not carry means the ids drifted.** Say which plan task it actually implemented, or relaunch it under the right id. That suffix is the only mapping between the plan and what was built, and a renumbered one breaks it without a trace.
-- **A task you decided not to run is written down, not left silent.** Name it in the merged `developer-report.md`, with what covers it instead and why. A stated decision is something a reviewer can challenge; an absence is not.
-
-Three archived runs opened their review with a hole here: nine planned tasks and eight reports, seven planned tasks with a report numbered past the end of the plan, and ten planned tasks with the first and the last missing. The first cost the most: the task that never ran was the documentation update, QA raised it as a `P1` in its second pass, and the run paid an extra rework round and about seventeen minutes over its review budget for something a file listing showed at a glance.
+- **A plan id with no report is a task that never ran.** Launch it now and commit it like any other. Never push it into the review phase or demote it to a follow-up ticket.
+- **A report under an id the plan does not carry means the ids drifted.** Say which plan task it implemented, or relaunch it under the right id.
+- **A task you decided not to run is written down.** Name it in the merged `developer-report.md`, with what covers it instead and why.
 
 ---
 
 ## Step 6 - Make the app reachable and measure the change in it
 
-For a change observable in the running app, use `implementation-harness:collect-evidence` with its browser reference. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
+For a change observable in the running app, use `implementation-harness:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
 
 In worktree mode, never assume the default port. Another run of the same repository, or the user's own dev server in the main checkout, may already hold it, and an app that answers there serves another checkout's code. Check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started. Build outputs (`.next`, `dist`) are not provisioned in the worktree, so a first build there is expected.
 
@@ -294,7 +298,7 @@ Loop exit criteria, enforced by the orchestrator:
 When the review phase is over, read what the tier you picked actually produced, and never a file that tier cannot write:
 
 - **tier 2**, the only tier with an orchestrator: `.claude/tasks/review-summary.md`, which the orchestrator writes.
-- **tier 0 and tier 1**, where you sequence the reviewers yourself: their own artifacts, `.claude/tasks/senior-review.md`, `.claude/tasks/qa-report.md`, and `.claude/tasks/designer-review.md` when a design review ran. There is no summary file on these tiers, so consolidate them yourself. Waiting for `review-summary.md` here is waiting for a file nobody writes.
+- **tier 0 and tier 1**, where you sequence the reviewers yourself: their own artifacts, `.claude/tasks/senior-review.md`, `.claude/tasks/qa-report.md`, and `.claude/tasks/designer-review.md` when a design review ran. There is no summary file on these tiers, so consolidate them yourself. Waiting for `review-summary.md` here is waiting for a file nobody writes. Before a rework, hold a code finding to the same test the orchestrator applies: it names the input, state or call site that reaches the defect, or it goes back to its reviewer once, then into the step 9 comment as dismissed with the reason. An unmet criterion, a failed check and a security finding are never dismissed that way.
 
 Then commit any code the reviewers changed with a `fix(...)` or `refactor(...)` commit. Version control stays your responsibility, never theirs.
 
@@ -339,6 +343,8 @@ Print a short summary in chat:
 Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
 
 **Declare the end first.** Write `workflow-state.json` with `"state": "completed"` and its `result` (see the workflow-state contract), before the archive sync below, so the console knows the run reached its end rather than lost its session.
+
+**Update the runtime recipe.** When this run started or drove the app, write `.claude/tasks/runtime-recipe.md` under its contract: what you actually ran to start, reach and drive it, the lines of the earlier recipe you found false corrected, no secret and nothing specific to this run. Take the reusable part of `browser-recipe.md`, not its ticket fixtures. A run that never started the app leaves the file alone.
 
 **Before cleaning, let the console archive what the run leaves behind.** When `IMPL_RUN_ID` is set, write a sync request with a fresh id, then wait for the console's answer carrying that same id, for up to two minutes, with `Monitor` and an until-loop rather than a `sleep`:
 

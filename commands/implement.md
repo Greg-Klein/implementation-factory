@@ -95,6 +95,7 @@ An obvious behaviour is not a gap. A close button closes the modal, a cancel but
 A single interaction with **AskUserQuestion**, carrying everything you will ever need:
 
 1. **Base branch.** `git fetch`, then list candidates: current branch, `develop`, `main`/`master`, plus any existing branch related to the ticket or its epic. Recommend `develop` when it exists, always allow a custom answer. In worktree mode the run worktree is detached and has no current branch: offer instead the branch the main checkout was on, `IMPL_SOURCE_BRANCH` when it is set, else `git -C <main checkout> branch --show-current`, and leave that candidate out when both are empty.
+   **When the candidates come down to a single branch, do not ask this one.** It happens when the checkout is on the default branch, there is no separate `develop` and no branch related to the ticket or its epic. That branch is the base: record it in `.claude/tasks/open-questions.md` as a deduction ("only candidate"), name it in your next message, and if the questions below leave nothing to ask, skip the interaction altogether. With two candidates or more, or none, ask.
    **When `IMPL_BASE_BRANCH` is set, do not ask this one.** The console started this ticket on top of another ticket's branch that is not merged yet (a stacked start): the base is that branch, as given. List no candidates and recommend nothing. If the questions below leave nothing to ask, skip the interaction altogether.
 2. **The blocking questions from step 1**, up to three per batch. Phrase each one as a real decision with concrete options, never as an open essay question. Give a recommended option first when you have a defensible one, and say what it implies.
 3. **Repository path**, if the checkout could not be resolved in step 1.
@@ -470,7 +471,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down
 - One ticket, one dedicated branch, always
 - In worktree mode the run stays in its worktree from the first step to the last: nothing is written, stashed or switched in the main checkout, and the run worktree and the ticket branch are left in place for the console
-- The MR always targets the branch chosen in step 2, or `IMPL_BASE_BRANCH` when the console set it, in which case the base branch question is not asked
+- The MR always targets the base branch of step 2, asked or deduced as the only candidate, or `IMPL_BASE_BRANCH` when the console set it, in which case the base branch question is not asked
 - Developers run in parallel only on strictly disjoint file scopes, and sequentially the moment those scopes overlap. While a batch is in flight the branch is a moving target: a repository-wide gate measures that, not any one task, so nobody concludes from it until the batch is done
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs

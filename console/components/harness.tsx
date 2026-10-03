@@ -130,6 +130,13 @@ export function Harness() {
           const incoming = message.state;
           if (adoptNextRunRef.current && incoming.id) {
             adoptNextRunRef.current = false;
+            // What the run printed before this page was told about it reached no one:
+            // asking for the run replays it. Not when the page already opened it itself.
+            if (openRunRef.current !== incoming.id) {
+              pendingOutputRef.current = "";
+              terminalRef.current?.clear();
+              socket.send(JSON.stringify({ type: "run.subscribe", runId: incoming.id }));
+            }
             openRunRef.current = incoming.id;
             setOpenRunId(incoming.id);
           }

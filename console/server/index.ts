@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./context.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
+import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
 import { answerQuestion } from "./hooks.js";
 import { answerSessionPrompt } from "./session-prompt.js";
 import { drainHookSpool, receiveHook } from "./hook-bridge.js";
@@ -167,6 +168,11 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "worktree.result", runId: message.runId, ...result });
     return;
   }
+  if (message.type === "recipe.forget") {
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Chemin de dépôt invalide.");
+    send(socket, { type: "recipe.result", repository: message.repository, forgotten: await forgetRuntimeRecipe(message.repository) });
+    return;
+  }
   if (message.type === "question.answer") {
     const session = registry.get(message.runId);
     if (!session) throw new Error("Ce run n'existe plus.");
@@ -237,6 +243,13 @@ const server = createServer(async (request, response) => {
   if (request.method === "GET" && requestPath === "/api/metrics") {
     try { respond(response, 200, { runs: await registry.metrics() }); }
     catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Mesures indisponibles." }); }
+    return;
+  }
+  if (request.method === "GET" && requestPath === "/api/repositories/recipe") {
+    const repository = new URL(request.url ?? "", `http://${hostname}:${port}`).searchParams.get("repository") ?? "";
+    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Chemin de dépôt invalide." }); return; }
+    // The store is named after a digest of the path, so whatever is asked only ever reads a recipe the console wrote.
+    respond(response, 200, { repository, recipe: await readRuntimeRecipe(repository) ?? null });
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }

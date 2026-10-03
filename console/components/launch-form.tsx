@@ -9,11 +9,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
 }
 
-function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting }: {
+function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting, onOpenRecipe }: {
   value: string;
   onChange: (value: string, project?: string) => void;
   repositories: RepositoryOption[];
   detectedProject?: string;
+  onOpenRecipe: (repository: string) => void;
   detecting: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -69,6 +70,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
         />
         {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
       </div>
+      {!listOpen && value.trim().startsWith("/") && <button type="button" onClick={() => onOpenRecipe(value.trim())} title="Ce que le harnais retient pour lancer l'application de ce dépôt" className="mt-1.5 text-[11px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Recette d&apos;exécution</button>}
       {listOpen && (
         <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-[var(--raised)] p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
           {suggestions.length > 0 ? suggestions.map((repository, index) => (
@@ -116,12 +118,14 @@ function TicketCount({ parsed }: { parsed: ParsedTickets }) {
   );
 }
 
-export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart }: {
+export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart, onOpenRecipe }: {
   cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
   /** The ticket field as read by parseTicketUrls: two tickets or more make a batch. */
   parsed: ParsedTickets;
   instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
   detectingProject: boolean; canStart: boolean; onStart: () => void;
+  /** Opens what the console keeps about starting the app of a repository. */
+  onOpenRecipe: (repository: string) => void;
 }) {
   const batch = parsed.tickets.length > 1;
   const lines = issueUrl.split("\n").length;
@@ -162,7 +166,7 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
           <TicketCount parsed={parsed} />
           {batch
             ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">Le dépôt de chaque ticket est détecté depuis son URL. Les tickets d’un même dépôt sont comparés avant de démarrer : ceux qui touchent le même code passent l’un après l’autre.</p>
-            : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />}
+            : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} onOpenRecipe={onOpenRecipe} />}
           <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· {batch ? "facultatif, appliquée à tous les tickets du lot" : "facultatif"}</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Lancer les ${parsed.tickets.length} tickets` : "Lancer l’implémentation"}</span><ArrowRightIcon size={16} />

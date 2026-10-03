@@ -106,6 +106,19 @@ describe("the proposals the console reads", () => {
     expect(open(source)).toEqual([url(1), url(2)]);
   });
 
+  it("should forget a decision when the watcher finds nothing any more", async () => {
+    const source = proposals();
+    write([1]);
+    await source.read();
+    await source.handle([url(1)]);
+    write([]);
+    await source.read();
+    expect(JSON.parse(readFileSync(handledFile, "utf8"))).toEqual([]);
+    write([1]);
+    await source.read();
+    expect(open(source)).toEqual([url(1)]);
+  });
+
   it("should keep what it read last when the file is caught mid-write", async () => {
     const source = proposals();
     write([1]);

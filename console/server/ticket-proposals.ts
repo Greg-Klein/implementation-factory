@@ -71,18 +71,20 @@ export class TicketProposals {
 
   private async readOnce() {
     let found: TicketProposal[] | undefined;
+    let missing = false;
     try {
       found = readProposalSnapshot(JSON.parse(await readFile(this.options.file, "utf8")) as unknown);
     } catch (error) {
       // No file: no watcher, or one that was removed, and nothing is proposed.
       // A file that does not parse is one caught mid-write or broken: what was read last still stands.
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") found = [];
+      missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+      if (missing) found = [];
     }
     if (!found) return;
     const before = JSON.stringify(this.found);
     this.found = found;
-    // Only a snapshot says a ticket left the filter: a missing file says nothing about the decisions taken.
-    const kept = found.length > 0 ? handledStillFound(this.handled, found) : this.handled;
+    // Only a snapshot says a ticket left the filter, an empty one included: a missing file says nothing about the decisions taken.
+    const kept = missing ? this.handled : handledStillFound(this.handled, found);
     const forgot = kept.length !== this.handled.length;
     this.handled = kept;
     if (forgot) await this.persist();

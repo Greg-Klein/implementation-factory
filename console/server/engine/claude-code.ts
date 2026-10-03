@@ -7,6 +7,7 @@ import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../do
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import { createTrustPromptWatcher, trustAnswerKeys } from "./trust-prompt.js";
+import { readSessionUsage } from "./usage.js";
 import type { Engine, EngineEvent, EngineSession, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
 
 /** Long enough for the paste to be read before the submission keystroke arrives. */
@@ -335,6 +336,7 @@ export const claudeCode: Engine = {
     return typeof transcript === "string" && transcript ? transcript : undefined;
   },
   conversationLine,
+  sessionUsage: readSessionUsage,
   event,
   questionAnswer: (input, answers): HookOutput => ({
     hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { ...input, answers } },

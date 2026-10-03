@@ -48,9 +48,12 @@ export type RunState = {
   /** Who can move the run forward, as the health monitor sees it. See server/run-health.ts. */
   health?: RunHealthView;
   incidents?: RunIncident[];
+  /** Tokens consumed so far, cache included, refreshed while the run goes. Mirrors RunUsage in server/types.ts. */
+  usage?: RunUsage;
   /** A run read back from its archive after a restart: no session, nothing to act on but its incident. */
   archived?: boolean;
 };
+export type RunUsage = { total: number; output: number; pilot: number; pilotCalls: number; agents: number };
 /**
  * A run as the side list sees it. Mirrors RunSummary in server/types.ts: the
  * list is pushed to every open page on every event of every run, so it carries
@@ -73,6 +76,8 @@ export type RunSummary = {
   /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
   holdsRepository: boolean;
   health?: RunHealth;
+  /** Tokens consumed so far, cache included. */
+  tokens?: number;
   incident?: { id: string; kind: IncidentKind; title: string; revision: number };
   archived?: boolean;
 };
@@ -163,3 +168,22 @@ export type RunHealthView = {
 };
 /** What became of an incident action this page sent, shown next to the incident. */
 export type IncidentResult = { incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
+
+/** Mirrors the metrics types of server/types.ts, computed by server/run-metrics.ts and served by /api/metrics. */
+export type TokenUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+export type SessionMetrics = TokenUsage & { calls: number; model?: string; firstContext: number; peakContext: number };
+export type AgentMetrics = SessionMetrics & { agentId: string; name: string; activeMs?: number };
+export type RunMetrics = {
+  schemaVersion: 1;
+  runId: string;
+  computedAt: string;
+  final: boolean;
+  harness?: { version?: string; commit?: string };
+  ticket: { issueUrl: string; title?: string; repository: string };
+  outcome: { status: Status; phase: number; delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; questions: number; incidents: string[]; acceptance?: AcceptanceCounts; qaStatus?: string; worktree?: string };
+  time: { startedAt: string | null; endedAt: string | null; elapsedMs: number; userWaitMs: number; waits: { reason: "question" | "session_prompt" | "terminal"; count: number; ms: number }[]; activeMs: number; incidentMs: number; phases: { phase: number; enteredAt: string; ms: number }[] };
+  complexity: { tasks: number; sizes: { S: number; M: number; L: number }; criteria: number; reviewTier?: 0 | 1 | 2; diff?: { files: number; insertions: number; deletions: number } };
+  rework: { launches: Record<string, number>; reworkDevelopers: number; lostAgents: number };
+  tokens?: { total: TokenUsage; pilot: SessionMetrics; agents: AgentMetrics[]; pilotShare: number };
+};
+export type MetricsResponse = { runs: RunMetrics[]; error?: string };

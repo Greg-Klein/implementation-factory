@@ -22,6 +22,7 @@ import { branchIsMerged, changedPaths, findWorktree, headCommit, mergeBranch, re
 import { registry } from "./registry.js";
 import { resolvePastedTickets } from "./ticket-source.js";
 import { reconcileRunWorktrees } from "./run-worktrees.js";
+import { backfillRunMetrics } from "./run-metrics-runtime.js";
 import { engine } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
 
@@ -196,6 +197,8 @@ await reconcileRunWorktrees(dataRoot).catch(() => undefined);
 await registry.restoreQueue();
 // Runs an earlier process left with an open incident or a worktree on disk, read back for consultation.
 await registry.archive.load(dataRoot);
+// Runs archived before they were measured, or cut short by a restart: figures from what is still on disk.
+void backfillRunMetrics(dataRoot).catch(() => undefined);
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();
@@ -220,6 +223,11 @@ const server = createServer(async (request, response) => {
       const hookOutput = await receiveHook(session, body);
       respond(response, 200, { ok: true, hookOutput: hookOutput ?? null });
     } catch { respond(response, 400, { ok: false }); }
+    return;
+  }
+  if (request.method === "GET" && requestPath === "/api/metrics") {
+    try { respond(response, 200, { runs: await registry.metrics() }); }
+    catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Mesures indisponibles." }); }
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }

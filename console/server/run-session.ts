@@ -8,7 +8,9 @@ import { engine, type EngineSession } from "./engine/index.js";
 import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
 import { createSignals, pilotActs, type RunSignals } from "./run-health.js";
 import { RUN_SCHEMA_VERSION } from "./run-incidents.js";
-import type { AcceptanceView, Activity, ConversationMessage, RunState } from "./types.js";
+import { trackTimeline } from "./run-metrics.js";
+import { refreshUsage } from "./run-metrics-runtime.js";
+import type { AcceptanceView, Activity, ConversationMessage, RunMetrics, RunState } from "./types.js";
 
 /**
  * Every event pushes the whole state to the pages showing this run, so the feed
@@ -67,6 +69,13 @@ export class RunSession {
   acceptanceView: AcceptanceView | null = null;
   /** What the figures last published were computed from, so an unchanged recomputation publishes nothing. */
   acceptanceKey = "";
+  /** The figures last computed for this run. See run-metrics-runtime.ts. */
+  metrics: RunMetrics | null = null;
+  /** Computations of those figures one after another, so two never write the file together. */
+  metricsChain: Promise<void> = Promise.resolve();
+  /** The pending reading of the live token count, and when the last one was made. */
+  usageTimer: ReturnType<typeof setTimeout> | null = null;
+  usageReadAt = 0;
   /** Writes of run.json one after another: two publications in the same tick must not race on the file. */
   private persistence: Promise<void> = Promise.resolve();
   private archive: Activity[] = [];
@@ -187,6 +196,10 @@ export class RunSession {
   }
 
   publish() {
+    // Every change of the state passes here: the one place the waits and the phases can be timed from.
+    if (!this.state.archived) trackTimeline(this.state, now());
+    // Something happened in the session, so its token count probably moved: read again, at its own pace.
+    if (this.state.sessionActive || (this.demo && this.state.phase > 0)) refreshUsage(this);
     broadcastToViewers(this.id, { type: "run", state: this.state });
     this.onChange?.();
     void this.persist();
@@ -219,6 +232,8 @@ export class RunSession {
   async dispose() {
     this.disposed = true;
     this.clearDemoTimers();
+    if (this.usageTimer) clearTimeout(this.usageTimer);
+    this.usageTimer = null;
     this.resolvePendingQuestion?.();
     this.resolvePendingQuestion = null;
     this.pendingQuestionInput = null;

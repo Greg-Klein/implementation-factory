@@ -1,7 +1,8 @@
 "use client";
 
-import { ArchiveIcon, FolderDashedIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { ArchiveIcon, ChartBarIcon, FolderDashedIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
+import { formatTokens } from "@/lib/metrics";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RunSummary } from "@/lib/types";
 import { QueueList, type QueueActions } from "./queue-list";
@@ -93,7 +94,8 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
                 ? <span className="font-medium text-[var(--accent)]">{statusLabel(run.status)}</span>
                 : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session ouverte" : run.action ?? statusLabel(run.status)}</span></>}
             {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
-            {coverage && <span title={coverage.title} aria-label={coverage.title} className={`ml-auto shrink-0 font-mono text-[9px] font-semibold ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
+            {run.tokens !== undefined && <span title={`${run.tokens.toLocaleString("fr-FR")} tokens consommés, cache compris`} aria-label={`${formatTokens(run.tokens)} tokens consommés`} className={`shrink-0 font-mono text-[9px] ${coverage ? "" : "ml-auto"}`}>{formatTokens(run.tokens)}</span>}
+            {coverage && <span title={coverage.title} aria-label={coverage.title} className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined ? "" : "ml-auto"} ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
           </span>
           <PhaseBar phase={run.phase} status={run.status} />
         </span>
@@ -152,7 +154,7 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
  * column as that run's progression, the two headings competed and the list read
  * as the top half of the progression rather than as the navigation it is.
  */
-export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, onClose, queueActions }: {
+export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
   archived?: RunSummary[];
@@ -160,6 +162,8 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
   selectedRunId: string | null;
   onOpen: (runId: string) => void;
   onNew: () => void;
+  metricsOpen?: boolean;
+  onMetrics: () => void;
   onClose: (runId: string) => void;
   queueActions: QueueActions;
 }) {
@@ -180,11 +184,23 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
         </div>
         <button
           type="button"
+          onClick={onMetrics}
+          aria-label="Mesures des runs"
+          aria-pressed={metricsOpen}
+          title="Tokens, durées et reprises de chaque run"
+          className={`ml-auto grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${metricsOpen
+            ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+            : "border-[var(--line)] text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--ink)]"}`}
+        >
+          <ChartBarIcon size={13} />
+        </button>
+        <button
+          type="button"
           onClick={onNew}
           aria-label="Nouveau run"
-          aria-pressed={selectedRunId === null}
+          aria-pressed={selectedRunId === null && !metricsOpen}
           title="Lancer un nouveau run"
-          className={`grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${selectedRunId === null
+          className={`grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${selectedRunId === null && !metricsOpen
             ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--on-ink)] hover:opacity-90"
             : "border-[var(--line)] text-[var(--ink)] hover:bg-[var(--raised)]"}`}
         >

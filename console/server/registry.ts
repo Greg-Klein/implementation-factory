@@ -25,8 +25,9 @@ import { checkIncidentAction, CONTINUATION_INSTRUCTION, withDecision } from "./r
 import { pilotActs } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
 import { discardRunWorktree, prepareRunWorktree, removeWorktreeOnRequest, settleRunWorktree, type WorktreeRemovalResult } from "./run-worktrees.js";
-import { currentBranch, mainCheckout } from "./worktree.js";
-import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, ScheduledTicket, ScheduleEdge } from "./types.js";
+import { currentBranch, headCommit, mainCheckout } from "./worktree.js";
+import { harnessVersion, recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
+import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, RunMetrics, ScheduledTicket, ScheduleEdge } from "./types.js";
 
 export type IncidentActionRequest = { runId: string; incidentId: string; expectedRevision: number; requestId: string; action: IncidentAction; reason?: string };
 export type IncidentActionResult = { outcome: "done" | "refused" | "duplicate"; message: string };
@@ -179,6 +180,13 @@ export class RunRegistry {
 
   private entry(ticket: ResolvedTicket, instruction: string | undefined, extra: Partial<QueuedRun> = {}): QueuedRun {
     return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...extra };
+  }
+
+  /** The figures of every run measured, newest first: those on disk, and the runs held here as they stand now. */
+  async metrics(): Promise<RunMetrics[]> {
+    const live = (await Promise.all([...this.sessions.values()].filter((session) => session.state.startedAt).map((session) => recordRunMetrics(session).catch(() => undefined)))).flatMap((metrics) => metrics ?? []);
+    const held = new Set(live.map((metrics) => metrics.runId));
+    return [...live, ...(await storedMetrics()).filter((metrics) => !held.has(metrics.runId))].sort((left, right) => (right.time.startedAt ?? "").localeCompare(left.time.startedAt ?? ""));
   }
 
   snapshot(): HarnessSnapshot {
@@ -457,6 +465,9 @@ export class RunRegistry {
       session.publish();
     });
     const sourceBranch = await currentBranch(repository);
+    // What the run is measured against later: the harness that drove it and the commit it started from.
+    session.state.harness = await harnessVersion();
+    session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
@@ -525,8 +536,9 @@ export class RunRegistry {
     // Diagnosed before the self-audit reads the run, so a lost session reaches it as an incident.
     void this.monitor.evaluate(session).then(() => { if (!this.shuttingDown) scheduleAutonomousReview(session); });
     // Nothing works in the worktree any more: it goes if the run delivered, and is kept with its reason otherwise.
-    if (this.shuttingDown) this.keepWorktreeForRestart(session);
-    else void session.serializeHealth(() => settleRunWorktree(session));
+    if (this.shuttingDown) { this.keepWorktreeForRestart(session); void recordRunMetrics(session).catch(() => undefined); }
+    // Measured first: the size of the change is read in the worktree, which a delivered run then loses.
+    else void session.serializeHealth(async () => { await recordRunMetrics(session).catch(() => undefined); await settleRunWorktree(session); });
     // The ticket and the slot are free now, which is what the queue waits on.
     void this.drain();
   }

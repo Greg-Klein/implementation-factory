@@ -26,6 +26,12 @@ Read every `pending/*.json` file. Entries whose `source` is `autonomous` are obs
 
 Autonomously inspect recent run archives as well, even when there is no user feedback. Look for measurable friction: failed starts, late specification questions, repeated review loops, recurring P0/P1 findings, missing expected artifacts, checks that could not run, unusually long phases, manual interventions and discrepancies between reported completion and observable outputs.
 
+Every run also has figures in `$ARGUMENTS/../runs/<runId>/metrics.json`: tokens per session (pilot and each subagent, with the pilot's number of calls and its first context), elapsed and active time, time spent waiting on the user, time per phase, predicted size (plan sizes, review tier) against the real diff, review launches and rework, the outcome, and the harness commit the run was driven by. An autonomous entry carries its run's `metrics`, a `baseline` (medians of the comparable delivered runs, with how many there were) and `findings` (what stands out against that baseline). Use them as evidence of cost, with three limits:
+
+- A `baseline` built on fewer than three runs is not one, and `findings` is then empty by design. Two runs of one ticket differ by ten percent on their own.
+- Compare runs of the same review tier and of a similar diff size. The plan sizes and the tier are the harness's own estimate; the diff is the fact.
+- A cost is a defect only when you can name what caused it in the run (a rework round a file listing would have avoided, a pilot re-reading a report it already had, a wait nobody was told about) and the fix removes that cause. Before proposing a change meant to save tokens or time, state which figure of which runs it should move and by roughly how much, so the next runs can confirm or refute it. To judge a past improvement, compare the runs before and after its commit through `harness.commit`.
+
 Ignore vague preferences that have no observable outcome. Merge duplicate feedback and distinguish:
 
 - a defect in the harness;

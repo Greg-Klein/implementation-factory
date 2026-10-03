@@ -1,3 +1,5 @@
+import type { SessionUsage } from "./engine/index.js";
+import type { RunState } from "./types.js";
 export const demoSelfImprovementDiff = `diff --git a/agents/developer/prompts/system.md b/agents/developer/prompts/system.md
 index 3a2f1c8..b7e04d2 100644
 --- a/agents/developer/prompts/system.md
@@ -863,3 +865,24 @@ INCONCLUSIVE`,
 - Review senior bloquée au second passage sur AC4.`,
 };
 
+
+/**
+ * What a simulated run "consumed": there is no transcript to read, so the
+ * figures are derived from how far the run got, and grow as it goes. The
+ * shape is the one of a real small run: a pilot that starts near 70,000
+ * tokens of context and reads it again on every call.
+ */
+export function demoSessionUsage(state: Pick<RunState, "id" | "agents" | "activities" | "phase">): SessionUsage[] {
+  if (state.phase === 0) return [];
+  const session = (calls: number, context: number, growth: number, model: string) => ({
+    calls, model, inputTokens: calls * 4, outputTokens: calls * 620,
+    cacheReadTokens: calls * context + growth * (calls * (calls - 1)) / 2, cacheWriteTokens: context + calls * growth,
+    firstContextTokens: context, peakContextTokens: context + growth * calls,
+  });
+  const sessionId = state.id ?? "demo";
+  const pilotCalls = 2 + state.activities.length;
+  return [
+    { sessionId, ...session(pilotCalls, 70_000, 1_800, "claude-opus-5-5") },
+    ...state.agents.map((agent) => ({ sessionId, agentId: agent.id, agentType: agent.name, ...session(agent.endedAt ? 14 : 6, 38_000, 2_400, agent.name.includes("developer") ? "claude-opus-5-5" : "claude-sonnet-5-5") })),
+  ];
+}

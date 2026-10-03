@@ -41,6 +41,7 @@ Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne l
 | `taskDirectory(cwd)` | où le workflow dépose ses documents | `.claude/tasks` pour Claude Code |
 | `transcriptPath(payload)` | le fichier d'où se lit le dialogue | nommé par l'agent dans ses propres événements |
 | `conversationLine(line)` | une ligne de ce fichier | format JSONL propre à l'agent |
+| `sessionUsage(source)` | les tokens consommés par le pilote et chaque sous-agent | champ `usage` du transcript, un fichier par sous-agent |
 | `event(payload)` | traduit un événement brut en `EngineEvent` | tout le vocabulaire de hooks |
 | `questionAnswer(input, answers)` | ce que l'agent attend en retour d'une question | `updatedInput` pour Claude Code |
 | `startSelfImprovement(options)` | lance la boucle d'auto-amélioration détachée | drapeaux de worktree et de permissions |

@@ -193,8 +193,17 @@ export type WorkflowState = {
   step?: string;
   nextAction?: { kind: string; taskIds: string[]; agents: string[]; expectedArtifact?: string; description?: string };
   result?: { delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; blockers: string[] };
+  /** The review tier the pilot picked at step 7, once it has. */
+  reviewTier?: ReviewTier;
   receivedAt: string;
 };
+export type ReviewTier = 0 | 1 | 2;
+/** A stretch of the run spent waiting on the user: a decision to take, the agent's own prompt, or the terminal. Open while `to` is absent. */
+export type UserWait = { reason: "question" | "session_prompt" | "terminal"; from: string; to?: string };
+/** The harness a run was driven by: the plugin's version and the commit of its checkout when the run started. */
+/** `total` counts every token read or written, cache included; `pilotCalls` is how many times the pilot's context was read again. */
+export type RunUsage = { total: number; output: number; pilot: number; pilotCalls: number; agents: number };
+export type HarnessVersion = { version?: string; commit?: string };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 /**
@@ -248,6 +257,19 @@ export type RunState = {
   incidents?: RunIncident[];
   /** The last valid `workflow-state.json`, when the workflow writes one. */
   workflow?: WorkflowState;
+  /** Every wait on the user, oldest first. See run-metrics.ts. */
+  userWaits?: UserWait[];
+  /** When each phase was first reached, by phase number. */
+  phaseArrivals?: Record<string, string>;
+  /** The review tier the workflow declared, kept once a later state omits it. */
+  reviewTier?: ReviewTier;
+  harness?: HarnessVersion;
+  /** Tokens consumed so far, read from the transcripts while the run goes. */
+  usage?: RunUsage;
+  /** The commit the run worktree was cut at, which the size of the change is measured from. */
+  baseCommit?: string;
+  /** The file the dialogue is read from, kept so the usage of the run can be read once the session is gone. */
+  transcriptPath?: string;
   /** Set on an archive the console reads back after a restart: the run has no session and takes no instruction. */
   archived?: boolean;
   /** The format of run.json, absent before version 2. */
@@ -282,6 +304,8 @@ export type RunSummary = {
   /** Whether this run still holds its slot and its ticket, which is what the queue waits on. */
   holdsRepository: boolean;
   health?: RunHealth;
+  /** Tokens consumed so far, cache included. */
+  tokens?: number;
   /** The open incident, as little of it as a row and a notification need. */
   incident?: { id: string; kind: IncidentKind; title: string; revision: number };
   /** A run read back from its archive after a restart: no session, no slot, no checkout. */
@@ -426,3 +450,83 @@ export type ServerMessage =
   | { type: "worktree.result"; runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] }
   /** What became of an incident action, answered to the page that asked. */
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
+
+/** Tokens of one session or of a sum of sessions. `total` counts the cache reads, which is most of what a long session consumes. */
+export type TokenUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+export type SessionMetrics = TokenUsage & {
+  /** Requests to the model: for the pilot, how many times its whole context was read again. */
+  calls: number;
+  model?: string;
+  firstContext: number;
+  peakContext: number;
+};
+export type AgentMetrics = SessionMetrics & { agentId: string; name: string; activeMs?: number };
+export type RunDiff = { files: number; insertions: number; deletions: number };
+/**
+ * What a run cost and what it delivered, in figures, written to `metrics.json`
+ * beside `run.json`. Built by server/run-metrics.ts from the run state, the
+ * usage the engine reads and the size of the change. Holds no ticket content
+ * beyond its title.
+ */
+export type RunMetrics = {
+  schemaVersion: 1;
+  runId: string;
+  computedAt: string;
+  /** The session is gone: these figures will not move any more. */
+  final: boolean;
+  harness?: HarnessVersion;
+  ticket: { issueUrl: string; title?: string; repository: string };
+  outcome: {
+    status: RunStatus;
+    phase: number;
+    delivery: "merge_request" | "draft_merge_request" | "none";
+    mergeRequestUrl?: string;
+    questions: number;
+    incidents: IncidentKind[];
+    acceptance?: AcceptanceCounts;
+    qaStatus?: string;
+    worktree?: RunWorktreeState;
+  };
+  time: {
+    startedAt: string | null;
+    endedAt: string | null;
+    /** From the start to the end of the workflow, or to now while it runs. */
+    elapsedMs: number;
+    /** Spent waiting on the user, by reason. */
+    userWaitMs: number;
+    waits: { reason: UserWait["reason"]; count: number; ms: number }[];
+    /** Elapsed time the user was not holding. */
+    activeMs: number;
+    /** Spent under an open incident, with nothing moving the run forward. */
+    incidentMs: number;
+    phases: { phase: number; enteredAt: string; ms: number }[];
+  };
+  complexity: {
+    /** What the plan predicted. */
+    tasks: number;
+    sizes: { S: number; M: number; L: number };
+    criteria: number;
+    reviewTier?: ReviewTier;
+    /** What the change turned out to be. */
+    diff?: RunDiff;
+  };
+  rework: {
+    /** Launches by agent type: a second senior or QA launch is a round of rework. */
+    launches: Record<string, number>;
+    /** Developers launched on a correction after review. */
+    reworkDevelopers: number;
+    /** Agents that ended failed or were stopped. */
+    lostAgents: number;
+  };
+  /** Absent when no transcript could be read. */
+  tokens?: {
+    total: TokenUsage;
+    pilot: SessionMetrics;
+    agents: AgentMetrics[];
+    /** The pilot's part of the total, between 0 and 1. */
+    pilotShare: number;
+  };
+};
+/** What stands out in a run against the runs it compares to, in one sentence each. */
+export type MetricsFinding = { metric: string; value: number; median: number; ratio: number; detail: string };
+export type MetricsBaseline = { runs: number; scope: string; tokens?: number; activeMs?: number; userWaitMs?: number; pilotCalls?: number; pilotShare?: number };

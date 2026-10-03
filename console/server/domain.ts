@@ -709,6 +709,7 @@ export function summarizeRun(state: RunState): RunSummary {
     ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
     holdsRepository: runHoldsRepository(state),
     ...(state.health ? { health: state.health.health } : {}),
+    ...(state.usage ? { tokens: state.usage.total } : {}),
     ...(openIncidentSummary(state)),
     ...(state.archived ? { archived: true } : {}),
   };

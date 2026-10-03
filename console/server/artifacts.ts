@@ -128,6 +128,8 @@ function readWorkflowState(session: RunSession, content: string) {
   const previous = session.state.workflow;
   if (previous && reading.state.revision < previous.revision) return;
   session.state.workflow = reading.state;
+  // Declared once at step 7: a later state that leaves it out does not take it back.
+  if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
   if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow : ${reading.state.state}${reading.state.step ? `, étape ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
   closeWorkflowIfDone(session);
 }

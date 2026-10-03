@@ -21,7 +21,10 @@ export function receiveHook(session: RunSession, body: Record<string, unknown>) 
   session.markExecution();
   if (!session.firstDelivery(body.hookId)) return undefined;
   const transcript = engine.transcriptPath(body);
-  if (transcript) void followTranscript(session, transcript);
+  if (transcript) {
+    session.state.transcriptPath = transcript;
+    void followTranscript(session, transcript);
+  }
   return processHook(session, body);
 }
 

@@ -5,6 +5,8 @@ import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
 import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
+import { metricsBaseline, metricsFindings } from "./run-metrics.js";
+import { recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
 import type { PendingSelfImprovementReview, RunState } from "./types.js";
@@ -124,6 +126,9 @@ export async function saveFeedback(session: RunSession, body: string) {
 
 async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
   const id = `self-audit-${session.id}`;
+  // What the run cost, and how that compares to the runs before it: figures, never ticket content.
+  const metrics = await recordRunMetrics(session).catch(() => undefined);
+  const others = metrics ? await storedMetrics().catch(() => []) : [];
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
     id, runId: session.id, createdAt: now(), status: "pending", source: "autonomous",
@@ -150,6 +155,7 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
       } : null,
       workflowStateDeclared: Boolean(snapshot.workflow),
     },
+    ...(metrics ? { metrics, baseline: metricsBaseline(metrics, others), findings: metricsFindings(metrics, others) } : {}),
   }, null, 2));
   session.activity("artifact", "Auto-audit mis en file", `${id}.json`);
   session.publish();

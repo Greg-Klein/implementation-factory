@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { formatTokens } from "@/lib/metrics";
 import { elapsedLabel, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
@@ -83,6 +84,13 @@ export function PhaseRail({ run }: { run: RunState }) {
           )}
         </dl>
         {run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}
+        {run.usage && (
+          <div className="mt-3">
+            <p className="text-[10px] font-semibold text-[var(--muted)]">Tokens</p>
+            <p className="font-mono text-[10px] text-[var(--ink)]" title={`${run.usage.total.toLocaleString("fr-FR")} tokens lus et écrits, cache compris`}>{formatTokens(run.usage.total)}</p>
+            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Pilote {formatTokens(run.usage.pilot)} en {run.usage.pilotCalls} appels{run.usage.agents > 0 ? `, ${run.usage.agents} agent${run.usage.agents > 1 ? "s" : ""}` : ""}</p>
+          </div>
+        )}
       </div>
     </aside>
   );

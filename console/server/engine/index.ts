@@ -6,4 +6,4 @@ import { claudeCode } from "./claude-code.js";
  */
 export const engine = claudeCode;
 
-export type { Engine, EngineEvent, EngineSession, SessionPromptDecision, StartOptions } from "./types.js";
+export type { Engine, EngineEvent, EngineSession, SessionPromptDecision, SessionUsage, StartOptions, UsageSource } from "./types.js";

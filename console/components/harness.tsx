@@ -9,6 +9,7 @@ import { parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
 import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
+import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
 import { RunRail } from "./run-rail";
 import { RunView } from "./run-view";
@@ -90,11 +91,14 @@ export function Harness() {
    * to start a second one.
    */
   const [composingRun, setComposingRun] = useState(false);
+  /** The table of measures takes the place of the run view: it is about every run, not the open one. */
+  const [showMetrics, setShowMetrics] = useState(false);
 
   const openRun = useCallback((runId: string | null) => {
     openRunRef.current = runId;
     setOpenRunId(runId);
     setComposingRun(runId === null);
+    setShowMetrics(false);
     if (runId === null) setRun(null);
     setWorktreeResult(undefined);
     clearTerminal();
@@ -365,6 +369,8 @@ export function Harness() {
           selectedRunId={openRunId}
           onOpen={openRun}
           onNew={newRun}
+          metricsOpen={showMetrics}
+          onMetrics={() => setShowMetrics((shown) => !shown)}
           onClose={(closedRunId) => send({ type: "run.close", runId: closedRunId })}
           queueActions={{
             cancel: (queuedId) => send({ type: "queue.cancel", queuedId }),
@@ -405,7 +411,7 @@ export function Harness() {
             <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
           </div>
 
-          {run ? (
+          {showMetrics ? <MetricsPanel /> : run ? (
             <RunView
               run={run}
               connected={connected}

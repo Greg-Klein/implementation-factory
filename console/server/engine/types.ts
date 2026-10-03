@@ -122,6 +122,28 @@ export type EngineEvent =
   /** That prompt left the screen, answered in the terminal or not. */
   | { kind: "session.prompt.end" };
 
+/**
+ * What one session of a run consumed: the pilot (no `agentId`) or one subagent.
+ * A `call` is one request to the model. `firstContextTokens`: what the session
+ * read before doing anything; `peakContextTokens`: the largest context of a call.
+ */
+export type SessionUsage = {
+  sessionId: string;
+  agentId?: string;
+  agentType?: string;
+  model?: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  firstContextTokens: number;
+  peakContextTokens: number;
+};
+
+/** Where the usage of a run is read from. `isolated`: `cwd` belongs to this run alone, so every session found for it is the run's. */
+export type UsageSource = { transcriptPath?: string; cwd: string; isolated: boolean };
+
 export type Engine = {
   readonly id: string;
   /** How the agent is named in the interface, in errors and in the activity feed. */
@@ -137,6 +159,8 @@ export type Engine = {
   transcriptPath(payload: Record<string, unknown>): string | undefined;
   /** One line of that file, or nothing when the line is not part of the dialogue. */
   conversationLine(line: string): ConversationMessage | undefined;
+  /** What the sessions of a run consumed so far, the pilot's and each subagent's. Empty when the agent keeps no such record. */
+  sessionUsage(source: UsageSource): Promise<SessionUsage[]>;
   event(payload: Record<string, unknown>): EngineEvent | undefined;
   /** What the agent expects back once the user has answered a question. */
   questionAnswer(input: Record<string, unknown>, answers: Record<string, string>): unknown;

@@ -7,6 +7,7 @@ import type { EngineEvent } from "./engine/index.js";
 import { recordEngineSignal } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
 import { sessionStarted } from "./session-prompt.js";
+import { recordRunMetrics } from "./run-metrics-runtime.js";
 import type { RunSession } from "./run-session.js";
 
 function advancePhase(session: RunSession, phase: number) {
@@ -34,6 +35,8 @@ export function closeWorkflowIfDone(session: RunSession) {
   session.state.endedAt = now();
   session.markProgress();
   session.activity("attention", "Workflow terminé");
+  // The figures of the run as delivered; the session's exit writes them once more, final.
+  void recordRunMetrics(session).catch(() => undefined);
   scheduleAutonomousReview(session);
   return true;
 }

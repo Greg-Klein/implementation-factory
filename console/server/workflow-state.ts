@@ -66,6 +66,7 @@ export function parseWorkflowState(content: string, receivedAt: string): Workflo
       parsed.result = { delivery: delivery as (typeof DELIVERIES)[number], ...(mergeRequestUrl ? { mergeRequestUrl } : {}), blockers: identifiers(result.blockers) };
     }
   }
+  if (raw.reviewTier === 0 || raw.reviewTier === 1 || raw.reviewTier === 2) parsed.reviewTier = raw.reviewTier;
   return { state: parsed };
 }
 

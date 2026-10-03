@@ -241,7 +241,7 @@ Preserve the developers' actual measurements, captures and reproduction recipe f
 
 ## Step 7 - Challenge the implementation
 
-**Size the review to the diff before you delegate anything.** The review phase costs the same on a four line fix as on a feature. Read `git diff --stat <base>...HEAD` and pick a tier. Announce which tier you picked and why, in one line.
+**Size the review to the diff before you delegate anything.** The review phase costs the same on a four line fix as on a feature. Read `git diff --stat <base>...HEAD` and pick a tier. Announce which tier you picked and why, in one line. Write it as `reviewTier` in `workflow-state.json` from this step on: the announcement is prose, and the console compares runs by that field.
 
 **Decide the design review from the same diff, and say it in one line with its reason.** With Figma frames it runs whenever the change is visible in the UI. Without Figma (levels `ticket-mockup` and `live-neighbours`) it runs only when the diff modifies a shared UI component or creates a screen or route. A shared component is a UI file imported by more than one screen or route (search its importers), or one that lives in the repository's shared UI or design system directories. Otherwise skip it: that skip is outside the trigger, not a failed review, and it is never a "design non vérifié" line.
 

@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { concurrencyLimit, listSetting, permissionMode, positiveDuration } from "./domain.js";
+import { concurrencyLimit, listSetting, permissionMode, positiveDuration, scheduleDirectory } from "./domain.js";
 import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -21,8 +22,8 @@ export const dataRoot = path.join(storageRoot, "runs");
 export const feedbackRoot = path.join(storageRoot, "feedback", "pending");
 /** The launches accepted but not started, kept across a restart of the console. */
 export const queueFile = path.join(storageRoot, "queue.json");
-/** The input and output files of the scheduling sessions. They hold ticket content: never anywhere tracked. */
-export const scheduleRoot = path.join(storageRoot, "schedule");
+/** The input and output files of the scheduling sessions. They hold ticket content: never anywhere tracked, and never inside the plugin, where the session may not write. */
+export const scheduleRoot = scheduleDirectory(storageRoot, pluginRoot, os.tmpdir(), os.userInfo().username);
 export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 /** Port zero lets the OS bind a free port; agent hooks need the actual one. */
 export function setListeningPort(value: number) { port = value; }

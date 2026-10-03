@@ -1084,3 +1084,16 @@ export function spooledHooks(text: string) {
 export function mergeNeedsRestart(changedPaths: string[]) {
   return changedPaths.some((file) => file.startsWith("console/") || file.startsWith("bin/"));
 }
+
+/**
+ * Where the scheduling sessions read and write. Claude Code refuses a session
+ * any write inside the directory of the plugin it loaded, and the default data
+ * directory sits in that plugin: the files then go to a directory of the
+ * system's temporary directory, private to the user. A data directory outside
+ * the plugin keeps them.
+ */
+export function scheduleDirectory(storageRoot: string, pluginRoot: string, temporaryRoot: string, user: string) {
+  const fromPlugin = path.relative(pluginRoot, storageRoot);
+  const inside = fromPlugin === "" || (!fromPlugin.startsWith("..") && !path.isAbsolute(fromPlugin));
+  return inside ? path.join(temporaryRoot, `implementation-harness-${user}`, "schedule") : path.join(storageRoot, "schedule");
+}

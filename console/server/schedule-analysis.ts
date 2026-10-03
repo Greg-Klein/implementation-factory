@@ -29,7 +29,7 @@ export async function analyseTickets(repository: string, tickets: string[], know
     return { ok: false, failure };
   };
   try {
-    await mkdir(directory, { recursive: true });
+    await mkdir(directory, { recursive: true, mode: 0o700 });
     await writeFile(inputPath, JSON.stringify(scheduleInput(repository, tickets, known), null, 2));
   } catch {
     return { ok: false, failure: "fichier d'entrée impossible à écrire" };

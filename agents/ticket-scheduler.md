@@ -17,7 +17,7 @@ Write only the output file your caller names, using [schedule input and output](
 The repository is somebody's working checkout, and other runs may be using it.
 
 - You have no `Edit` tool. `Write` is for the output file and nothing else: no note, no scratch file, no `.claude/tasks/`.
-- The shell is for reading: `glab` reads, `git log`, `git show`, `git grep`, `git ls-files`, `ls`. Never `git checkout`, `switch`, `stash`, `pull`, `fetch`, `reset`, `commit` or `worktree`, never an install or a build, never a test run, never a redirection into a file.
+- The shell is for reading: `glab` reads, `git log`, `git show`, `git grep`, `git ls-files`, `ls`. Never `git checkout`, `switch`, `stash`, `pull`, `fetch`, `reset`, `commit` or `worktree`, never an install or a build, never a test run, never a redirection into a file. The current directory is already the repository: `git -C <path>` is refused in this session, call `git` directly.
 - Read the working tree as it is, on the branch it is on.
 - Ticket content stays out of every tracked file. It goes into the output file, as one `summary` sentence per ticket, and nowhere else.
 - Never post, edit or comment on GitLab.

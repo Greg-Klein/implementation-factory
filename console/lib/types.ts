@@ -92,8 +92,10 @@ export type QueuedRunView = QueuedRun & {
   reason: QueueReason; blockedBy?: string; blocking?: QueueBlocker; cause?: QueueCause; detail?: string;
   summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
 };
-/** `archived`: runs of an earlier process left with an open incident, readable but not live. */
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[] };
+/** Mirrors TicketProposal in server/types.ts: a ticket a watcher found, waiting for the user's decision. */
+export type TicketProposal = { issueUrl: string; title?: string; source?: string };
+/** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
 export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string };
 export type ServerMessage =

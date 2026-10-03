@@ -53,6 +53,8 @@ export default defineConfig({
       // The stand-in `glab` sits next to the stand-in `claude`: the suite never reaches a real GitLab.
       FAKE_GLAB_DIR: fakeGlabDirectory,
       IMPL_MERGE_POLL_MS: "500",
+      // The file a ticket watcher would write is read often enough for a test to see it change.
+      IMPL_PROPOSALS_POLL_MS: "300",
       // A launched run gets a stand-in session instead of a real Claude Code, and `glab` a stand-in too.
       PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },

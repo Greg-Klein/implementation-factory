@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, broadcastToViewers, now } from "./context.js";
-import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, queueFile } from "./config.js";
+import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
 import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
@@ -14,6 +14,7 @@ import { resolveProjectDirectory } from "./repository.js";
 import { fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
 import { analyseTickets, clearScheduleFiles, type AnalysisResult } from "./schedule-analysis.js";
 import { MergeWatcher } from "./merge-watch.js";
+import { TicketProposals } from "./ticket-proposals.js";
 import type { ScheduleSession } from "./engine/types.js";
 import { engine } from "./engine/index.js";
 import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
@@ -96,6 +97,15 @@ export class RunRegistry {
     check: (watch) => fetchMergeRequestStatus(watch.mergeRequestUrl, watch.repository),
     apply: (watch, status) => this.applyMergeStatus(watch, status),
     intervalMs: mergePollMs,
+  });
+  /** The tickets a watcher found, waiting for the user to accept or dismiss them. */
+  readonly proposals = new TicketProposals({
+    file: proposalsFile,
+    handledFile: proposalsHandledFile,
+    intervalMs: proposalsPollMs,
+    // By address: a proposal has no checkout until it is accepted.
+    taken: () => [...this.queue.map((entry) => entry.issueUrl), ...[...this.sessions.values()].filter((session) => session.holdsRepository).map((session) => session.state.issueUrl), ...this.watches.map((watch) => watch.issueUrl)],
+    changed: () => this.publishSnapshot(),
   });
   /** Watches every run this registry holds, and only those. */
   readonly monitor = new RunMonitor(() => this.all(), healthPolicy);
@@ -196,6 +206,7 @@ export class RunRegistry {
       queued: this.describe(),
       maxConcurrentRuns,
       archived: this.archive.list(),
+      proposals: this.proposals.open(),
     };
   }
 
@@ -824,6 +835,7 @@ export class RunRegistry {
     this.shuttingDown = true;
     this.monitor.stop();
     this.mergeWatcher.stop();
+    this.proposals.stop();
     for (const timer of this.timers) clearTimeout(timer);
     this.timers.clear();
     // Their tickets stay marked as being analysed, which the next start reads as a failed analysis.

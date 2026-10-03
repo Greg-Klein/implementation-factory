@@ -90,6 +90,12 @@ export function runLabel(run: { cwd: string; repository?: string; issueUrl: stri
   return [project, reference].filter(Boolean).join(" ") || run.issueUrl || "run";
 }
 
+/** A proposed ticket has no checkout yet: it is named by the project of its address, `companion #247`. */
+export function proposalLabel(issueUrl: string) {
+  const project = issueUrl.split("/-/")[0].split("/").filter(Boolean).pop();
+  return [project, ticketReference(issueUrl)].filter(Boolean).join(" ");
+}
+
 /** The checkout a run was launched on. A run archived before worktrees ran in that checkout itself. */
 export function sourceRepository(run: { cwd: string; repository?: string }) {
   return run.repository || run.cwd;

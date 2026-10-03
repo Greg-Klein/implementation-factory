@@ -203,6 +203,19 @@ Le dépliant propose deux départs forcés. Un ticket forcé attend encore une p
 - Une prédiction reste une estimation faite avant d’écrire le code. Deux tickets jugés indépendants peuvent quand même entrer en conflit au merge.
 - Les tickets ne sont pas encore tirés de GitLab par labels ou par assignee : il faut coller les URL.
 
+### Tickets proposés par un surveillant
+
+Le harnais peut afficher des tickets trouvés par un outil extérieur, par exemple un script qui interroge GitLab sur un label, un assigné et un statut. Cet outil écrit la liste des tickets trouvés dans `console/data/ticket-proposals.json`, et le harnais relit ce fichier toutes les cinq secondes. Les deux ne se parlent pas autrement : l’un peut être arrêté sans gêner l’autre, et sans ce fichier le harnais fonctionne comme avant.
+
+Les tickets apparaissent dans la liste de gauche, sous **Proposés**. Rien ne démarre seul :
+
+- **Lancer** met le ticket en file comme une URL collée. **Tout lancer** les envoie en un seul lot, pour que les tickets d’un même dépôt soient comparés avant de partir.
+- **Ignorer** retire le ticket de la liste.
+
+Un ticket lancé ou ignoré n’est plus proposé tant qu’il reste dans le fichier. S’il en sort puis y revient, il est proposé de nouveau. Un ticket déjà en file, en cours ou en attente de merge n’est pas proposé.
+
+`IMPL_TICKET_PROPOSALS_FILE`, défini dans l’environnement de lancement, désigne un autre fichier par son chemin absolu. Le format attendu est décrit dans [contracts/ticket-proposals.md](contracts/ticket-proposals.md).
+
 ### Un worktree par run
 
 Avant d’ouvrir la session, le harnais crée un worktree git du projet dans `<projet>/.claude/worktrees/<id du run>`, détaché sur le commit courant du checkout principal. Claude Code démarre dans ce dossier et y fait tout son travail : la branche du ticket, les commits, le dossier `.claude/tasks` et le serveur de développement. Le checkout principal n’est pas touché. Sa branche, ses modifications en cours et son stash restent tels quels, et on peut continuer à y travailler pendant le run.

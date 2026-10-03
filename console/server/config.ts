@@ -43,6 +43,15 @@ export const scheduleTimeoutMs = positiveDuration(process.env.IMPL_SCHEDULE_TIME
 /** How often GitLab is asked whether a merge request tickets are waiting for has been merged. */
 export const mergePollMs = positiveDuration(process.env.IMPL_MERGE_POLL_MS, 60_000);
 /**
+ * The file an outside watcher keeps up to date with the tickets it found, and
+ * how often it is read. The watcher asks GitLab at its own pace, set in its
+ * own configuration: this interval only says how soon a change shows here.
+ */
+export const proposalsFile = path.resolve(process.env.IMPL_TICKET_PROPOSALS_FILE?.trim() || path.join(storageRoot, "ticket-proposals.json"));
+export const proposalsPollMs = positiveDuration(process.env.IMPL_PROPOSALS_POLL_MS, 5_000);
+/** The proposals already accepted or dismissed, kept across a restart of the console. */
+export const proposalsHandledFile = path.join(storageRoot, "ticket-proposals-handled.json");
+/**
  * What the worktree of a run takes from the main checkout: dependency
  * directories by name, cloned or linked, and configuration files, copied.
  */

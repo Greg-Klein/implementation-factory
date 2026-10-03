@@ -4,7 +4,8 @@ import { ArchiveIcon, ChartBarIcon, FolderDashedIcon, CheckCircleIcon, ClockCoun
 import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { formatTokens } from "@/lib/metrics";
 import { statusColor } from "@/lib/notifications";
-import type { QueuedRunView, RunSummary } from "@/lib/types";
+import type { QueuedRunView, RunSummary, TicketProposal } from "@/lib/types";
+import { ProposalList, type ProposalActions } from "./proposal-list";
 import { QueueList, type QueueActions } from "./queue-list";
 
 const PHASES = 10;
@@ -154,10 +155,11 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
  * column as that run's progression, the two headings competed and the list read
  * as the top half of the progression rather than as the navigation it is.
  */
-export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions }: {
+export function RunRail({ runs, queued, archived = [], proposals = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions, proposalActions }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
   archived?: RunSummary[];
+  proposals?: TicketProposal[];
   maxConcurrentRuns: number;
   selectedRunId: string | null;
   onOpen: (runId: string) => void;
@@ -166,6 +168,7 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
   onMetrics: () => void;
   onClose: (runId: string) => void;
   queueActions: QueueActions;
+  proposalActions: ProposalActions;
 }) {
   const holding = runs.filter((run) => run.holdsRepository).length;
   // An incident is a diagnosis to read; a worktree left on disk is housekeeping. Two groups, so neither hides the other.
@@ -209,7 +212,7 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
       </div>
 
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-        {runs.length === 0 && queued.length === 0 && archived.length === 0 ? (
+        {runs.length === 0 && queued.length === 0 && archived.length === 0 && proposals.length === 0 ? (
           <div className="px-3.5 py-6 text-center">
             <div className="mx-auto grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ClockCounterClockwiseIcon size={14} /></div>
             <p className="mt-2.5 text-[11px] font-medium">Aucun run</p>
@@ -223,6 +226,9 @@ export function RunRail({ runs, queued, archived = [], maxConcurrentRuns, select
 
         {/* Right under the live runs: what waits is about to become one of them, the archives below are not. */}
         <QueueList queued={queued} actions={queueActions} />
+
+        {/* Below the queue: a proposal is one decision further from running than a queued ticket. */}
+        <ProposalList proposals={proposals} actions={proposalActions} />
 
         {interrupted.length > 0 && (
           <div role="group" aria-label="Runs interrompus" className="border-t border-[var(--line)]">

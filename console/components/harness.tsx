@@ -365,6 +365,7 @@ export function Harness() {
           runs={snapshot.runs}
           queued={snapshot.queued}
           archived={snapshot.archived}
+          proposals={snapshot.proposals}
           maxConcurrentRuns={snapshot.maxConcurrentRuns}
           selectedRunId={openRunId}
           onOpen={openRun}
@@ -376,6 +377,10 @@ export function Harness() {
             cancel: (queuedId) => send({ type: "queue.cancel", queuedId }),
             force: (queuedId, mode, onto) => send({ type: "queue.force", queuedId, mode, ...(onto ? { onto } : {}) }),
             move: (queuedId, before) => send({ type: "queue.move", queuedId, before }),
+          }}
+          proposalActions={{
+            accept: (issueUrls) => send({ type: "proposal.accept", issueUrls }),
+            dismiss: (issueUrls) => send({ type: "proposal.dismiss", issueUrls }),
           }}
         />
 

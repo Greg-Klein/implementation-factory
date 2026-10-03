@@ -137,6 +137,15 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "batch.result", batchId: outcome.batchId, accepted: outcome.entries.length, duplicates: outcome.duplicates });
     return;
   }
+  if (message.type === "proposal.accept" || message.type === "proposal.dismiss") {
+    // Only what is proposed right now: a page showing an older list decides nothing about a ticket that left it.
+    const issueUrls = registry.proposals.proposed(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
+    if (issueUrls.length === 0) throw new Error("Ce ticket n'est plus proposé.");
+    // An accepted proposal is a batch like a pasted one. Remembered only once queued: a refused one stays proposed.
+    if (message.type === "proposal.accept") await registry.enqueueBatch(await resolvePastedTickets(issueUrls));
+    await registry.proposals.handle(issueUrls);
+    return;
+  }
   if (message.type === "demo.start" && message.scenario === "batch") { registry.startDemoBatch(); return; }
   if (message.type === "demo.start") {
     const session = registry.startDemo(message.scenario === "incident" ? "incident" : "workflow");
@@ -345,7 +354,7 @@ wss.on("connection", (socket) => {
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined });
-      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
+      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.accept") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
     }
   });
   socket.on("close", () => clients.delete(socket));
@@ -366,6 +375,8 @@ void registry.drain();
 // Hooks a session spooled while nothing else arrived, and runs with nothing
 // next, would otherwise wait for an event that may never come.
 registry.monitor.start();
+// Tickets a watcher found while the console was down are proposed as soon as it is up.
+void registry.proposals.start();
 
 let shuttingDown = false;
 async function shutdown() {

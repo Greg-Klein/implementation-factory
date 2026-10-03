@@ -1,6 +1,6 @@
 import path from "node:path";
 import { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../lib/ticket-urls.js";
-import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge } from "./types.js";
+import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
 export { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
@@ -841,6 +841,45 @@ export function admitBatch(tickets: ResolvedTicket[], taken: Iterable<string>) {
     else { seen.add(key); accepted.push(ticket); }
   }
   return { accepted, duplicates };
+}
+
+/**
+ * The tickets a watcher's file names, see contracts/ticket-proposals.md. The
+ * file is a snapshot: everything that matches the watcher's filter right now.
+ * `undefined` when it is not a snapshot at all, which is not the same as an
+ * empty one: the caller keeps what it read last. An entry that is not a ticket
+ * URL is skipped, a ticket named twice is kept once.
+ */
+export function readProposalSnapshot(content: unknown): TicketProposal[] | undefined {
+  if (!isRecord(content) || !Array.isArray(content.tickets)) return undefined;
+  const proposals = new Map<string, TicketProposal>();
+  for (const entry of content.tickets.filter(isRecord)) {
+    const issueUrl = typeof entry.url === "string" ? normalizeTicketUrl(entry.url) : undefined;
+    if (!issueUrl || proposals.has(issueUrl)) continue;
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+    proposals.set(issueUrl, { issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}) });
+  }
+  return [...proposals.values()];
+}
+
+/**
+ * What is still to decide: the tickets found that the console does not already
+ * have and that were neither accepted nor dismissed. Compared by address alone,
+ * a proposal has no checkout yet.
+ */
+export function openProposals(found: TicketProposal[], taken: Iterable<string>, handled: Iterable<string>) {
+  const known = new Set([...taken, ...handled].map(ticketIdentity));
+  return found.filter((proposal) => !known.has(ticketIdentity(proposal.issueUrl)));
+}
+
+/**
+ * A decision is remembered only while the watcher still finds the ticket: once
+ * it left the filter it cannot be proposed, and when it comes back, to do
+ * again, it is a new proposal. This is also what keeps the list from growing.
+ */
+export function handledStillFound(handled: string[], found: TicketProposal[]) {
+  const current = new Set(found.map((proposal) => ticketIdentity(proposal.issueUrl)));
+  return handled.filter((issueUrl) => current.has(ticketIdentity(issueUrl)));
 }
 
 /** A run as the schedule reads it: what it works on, whether it still works, and what a stacked start would be cut from. */

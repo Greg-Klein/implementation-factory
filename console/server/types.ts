@@ -375,9 +375,16 @@ export type QueuedRunView = QueuedRun & {
 /** A ticket whose checkout is known. Whatever found the tickets, a paste today, hands the registry a list of these. */
 export type ResolvedTicket = { repository: string; issueUrl: string };
 
+/**
+ * A ticket an outside watcher found and the user has not decided on yet. It is
+ * only an address: nothing is resolved, queued or analysed until it is accepted.
+ * `source`: what the watcher was looking at, a project or a group path.
+ */
+export type TicketProposal = { issueUrl: string; title?: string; source?: string };
+
 /** Everything every open page is told about, whichever run it has opened. */
-/** `archived`: runs of an earlier process left with an open incident, readable but not live. */
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[] };
+/** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[]; proposals: TicketProposal[] };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
@@ -408,6 +415,10 @@ export type ClientMessage =
   | { type: "queue.force"; queuedId: string; mode: "base" | "stacked"; onto?: string }
   /** Moves a waiting launch right before another one, or to the end of the queue with `before: null`. */
   | { type: "queue.move"; queuedId: string; before: string | null }
+  /** Queues proposed tickets as one batch, as if their URLs had been pasted. A failure is answered with `error` and leaves them proposed. */
+  | { type: "proposal.accept"; issueUrls: string[] }
+  /** Drops proposed tickets without starting them. They are not proposed again while they stay in the watcher's file. */
+  | { type: "proposal.dismiss"; issueUrls: string[] }
   /**
    * Removes the worktree of a run whose session is gone, live or archived. Without
    * `force` the server answers `confirm` when work would be lost, and removes nothing.

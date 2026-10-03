@@ -21,6 +21,9 @@ process.env.IMPL_SCHEDULE_TIMEOUT_MS = "1500";
 process.env.IMPL_MAX_CONCURRENT_RUNS = "3";
 process.env.FAKE_CLAUDE_SCHEDULE = fixtureFile;
 process.env.FAKE_CLAUDE_INPUT_DIR = storage;
+// Where the stand-in `glab` reads the state of a merge request. Empty, it answers nothing.
+const glabDirectory = path.join(storage, "glab");
+process.env.FAKE_GLAB_DIR = glabDirectory;
 // The stand-in `claude`, and a `glab` that answers nothing.
 process.env.PATH = `${path.resolve(__dirname, "..", "fake-claude")}${path.delimiter}${process.env.PATH ?? ""}`;
 
@@ -38,6 +41,7 @@ const registries: Registry[] = [];
 afterEach(async () => {
   for (const registry of registries.splice(0)) await registry.shutdown();
   rmSync(fixtureFile, { force: true });
+  rmSync(glabDirectory, { recursive: true, force: true });
   rmSync(path.join(storage, "schedule-calls.jsonl"), { force: true });
 });
 afterAll(() => rmSync(storage, { recursive: true, force: true }));
@@ -232,6 +236,10 @@ describe("a batch of tickets", () => {
     await until(() => context.numbers().length === 1, "the first ticket to start");
     await until(analysed(context.queued), "the analysis to fail");
     for (const entry of context.queued()) context.registry.cancelQueued(entry.id);
+    // The merge watcher asks at once about a watch something waits for. GitLab answers that the
+    // merge request is still open, so the wait reads the same however fast that answer comes.
+    mkdirSync(glabDirectory, { recursive: true });
+    writeFileSync(path.join(glabDirectory, "merge-request-12"), "opened");
     context.finish(101, 12);
     await until(() => context.internals.watches.length === 1, "the merge request to be watched");
     return context;

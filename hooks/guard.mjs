@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const NAMESPACE = "implementation-harness";
@@ -42,6 +42,111 @@ function unreportedTasks(tasks) {
   });
 }
 
+/** Whether the session works in a linked git worktree: every run the console starts, and a session opened in one by hand. */
+function inLinkedWorktree(cwd, env) {
+  if (env.IMPL_RUN_WORKTREE) return true;
+  let directory = path.resolve(cwd || ".");
+  for (let depth = 0; depth < 12; depth += 1) {
+    try { return statSync(path.join(directory, ".git")).isFile(); } catch { /* not the root of a checkout */ }
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return false;
+}
+
+/**
+ * The simple commands of a shell line, each as its words with the quotes
+ * removed. Enough to read a git invocation typed on the line, and nothing more:
+ * what a quoted string, a substitution or a script runs is not looked at, so a
+ * commit message that quotes a forbidden command is never taken for one.
+ */
+export function shellCommands(text) {
+  const source = String(text).replace(/<<-?\s*(['"]?)(\w+)\1[^\n]*\n[\s\S]*?\n[ \t]*\2(?=\n|$)/g, " ");
+  const commands = [];
+  let words = [];
+  let word = "";
+  let started = false;
+  let quote = "";
+  const endWord = () => { if (started) words.push(word); word = ""; started = false; };
+  const endCommand = () => { endWord(); if (words.length) commands.push(words); words = []; };
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (char === quote) quote = "";
+      else if (char === "\\" && quote === "\"" && index + 1 < source.length) { index += 1; word += source[index]; }
+      else word += char;
+    } else if (char === "'" || char === "\"") { quote = char; started = true; }
+    else if (char === "\\" && index + 1 < source.length) { index += 1; if (source[index] !== "\n") { word += source[index]; started = true; } }
+    else if (/\s/.test(char) && char !== "\n") endWord();
+    else if (";\n|&(){}".includes(char)) endCommand();
+    else { word += char; started = true; }
+  }
+  endCommand();
+  return commands;
+}
+
+const GIT_OPTIONS_WITH_VALUE = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"];
+
+/** The subcommand and arguments of a git invocation, or undefined when the words run something else. */
+function gitInvocation(words) {
+  let index = 0;
+  while (index < words.length && (/^\w+=/.test(words[index]) || ["rtk", "command", "env", "exec", "time"].includes(words[index]))) index += 1;
+  if (words[index] !== "git") return undefined;
+  index += 1;
+  while (index < words.length && words[index].startsWith("-")) index += GIT_OPTIONS_WITH_VALUE.includes(words[index]) ? 2 : 1;
+  return index < words.length ? { subcommand: words[index], args: words.slice(index + 1) } : undefined;
+}
+
+/** A short option among the arguments, alone or in a cluster: `-f`, `-fd`, `-xfd`. */
+function hasFlag(args, letter, long) {
+  return args.some((arg) => arg === long || (/^-[A-Za-z]+$/.test(arg) && arg.includes(letter)));
+}
+
+/** Why a git command typed on the line is refused, or undefined when it may run. */
+function gitRefusal({ subcommand, args }, { cwd, env, linked }) {
+  const wholeTree = args.includes(".") || args.includes(":/");
+  switch (subcommand) {
+    case "reset":
+      if (args.includes("--hard")) return "`git reset --hard` destroys uncommitted work with no way back. Commit what is yours, or stop and report the git state.";
+      break;
+    case "clean":
+      if (hasFlag(args, "f", "--force") && !hasFlag(args, "n", "--dry-run")) return "`git clean -f` deletes untracked files with no way back. List them with `git clean -n`, then remove by absolute path the ones this run created.";
+      break;
+    case "checkout":
+      if (wholeTree || hasFlag(args, "f", "--force")) return "This checkout discards every uncommitted change of the tree. Name the files this run owns, or stop and report the git state.";
+      if (linked && (args.includes("-B") || args.includes("--ignore-other-worktrees"))) return "An existing branch is never overwritten or taken from another worktree. Create the branch with `git switch -c`, under a suffixed name when it exists.";
+      break;
+    case "restore":
+      if (wholeTree && (!args.some((arg) => arg === "--staged" || arg === "-S") || args.some((arg) => arg === "--worktree" || arg === "-W"))) return "This restore discards every uncommitted change of the tree. Name the files this run owns, or stop and report the git state.";
+      break;
+    case "switch":
+      if (args.includes("--discard-changes") || hasFlag(args, "f", "--force")) return "This switch discards uncommitted changes. Commit what is yours first, or stop and report the git state.";
+      if (linked && (args.includes("-C") || args.includes("--force-create") || args.includes("--ignore-other-worktrees"))) return "An existing branch is never overwritten or taken from another worktree. Create the branch with `git switch -c`, under a suffixed name when it exists.";
+      break;
+    case "push":
+      if (hasFlag(args, "f", "--force") || args.some((arg) => /^\+[^\s]/.test(arg))) return "A bare forced push overwrites whatever the remote holds. When the user asked for it, use `--force-with-lease` after checking the remote holds nothing you lack.";
+      break;
+    case "worktree": {
+      if (args[0] === "prune") return "`git worktree prune` is never run by the workflow: the console owns the run worktrees.";
+      const run = env.IMPL_RUN_WORKTREE ? path.resolve(env.IMPL_RUN_WORKTREE) : undefined;
+      const targets = args.slice(1).filter((arg) => !arg.startsWith("-")).map((arg) => path.resolve(cwd || ".", arg));
+      if (args[0] === "remove" && targets.some((target) => target === run || target.split(path.sep).join("/").includes("/.claude/worktrees/"))) {
+        return "A run worktree is never removed by the workflow: the console removes it after the session ends. Only the throwaway QA worktree, outside `.claude/worktrees/`, is yours to remove.";
+      }
+      break;
+    }
+    case "stash":
+      if (linked && !["list", "show"].includes(args[0])) return "Nothing is stashed in worktree mode: the stash list is shared with the main checkout and every other run. Commit what is yours, or stop and report.";
+      break;
+    case "branch":
+      if (linked && args.some((arg) => ["-D", "-d", "--delete", "-M", "-C", "-f", "--force"].includes(arg))) return "In worktree mode a branch is never deleted or overwritten: the ticket branch stays in place for the console and the user.";
+      break;
+    default:
+  }
+  return undefined;
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
@@ -68,6 +173,12 @@ export function guardDecision(payload, env = process.env) {
     const command = typeof input.command === "string" ? input.command : "";
     if (PUBLISHING.test(command) && SESSION_TRACE.test(command)) {
       return "Nothing this run publishes carries a trace of the session: remove the Co-Authored-By or Claude-Session trailer, the claude.ai/code/session_ link and the \"Generated with\" line, then run the command again.";
+    }
+    const context = { cwd: payload.cwd, env, linked: inLinkedWorktree(payload.cwd, env) };
+    for (const words of shellCommands(command)) {
+      const git = gitInvocation(words);
+      const refused = git && gitRefusal(git, context);
+      if (refused) return refused;
     }
   }
   return undefined;

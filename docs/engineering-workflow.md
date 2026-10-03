@@ -228,6 +228,8 @@ How the app of a target repository is started, reached and driven is the same fr
 
 A question about what the system does today is a fact. The pilot answers it itself when it can be read or run without starting the app. When only the running app can show it, the question is asked at step 2, marked `observable`, and the step 6 measurement is compared with the answer; a contradiction goes back to the user before the review.
 
+The base branch follows the same rule. When the repository offers a single candidate (the checkout is on the default branch, there is no separate `develop` and no branch related to the ticket), the pilot takes it, records it in `open-questions.md` as a deduction and does not ask. With two candidates or more, or none, the question is asked at step 2.
+
 ## Defects and dismissed findings
 
 A `fix` ticket is reproduced before it is fixed: the developer records the failing observation, then runs the same reproduction after the fix. A defect nobody reproduced leaves its criterion unverified.

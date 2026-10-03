@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectDemoCompleted, resetRun } from "./helpers";
+import { currentRun, expectDemoCompleted, resetRun, runDemoToCompletion, sendAndWait } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -94,16 +94,29 @@ test("should flag a new message on the Conversation tab, and clear it on reading
   await expect(badge).toBeHidden();
 });
 
-test("should not flag the dialogue for an instruction the user typed", async ({ page }) => {
-  await page.goto("/?demo=1");
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Lecture du ticket GitLab simulé…")).toBeVisible();
+/**
+ * Played on a finished demo: while it runs, the demo speaks every step and asks
+ * its question a second after it starts, so the dot on the tab depended on how
+ * fast the page was driven. Once it has ended, the only messages are the ones
+ * this test causes.
+ */
+test("should flag the answer to an instruction that lands while another tab is read", async ({ page, request }) => {
+  await runDemoToCompletion(page);
+  const badge = page.getByRole("img", { name: "nouveau message" });
+  // The last thing the demo says, a step after it completes.
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText(/^Auto-audit terminé\./)).toBeVisible();
 
-  await page.getByLabel("Instruction pour Claude").fill("reste sur desktop");
-  await page.getByRole("button", { name: "Envoyer l’instruction" }).click();
   await page.getByRole("tab", { name: "Terminal" }).click();
+  await expect(badge).toBeHidden();
 
-  // The demo answers, and that answer is news; the instruction itself was not.
-  await expect(page.getByRole("img", { name: "nouveau message" })).toBeVisible();
+  // The composer sits in the Conversation tab: the instruction comes from another window.
+  const run = await currentRun(request);
+  await sendAndWait(page, { type: "instruction.send", runId: run.id, text: "reste sur desktop" }, "harness");
+  await expect(badge).toBeVisible();
+
+  await page.getByRole("tab", { name: "Conversation" }).click();
+  await expect(badge).toBeHidden();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Instruction prise en compte. La démonstration ne modifie aucun dépôt.")).toBeVisible();
 });
 
 test("should keep the tab bar aligned when a dot appears on the first tab", async ({ page }) => {

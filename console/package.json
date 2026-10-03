@@ -14,6 +14,7 @@
     "test:integration": "playwright test",
     "test:integration:headed": "playwright test --headed",
     "test": "npm run test:unit && npm run test:integration",
+    "verify": "npm run typecheck && npm run test:unit && npm run build && npm run test:integration",
     "prebuild": "node -e \"require('node:fs').rmSync('.next/dev', { recursive: true, force: true })\""
   },
   "engines": {

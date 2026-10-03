@@ -62,7 +62,9 @@ If Claude Code already placed this session in a worktree or a non-protected bran
 
 ## 3. Make the smallest durable improvement
 
-Implement only changes directly supported by the feedback and run evidence. Prefer a precise prompt correction, event contract or UI fix over a broad new abstraction. Do not weaken permission, git-safety, review or privacy rules to gain autonomy. Do not add credentials, project-specific paths or runtime content to tracked files.
+Implement only changes directly supported by the feedback and run evidence. Prefer a precise prompt correction, event contract or UI fix over a broad new abstraction.
+
+**Before adding a sentence to a prompt, ask whether a mechanism can enforce the rule instead.** A rule that a tool call's input or a file listing decides (a forbidden name, a trailer, a missing artifact) belongs in `hooks/guard.mjs`, which refuses the call and tells the agent why. A rule about what a run produced belongs in the console (`PRODUCER_CONTRACTS`, an incident, a validation). When the mechanism exists, shorten the paragraph it replaces to the one line the agent needs to avoid the refusal, in the same commit. Keep prose for what needs judgment. A guard must never refuse on a guess: when it cannot read what it checks, it lets the call through. Do not weaken permission, git-safety, review or privacy rules to gain autonomy. Do not add credentials, project-specific paths or runtime content to tracked files.
 
 For instruction changes, read `docs/engineering-workflow.md` first. Put reusable procedures in the responsible skill or its conditional reference, role decisions in the agent, formats in `contracts/`, and scheduling in the command. Do not paste a skill body back into agent briefs. Preserve the separation between developer self-checks and independent review; shared measurement mechanics must not become a shared verdict or scenario checklist.
 

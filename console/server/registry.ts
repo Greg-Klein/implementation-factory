@@ -5,6 +5,7 @@ import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcu
 import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
+import { seedRuntimeRecipe } from "./runtime-recipe.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
 import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
@@ -480,6 +481,7 @@ export class RunRegistry {
     session.state.harness = await harnessVersion();
     session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
+    if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Recette d'exécution reprise", "Conservée d'un run précédent de ce dépôt.");
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) {

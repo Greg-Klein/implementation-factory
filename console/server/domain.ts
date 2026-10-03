@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
@@ -344,6 +345,21 @@ export function gitRemoteProjects(config: string): string[] {
 /** A previous run leaves its documents in the project, and only this run's own count. */
 export function belongsToRun(writtenAt: number, startedAt: string | null) {
   return startedAt !== null && writtenAt >= new Date(startedAt).getTime();
+}
+
+/** The workflow file that says how the target repository's app is started and reached. */
+export const RUNTIME_RECIPE_FILE = "runtime-recipe.md";
+
+/**
+ * Where the console keeps that file between the runs of one repository. Named
+ * after the checkout for a person reading the directory, and after its full
+ * path so two checkouts of the same name never share a recipe.
+ */
+export function runtimeRecipeStore(storageRoot: string, repository: string) {
+  const checkout = path.resolve(repository);
+  const name = path.basename(checkout).replace(/[^\w.-]+/g, "-") || "repository";
+  const digest = createHash("sha256").update(checkout).digest("hex").slice(0, 10);
+  return path.join(storageRoot, "repositories", `${name}-${digest}`, RUNTIME_RECIPE_FILE);
 }
 
 /** The directory the artifact watcher attaches to, one level above the documents. */

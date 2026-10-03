@@ -14,6 +14,8 @@ The reports the workflow writes and the console's interface are in French. Secti
 | `agents/` | Mission, scope, decisions, rights, methods to load and deliverables. |
 | `skills/` | Invocable procedures, with their references loaded when needed. |
 | `principles/engineering.md` | Evidence, proportionality, simplicity, constraints and handling of unknowns. |
+| `principles/test-quality.md` | The shapes of a test that cannot fail for a defect. Read by the author and by the code reviewer, only when the diff touches test files. |
+| `hooks/guard.mjs` | Rules a tool call's input or a file listing decides, refused before the call runs. |
 | `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
 The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the harness; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
@@ -204,6 +206,30 @@ The designer uses the highest level the brief allows and declares it at the top 
 The report contains a coverage matrix, with one row per screen, viewport and required state or content case. A cell is measured only if the designer reached it in the application, read its values and kept the pair of captures. The verdict is `INCONCLUSIVE` when a required viewport or an explicitly required state is not reached, when the measured coverage is under 80%, or when no reference level could be established.
 
 A design verdict of `INCONCLUSIVE`, or a review triggered but not started because the application was unreachable, does not block READY. The review summary writes it under `## Design non vérifié` with the reason. The pilot carries the words "design non vérifié" into the merge request description, the review comment and the final report.
+
+## Rules enforced by a mechanism
+
+A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses three calls and gives the agent the reason:
+
+- an agent of the workflow invoked under its bare name;
+- a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
+- a `git commit`, or a `glab` publication on a merge request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line.
+
+A refused call is not forwarded to the console. A guard that cannot read what it checks lets the call through. `commands/improve.md` asks for a mechanism before a new sentence whenever one can carry the rule.
+
+## Runtime recipe of a repository
+
+How the app of a target repository is started, reached and driven is the same from one ticket to the next. The pilot writes it to `.claude/tasks/runtime-recipe.md` under `contracts/runtime-recipe.md` at the end of a run that drove the app. The console keeps every version under `repositories/<checkout>-<digest>/runtime-recipe.md` in its data directory, outside the target repository, and puts it back in the task directory of the next run of that repository. The pilot reads it at step 1, checks what it relies on, and corrects the lines it found false. The file holds no secret and nothing specific to one run; `browser-recipe.md` keeps the fixtures of the ticket. Without the console the file is lost with the task directory.
+
+## Questions the code or the app can answer
+
+A question about what the system does today is a fact. The pilot answers it itself when it can be read or run without starting the app. When only the running app can show it, the question is asked at step 2, marked `observable`, and the step 6 measurement is compared with the answer; a contradiction goes back to the user before the review.
+
+## Defects and dismissed findings
+
+A `fix` ticket is reproduced before it is fixed: the developer records the failing observation, then runs the same reproduction after the fix. A defect nobody reproduced leaves its criterion unverified.
+
+Before a code finding enters rework, the orchestrator (the pilot at tiers 0 and 1) checks that it names the input, state or call site that reaches the defect. A finding without one goes back to its reviewer once, then under `## Constats écartés` of the summary with its author and the reason. An unmet criterion, a failed check and a security finding at a changed trust boundary are never dismissed that way. At tier 0 the senior reviewer names the one fact the change is safe because of and establishes it by running code.
 
 ## Handoff and stability
 

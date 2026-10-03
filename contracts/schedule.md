@@ -32,7 +32,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 ```
 
 - `repository`: absolute path of the main checkout, the directory the session runs in.
-- `tickets`: the new tickets to predict. An empty array is valid and gives an output with two empty arrays.
+- `tickets`: the tickets to predict: the new ones, and those of the repository whose earlier analysis failed. An empty array is valid and gives an output with two empty arrays.
 - `known`: earlier predictions for tickets of the same repository that are `queued`, `running` or `awaiting_merge`. They are compared against, never recomputed and never repeated in the output `tickets`. May be empty or absent.
 
 ## Output (STRICT JSON)

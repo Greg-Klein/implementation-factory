@@ -163,7 +163,7 @@ Avant de démarrer, le harnais compare les tickets d’un même dépôt. Il ouvr
 - Un ticket seul dans son dépôt, sans autre ticket connu à comparer, démarre sans analyse.
 - Un ticket ajouté plus tard est comparé aux prédictions déjà faites pour les tickets en file, en cours ou en attente de merge. Elles ne sont pas recalculées.
 - Deux tickets de dépôts différents ne se retiennent jamais.
-- L’analyse a `IMPL_SCHEDULE_TIMEOUT_MINUTES` minutes (5 par défaut). Si elle échoue, dépasse ce délai ou rend un fichier invalide, les tickets concernés passent un par un sur leur dépôt et la file affiche « Analyse en échec ». Un redémarrage de la console pendant l’analyse a le même effet.
+- L’analyse a `IMPL_SCHEDULE_TIMEOUT_MINUTES` minutes (5 par défaut). Si elle échoue, dépasse ce délai ou rend un fichier invalide, les tickets concernés passent un par un sur leur dépôt et la file affiche « Analyse en échec ». Un redémarrage de la console pendant l’analyse a le même effet. L’analyse suivante du même dépôt reprend ces tickets avec les nouveaux, tant qu’ils sont en file, en cours ou en attente de merge. Aucune analyse n’est relancée pour eux seuls.
 - Un ticket trop vague pour être prédit est marqué « Prédiction peu fiable » et passe seul sur son dépôt.
 
 #### Ce que montre la file
@@ -363,7 +363,7 @@ Il y a une seule implémentation aujourd’hui, `claude-code`, et c’est délib
 
 `console/server/engine/README.md` documente le contrat membre par membre, le chemin complet d’une question bloquante, et ce qui reste couplé en dehors du serveur.
 
-La file et son ordonnancement sont dans `queue.json`. Les fichiers d’une analyse de lot sont dans `schedule/<id>/` : ils sont supprimés une fois la réponse lue, gardés après un échec pour le diagnostic, et effacés au démarrage suivant.
+La file et son ordonnancement sont dans `queue.json`. Les fichiers d’une analyse de lot ne sont pas dans ce dossier tant qu’il est dans le plugin, parce que Claude Code refuse à une session toute écriture dans le dossier du plugin qu’elle a chargé : ils vont dans `implementation-harness-<utilisateur>/schedule/<id>/`, sous le dossier temporaire du système, réservé à ton utilisateur. Avec un dossier de données hors du plugin (`IMPL_DATA_DIR`), ils restent dans `schedule/<id>/`. Ils sont supprimés une fois la réponse lue, gardés après un échec pour le diagnostic, et effacés au démarrage suivant.
 
 Les données d’un run sont archivées dans `runs/<run-id>/`, sous le [dossier de données](#configuration) (`console/data/` depuis le dépôt) :
 

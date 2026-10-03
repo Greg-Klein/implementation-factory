@@ -145,16 +145,35 @@ export class RunRegistry {
     ];
   }
 
-  /** The predictions a new analysis of this repository is compared against. See `known` in contracts/schedule.md. */
-  private knownTickets(repository: string, except: Set<string> = new Set()): KnownTicket[] {
+  /** Where each ticket the console still has stands, by lock key: running, behind an unmerged merge request, or queued. */
+  private ticketStates() {
     const queued = new Set(this.queue.map(runLockKey));
     const running = new Set([...this.sessions.values()].filter((session) => runInProgress(session.state.status)).map((session) => runLockKey(session.state)));
     const awaited = new Set(this.watches.map((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl })));
+    return (key: string) => running.has(key) ? "running" as const : awaited.has(key) ? "awaiting_merge" as const : queued.has(key) ? "queued" as const : undefined;
+  }
+
+  /** The predictions a new analysis of this repository is compared against. See `known` in contracts/schedule.md. */
+  private knownTickets(repository: string, except: Set<string> = new Set()): KnownTicket[] {
+    const stateOf = this.ticketStates();
     return this.tickets.flatMap((ticket) => {
       const key = runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl });
       if (ticket.repository !== repository || ticket.analysis !== "done" || except.has(key)) return [];
-      const state = running.has(key) ? "running" as const : awaited.has(key) ? "awaiting_merge" as const : queued.has(key) ? "queued" as const : undefined;
+      const state = stateOf(key);
       return state ? [{ ticket, state }] : [];
+    });
+  }
+
+  /**
+   * The tickets of this repository the console still has and whose analysis
+   * failed. They have no prediction to compare against, so the next analysis of
+   * the repository predicts them again instead of holding every ticket behind them.
+   */
+  private failedTickets(repository: string, except: Set<string>): ScheduledTicket[] {
+    const stateOf = this.ticketStates();
+    return this.tickets.filter((ticket) => {
+      const key = runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl });
+      return ticket.repository === repository && ticket.analysis === "failed" && !except.has(key) && stateOf(key) !== undefined;
     });
   }
 
@@ -259,7 +278,9 @@ export class RunRegistry {
     const pending = entries.filter((entry) => this.queue.some((queued) => queued.id === entry.id) || running.has(runLockKey(entry)));
     if (pending.length === 0) return;
     const keys = new Set(pending.map(runLockKey));
-    const urls = pending.map((entry) => entry.issueUrl);
+    // An analysis that failed earlier is tried again here, with the new tickets: never on its own.
+    const retried = this.failedTickets(repository, keys);
+    const urls = [...pending, ...retried].map((ticket) => ticket.issueUrl);
     let inFlight: ScheduleSession | null = null;
     const track = (session: ScheduleSession | null) => {
       if (inFlight) this.analysisSessions.delete(inFlight);
@@ -271,7 +292,9 @@ export class RunRegistry {
       : await analyseTickets(repository, urls, this.knownTickets(repository, keys), track);
     // Left as `analysing` on disk: the next start reads it back as a failed analysis.
     if (this.shuttingDown) return;
-    this.tickets = this.tickets.filter((ticket) => !keys.has(runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
+    // A second failure leaves the retried tickets as they were: failed, with the reason they had.
+    const answered = result.ok ? new Set([...keys, ...retried.map((ticket) => runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl }))]) : keys;
+    this.tickets = this.tickets.filter((ticket) => !answered.has(runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
     if (result.ok) {
       this.tickets = [...this.tickets, ...result.schedule.tickets.map((prediction) => ({ ...prediction, repository, analysis: "done" as const }))];
       const pair = (edge: { a: string; b: string }) => [ticketIdentity(edge.a), ticketIdentity(edge.b)].sort().join("\n");

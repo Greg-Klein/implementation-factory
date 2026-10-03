@@ -144,6 +144,35 @@ describe("the entries that start", () => {
     expect(start(queue.slice(1), { tickets })).toEqual(["q102"]);
   });
 
+  it("should blame the ticket whose analysis failed, not the ticket that waits for it", () => {
+    const failed = { analysis: "failed" as const, confidence: undefined, summary: undefined, failure: "fichier de sortie absent" };
+    const tickets = [predicted(101, failed), predicted(102), predicted(103, { ...failed, failure: undefined })];
+    const other = "L'analyse de #101 a échoué (fichier de sortie absent) : ce ticket passe après lui.";
+    // 102 was predicted: behind 101 in the queue, running or awaiting its merge, the failure it names is 101's.
+    const behind = view([queued(101), queued(102)], { tickets }, "q102");
+    expect(behind).toMatchObject({ reason: "order", cause: "analysis_failed", detail: other });
+    expect(behind.analysisFailure).toBeUndefined();
+    expect(view([queued(102)], { tickets, runs: [running(101)] }, "q102")).toMatchObject({ reason: "conflict", detail: other });
+    expect(view([queued(102)], { tickets, watches: [watch(101)] }, "q102")).toMatchObject({ reason: "merge", detail: other });
+    // A ticket with no prediction of its own, launched alone, is told the same.
+    expect(view([queued(104)], { tickets, watches: [watch(101)] }, "q104").detail).toBe(other);
+    // Without a recorded reason the sentence has no parenthesis.
+    expect(view([queued(103), queued(102)], { tickets }, "q102").detail).toBe("L'analyse de #103 a échoué : ce ticket passe après lui.");
+    // The ticket whose own analysis failed keeps the sentence about its batch, whatever the other ticket is.
+    expect(view([queued(102), queued(101)], { tickets }, "q101").detail).toBe("L'analyse du lot a échoué (fichier de sortie absent) : les tickets de ce dépôt passent un par un.");
+    expect(view([queued(101), queued(103)], { tickets }, "q103").detail).toBe("L'analyse du lot a échoué : les tickets de ce dépôt passent un par un.");
+  });
+
+  it("should say whose prediction is vague, the waiting ticket's or the other one's", () => {
+    const tickets = [predicted(101), predicted(102, { confidence: "low", summary: "Rien à chercher dans ce ticket." }), predicted(103, { confidence: "low", summary: undefined })];
+    expect(view([queued(101), queued(102)], { tickets }, "q102").detail).toBe("Prédiction peu fiable pour ce ticket : il passe seul sur son dépôt. Rien à chercher dans ce ticket.");
+    expect(view([queued(102), queued(101)], { tickets }, "q101")).toMatchObject({ reason: "order", cause: "low_confidence", detail: "Prédiction peu fiable pour #102 : ce ticket passe après lui. #102 : Rien à chercher dans ce ticket." });
+    expect(view([queued(101)], { tickets, watches: [watch(103)] }, "q101").detail).toBe("Prédiction peu fiable pour #103 : ce ticket passe après lui.");
+    // A failed analysis on either side is said before a vague prediction.
+    const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]];
+    expect(view([queued(101), queued(102)], { tickets: mixed }, "q102")).toMatchObject({ cause: "analysis_failed", detail: "L'analyse de #101 a échoué : ce ticket passe après lui." });
+  });
+
   it("should name the run on the same ticket before anything the schedule says", () => {
     const context = { runs: [running(101), running(98)], edges: [overlap(98, 101)] };
     expect(view([queued(101)], context, "q101")).toMatchObject({ reason: "ticket", blockedBy: "run-101" });

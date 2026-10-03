@@ -132,7 +132,7 @@ Le registre reçoit une liste de tickets résolus (`enqueueBatch`). Il écarte c
 
 ### Analyse
 
-Pour chaque dépôt qui a au moins deux nouveaux tickets, ou un nouveau ticket à côté de prédictions déjà connues, `server/schedule-analysis.ts` écrit `input.json` dans `data/schedule/<id>/` et demande au moteur une session sans terminal (`startSchedule`) :
+Pour chaque dépôt qui a au moins deux nouveaux tickets, ou un nouveau ticket à côté de prédictions déjà connues, `server/schedule-analysis.ts` écrit `input.json` dans le dossier d’analyse (`scheduleRoot`, voir plus bas) et demande au moteur une session sans terminal (`startSchedule`) :
 
 ```bash
 claude -p --plugin-dir <plugin> --model sonnet --permission-mode dontAsk \
@@ -149,7 +149,9 @@ La liste complète des arguments est dans `scheduleArguments` (`server/engine/cl
 | Console arrêtée pendant l’analyse | même repli au démarrage suivant |
 | Confiance `low` sur un ticket | « Prédiction peu fiable », ce ticket passe seul sur son dépôt |
 
-Après un échec, le dossier d’analyse reste avec `session.log`, la fin de la sortie de la session. `data/schedule/` est vidé à chaque démarrage. Ces fichiers contiennent du contenu de tickets.
+Les tickets en échec d’analyse encore en file, en cours ou en attente de merge repartent dans l’analyse suivante de leur dépôt, comme tickets à prédire et non comme `known`. Leur prédiction est remplacée si elle réussit, et ils restent en échec sinon. Aucune analyse n’est ouverte pour eux seuls.
+
+Chaque analyse a son dossier `<id>/` sous `scheduleRoot` (`server/config.ts`). Quand le dossier de données est dans le plugin, `scheduleRoot` est `implementation-harness-<utilisateur>/schedule/` sous le dossier temporaire du système, réservé à l’utilisateur : Claude Code refuse à une session toute écriture dans le dossier du plugin qu’elle a chargé. Un dossier de données hors du plugin (`IMPL_DATA_DIR`) les garde sous `schedule/`. Après un échec, le dossier d’analyse reste avec `session.log`, la fin de la sortie de la session. `scheduleRoot` est vidé à chaque démarrage. Ces fichiers contiennent du contenu de tickets.
 
 ### Raisons d’attente
 
@@ -167,7 +169,7 @@ Après un échec, le dossier d’analyse reste avec `session.log`, la fin de la 
 | `order` | « Passe après #217 » | un autre conflit avec une entrée devant elle |
 | `slot` | « En attente, toutes les places sont prises » | rien d’autre ne la retient |
 
-`cause` dit pourquoi deux tickets sont séparés : `overlap`, `depends_on`, `analysis_failed` ou `low_confidence`. `detail` porte la phrase de l’agent, ou celle du serveur pour les deux dernières causes. Seules les entrées `slot` démarrent (`startableEntries`), dans la limite des places libres. Une entrée retenue n’occupe pas de place et celles qui la suivent passent devant.
+`cause` dit pourquoi deux tickets sont séparés : `overlap`, `depends_on`, `analysis_failed` ou `low_confidence`. `detail` porte la phrase de l’agent, ou celle du serveur pour les deux dernières causes, qui dit si l’analyse en échec ou la prédiction peu fiable est celle du ticket qui attend ou celle de l’autre. Seules les entrées `slot` démarrent (`startableEntries`), dans la limite des places libres. Une entrée retenue n’occupe pas de place et celles qui la suivent passent devant.
 
 ### Veille des merge requests
 
@@ -254,7 +256,7 @@ Chaque exécution est conservée dans `console/data/runs/<run-id>/` :
 
 `run.json` est écrit en entier puis renommé, une écriture après l’autre. Une lecture ne voit donc jamais un fichier à moitié écrit, et le dernier état publié est celui qui reste.
 
-`data/queue.json` garde la file et son ordonnancement, `data/schedule/<id>/` les fichiers d’une analyse de lot en cours ou en échec.
+`data/queue.json` garde la file et son ordonnancement. Les fichiers d’une analyse de lot en cours ou en échec sont hors du plugin, dans le dossier d’analyse décrit plus haut.
 
 Le dossier `data/` est ignoré par Git.
 

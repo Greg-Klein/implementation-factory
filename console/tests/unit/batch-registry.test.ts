@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from "@jes
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { QueuedRun } from "../../server/types";
+import type { QueuedRun, ScheduledTicket } from "../../server/types";
 
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
@@ -222,6 +222,73 @@ describe("a batch of tickets", () => {
     expect(hanging.queued().map((entry) => entry.reason)).toEqual(["analysis", "analysis"]);
     await until(() => hanging.numbers().length === 1, "the timeout");
     expect(hanging.waiting(102)?.analysisFailure).toMatch(/délai de 2 s dépassé/);
+  });
+
+  /** Ticket 101 as a batch whose analysis wrote no file left it: failed, run alone, its merge request open, the rest of the batch removed. */
+  async function failedAndAwaitingMerge(shop: string) {
+    fixture({ mode: "fail" });
+    const context = harness();
+    await context.registry.enqueueBatch(tickets(shop, 101, 102, 103));
+    await until(() => context.numbers().length === 1, "the first ticket to start");
+    await until(analysed(context.queued), "the analysis to fail");
+    for (const entry of context.queued()) context.registry.cancelQueued(entry.id);
+    context.finish(101, 12);
+    await until(() => context.internals.watches.length === 1, "the merge request to be watched");
+    return context;
+  }
+  const stored = (registry: Registry, iid: number) => (registry as unknown as { tickets: ScheduledTicket[] }).tickets.find((ticket) => ticket.issueUrl === url(iid));
+
+  it("should predict again a ticket whose analysis failed when a later batch of its repository is analysed", async () => {
+    const shop = repository("shop");
+    const { registry, numbers, queued } = await failedAndAwaitingMerge(shop);
+    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "fichier de sortie absent" });
+    // The new analysis answers for the three tickets and links none of them.
+    fixture({});
+    await registry.enqueueBatch(tickets(shop, 102, 103));
+    await until(() => numbers().length === 3, "the two new tickets to start");
+    const call = calls()[1];
+    expect(call.input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
+    expect(call.input.known).toEqual([]);
+    expect(stored(registry, 101)).toMatchObject({ analysis: "done", files: ["src/ticket-101.ts"], confidence: "high" });
+    expect(stored(registry, 101)?.failure).toBeUndefined();
+    expect(numbers()).toEqual([101, 102, 103]);
+    expect(queued()).toEqual([]);
+  });
+
+  it("should hold a new ticket behind a ticket predicted again only when the new analysis links them", async () => {
+    const shop = repository("shop");
+    const { registry, numbers, queued, waiting, merge } = await failedAndAwaitingMerge(shop);
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }] });
+    await registry.enqueueBatch(tickets(shop, 102, 103));
+    await until(analysed(queued), "the second analysis");
+    await until(() => numbers().length === 2, "the free ticket to start");
+    expect(numbers()).toEqual([101, 103]);
+    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "overlap", detail: "Même fichier.", blocking: { issueUrl: url(101) } });
+    expect(waiting(102)?.analysisFailure).toBeUndefined();
+    await merge("merged");
+    await until(() => numbers().length === 3, "the held ticket to start");
+  });
+
+  it("should keep a ticket failed, with its own reason, when the analysis that predicts it again fails too", async () => {
+    const shop = repository("shop");
+    const { registry, numbers, queued, waiting } = await failedAndAwaitingMerge(shop);
+    fixture({ mode: "invalid" });
+    await registry.enqueueBatch(tickets(shop, 102, 103));
+    await until(analysed(queued), "the second analysis to fail");
+    expect(calls()[1].input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
+    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "fichier de sortie absent" });
+    expect(numbers()).toEqual([101]);
+    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "analysis_failed", analysisFailure: expect.stringMatching(/sortie refusée/), detail: expect.stringMatching(/^L'analyse du lot a échoué \(sortie refusée/) });
+  });
+
+  it("should not open an analysis for a single ticket beside a failed one, and blame the failed ticket for the wait", async () => {
+    const shop = repository("shop");
+    const { registry, numbers, waiting } = await failedAndAwaitingMerge(shop);
+    await registry.enqueueBatch(tickets(shop, 104));
+    expect(calls()).toHaveLength(1);
+    expect(numbers()).toEqual([101]);
+    expect(waiting(104)).toMatchObject({ reason: "merge", cause: "analysis_failed", detail: "L'analyse de #101 a échoué (fichier de sortie absent) : ce ticket passe après lui." });
+    expect(waiting(104)?.analysisFailure).toBeUndefined();
   });
 
   it("should run a low confidence ticket alone on its repository", async () => {

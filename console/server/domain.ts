@@ -871,17 +871,21 @@ function scheduleIndex(context: ScheduleContext): ScheduleIndex {
  * the rule is enforced here, not left to the scheduling agent. Within one
  * repository, an edge keeps its two tickets apart, and a ticket whose analysis
  * failed, or whose prediction is `low`, is kept apart from every other.
+ * `detail` is written for `left`, the ticket that waits: it says whether the
+ * failed analysis or the vague prediction is its own or the other ticket's.
  */
 function conflictBetween(index: ScheduleIndex, left: Launch, right: Launch): Conflict | undefined {
   const repository = repositoryOf(left);
   if (repository !== repositoryOf(right) || runLockKey(left) === runLockKey(right)) return undefined;
   const edge = index.edges.get(pairKey(repository, left.issueUrl, right.issueUrl));
   if (edge) return { cause: edge.kind, detail: edge.reason, ...(edge.order ? { order: edge.order } : {}) };
-  const sides = [left, right].flatMap((side) => index.tickets.get(runLockKey(side)) ?? []);
-  const failed = sides.find((ticket) => ticket.analysis === "failed");
-  if (failed) return { cause: "analysis_failed", detail: `L'analyse du lot a échoué${failed.failure ? ` (${failed.failure})` : ""} : les tickets de ce dépôt passent un par un.` };
-  const vague = sides.find((ticket) => ticket.confidence === "low");
-  if (vague) return { cause: "low_confidence", detail: `Prédiction peu fiable pour ${ticketReference(vague.issueUrl)} : il passe seul sur son dépôt.${vague.summary ? ` ${vague.summary}` : ""}` };
+  const own = index.tickets.get(runLockKey(left));
+  const other = index.tickets.get(runLockKey(right));
+  const because = (ticket: ScheduledTicket) => (ticket.failure ? ` (${ticket.failure})` : "");
+  if (own?.analysis === "failed") return { cause: "analysis_failed", detail: `L'analyse du lot a échoué${because(own)} : les tickets de ce dépôt passent un par un.` };
+  if (other?.analysis === "failed") return { cause: "analysis_failed", detail: `L'analyse de ${ticketReference(other.issueUrl)} a échoué${because(other)} : ce ticket passe après lui.` };
+  if (own?.confidence === "low") return { cause: "low_confidence", detail: `Prédiction peu fiable pour ce ticket : il passe seul sur son dépôt.${own.summary ? ` ${own.summary}` : ""}` };
+  if (other?.confidence === "low") return { cause: "low_confidence", detail: `Prédiction peu fiable pour ${ticketReference(other.issueUrl)} : ce ticket passe après lui.${other.summary ? ` ${ticketReference(other.issueUrl)} : ${other.summary}` : ""}` };
   return undefined;
 }
 

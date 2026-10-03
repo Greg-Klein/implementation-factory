@@ -123,11 +123,11 @@ Sans `IMPL_RUN_WORKTREE`, c'est-à-dire quand le plugin est utilisé sans la con
 
 La commande tourne sans terminal (`claude -p`, Sonnet), depuis le checkout principal. Elle reçoit deux chemins absolus : un fichier d'entrée écrit par la console et le fichier de sortie à écrire. Le contrat des deux fichiers et les règles de validation sont dans `contracts/schedule.md`.
 
-- L'entrée liste les nouveaux tickets (`tickets`) et les prédictions déjà faites pour les tickets en file, en cours ou en attente de merge (`known`). Les prédictions connues servent à la comparaison et ne sont pas recalculées.
+- L'entrée liste les tickets à prédire (`tickets`) : les nouveaux, et ceux du dépôt dont une analyse précédente a échoué. Elle liste aussi les prédictions déjà faites pour les tickets en file, en cours ou en attente de merge (`known`). Les prédictions connues servent à la comparaison et ne sont pas recalculées.
 - L'agent `ticket-scheduler` (Sonnet) lit chaque nouveau ticket avec `glab`, cherche dans le dépôt ce que le ticket toucherait, puis écrit pour chacun des fichiers, des zones, une confiance et un résumé d'une phrase.
 - Il relie par une arête deux tickets qui ne peuvent pas tourner en même temps. `overlap` signale des fichiers communs ou une zone étroite commune. `depends_on` signale qu'un ticket a besoin du résultat de l'autre, d'après un lien GitLab « blocks » ou le texte du ticket, et donne l'ordre. Deux tickets du même grand module sans fichier commun n'ont pas d'arête.
 - Une confiance `low` veut dire que le ticket ne permet aucune prédiction. La console le traite alors comme en conflit avec tous les tickets du dépôt.
-- L'agent ne modifie rien dans le dépôt : pas d'édition, pas de changement de branche, pas d'installation. Le fichier de sortie est le seul fichier écrit, hors du dépôt. Le contenu des tickets ne va dans aucun fichier suivi.
+- L'agent ne modifie rien dans le dépôt : pas d'édition, pas de changement de branche, pas d'installation. Le fichier de sortie est le seul fichier écrit, hors du dépôt et hors du plugin : Claude Code refuse à une session toute écriture dans le dossier du plugin qu'elle a chargé. La console place donc les deux fichiers dans un dossier du répertoire temporaire du système, réservé à l'utilisateur, ou sous `schedule/` quand le dossier de données est hors du plugin (`IMPL_DATA_DIR`). Le contenu des tickets ne va dans aucun fichier suivi.
 - Un lot vide donne `{ "tickets": [], "edges": [] }` sans lancer l'agent. Une sortie qui ne respecte pas le contrat après une reprise est supprimée, et la console lit un fichier absent comme un ordonnancement en échec.
 
 ### Ce que la console fait du résultat
@@ -137,7 +137,7 @@ Le détail des modules est dans `console/README.md`, section « Lot de tickets e
 - La console ne lance pas d'analyse pour un ticket seul dans son dépôt quand aucune prédiction n'y est connue. Un ticket ajouté à côté de tickets déjà prédits est analysé, même lancé seul.
 - Les analyses d'un même dépôt passent l'une après l'autre et ne prennent aucune des places de `IMPL_MAX_CONCURRENT_RUNS`. Le délai est `IMPL_SCHEDULE_TIMEOUT_MINUTES` (5 minutes par défaut). Passé ce délai, la session est tuée.
 - La console ne lit pas le code de sortie. Elle valide le fichier de sortie en entier et le refuse à la première règle du contrat qui échoue.
-- Un fichier absent ou refusé, un délai dépassé ou un arrêt de la console pendant l'analyse marquent les tickets en échec d'analyse. Un ticket en échec d'analyse, comme un ticket `low`, est en conflit avec tous les tickets de son dépôt : ils passent un par un.
+- Un fichier absent ou refusé, un délai dépassé ou un arrêt de la console pendant l'analyse marquent les tickets en échec d'analyse. Un ticket en échec d'analyse, comme un ticket `low`, est en conflit avec tous les tickets de son dépôt : ils passent un par un. L'analyse suivante du dépôt reprend les tickets en échec encore en file, en cours ou en attente de merge, et remplace leur prédiction si elle réussit. Aucune analyse n'est relancée pour eux seuls.
 - Deux tickets de dépôts différents ne sont jamais en conflit, quoi que disent les arêtes. La règle est dans la console, pas dans l'agent.
 - Un ticket en conflit avec un run en cours attend. Quand ce run se termine avec une merge request, le ticket attend qu'elle soit mergée. Une merge request fermée sans merge, ou un run terminé sans merge request, libère le ticket.
 - Pour une arête `depends_on`, le premier ticket de `order` passe devant le second dans la file.

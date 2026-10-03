@@ -46,7 +46,7 @@ function idleRun(id: string) {
 function registryWith(session: InstanceType<typeof RunSession>, submitted: string[] = []) {
   const registry = new RunRegistry();
   (registry as unknown as { register(session: unknown): unknown }).register(session);
-  session.engine = { write: () => undefined, submit: (text) => submitted.push(text), resize: () => undefined, kill: () => undefined };
+  session.engine = { write: () => undefined, submit: (text) => submitted.push(text), resize: () => undefined, kill: () => undefined, answerPrompt: () => false };
   registry.monitor.stop();
   return registry;
 }

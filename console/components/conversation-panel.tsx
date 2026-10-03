@@ -3,9 +3,10 @@
 import { ArrowDownIcon, ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { messageBlocks } from "@/lib/conversation";
-import type { ConversationMessage, PendingQuestion } from "@/lib/types";
+import type { ConversationMessage, PendingQuestion, SessionPrompt } from "@/lib/types";
 import { InlineText } from "./inline-text";
 import { QuestionPanel } from "./question-panel";
+import { SessionPromptPanel } from "./session-prompt-panel";
 
 function MessageBody({ text }: { text: string }) {
   return <>{messageBlocks(text).map((block, index) => block.kind === "code"
@@ -27,10 +28,12 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, pendingQuestion, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; sessionPrompt?: SessionPrompt; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
+  // A question of the workflow or the prompt the session opened on: either one holds the run.
+  const decisionId = pendingQuestion?.id ?? sessionPrompt?.id;
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -48,11 +51,11 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
   // user had scrolled up to reread something.
   useEffect(() => {
     const list = listRef.current;
-    if (!list || !pendingQuestion || !visible) return;
+    if (!list || !decisionId || !visible) return;
     pinnedRef.current = true;
     setPinned(true);
     list.scrollTop = list.scrollHeight;
-  }, [pendingQuestion?.id, visible]);
+  }, [decisionId, visible]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -94,7 +97,7 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
           onScroll={() => { const list = listRef.current; if (!list) return; pinnedRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; setPinned(pinnedRef.current); }}
           className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 md:px-7"
         >
-          {messages.length === 0 && !pendingQuestion ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+          {messages.length === 0 && !decisionId ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
             {!live ? (
               <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Aucun échange n’a été relu pour ce run. Sa session est fermée : ses documents et ses preuves restent consultables.</p>
@@ -123,8 +126,9 @@ export function ConversationPanel({ messages, pendingQuestion, writing, action, 
               </div>
             </article>
           ))}
+          {sessionPrompt && <div className="flex flex-col items-start"><SessionPromptPanel key={sessionPrompt.id} prompt={sessionPrompt} disabled={!connected} onAnswer={(decision) => onAnswerPrompt?.(sessionPrompt.id, decision)} /></div>}
           {pendingQuestion && <div className="flex flex-col items-start"><QuestionPanel key={pendingQuestion.id} pending={pendingQuestion} onAnswer={onAnswer} /></div>}
-          {messages.length > 0 && busy && !pendingQuestion && <WritingHint action={action} />}
+          {messages.length > 0 && busy && !decisionId && <WritingHint action={action} />}
         </div>
         {!pinned && (
           <button

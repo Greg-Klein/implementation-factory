@@ -37,7 +37,7 @@ Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne l
 | `id`, `label` | identité du moteur | `label` apparaît dans les erreurs et le journal d'activité |
 | `locate()` | l'exécutable, ou `null` | nom du binaire |
 | `command(issueUrl, instruction)` | point d'entrée du workflow | forme de la commande, ici une commande slash |
-| `start(options)` | démarre la session, rend un `EngineSession`. `options.environment` porte les variables que le workflow lit (`IMPL_CODE_SNAPSHOT`, `IMPL_SNAPSHOT_LOG`, `IMPL_SNAPSHOT_EXCLUDE`), posées telles quelles | arguments, variables d'environnement, transport |
+| `start(options)` | démarre la session, rend un `EngineSession`. `options.onEvent` reçoit ce que l’agent dit hors de ses hooks, lu dans le terminal. `options.environment` porte les variables que le workflow lit (`IMPL_CODE_SNAPSHOT`, `IMPL_SNAPSHOT_LOG`, `IMPL_SNAPSHOT_EXCLUDE`), posées telles quelles | arguments, variables d'environnement, transport |
 | `taskDirectory(cwd)` | où le workflow dépose ses documents | `.claude/tasks` pour Claude Code |
 | `transcriptPath(payload)` | le fichier d'où se lit le dialogue | nommé par l'agent dans ses propres événements |
 | `conversationLine(line)` | une ligne de ce fichier | format JSONL propre à l'agent |
@@ -52,7 +52,8 @@ Ce que le harnais fait d'une session en cours :
 
 - `write(data)` : les frappes brutes du terminal intégré;
 - `submit(text)` : une instruction tapée dans l'interface, envoyée comme l'agent l'attend. Sous Claude Code c'est un collage entre marqueurs suivi d'un retour chariot séparé, parce qu'un retour chariot **dans** le collage est lu comme du contenu et l'instruction n'est jamais soumise;
-- `resize(cols, rows)`, `kill()`.
+- `resize(cols, rows)`, `kill()`;
+- `answerPrompt(decision)` : la réponse (`accept` ou `refuse`) à la demande que la session a levée par `session.prompt`, tapée comme l’agent l’attend. Rend `false`, sans rien taper, quand cette demande n’est plus à l’écran.
 
 ### EngineEvent
 
@@ -67,6 +68,8 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 | `question` | **bloque l'agent** jusqu'à la réponse de l'utilisateur |
 | `attention` | l'agent réclame la main, avec sa cause : `permission`, `terminal_interaction` ou `unknown` |
 | `turn.end` | le **pilote** rend la main, ce qui ne veut pas dire que le workflow est fini (la fin d'un sous-agent est `agent.stop`) |
+| `session.prompt` | l’agent s’arrête sur une demande à lui avant que la session démarre (`folder_trust` : faire confiance au dossier) : une décision attend l’utilisateur |
+| `session.prompt.end` | cette demande a quitté l’écran |
 
 Ces champs ne sont remplis que quand Claude Code les fournit : `tool_use_id` et `agent_id` des hooks d'outils, `notification_type` des notifications. Un champ absent reste inconnu, et la santé du run (`server/run-health.ts`) s'en accommode. `END_REPORTED_TOOLS` doit rester égal au matcher `PostToolUse` de `hooks/hooks.json`, ce que vérifie un test.
 
@@ -100,6 +103,18 @@ la Promise se résout, la réponse HTTP part, l'agent repart
 ```
 
 Le blocage est cette Promise non résolue. Un moteur qui ne sait pas attendre dessus ne peut pas alimenter le panneau de décisions.
+
+### La demande de confiance du dossier
+
+Claude Code la dessine avant tout hook et tout transcript : elle ne peut être lue que dans la sortie du terminal. `trust-prompt.ts` contient tout ce qu’on en sait, et rien d’autre n’en parle.
+
+- **Le texte.** Observé sur Claude Code 2.1.288, dans un dossier jamais ouvert : « Accessing workspace: », le chemin, « Quick safety check: Is this a project you created or one you trust? … », puis deux options, « No, exit » (sous le curseur à l’ouverture) et « Yes, I trust this folder », et « Enter to confirm · Esc to cancel ». La sortie brute est gardée dans `tests/unit/fixtures/trust-dialog.json`, chemin remplacé.
+- **La détection.** Les mots sont séparés par des déplacements de curseur (`ESC[<colonne>G`), pas par des espaces, et la trame arrive coupée n’importe où. Le texte est donc comparé sans séquences d’échappement ni blancs, sur une fenêtre glissante. Trois expressions doivent s’y trouver dans l’ordre. La recherche s’arrête après les 16 premiers kilo-octets de sortie : la demande est la première chose que la session dessine, et le même texte affiché plus tard par un outil n’en est pas une.
+- **La fin.** Une sortie de 400 caractères visibles sans aucune expression de la demande veut dire que la session est passée à son propre écran. Au-dessus du moteur, le premier hook reçu et la sortie du processus ferment aussi la demande.
+- **La réponse.** Refuser envoie Échap, que la demande propose elle-même, puis termine la session si elle est encore là deux secondes plus tard. Accepter envoie Flèche bas puis Entrée, ou Entrée seule si le curseur a été vu sur « Yes ». Si le curseur n’est pas où il a été vu, une acceptation peut au pire devenir un refus.
+- **Ce qui n’est pas vérifié.** Aucune réponse n’a été envoyée au vrai Claude Code : accepter écrit dans la configuration de l’utilisateur. Les touches sont vérifiées contre `tests/fake-claude/claude`, qui rejoue la trame capturée.
+- **Un texte reformulé** ne correspond à rien. Le run se comporte alors comme avant : rien dans la conversation, la réponse dans l’onglet Terminal. Jamais une carte qui bloque un run sain.
+- Un sous-dossier d’un dossier déjà approuvé ne reçoit pas la demande (observé dans `<dépôt>/.claude/worktrees/trust-probe`, même version).
 
 ## Ajouter un moteur
 

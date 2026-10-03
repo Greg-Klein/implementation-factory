@@ -24,6 +24,9 @@ export function createSampleCheckout() {
   return sampleCheckout;
 }
 
+/** Checkouts under this directory get the folder trust dialog from the stand-in `claude`, as a directory Claude Code never saw would. */
+export const untrustedRoot = path.join(checkoutsRoot, "untrusted");
+
 /** Where the suite's console keeps its runs, away from the developer's own history. */
 export const dataDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "data");
 /** A `claude` that only waits at its prompt, put first on the console's PATH. See tests/fake-claude/claude. */

@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, hookToken, prepareDataDirectory } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, hookToken, prepareDataDirectory, untrustedRoot } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -40,6 +40,8 @@ export default defineConfig({
       IMPL_HEALTH_TURN_GRACE_MS: "1500",
       IMPL_HEALTH_ARTIFACT_GRACE_MS: "1000",
       FAKE_CLAUDE_INPUT_DIR: fakeClaudeInputDirectory,
+      // Runs started under this directory open on the folder trust dialog.
+      FAKE_CLAUDE_UNTRUSTED_ROOT: untrustedRoot,
       // A launched run gets a stand-in session instead of a real Claude Code.
       PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },

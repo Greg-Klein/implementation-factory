@@ -19,6 +19,7 @@ export type RunViewActions = {
   terminalResize: (cols: number, rows: number) => void;
   sendInstruction: (text: string) => void;
   answer: (answers: Record<string, string>) => void;
+  answerPrompt: (promptId: string, decision: "accept" | "refuse") => void;
   feedback: (body: string) => void;
   stop: () => void;
   close: () => void;
@@ -51,7 +52,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
    * is not news to them.
    */
   const unread: Partial<Record<Tab, string>> = {
-    conversation: tab === "conversation" ? undefined : run.pendingQuestion ? "décision en attente" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
+    conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "décision en attente" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
     preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
   };
 
@@ -126,7 +127,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
         </div>
         <IncidentPanel run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
+          <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} sessionPrompt={run.sessionPrompt} connected={connected} onAnswerPrompt={actions.answerPrompt} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
         </div>
         <div className={tab === "suivi" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <TrackingPanel run={run} />

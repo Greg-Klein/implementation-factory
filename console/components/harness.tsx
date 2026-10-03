@@ -375,6 +375,7 @@ export function Harness() {
                 terminalResize: (cols, rows) => send({ type: "terminal.resize", runId, cols, rows }),
                 sendInstruction: (text) => send({ type: "instruction.send", runId, text }),
                 answer: (answers) => send({ type: "question.answer", runId, answers }),
+                answerPrompt: (promptId, decision) => send({ type: "sessionPrompt.answer", runId, promptId, decision }),
                 feedback: (body) => send({ type: "feedback.submit", runId, body }),
                 stop: () => send({ type: "run.stop", runId }),
                 close: () => send({ type: "run.close", runId }),

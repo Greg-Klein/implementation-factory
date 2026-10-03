@@ -222,6 +222,7 @@ export function interruptRun(state: RunState, now: string): RunState {
     endedAt: state.endedAt ?? lastKnownActivityAt(state) ?? now,
     sessionActive: false,
     pendingQuestion: undefined,
+    sessionPrompt: undefined,
     action: undefined,
     agents: closeAbandonedAgents(state.agents ?? [], now).agents,
     error: state.error ?? "Le serveur du harnais a redémarré ou s'est arrêté pendant que ce run était en cours ; son issue réelle n'a jamais été enregistrée.",

@@ -34,6 +34,8 @@ La commande et les agents restent dans le dossier `implementation-harness`; rien
 
 Le panneau de discussion est lu dans le transcript de la session, et Claude Code n’y écrit un message qu’une fois revenue l’action qui l’a suivi. Un paragraphe peut donc y arriver avec une minute de retard sur le terminal, qui est la seule vue en direct. Tant que la session produit de la sortie, le panneau affiche « Claude écrit… » pour dire que le dernier message visible n’est pas le dernier état du run.
 
+Dans un dossier que Claude Code n’a jamais ouvert, la session commence par sa demande de confiance, avant tout hook et tout transcript. La console la reconnaît dans la sortie du terminal et l’affiche dans la conversation comme une décision : « Claude Code demande de faire confiance à ce dossier », le chemin, puis « Faire confiance et continuer » ou « Refuser ». Elle ne répond jamais à ta place, n’écrit dans aucun fichier de configuration de Claude Code et ne passe aucun drapeau qui saute la question : elle tape dans le terminal la réponse que tu as choisie. La carte disparaît dès que la demande n’est plus à l’écran, que tu aies répondu ici ou dans l’onglet Terminal. Un refus ferme la session, et le run finit « Arrêté » avec sa raison, sans incident. La détection est écrite pour le texte de Claude Code 2.1.288 (`server/engine/trust-prompt.ts`) : si une version le reformule, rien ne s’affiche et la réponse se donne dans l’onglet Terminal, comme avant.
+
 Le flux d’activité ne garde que les jalons du workflow : agents, documents, branche, merge request, décisions attendues. Le détail des commandes reste dans le terminal.
 
 Le harnais ne réclame l’attention que quand il est arrêté : une décision attendue, une demande de permission, un incident (plus aucune action en cours, résultat manquant, session interrompue), la fin ou l’échec du run. Un simple silence n’est qu’un doute, signalé une fois.
@@ -44,7 +46,7 @@ La santé d’un run est une projection à part de son statut (`server/run-healt
 
 | Situation observée | Santé | Ce que montre la console |
 |---|---|---|
-| Question, permission ou saisie attendue | attente | le panneau de question, ou « Ouvrir le terminal » |
+| Question, confiance du dossier, permission ou saisie attendue | attente | le panneau de question ou de confiance, ou « Ouvrir le terminal » |
 | Agent, commande ou tâche de fond au travail | sain ou attente | rien ; au-delà du seuil de silence, un doute |
 | Silence prolongé (`IMPL_STALL_MINUTES`, 10 par défaut) | doute | « Aucune progression observée », sans rien arrêter ni relancer |
 | Le pilote a rendu la main, rien ne tourne, rien n’est attendu, workflow inachevé | incident après 60 s | « Plus aucune action en cours » |
@@ -104,6 +106,7 @@ Limites de cette version : aucune commande n’est encore corrélée à son rés
 | `server/index.ts` | serveur HTTP et WebSocket, cycle de vie du run |
 | `server/engine/` | **la seule partie qui sait quel agent est piloté** (voir son README) |
 | `server/hooks.ts` | applique les événements du moteur à l’état du run |
+| `server/session-prompt.ts` | la demande de confiance du dossier : affichée, répondue, partie d’elle-même, refusée |
 | `server/transcript.ts` | suit le fichier de dialogue de la session |
 | `server/artifacts.ts` | archive les documents produits avant leur nettoyage |
 | `server/acceptance.ts` | couverture des critères d’acceptation, cohérence du verdict QA, logique pure, et synthèse de merge request |

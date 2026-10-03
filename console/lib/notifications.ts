@@ -1,4 +1,4 @@
-import { pendingAnswerLabel, runInProgress, runLabel } from "./run-state";
+import { pendingAnswerLabel, pendingDecisions, runInProgress, runLabel } from "./run-state";
 import type { RunSummary } from "./types";
 
 /** Two cues, the distinction the workflow has always made: something is expected of you, or the run is over. */
@@ -21,6 +21,8 @@ export function runAlert(previous: RunSummary | undefined, next: RunSummary): Ru
   const where = runLabel(next);
   if (next.pendingQuestionCount > 0 && previous.pendingQuestionCount === 0)
     return { runId: next.id, tag: `question-${next.pendingQuestionId}`, title: pendingAnswerLabel(next.pendingQuestionCount), body: `${where} · le workflow attend ta décision pour continuer.`, cue: "attention" };
+  if (next.sessionPromptId && next.sessionPromptId !== previous.sessionPromptId)
+    return { runId: next.id, tag: `session-prompt-${next.sessionPromptId}`, title: "Claude Code demande de faire confiance au dossier", body: `${where} · la session ne démarre pas sans ta décision.`, cue: "attention" };
   if (next.status === "completed" && runInProgress(previous.status))
     return { runId: next.id, tag: `completed-${next.id}`, title: `Workflow terminé · ${where}`, body: next.mergeRequestUrl ?? "Le run est allé au bout.", cue: "done" };
   // A failed run is over too, and what happens next is the user's call either
@@ -30,7 +32,7 @@ export function runAlert(previous: RunSummary | undefined, next: RunSummary): Ru
   // A stop the user asked for is over too, but it never went all the way: it
   // must never read like the "completed" case above.
   if (next.status === "stopped" && runInProgress(previous.status))
-    return { runId: next.id, tag: `stopped-${next.id}`, title: `Run arrêté · ${where}`, body: "Tu as arrêté la session avant la fin du workflow.", cue: "done" };
+    return { runId: next.id, tag: `stopped-${next.id}`, title: `Run arrêté · ${where}`, body: next.error ?? "Tu as arrêté la session avant la fin du workflow.", cue: "done" };
   // One alert per incident, whatever else changed with it: its opening is the news.
   if (next.incident && next.incident.id !== previous.incident?.id && next.pendingQuestionCount === 0)
     return { runId: next.id, tag: `incident-${next.incident.id}`, title: `${next.incident.title} · ${where}`, body: "Ouvre le run pour voir ce qui a été observé et ce que tu peux faire.", cue: "attention" };
@@ -57,8 +59,8 @@ export function runAlerts(previous: RunSummary[], next: RunSummary[]): RunAlert[
  * the most demanding state across all of them, and how many runs are in it.
  */
 export function documentTitle(runs: RunSummary[]) {
-  const waiting = runs.filter((run) => run.pendingQuestionCount > 0);
-  if (waiting.length === 1) return `● ${pendingAnswerLabel(waiting[0].pendingQuestionCount)} · ${NAME}`;
+  const waiting = runs.filter((run) => pendingDecisions(run) > 0);
+  if (waiting.length === 1) return `● ${pendingAnswerLabel(pendingDecisions(waiting[0]))} · ${NAME}`;
   if (waiting.length > 1) return `● ${waiting.length} runs attendent une réponse · ${NAME}`;
   const attention = runs.filter((run) => run.status === "attention").length;
   if (attention > 0) return `● Attention requise${attention > 1 ? ` (${attention})` : ""} · ${NAME}`;
@@ -82,7 +84,7 @@ export function statusColor(status: RunSummary["status"]) {
 
 /** The favicon speaks for the whole console: the most demanding run wins. */
 export function faviconColor(runs: RunSummary[]) {
-  if (runs.some((run) => run.status === "attention" || run.pendingQuestionCount > 0)) return statusColor("attention");
+  if (runs.some((run) => run.status === "attention" || pendingDecisions(run) > 0)) return statusColor("attention");
   if (runs.some((run) => runInProgress(run.status))) return statusColor("running");
   if (runs.some((run) => run.status === "failed")) return statusColor("failed");
   if (runs.some((run) => run.status === "completed")) return statusColor("completed");

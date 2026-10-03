@@ -4,6 +4,8 @@ export type Agent = { id: string; name: string; nickname?: string; avatar?: stri
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
+/** Mirrors SessionPrompt in server/types.ts: the folder trust dialog of the agent, waiting for the user. */
+export type SessionPrompt = { id: string; kind: "folder_trust"; directory: string; since: string };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
@@ -18,6 +20,8 @@ export type RunState = {
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. Absent on states built before this field existed. */
   sessionActive?: boolean;
+  /** The agent stopped at a prompt of its own before the session started, and the user has not answered yet. */
+  sessionPrompt?: SessionPrompt;
   /** What Claude is doing at this instant, from the tool it last called. Absent as soon as it hands control back. */
   action?: string;
   /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
@@ -51,6 +55,7 @@ export type RunSummary = {
   sessionActive: boolean;
   pendingQuestionId?: string;
   pendingQuestionCount: number;
+  sessionPromptId?: string;
   runningAgents: number;
   lastMessageId?: string;
   lastMessageAuthor?: ConversationMessage["author"];

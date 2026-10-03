@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -141,5 +141,20 @@ describe("the acceptance chip of a run row", () => {
     expect(acceptanceChip(counts)).toEqual({ label: "2/5 AC", title: "2 critères vérifiés sur 5 · 1 en échec · 1 bloqué · 1 non vérifié", tone: "error" });
     expect(acceptanceChip({ ...counts, failed: 0, unverified: 2 })?.tone).toBe("attention");
     expect(acceptanceChip({ ...counts, verified: 5, failed: 0, blocked: 0, unverified: 0 })).toMatchObject({ label: "5/5 AC", tone: "verified" });
+  });
+});
+
+describe("a session waiting on the folder trust prompt", () => {
+  it("should count as one decision, like a question of the workflow", () => {
+    expect(pendingDecisions({ pendingQuestionCount: 0 })).toBe(0);
+    expect(pendingDecisions({ pendingQuestionCount: 0, sessionPromptId: "p1" })).toBe(1);
+    expect(pendingDecisions({ pendingQuestionCount: 2 })).toBe(2);
+  });
+
+  it("should read as the user's turn, and as a stop once refused", () => {
+    const prompt = { id: "p1", kind: "folder_trust" as const, directory: "/tmp/repo", since: "2026-10-03T09:00:00.000Z" };
+    expect(runStatusBadge({ status: "attention", sessionPrompt: prompt })).toEqual({ label: "À toi de jouer", tone: "decision" });
+    expect(terminalExitStatus(1, true)).toBe("stopped");
+    expect(runStatusBadge({ status: "stopped" })).toEqual({ label: "Arrêté", tone: "stopped" });
   });
 });

@@ -9,6 +9,7 @@ import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./conte
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
 import { answerQuestion } from "./hooks.js";
+import { answerSessionPrompt } from "./session-prompt.js";
 import { drainHookSpool, receiveHook } from "./hook-bridge.js";
 import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
@@ -137,6 +138,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     const session = registry.get(message.runId);
     if (!session) throw new Error("Ce run n'existe plus.");
     answerQuestion(session, message.answers);
+    return;
+  }
+  if (message.type === "sessionPrompt.answer") {
+    const session = registry.get(message.runId);
+    if (!session) throw new Error("Ce run n'existe plus.");
+    if (message.decision !== "accept" && message.decision !== "refuse") throw new Error("Décision inconnue.");
+    answerSessionPrompt(session, message.promptId, message.decision);
     return;
   }
   if (message.type === "feedback.submit") {

@@ -97,6 +97,8 @@ export function pilotActs(signals: RunSignals, now: number) {
  * call whose end is never reported ends with its caller's turn.
  */
 export function recordEngineSignal(signals: RunSignals, event: EngineEvent, now: number, label?: string) {
+  // A prompt before the session starts is no execution: the run state carries it, not the signals.
+  if (event.kind === "session.prompt" || event.kind === "session.prompt.end") return;
   signals.lastExecutionAt = now;
   if (event.kind === "attention") {
     const entry = { since: now, ...(event.message ? { message: event.message } : {}) };
@@ -186,6 +188,8 @@ export type HealthInput = {
   sessionActive: boolean;
   stoppedBy: "user" | "queue" | null;
   pendingQuestion: boolean;
+  /** The session waits on a prompt of its own, the folder trust dialog, answered from the console. */
+  sessionPrompt?: boolean;
   agents: Pick<AgentState, "id" | "name" | "status" | "startedAt" | "endedAt">[];
   artifacts: string[];
   planTasks?: Pick<PlanTask, "id" | "status" | "dependencies">[];
@@ -273,6 +277,7 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   }
   if (input.status === "starting" || !input.sessionActive) return { health: "healthy" };
 
+  if (input.sessionPrompt) return waiting("user_question", now, "Décision attendue", "Claude Code demande de faire confiance au dossier avant de démarrer.", "toi", "ta réponse");
   if (input.pendingQuestion) return waiting("user_question", now, "Décision attendue", "Le workflow attend ta réponse pour continuer.", "toi", "ta réponse");
   if (signals.permission) return waiting("permission", signals.permission.since, "Permission attendue", signals.permission.message ?? "Claude Code attend ton accord dans le terminal.", "toi", "ton accord dans le terminal");
   if (signals.terminalInteraction) return waiting("terminal_interaction", signals.terminalInteraction.since, "Saisie attendue dans le terminal", signals.terminalInteraction.message ?? "Claude Code attend une réponse que seul le terminal peut recevoir.", "toi", "ta saisie dans le terminal");

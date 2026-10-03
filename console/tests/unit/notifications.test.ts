@@ -106,3 +106,30 @@ describe("run notifications", () => {
     expect(faviconColor([])).toBe("#1c211f");
   });
 });
+
+describe("the folder trust prompt in notifications", () => {
+  const prompted = { status: "attention" as const, sessionPromptId: "p1" };
+
+  it("should call back once when the session opens on the prompt", () => {
+    expect(runAlert(run(), run(prompted))).toEqual({
+      runId: "run-1",
+      tag: "session-prompt-p1",
+      title: "Claude Code demande de faire confiance au dossier",
+      body: "repo · la session ne démarre pas sans ta décision.",
+      cue: "attention",
+    });
+    expect(runAlert(run(prompted), run(prompted))).toBeUndefined();
+  });
+
+  it("should count the prompt as a decision in the tab title and the favicon", () => {
+    expect(documentTitle([run(prompted)])).toBe("● Claude attend une réponse · Implementation Harness");
+    expect(documentTitle([run(prompted), run({ id: "run-2", ...waiting })])).toBe("● 2 runs attendent une réponse · Implementation Harness");
+    expect(faviconColor([run({ sessionPromptId: "p1" })])).toBe("#d97706");
+  });
+
+  it("should say why a run stopped on a refused folder", () => {
+    const reason = "Le dossier n'a pas été approuvé : la session s'est fermée avant de démarrer le workflow.";
+    expect(runAlert(run(prompted), run({ status: "stopped", error: reason }))).toMatchObject({ tag: "stopped-run-1", body: reason, cue: "done" });
+    expect(runAlert(run(), run({ status: "stopped" }))).toMatchObject({ body: "Tu as arrêté la session avant la fin du workflow." });
+  });
+});

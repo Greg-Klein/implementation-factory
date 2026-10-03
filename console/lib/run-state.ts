@@ -63,6 +63,11 @@ export function pendingAnswerLabel(count: number) {
   return count === 1 ? "Claude attend une réponse" : `Claude attend ${count} réponses`;
 }
 
+/** How many decisions a run waits on: the questions of the workflow, or the one prompt its session opened on. */
+export function pendingDecisions(run: { pendingQuestionCount: number; sessionPromptId?: string }) {
+  return run.pendingQuestionCount || (run.sessionPromptId ? 1 : 0);
+}
+
 export function elapsedLabel(start: string, end: string | undefined, now: number) {
   const milliseconds = (end ? new Date(end).getTime() : now) - new Date(start).getTime();
   const minutes = Math.floor(milliseconds / 60_000);
@@ -124,11 +129,11 @@ export type StatusBadge = { label: string; tone: "decision" | "blocked" | "error
  * without implying a question was asked, and a lost session reads as an
  * interruption rather than an error of the workflow.
  */
-export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "health" | "incidents">): StatusBadge {
+export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "sessionPrompt" | "health" | "incidents">): StatusBadge {
   const incident = run.incidents?.findLast((entry) => entry.status === "open");
   if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: "Interrompu", tone: "error" };
   if (run.status === "attention") {
-    const humanWait = Boolean(run.pendingQuestion) || (run.health?.health === "waiting" && (run.health.wait?.reason === "permission" || run.health.wait?.reason === "terminal_interaction"));
+    const humanWait = Boolean(run.pendingQuestion) || Boolean(run.sessionPrompt) || (run.health?.health === "waiting" && (run.health.wait?.reason === "permission" || run.health.wait?.reason === "terminal_interaction"));
     if (!humanWait && incident) return { label: "Sans suite", tone: "blocked" };
     return { label: statusLabel(run.status), tone: "decision" };
   }

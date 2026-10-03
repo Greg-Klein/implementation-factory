@@ -4,9 +4,15 @@
 // workflow's documents and post its hooks themselves, so the real ingestion
 // path runs without a model. What the console types into the session is kept,
 // one file per run, for a test to count what was submitted.
-import { appendFileSync } from "node:fs";
+//
+// Started under FAKE_CLAUDE_UNTRUSTED_ROOT, it first draws the folder trust
+// dialog, byte for byte what Claude Code 2.1.288 wrote (the fixture of the unit
+// tests), and waits for an answer: Enter on the option under the cursor, the
+// arrows to move it, Escape to leave. Only the frame is the real one. How the
+// real dialog redraws and what it does with each key was not observed.
+import { appendFileSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-process.stdout.write("fake claude ready\r\n");
+
 const inputDirectory = process.env.FAKE_CLAUDE_INPUT_DIR;
 if (inputDirectory && process.env.IMPL_RUN_ID) {
   const log = path.join(inputDirectory, `${process.env.IMPL_RUN_ID}.log`);
@@ -16,3 +22,36 @@ const quit = () => process.exit(0);
 process.on("SIGHUP", quit);
 process.on("SIGTERM", quit);
 setInterval(() => {}, 1 << 30);
+
+const real = (directory) => { try { return realpathSync(directory); } catch { return directory; } };
+const untrustedRoot = process.env.FAKE_CLAUDE_UNTRUSTED_ROOT;
+const untrusted = Boolean(untrustedRoot) && (real(process.cwd()) + path.sep).startsWith(real(untrustedRoot) + path.sep);
+
+/** Long enough to read as a screen of its own, the way the real welcome screen replaces the dialog. */
+function ready() {
+  const rule = "─".repeat(120);
+  process.stdout.write(`\u001b[2J\u001b[H${rule}\r\n fake claude ready\r\n ${real(process.cwd())}\r\n${rule}\r\n ❯ \r\n${rule}\r\n ⏵⏵ auto mode on (shift+tab to cycle)\r\n`);
+}
+
+if (!untrusted) {
+  process.stdout.write("fake claude ready\r\n");
+} else {
+  const fixture = JSON.parse(readFileSync(new URL("../unit/fixtures/trust-dialog.json", import.meta.url), "utf8"));
+  for (const chunk of fixture.chunks) process.stdout.write(chunk.split("/private/tmp/trust-fixture").join(real(process.cwd())));
+  process.stdin.setRawMode?.(true);
+  let selected = "no";
+  const options = () => {
+    const mark = (option) => `\u001b[2K${selected === option ? "\u001b[2G❯" : ""}`;
+    process.stdout.write(`\r${mark("no")}\u001b[4GNo,\u001b[8Gexit\r\r\n${mark("yes")}\u001b[4GYes,\u001b[9GI\u001b[11Gtrust\u001b[17Gthis\u001b[22Gfolder\u001b[1A`);
+  };
+  const onKey = (chunk) => {
+    const key = chunk.toString();
+    if (key === "\u001b[B" || key === "\u001b[A") { selected = selected === "no" ? "yes" : "no"; options(); return; }
+    if (key === "\u001b" || key === "\u0003") process.exit(1);
+    if (key !== "\r") return;
+    if (selected === "no") process.exit(1);
+    process.stdin.off("data", onKey);
+    ready();
+  };
+  process.stdin.on("data", onKey);
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArchiveIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
+import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RunSummary } from "@/lib/types";
 
@@ -59,7 +59,8 @@ function TicketTitle({ title }: { title: string }) {
  * from. What is removed is the row, never the archive on disk.
  */
 function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; selected: boolean; index: number; onOpen: () => void; onClose: () => void }) {
-  const waiting = run.pendingQuestionCount > 0;
+  const decisions = pendingDecisions(run);
+  const waiting = decisions > 0;
   const idle = holdsIdleSession(run);
   const badge = healthBadge(run);
   const closable = isClosable(run);
@@ -81,7 +82,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
           <span className={`flex items-baseline justify-between gap-2 ${run.ticketTitle ? "mt-0.5" : ""}`}>
             <span className={`truncate ${run.ticketTitle ? "text-[10px] font-medium text-[var(--ink)]" : "text-[11px] font-semibold text-[var(--ink)]"}`}>{runLabel(run)}</span>
             {waiting
-              ? <span title={`${run.pendingQuestionCount} décision${run.pendingQuestionCount > 1 ? "s" : ""} en attente`} className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-amber-800"><WarningIcon size={9} weight="fill" />{run.pendingQuestionCount}</span>
+              ? <span title={`${decisions} décision${decisions > 1 ? "s" : ""} en attente`} className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-amber-800"><WarningIcon size={9} weight="fill" />{decisions}</span>
               : <span className="shrink-0 font-mono text-[9px] text-[var(--muted)]">{run.phase}/{PHASES}</span>}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 truncate text-[10px] text-[var(--muted)]">

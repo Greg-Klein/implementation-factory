@@ -102,7 +102,8 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
  * itself killed left the same line as a crash, which on a finished run read as
  * an incident where there was only a place given back.
  */
-export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true) {
+export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true, trustRefused = false) {
+  if (trustRefused) return "Session fermée, dossier non approuvé";
   if (stoppedBy === "queue") return "Place libérée pour la file d'attente";
   if (stoppedBy === "user") return "Session arrêtée par l'utilisateur";
   if (!workflowComplete) return exitCode === 0 ? "Session terminée avant la fin du workflow" : "Session interrompue";
@@ -582,6 +583,7 @@ export function summarizeRun(state: RunState): RunSummary {
     sessionActive: state.sessionActive,
     pendingQuestionId: state.pendingQuestion?.id,
     pendingQuestionCount: state.pendingQuestion?.questions.length ?? 0,
+    ...(state.sessionPrompt ? { sessionPromptId: state.sessionPrompt.id } : {}),
     runningAgents: state.agents.filter((agent) => agent.status === "running").length,
     lastMessageId: lastMessage?.id,
     lastMessageAuthor: lastMessage?.author,

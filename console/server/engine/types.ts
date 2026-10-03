@@ -25,7 +25,16 @@ export type EngineSession = {
   submit(text: string): void;
   resize(cols: number, rows: number): void;
   kill(): void;
+  /**
+   * Answers the prompt the session raised as `session.prompt`, in the keystrokes
+   * the agent expects. False when no such prompt is on screen any more, and
+   * then nothing was typed.
+   */
+  answerPrompt(decision: SessionPromptDecision): boolean;
 };
+
+/** `accept`: let the session go on; `refuse`: the session ends, which is what the agent does with a refusal. */
+export type SessionPromptDecision = "accept" | "refuse";
 
 export type StartOptions = {
   cwd: string;
@@ -42,6 +51,8 @@ export type StartOptions = {
   environment?: Record<string, string>;
   onData(data: string): void;
   onExit(exitCode: number): void;
+  /** What the agent says outside of its hooks: read off the terminal by the engine, the only code that knows what to look for. */
+  onEvent?(event: EngineEvent): void;
 };
 
 /**
@@ -79,7 +90,15 @@ export type EngineEvent =
    */
   | { kind: "attention"; message?: string; cause: "permission" | "terminal_interaction" | "unknown" }
   /** The pilot handed control back, which does not mean the workflow is over. A subagent's end is `agent.stop`. */
-  | { kind: "turn.end" };
+  | { kind: "turn.end" }
+  /**
+   * The agent stopped at a prompt of its own before the session really started,
+   * where no hook can fire. `folder_trust`: it asks whether the directory it was
+   * started in may be trusted. Answered through `EngineSession.answerPrompt`.
+   */
+  | { kind: "session.prompt"; prompt: "folder_trust"; directory: string }
+  /** That prompt left the screen, answered in the terminal or not. */
+  | { kind: "session.prompt.end" };
 
 export type Engine = {
   readonly id: string;

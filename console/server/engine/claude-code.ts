@@ -6,10 +6,13 @@ import { pluginRoot, remoteControl, sessionPermissionMode } from "../config.js";
 import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../domain.js";
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
+import { createTrustPromptWatcher, trustAnswerKeys } from "./trust-prompt.js";
 import type { Engine, EngineEvent, EngineSession, StartOptions } from "./types.js";
 
 /** Long enough for the paste to be read before the submission keystroke arrives. */
 const SUBMIT_DELAY_MS = 150;
+/** How long a refused session is given to leave on its own before it is ended for it. */
+const REFUSAL_EXIT_MS = 2_000;
 
 /**
  * A harness started from inside a Claude Code session inherits markers that make
@@ -211,7 +214,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   return undefined;
 }
 
-function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit }: StartOptions): EngineSession {
+function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
   const sessionName = `implementation-harness ${path.basename(cwd)}`;
@@ -223,7 +226,14 @@ function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment
     env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
   });
   let alive = true;
-  terminal.onData(onData);
+  // The folder trust dialog comes before any hook: the terminal is where it is read from.
+  const trust = createTrustPromptWatcher();
+  terminal.onData((data) => {
+    onData(data);
+    const change = trust.feed(data);
+    if (change === "shown") onEvent?.({ kind: "session.prompt", prompt: "folder_trust", directory: cwd });
+    else if (change === "gone") onEvent?.({ kind: "session.prompt.end" });
+  });
   terminal.onExit(({ exitCode }) => { alive = false; onExit(exitCode); });
   return {
     write: (data) => terminal.write(data),
@@ -237,6 +247,16 @@ function start({ cwd, runId, command, pluginDir, hookUrl, hookSpool, environment
     },
     resize: (cols, rows) => terminal.resize(cols, rows),
     kill: () => { alive = false; terminal.kill(); },
+    answerPrompt: (decision) => {
+      if (!alive || !trust.shown) return false;
+      const keys = trustAnswerKeys(decision, trust.selected);
+      trust.answered();
+      // One keystroke per write: a burst is read as a paste, and the arrow would never move the cursor.
+      keys.forEach((key, index) => setTimeout(() => { if (alive) terminal.write(key); }, index * SUBMIT_DELAY_MS));
+      // A refusal ends the session whatever the dialog made of the keystroke.
+      if (decision === "refuse") setTimeout(() => { if (alive) { alive = false; terminal.kill(); } }, REFUSAL_EXIT_MS).unref();
+      return true;
+    },
   };
 }
 

@@ -6,6 +6,7 @@ import { engine } from "./engine/index.js";
 import type { EngineEvent } from "./engine/index.js";
 import { recordEngineSignal } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
+import { sessionStarted } from "./session-prompt.js";
 import type { RunSession } from "./run-session.js";
 
 function advancePhase(session: RunSession, phase: number) {
@@ -120,6 +121,8 @@ export function clearPendingQuestion(session: RunSession) {
 }
 
 function apply(session: RunSession, event: EngineEvent) {
+  // Read off the terminal, never carried by a hook: see session-prompt.ts.
+  if (event.kind === "session.prompt" || event.kind === "session.prompt.end") return;
   recordEngineSignal(session.signals, event, Date.now(), event.kind === "tool.start" ? actionLabel(event.tool, event.command, event.target) : undefined);
   if (event.kind === "agent.start") {
     const known = session.state.agents.find((agent) => agent.id === event.agentId);
@@ -207,8 +210,13 @@ function apply(session: RunSession, event: EngineEvent) {
 export function processHook(session: RunSession, body: Record<string, unknown>) {
   const inProgress = runInProgress(session.state.status);
   if (!inProgress && !session.state.sessionActive) return;
+  // Any hook proves the session runs, the one of its start included, which names no event of the harness.
+  const started = sessionStarted(session);
   const event = engine.event((body.payload ?? {}) as Record<string, unknown>);
-  if (!event) return;
+  if (!event) {
+    if (started) { session.publish(); session.signal(); }
+    return;
+  }
   // A question publishes its own state from inside the promise it hands back,
   // and that promise is what keeps the agent waiting. It is raised even once
   // the workflow is over: the user can keep talking to the idle session, and a

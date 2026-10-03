@@ -8,6 +8,12 @@ export type AgentState = { id: string; name: string; nickname?: string; avatar?:
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
 /**
+ * A prompt the agent raised before its session started, waiting for the user:
+ * `folder_trust` asks whether `directory` may be trusted. Not a workflow
+ * question, see server/session-prompt.ts.
+ */
+export type SessionPrompt = { id: string; kind: "folder_trust"; directory: string; since: string };
+/**
  * One worktree the improvement loop left for a verdict, independent of any run: it is
  * discovered by listing worktrees, never tied to the run that happened to spawn it.
  * `mergesCleanly` is false when the branch no longer merges into the harness even
@@ -196,6 +202,8 @@ export type RunState = {
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
   sessionActive: boolean;
+  /** The agent stopped at a prompt of its own before the session started, and the user has not answered yet. */
+  sessionPrompt?: SessionPrompt;
   /** What the agent is doing at this instant, from the tool it last called. Cleared as soon as it hands control back. */
   action?: string;
   /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
@@ -240,6 +248,8 @@ export type RunSummary = {
   /** How many decisions this run is blocked on, and which batch they belong to, so an alert fires once per batch. */
   pendingQuestionId?: string;
   pendingQuestionCount: number;
+  /** Set while the session waits on a prompt of its own, the folder trust dialog: a decision too, and one alert per prompt. */
+  sessionPromptId?: string;
   runningAgents: number;
   /** What the unread dots of this row are measured against, same pair as inside the run view. */
   lastMessageId?: string;
@@ -289,6 +299,8 @@ export type ClientMessage =
   | { type: "demo.start"; scenario?: "workflow" | "incident" }
   | { type: "feedback.submit"; runId: string; body: string }
   | { type: "question.answer"; runId: string; answers: Record<string, string> }
+  /** The user's decision on the prompt the page was shown, typed into the session by the engine. */
+  | { type: "sessionPrompt.answer"; runId: string; promptId: string; decision: "accept" | "refuse" }
   | { type: "selfImprovement.approve"; worktreeName: string }
   | { type: "selfImprovement.reject"; worktreeName: string }
   /**

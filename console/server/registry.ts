@@ -7,6 +7,7 @@ import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "
 import { closeTranscript } from "./transcript.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
+import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
 import { acknowledgeDemoInstruction, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
@@ -177,6 +178,7 @@ export class RunRegistry {
         void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);
       },
       onExit: (exitCode) => this.handleExit(session, exitCode),
+      onEvent: (event) => applySessionEvent(session, event),
     });
     session.state.status = "running";
     session.state.sessionActive = true;
@@ -192,18 +194,21 @@ export class RunRegistry {
     // Whatever the session was doing when it went away, it is not doing it now.
     session.state.action = undefined;
     clearPendingQuestion(session);
+    // A session that leaves on the folder trust prompt was refused it: the user's decision, not a crash.
+    const trustRefused = closeSessionPrompt(session);
     // The workflow can already have closed the run, and how its idle session
     // then ends says nothing about the outcome it reached.
     const inProgress = runInProgress(session.state.status);
     const complete = !inProgress || declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
     if (inProgress) {
-      session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null, complete);
+      session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null || Boolean(trustRefused), complete);
       session.state.endedAt = now();
-      if (session.state.status === "failed") session.state.error = exitCode === 0
+      if (trustRefused) session.state.error = trustRefused;
+      else if (session.state.status === "failed") session.state.error = exitCode === 0
         ? `${engine.label} s'est terminé avant que le workflow n'atteigne un résultat.`
         : `${engine.label} s'est arrêté avec le code ${exitCode}.`;
     }
-    session.activity("system", exitReport(session.stoppedBy, exitCode, complete), `Code ${exitCode}`);
+    session.activity("system", exitReport(session.stoppedBy, exitCode, complete, Boolean(trustRefused)), `Code ${exitCode}`);
     closeAgentsLeftBehind(session);
     session.publish();
     // Diagnosed before the self-audit reads the run, so a lost session reaches it as an incident.
@@ -420,6 +425,7 @@ export class RunRegistry {
       }
       session.state.sessionActive = false;
       session.state.action = undefined;
+      session.state.sessionPrompt = undefined;
       clearPendingQuestion(session);
       closeAgentsLeftBehind(session);
       await session.dispose().catch(() => undefined);

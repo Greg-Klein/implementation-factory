@@ -33,6 +33,8 @@ export class RunSession {
   terminalBuffer = "";
   /** Who ended the session, when it was not the workflow: a stop the user asked for, or the place given back to the queue. Neither is a crash. */
   stoppedBy: "user" | "queue" | null = null;
+  /** Why the session ended by the user's own decision without a stop: they refused to trust the folder. */
+  endedBy: "trust_refused" | null = null;
   engine: EngineSession | null = null;
   artifactWatcher: FSWatcher | null = null;
   /** Where the dialogue is read from, and how far it has been read. */

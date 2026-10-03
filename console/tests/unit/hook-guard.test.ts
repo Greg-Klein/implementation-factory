@@ -67,7 +67,55 @@ describe("the hook guard", () => {
     expect(refusal("Bash", { command: "git log --grep 'Co-Authored-By:'" })).toBeUndefined();
   });
 
+  it("should refuse the git commands that destroy work, wherever they sit on the line", () => {
+    for (const command of [
+      "git reset --hard",
+      "cd /repo && rtk git -C /repo reset --hard origin/main",
+      "(git clean -fd)",
+      "git checkout .",
+      "git checkout -- .",
+      "git restore .",
+      "git switch --discard-changes main",
+      "git push --force origin feat-1-x",
+      "git push origin +feat-1-x",
+      "git worktree prune",
+      "git worktree remove /repo/.claude/worktrees/run-1",
+    ]) expect(`${command} => ${refusal("Bash", { command }) ? "refused" : "let through"}`).toBe(`${command} => refused`);
+  });
+
+  it("should let through the git commands the workflow needs", () => {
+    for (const command of [
+      "git reset --soft HEAD~1",
+      "git clean -nfd",
+      "git checkout -- src/a.ts",
+      "git restore --staged .",
+      "git switch -c feat-1-x --no-track origin/main",
+      "git push -u origin feat-1-x",
+      "git push --force-with-lease origin feat-1-x",
+      "git worktree add --detach /tmp/qa-1 HEAD",
+      "git worktree remove --force /tmp/qa-1",
+      "git stash push -u -m implementation-harness-1",
+      "git commit -m 'docs: never run git reset --hard'",
+      "git log --grep 'clean -fd'",
+      "git commit -F - <<EOF\nfix: x\n\ngit reset --hard was the cause\nEOF",
+    ]) expect(`${command} => ${refusal("Bash", { command }) ? "refused" : "let through"}`).toBe(`${command} => let through`);
+  });
+
+  it("should refuse a stash and a deleted or overwritten branch in the worktree of a run", () => {
+    const worktree = { IMPL_RUN_ID: "run", IMPL_RUN_WORKTREE: "/repo/.claude/worktrees/run-1" };
+    expect(refusal("Bash", { command: "git stash" }, worktree)).toContain("worktree mode");
+    expect(refusal("Bash", { command: "git stash list" }, worktree)).toBeUndefined();
+    expect(refusal("Bash", { command: "git branch -D feat-1-x" }, worktree)).toBeDefined();
+    expect(refusal("Bash", { command: "git switch -C feat-1-x origin/main" }, worktree)).toBeDefined();
+    expect(refusal("Bash", { command: "git checkout -B feat-1-x" }, worktree)).toBeDefined();
+    expect(refusal("Bash", { command: "git worktree remove ." }, { ...worktree, IMPL_RUN_WORKTREE: cwd })).toBeDefined();
+    // A checkout whose `.git` is a file is a linked worktree, with or without the console.
+    writeFileSync(path.join(cwd, ".git"), "gitdir: /repo/.git/worktrees/x\n");
+    expect(refusal("Bash", { command: "git stash" })).toContain("worktree mode");
+  });
+
   it("should say nothing outside a run of the workflow", () => {
+    expect(refusal("Bash", { command: "git reset --hard" }, {})).toBeUndefined();
     expect(refusal("Agent", { subagent_type: "developer" }, {})).toBeUndefined();
     expect(refusal("Bash", { command: "git commit -m 'x\n\nCo-Authored-By: someone'" }, {})).toBeUndefined();
     writeFileSync(path.join(tasks, "workflow-state.json"), "{}");

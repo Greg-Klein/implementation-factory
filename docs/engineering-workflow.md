@@ -209,11 +209,14 @@ A design verdict of `INCONCLUSIVE`, or a review triggered but not started becaus
 
 ## Rules enforced by a mechanism
 
-A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses three calls and gives the agent the reason:
+A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses four kinds of call and gives the agent the reason:
 
 - an agent of the workflow invoked under its bare name;
 - a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
-- a `git commit`, or a `glab` publication on a merge request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line.
+- a `git commit`, or a `glab` publication on a merge request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line;
+- a git command that destroys work: `git reset --hard`, `git clean -f` without a dry run, a checkout, restore or switch that discards the whole tree, a forced push without `--force-with-lease`, `git worktree prune`, the removal of a worktree under `.claude/worktrees/`. In a linked worktree, which is every run the console starts, it also refuses a stash other than `list` or `show`, and a branch deleted or overwritten (`branch -D`, `checkout -B`, `switch -C`, `--ignore-other-worktrees`).
+
+The git rules read the commands typed on the line, word by word. A forbidden command quoted in a commit message or passed to a script is not looked at.
 
 A refused call is not forwarded to the console. A guard that cannot read what it checks lets the call through. `commands/improve.md` asks for a mechanism before a new sentence whenever one can carry the rule.
 

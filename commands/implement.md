@@ -445,11 +445,11 @@ You are the only one allowed to touch git, so you are the only one who can break
 
 Never, whatever the situation, whoever asks:
 
-- `git reset --hard`, `git checkout .`, `git restore` over uncommitted work, `git clean -fd`
+- destroying uncommitted work: `git reset --hard`, `git clean -f`, a checkout, restore or switch that discards the tree, a bare `git push --force`. A hook refuses these, and in worktree mode it also refuses a stash, the removal of a run worktree, `git worktree prune`, and deleting or overwriting a branch (`-B`, `-C`, `-D`). A refusal is a reason to stop and report, never to reach the same result another way
+- `git restore` or `git checkout --` on a file whose uncommitted changes are not yours
 - amending or rebasing commits that are not yours from this run
 - resolving a conflict by discarding one side
 - deleting or rewriting a branch you did not create in this run, unless the user names it
-- in worktree mode: removing the run worktree, deleting the ticket branch, or overwriting an existing branch (`-B`, `--force`)
 
 Not on your own initiative, but allowed when **the user asks for it explicitly**. Announce the move, state the preconditions you checked, then do it:
 

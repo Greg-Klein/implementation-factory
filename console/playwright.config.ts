@@ -34,6 +34,9 @@ export default defineConfig({
       IMPL_SEARCH_ROOTS: checkoutsRoot,
       // Isolate the suite from whatever .env the developer keeps locally.
       IMPL_ENV_FILE: path.join(checkoutsRoot, "absent.env"),
+      // The shell wins over the defaults, and a session the console started
+      // inherits its settings: the specs read the summary in English.
+      IMPL_LANGUAGE: "en",
       // The self-audit is on by default, and a run finishing under test must not
       // start a real improvement session on this checkout.
       IMPL_SELF_IMPROVEMENT_AUTORUN: "false",

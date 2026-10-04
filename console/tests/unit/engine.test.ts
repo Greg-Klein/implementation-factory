@@ -155,6 +155,10 @@ describe("the headless scheduling session", () => {
     expect(valueOf("--output-format")).toBe("json");
   });
 
+  it("should leave the user's own settings out, so a personal hook cannot rewrite a command into a refused one", () => {
+    expect(valueOf("--setting-sources")).toBe("project,local");
+  });
+
   it("should load the plugin and reach the plugin and the output directory", () => {
     expect(valueOf("--plugin-dir")).toBe("/opt/harness");
     expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : [])).toEqual(["/opt/harness", "/data/schedule/call-1"]);

@@ -274,13 +274,14 @@ Typecheck, build, 443 unit tests and 59 integration tests pass on the `feat/revi
 A real trial of `/implementation-harness:schedule` with `claude -p` (Claude Code 2.1.288), from a disposable git repository, on an empty batch. The plugin's command is resolved in non-interactive mode, the output file contains `{ "tickets": [], "edges": [] }` and the process exits with code 0 in 9 to 12 seconds.
 
 ```bash
-claude -p --plugin-dir <plugin> --add-dir <plugin> --add-dir <output directory> \
+claude -p --setting-sources project,local --plugin-dir <plugin> --add-dir <plugin> --add-dir <output directory> \
   --model sonnet --permission-mode dontAsk --permission-prompts none \
   --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(gh issue view *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <output directory>/*)" \
   --output-format json -- "/implementation-harness:schedule <input> <output>"
 ```
 
 - `--permission-mode auto` works too, with no tool list.
+- `--setting-sources project,local` was added on 4 October 2026. With the user's settings loaded, a personal `PreToolUse` hook that put a wrapper in front of `gh issue view` turned it into a command the list does not allow: the session answered `schedule failed: shell denied`, the batch ran one ticket at a time and in the pasted order. Without them, the same batch of two GitHub issues came back with its two predictions and the `depends_on` edge read from GitHub's "blocked by".
 - `--allowedTools` accepts several values. Written as separate arguments, it swallows the prompt and `claude -p` exits with code 1 ("Input must be provided"). The list goes in a single argument separated by commas, and `--` comes before the prompt.
 - In `dontAsk` without `Write` in the list, the write is refused and the process still exits with code 0. The exit code therefore says nothing about the result: the console reads the output file.
 - A second trial with an invented ticket URL exercised the agent: it is started from the non-interactive session, `glab` passes the tool list, and the unreadable ticket comes out as `low`. No real ticket was read, so the quality of the predictions is not verified.

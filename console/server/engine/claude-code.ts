@@ -280,6 +280,11 @@ export function scheduleArguments({ pluginDir, inputPath, outputPath }: Pick<Sch
   const outputDirectory = path.dirname(outputPath);
   return [
     "-p",
+    // The user's own settings stay out: a personal hook that rewrites a command
+    // (a wrapper put in front of `gh` or `glab`) turns it into one the list
+    // below does not allow, and a session nobody answers reads that as a
+    // refusal. The repository's settings still load.
+    "--setting-sources", "project,local",
     "--plugin-dir", pluginDir,
     "--add-dir", pluginDir,
     "--add-dir", outputDirectory,

@@ -69,13 +69,12 @@ Paste this prompt into a coding agent (Claude Code, Codex, opencode). It install
 Install Implementation Harness from https://github.com/Greg-Klein/implementation-harness on this machine (macOS or Linux).
 
 1. Read the README of the repository to know what the harness needs.
-2. Check for git (`git --version`). If it is missing, install it with the package manager of this system.
-3. Check for Node.js 22.12 or later (`node --version`). If it is missing or older, install it with the version manager already on this machine (nvm, fnm, volta), otherwise with the package manager of this system (Homebrew on macOS).
-4. The console builds a native module (node-pty). Check for a C++ toolchain: the Xcode command line tools on macOS (`xcode-select -p`), `build-essential` and `python3` on Linux. Install what is missing.
-5. Check for Claude Code (`claude --version`). If it is missing, install it following https://docs.anthropic.com/en/docs/claude-code. Do not log in for me: tell me to run `claude` once and log in.
-6. Check for glab (`glab --version`). If it is missing, install it following https://gitlab.com/gitlab-org/cli. Run `glab auth status`. If glab is not logged in, do not log in for me: tell me to run `glab auth login`.
-7. Run `curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash`.
-8. Check that `impl help` answers. If the command is not found, tell me how to add `~/.local/bin` to my PATH, without editing my shell files yourself.
+2. Check for Node.js 22.12 or later (`node --version`). If it is missing or older, install it with the version manager already on this machine (nvm, fnm, volta), otherwise with the package manager of this system (Homebrew on macOS).
+3. The console builds a native module (node-pty). Check for a C++ toolchain: the Xcode command line tools on macOS (`xcode-select -p`), `build-essential` and `python3` on Linux. Install what is missing.
+4. Check for Claude Code (`claude --version`). If it is missing, install it following https://docs.anthropic.com/en/docs/claude-code. Do not log in for me: tell me to run `claude` once and log in.
+5. Check for glab (`glab --version`). If it is missing, install it following https://gitlab.com/gitlab-org/cli. Run `glab auth status`. If glab is not logged in, do not log in for me: tell me to run `glab auth login`.
+6. Run `curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash`.
+7. Check that `impl help` answers. If the command is not found, tell me how to add `~/.local/bin` to my PATH, without editing my shell files yourself.
 
 Do not use sudo without asking me first. Do not start the harness and do not change its configuration: finish by telling me what you installed, what was already there, and that the next steps are `impl config`, then `impl demo` to look around or `impl` to start.
 ```

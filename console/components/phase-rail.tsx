@@ -2,7 +2,8 @@
 
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { formatTokens } from "@/lib/metrics";
-import { elapsedLabel, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
+import { elapsedLabel, phaseNames, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
+import { forgeOf, forgeWords } from "@/lib/ticket-urls";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 
@@ -15,7 +16,6 @@ const BADGE_TONE: Record<StatusBadge["tone"], string> = {
   neutral: "bg-[var(--accent-soft)] text-[var(--accent)]",
 };
 
-const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
 
 /** The demonstration ticket has no address to open, and neither has a malformed one. */
 function externalHref(value: string) {
@@ -41,6 +41,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
   const badge = runStatusBadge(run);
   const repository = sourceRepository(run);
   const worktree = worktreeLabel(run);
+  const phases = phaseNames(run.issueUrl);
 
   return (
     <aside aria-label="Progression du run" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
@@ -60,7 +61,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
           <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">Livrable</p>
           {run.issueUrl && <Deliverable icon={<TicketIcon size={12} />} label={reference(run.issueUrl, "#")} title={run.issueUrl} href={externalHref(run.issueUrl)} />}
           {run.branch && <Deliverable icon={<GitBranchIcon size={12} />} label={run.branch} title={run.branch} />}
-          {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, "!")} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
+          {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, forgeWords(forgeOf(run.mergeRequestUrl)).sigil)} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
         </div>
       )}
       <div className="mt-6 border-t border-[var(--line)] pt-4">

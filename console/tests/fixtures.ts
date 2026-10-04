@@ -39,13 +39,13 @@ export const fakeClaudeDirectory = fileURLToPath(new URL("./fake-claude", import
  * the sample checkout can give. It carries what a developer's checkout holds
  * and a fresh worktree lacks: an ignored `node_modules` and an ignored `.env`.
  */
-export function createGitCheckout(name: string) {
+export function createGitCheckout(name: string, forge: "gitlab" | "github" = "gitlab") {
   const directory = path.join(checkoutsRoot, name);
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
   const git = (...args: string[]) => execFileSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=Test", ...args], { cwd: directory, stdio: "ignore" });
   git("init", "-q");
-  git("remote", "add", "origin", `https://gitlab.com/group/${name}.git`);
+  git("remote", "add", "origin", `https://${forge}.com/group/${name}.git`);
   writeFileSync(path.join(directory, "app.ts"), "export const answer = 42;\n");
   writeFileSync(path.join(directory, ".gitignore"), "node_modules/\n.env*\n");
   git("add", ".");
@@ -53,7 +53,7 @@ export function createGitCheckout(name: string) {
   mkdirSync(path.join(directory, "node_modules", "dep"), { recursive: true });
   writeFileSync(path.join(directory, "node_modules", "dep", "index.js"), "module.exports = 1;\n");
   writeFileSync(path.join(directory, ".env"), "SECRET=1\n");
-  return { directory, project: `group/${name}`, issueUrl: `https://gitlab.com/group/${name}/-/issues/1` };
+  return { directory, project: `group/${name}`, issueUrl: forge === "github" ? `https://github.com/group/${name}/issues/1` : `https://gitlab.com/group/${name}/-/issues/1` };
 }
 
 /** Where the stand-in `claude` writes what it receives on its terminal, one file per run. */
@@ -82,6 +82,15 @@ export function mergeRequestState(iid: number, state?: "opened" | "merged" | "cl
   else rmSync(file, { force: true });
 }
 
+/** Where the stand-in `gh` reads the state of a pull request from. See tests/fake-claude/gh. */
+export const fakeGhDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "gh");
+/** What GitHub says of a pull request, or nothing at all with `undefined`, as when it cannot be reached. */
+export function pullRequestState(number: number, state?: "open" | "merged" | "closed") {
+  const file = path.join(fakeGhDirectory, `pull-request-${number}`);
+  if (state) writeFileSync(file, state);
+  else rmSync(file, { force: true });
+}
+
 /** The checkout of the batch a restart found half analysed, seeded before the suite's console boots. */
 export const restoredBatchCheckout = "restored-batch";
 
@@ -96,6 +105,8 @@ export function prepareDataDirectory() {
   mkdirSync(fakeClaudeInputDirectory, { recursive: true });
   rmSync(fakeGlabDirectory, { recursive: true, force: true });
   mkdirSync(fakeGlabDirectory, { recursive: true });
+  rmSync(fakeGhDirectory, { recursive: true, force: true });
+  mkdirSync(fakeGhDirectory, { recursive: true });
   scheduleFixture();
   // A batch of two invented tickets the earlier process was still analysing when it went down:
   // the boot has to bring it back as a failed analysis, one ticket at a time.

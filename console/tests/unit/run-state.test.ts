@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, heldBySchedule, mergeRequestLabel, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, heldBySchedule, mergeRequestLabel, phaseNames, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -210,6 +210,15 @@ describe("what a queued ticket waits for", () => {
 
   it("should say so when the state of that merge request is unknown", () => {
     expect(queueStatus({ reason: "merge_unknown", blocking })).toBe("État de la MR !12 inconnu (#217)");
+  });
+
+  it("should call it a pull request, and number it with a hash, when the ticket is on GitHub", () => {
+    const onGitHub = { issueUrl: "https://github.com/acme/shop/issues/217", mergeRequestUrl: "https://github.com/acme/shop/pull/12", branch: "feat/217" };
+    expect(queueStatus({ reason: "merge", blocking: onGitHub })).toBe("Attend que la PR #12 soit mergée (#217)");
+    expect(queueStatus({ reason: "merge_unknown", blocking: onGitHub })).toBe("État de la PR #12 inconnu (#217)");
+    expect(phaseNames("https://github.com/acme/shop/issues/217")[7]).toBe("Ouvrir la PR");
+    expect(phaseNames("https://gitlab.com/acme/shop/-/issues/217")[7]).toBe("Ouvrir la MR");
+    expect(phaseNames("ticket-simule://IH-42")[7]).toBe("Ouvrir la MR");
   });
 
   it("should tell a dependency from a plain order among queued tickets", () => {

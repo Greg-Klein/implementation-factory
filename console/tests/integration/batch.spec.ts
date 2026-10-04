@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { createGitCheckout, fakeClaudeInputDirectory, hookToken, mergeRequestState, scheduleFixture } from "../fixtures";
+import { createGitCheckout, fakeClaudeInputDirectory, hookToken, mergeRequestState, pullRequestState, scheduleFixture } from "../fixtures";
 import { resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => { scheduleFixture(); await resetRun(page); });
@@ -38,8 +38,8 @@ async function postHook(request: APIRequestContext, runId: string, payload: Reco
 }
 
 /** An invented repository with invented tickets, numbered from 1. */
-function batch(name: string) {
-  const checkout = createGitCheckout(name);
+function batch(name: string, forge: "gitlab" | "github" = "gitlab") {
+  const checkout = createGitCheckout(name, forge);
   return { ...checkout, repository: realpathSync(checkout.directory), url: (iid: number) => checkout.issueUrl.replace(/\/1$/, `/${iid}`) };
 }
 
@@ -59,7 +59,7 @@ test("should take several tickets at once, start those that conflict with nothin
   await paste(page, [url(1), `${url(2)}?tab=notes`, "pas-un-ticket", url(3), url(1)]);
   await expect(page.getByText("3 tickets reconnus")).toBeVisible();
   await expect(page.getByText("1 doublon ignoré")).toBeVisible();
-  await expect(page.getByText("Ligne 3 : pas-un-ticket n’est pas une URL de ticket GitLab.")).toBeVisible();
+  await expect(page.getByText("Ligne 3 : pas-un-ticket n’est pas une URL de ticket GitLab ou GitHub.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Lancer les 3 tickets" })).toBeDisabled();
 
   await page.getByLabel("Ticket GitLab").fill([url(1), `${url(2)}?tab=notes`, url(3)].join("\n"));
@@ -192,6 +192,33 @@ test("should wait for the merge request of the ticket it conflicts with, then st
   await expect.poll(async () => (await snapshot(request)).runs.map((run) => number(run.issueUrl)).sort()).toEqual([1, 2]);
   await expect(page.getByText("Merge request mergée")).toBeVisible();
   expect((await snapshot(request)).queued).toEqual([]);
+});
+
+test("should take GitHub issues, wait for the pull request of the one in conflict and call it a pull request", async ({ page, request }) => {
+  const { url, project } = batch("batch-github", "github");
+  scheduleFixture({ edges: [{ a: 1, b: 2, kind: "depends_on", order: [1, 2], reason: "Le second ticket lit ce que le premier calcule." }] });
+  pullRequestState(41);
+  await paste(page, [url(1), url(2)]);
+  await expect(page.getByText("2 tickets reconnus")).toBeVisible();
+  await page.getByRole("button", { name: "Lancer les 2 tickets" }).click();
+  await expect.poll(() => standing(request)).toEqual({ running: [1], waiting: [2] });
+
+  const [first] = (await snapshot(request)).runs;
+  const pullRequest = `https://github.com/${project}/pull/41`;
+  await postHook(request, first.id, { hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "pr1", tool_input: { command: "gh pr create --base main --body-file .claude/tasks/mr-description.md" }, tool_response: { stdout: `${pullRequest}\n` } });
+  await page.getByRole("button", { name: "Ouvrir le run batch-github #1" }).click();
+  await expect(page.getByText("Ouvrir la PR")).toBeVisible();
+  await page.getByRole("button", { name: "Arrêter" }).click();
+
+  // GitHub does not answer, then says the pull request is open: the ticket waits either way.
+  await expect(queue(page).getByText("État de la PR #41 inconnu (#1)")).toBeVisible();
+  pullRequestState(41, "open");
+  await expect(queue(page).getByText("Attend que la PR #41 soit mergée (#1)")).toBeVisible();
+  expect(await standing(request)).toEqual({ running: [1], waiting: [2] });
+
+  pullRequestState(41, "merged");
+  await expect.poll(async () => (await snapshot(request)).runs.map((run) => number(run.issueUrl)).sort()).toEqual([1, 2]);
+  await expect(page.getByText("Pull request mergée")).toBeVisible();
 });
 
 test("should play a batch of invented tickets with one conflict in demonstration mode", async ({ page, request }) => {

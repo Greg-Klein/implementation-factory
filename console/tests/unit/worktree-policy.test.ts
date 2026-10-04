@@ -39,6 +39,7 @@ describe("whether the console removes a worktree on its own", () => {
   it("should keep it when the run opened no merge request", () => {
     expect(worktreeRemoval(delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), safe)).toMatchObject({ allowed: true, automatic: false, reasons: ["aucune merge request"], risks: [] });
     expect(worktreeRemoval(delivered({ status: "failed", mergeRequestUrl: undefined }), safe).automatic).toBe(false);
+    expect(worktreeRemoval({ ...delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), issueUrl: "https://github.com/acme/shop/issues/7" }, safe).reasons).toEqual(["aucune pull request"]);
   });
 
   it("should keep it when the merge request is a draft on a blocked run", () => {

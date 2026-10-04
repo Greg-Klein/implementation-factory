@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+// Stands in for `gh` in the test suites, which must never reach a real GitHub.
+// It answers one question, the state of a pull request, from a file a test
+// writes: `FAKE_GH_DIR/pull-request-<number>` holding `open`, `merged` or
+// `closed`. Anything else fails, the way `gh` does without a network.
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+const endpoint = process.argv.slice(2).find((argument) => argument.startsWith("repos/")) ?? "";
+const pullRequest = endpoint.match(/\/pulls\/(\d+)$/)?.[1];
+const file = pullRequest && process.env.FAKE_GH_DIR ? path.join(process.env.FAKE_GH_DIR, `pull-request-${pullRequest}`) : undefined;
+if (!file || !existsSync(file)) {
+  process.stderr.write("fake gh: nothing to answer\n");
+  process.exit(1);
+}
+// GitHub has no `merged` state: a merge is a closed pull request with `merged` set.
+const state = readFileSync(file, "utf8").trim();
+process.stdout.write(JSON.stringify({ number: Number(pullRequest), state: state === "open" ? "open" : "closed", merged: state === "merged" }));

@@ -42,6 +42,22 @@ export function parseDeliveryUrl(value: string) {
   return forgeAddress(value, /^\/(.+?)\/-\/merge_requests\/(\d+)(?:\/|$)/, /^\/([^/]+\/[^/]+)\/pull\/(\d+)(?:\/|$)/);
 }
 
+/** The forge an address belongs to, a ticket or what delivers one. Undefined for the demonstration and for anything unread. */
+export function forgeOf(url: string | undefined): Forge | undefined {
+  return url ? (parseTicketUrl(url) ?? parseDeliveryUrl(url))?.forge : undefined;
+}
+
+/**
+ * What each forge calls itself and what delivers a ticket there: `MR !12` on
+ * GitLab, `PR #12` on GitHub. An address no forge is read from, the
+ * demonstration's for one, keeps the GitLab words.
+ */
+export function forgeWords(forge: Forge | undefined) {
+  return forge === "github"
+    ? { name: "GitHub", delivery: "pull request", short: "PR", sigil: "#" } as const
+    : { name: "GitLab", delivery: "merge request", short: "MR", sigil: "!" } as const;
+}
+
 /** A ticket URL without its query, its fragment or a trailing slash, the way a pasted URL varies. */
 export function ticketIdentity(issueUrl: string) {
   return issueUrl.trim().split(/[?#]/)[0].replace(/\/+$/, "");

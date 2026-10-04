@@ -111,7 +111,7 @@ function TicketCount({ parsed }: { parsed: ParsedTickets }) {
       </p>
       {invalid.length > 0 && (
         <ul className="text-red-700">
-          {invalid.map((entry, index) => <li key={`${entry.line}-${index}`}>Ligne {entry.line} : <span className="break-all font-mono text-[10px]">{entry.text}</span> n’est pas une URL de ticket GitLab.</li>)}
+          {invalid.map((entry, index) => <li key={`${entry.line}-${index}`}>Ligne {entry.line} : <span className="break-all font-mono text-[10px]">{entry.text}</span> n’est pas une URL de ticket GitLab ou GitHub.</li>)}
         </ul>
       )}
     </div>
@@ -150,12 +150,12 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
           </div>
           <label className="mb-5 block">
-            <span className="mb-2 block text-xs font-medium">Ticket GitLab <span className="font-normal text-[var(--muted)]">· un par ligne pour en lancer plusieurs</span></span>
+            <span className="mb-2 block text-xs font-medium">Ticket <span className="font-normal text-[var(--muted)]">GitLab ou GitHub · un par ligne pour en lancer plusieurs</span></span>
             <textarea
               value={issueUrl}
               onChange={(event) => setIssueUrl(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canStart) { event.preventDefault(); onStart(); } }}
-              placeholder="https://gitlab.com/…/-/issues/217"
+              placeholder="https://gitlab.com/…/-/issues/217 ou https://github.com/…/issues/217"
               rows={Math.min(Math.max(lines, 1), 8)}
               spellCheck={false}
               autoComplete="off"

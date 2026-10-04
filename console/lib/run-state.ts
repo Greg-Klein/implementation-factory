@@ -1,4 +1,4 @@
-import { parseTicketUrl, ticketReference } from "./ticket-urls";
+import { forgeOf, forgeWords, parseTicketUrl, ticketReference } from "./ticket-urls";
 import type { AcceptanceCounts, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
@@ -120,10 +120,16 @@ export function canRemoveWorktree(run: { status: Status; sessionActive?: boolean
   return run.worktree?.state === "kept" && !sessionAlive(run.status, run.sessionActive);
 }
 
-/** A merge request the way it is called, `MR !12`. */
+/** A merge request the way it is called, `MR !12`, or a pull request, `PR #12`. */
 export function mergeRequestLabel(mergeRequestUrl: string | undefined) {
+  const words = forgeWords(forgeOf(mergeRequestUrl));
   const number = mergeRequestUrl?.split(/[?#]/)[0].split("/").filter(Boolean).pop();
-  return number && /^\d+$/.test(number) ? `MR !${number}` : "MR";
+  return number && /^\d+$/.test(number) ? `${words.short} ${words.sigil}${number}` : words.short;
+}
+
+/** The ten steps of the workflow, the eighth named after what the forge of the ticket opens. */
+export function phaseNames(issueUrl: string | undefined) {
+  return ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", `Ouvrir la ${forgeWords(forgeOf(issueUrl)).short}`, "Publier la revue", "Terminer"];
 }
 
 type QueueWait = Pick<QueuedRunView, "reason"> & Partial<Pick<QueuedRunView, "blocking" | "forced">>;

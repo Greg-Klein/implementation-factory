@@ -3,13 +3,13 @@
 import { CaretRightIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { Fragment, useEffect, useState } from "react";
 import { formatDuration, formatShare, formatTokens, planSizes, reworkCount, sessionLabel, summarize, waitLabel } from "@/lib/metrics";
-import { runLabel, statusLabel } from "@/lib/run-state";
+import { phaseNames, runLabel, statusLabel } from "@/lib/run-state";
+import { forgeOf, forgeWords } from "@/lib/ticket-urls";
 import type { MetricsResponse, RunMetrics } from "@/lib/types";
 
 /** A run still going moves its figures: the table follows at this pace while it is on screen. */
 const POLL_MS = 10_000;
 
-const PHASES = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
 
 const STATUS_TONE: Record<string, string> = {
   completed: "bg-emerald-50 text-emerald-700", failed: "bg-red-50 text-red-700", stopped: "bg-[var(--line)] text-[var(--muted)]",
@@ -26,7 +26,8 @@ function Figure({ label, value, help }: { label: string; value: string; help: st
 
 function outcomeLabel(run: RunMetrics) {
   if (run.outcome.status !== "completed") return statusLabel(run.outcome.status);
-  return run.outcome.delivery === "draft_merge_request" ? "MR en brouillon" : run.outcome.delivery === "none" ? "Sans MR" : "MR ouverte";
+  const { short } = forgeWords(forgeOf(run.ticket.issueUrl));
+  return run.outcome.delivery === "draft_merge_request" ? `${short} en brouillon` : run.outcome.delivery === "none" ? `Sans ${short}` : `${short} ouverte`;
 }
 
 function Detail({ run }: { run: RunMetrics }) {
@@ -64,7 +65,7 @@ function Detail({ run }: { run: RunMetrics }) {
             <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Du début à la fin</dt><dd className="font-mono text-[10px]">{formatDuration(run.time.elapsedMs)}</dd></div>
             {run.time.waits.map((wait) => <div key={wait.reason} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{waitLabel(wait.reason)} · {wait.count}</dt><dd className="font-mono text-[10px]">{formatDuration(wait.ms)}</dd></div>)}
             {run.time.incidentMs > 0 && <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Sous incident</dt><dd className="font-mono text-[10px]">{formatDuration(run.time.incidentMs)}</dd></div>}
-            {run.time.phases.filter((phase) => phase.ms >= 1_000 && phase.phase <= PHASES.length).map((phase) => <div key={phase.phase} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{phase.phase}. {PHASES[phase.phase - 1]}</dt><dd className="font-mono text-[10px]">{formatDuration(phase.ms)}</dd></div>)}
+            {run.time.phases.filter((phase) => phase.ms >= 1_000 && phase.phase <= phaseNames(run.ticket.issueUrl).length).map((phase) => <div key={phase.phase} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{phase.phase}. {phaseNames(run.ticket.issueUrl)[phase.phase - 1]}</dt><dd className="font-mono text-[10px]">{formatDuration(phase.ms)}</dd></div>)}
           </dl>
         </div>
         <div>

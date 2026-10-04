@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, now } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRuntimeRecipe } from "./runtime-recipe.js";
@@ -47,7 +47,8 @@ const DEMO_MERGE_STEPS = 4;
 const plural = (count: number, one: string, many: string) => `${count} ${count > 1 ? many : one}`;
 
 function mergeRequestReference(mergeRequestUrl: string) {
-  return `MR !${mergeRequestUrl.split("/").filter(Boolean).pop()}`;
+  const words = forgeWords(forgeOf(mergeRequestUrl));
+  return `${words.short} ${words.sigil}${mergeRequestUrl.split("/").filter(Boolean).pop()}`;
 }
 
 function runIdentifier() {
@@ -404,7 +405,7 @@ export class RunRegistry {
       // Nobody merges a simulated merge request: the demonstration does, a few steps later.
       if (isSimulatedTicket(watch.issueUrl)) this.later(demoStepDuration * DEMO_MERGE_STEPS, () => void this.applyMergeStatus(watch, "merged"));
     } else if (dependents.length > 0) {
-      broadcast({ type: "notice", level: "info", at: now(), title: "Ticket terminé sans merge request", detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} n'a ouvert aucune merge request : ${plural(dependents.length, "ticket ne l'attend plus", "tickets ne l'attendent plus")}.` });
+      broadcast({ type: "notice", level: "info", at: now(), title: `Ticket terminé sans ${forgeWords(forgeOf(state.issueUrl)).delivery}`, detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} n'a ouvert aucune ${forgeWords(forgeOf(state.issueUrl)).delivery} : ${plural(dependents.length, "ticket ne l'attend plus", "tickets ne l'attendent plus")}.` });
     }
     void this.drain();
   }
@@ -424,10 +425,11 @@ export class RunRegistry {
     const released = conflictingEntries(this.queue, { cwd: current.repository, issueUrl: current.issueUrl }, this.context()).length;
     this.watches = this.watches.filter((known) => known !== current);
     const subject = `${mergeRequestReference(current.mergeRequestUrl)} (${path.basename(current.repository)} ${ticketReference(current.issueUrl)})`;
+    const delivery = forgeOf(current.mergeRequestUrl) === "github" ? "Pull request" : "Merge request";
     if (step.released === "merged") {
-      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: "Merge request mergée", detail: `${subject} : ${plural(released, "ticket repart", "tickets repartent")} de la base à jour.` });
+      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: `${delivery} mergée`, detail: `${subject} : ${plural(released, "ticket repart", "tickets repartent")} de la base à jour.` });
     } else {
-      broadcast({ type: "notice", level: "attention", at: now(), title: "Merge request fermée sans être mergée", detail: `${subject} : ${plural(released, "ticket ne l'attend plus et part", "tickets ne l'attendent plus et partent")} de la base.` });
+      broadcast({ type: "notice", level: "attention", at: now(), title: `${delivery} fermée sans être mergée`, detail: `${subject} : ${plural(released, "ticket ne l'attend plus et part", "tickets ne l'attendent plus et partent")} de la base.` });
     }
     await this.drain();
   }
@@ -448,7 +450,7 @@ export class RunRegistry {
       ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : {}),
     }));
     session.activity("system", "Session créée", path.basename(repository));
-    if (entry.forced?.mode === "stacked") session.activity("attention", "Départ empilé", `Sur ${entry.forced.baseBranch}, la branche de ${ticketReference(entry.forced.onto)} : la merge request ciblera cette branche.`);
+    if (entry.forced?.mode === "stacked") session.activity("attention", "Départ empilé", `Sur ${entry.forced.baseBranch}, la branche de ${ticketReference(entry.forced.onto)} : la ${forgeWords(forgeOf(entry.issueUrl)).delivery} ciblera cette branche.`);
     else if (entry.forced) session.activity("attention", "Départ forcé depuis la base", "L'ordonnancement du lot est ignoré pour ce ticket.");
     session.publish();
     const abandon = async (message: string) => {

@@ -22,7 +22,7 @@ export function ProposalList({ proposals, actions }: { proposals: TicketProposal
   return (
     <div role="group" aria-label="Tickets proposés" className="border-t border-[var(--line)]">
       <div className="flex items-center justify-between gap-2 px-3.5 pb-1 pt-2.5">
-        <p className="font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Tickets trouvés sur GitLab par le surveillant. Rien ne démarre tant que tu ne les lances pas.">Proposés · {proposals.length}</p>
+        <p className="font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Tickets trouvés par le surveillant. Rien ne démarre tant que tu ne les lances pas.">Proposés · {proposals.length}</p>
         {proposals.length > 1 && <button type="button" className={launch} onClick={() => actions.accept(proposals.map((proposal) => proposal.issueUrl))}>Tout lancer</button>}
       </div>
       <div className="divide-y divide-[var(--line)]">

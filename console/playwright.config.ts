@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, fakeGlabDirectory, hookToken, prepareDataDirectory, scheduleFixtureFile, untrustedRoot } from "./tests/fixtures";
+import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, fakeGhDirectory, fakeGlabDirectory, hookToken, prepareDataDirectory, scheduleFixtureFile, untrustedRoot } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -52,6 +52,8 @@ export default defineConfig({
       IMPL_SCHEDULE_TIMEOUT_MS: "4000",
       // The stand-in `glab` sits next to the stand-in `claude`: the suite never reaches a real GitLab.
       FAKE_GLAB_DIR: fakeGlabDirectory,
+      // The same for `gh` and GitHub.
+      FAKE_GH_DIR: fakeGhDirectory,
       IMPL_MERGE_POLL_MS: "500",
       // The file a ticket watcher would write is read often enough for a test to see it change.
       IMPL_PROPOSALS_POLL_MS: "300",

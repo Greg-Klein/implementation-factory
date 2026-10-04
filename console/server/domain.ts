@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
+import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
-export { normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
+export { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
 export type { Forge, ForgeAddress };
 
 export type QuestionOption = { label: string; description?: string };
@@ -247,15 +247,21 @@ export function branchFromCommand(command: string | undefined) {
 const OPENS_MERGE_REQUEST =
   /\b(?:glab|gh)\b[^;&|]*?(?:\b(?:mr|pr)\s+create\b|--method\s+POST\b[^;&|]*\/(?:merge_requests|pulls)(?![\w/]))/;
 
+/** The same opening on GitHub, named apart only for what the interface calls it. */
+const OPENS_PULL_REQUEST = /\bgh\b[^;&|]*?(?:\bpr\s+create\b|--method\s+POST\b[^;&|]*\/pulls(?![\w/]))/;
+
 /**
  * What a shell command is busy doing. Ordered, first match wins, so a rule
  * always comes before the family it belongs to: opening the merge request
  * comes before being merely a call to GitLab.
  */
 const SHELL_ACTIONS: [RegExp, string][] = [
+  [OPENS_PULL_REQUEST, "Ouverture de la pull request"],
   [OPENS_MERGE_REQUEST, "Ouverture de la merge request"],
-  [/\b(?:glab|gh)\b[^;&|]*\b(?:mr|pr)\b/, "Consultation de la merge request"],
+  [/\bgh\b[^;&|]*\bpr\b/, "Consultation de la pull request"],
+  [/\bglab\b[^;&|]*\bmr\b/, "Consultation de la merge request"],
   [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Lecture du ticket GitLab"],
+  [/\bgh\b[^;&|]*\bissue\b/, "Lecture du ticket GitHub"],
   [/\bglab\b/, "Consultation de GitLab"],
   [/\bgh\b/, "Consultation de GitHub"],
   [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "Création de la branche"],
@@ -664,7 +670,7 @@ export type WorktreeFacts = { exists: boolean; clean: boolean; pushed: boolean }
  * the interface asks a confirmation for. The branch is never part of a removal.
  */
 export function worktreeRemoval(
-  run: Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt">,
+  run: Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt"> & { issueUrl?: string },
   facts: WorktreeFacts,
 ): { allowed: boolean; automatic: boolean; reasons: string[]; risks: string[] } {
   const allowed = !runHoldsRepository(run);
@@ -672,8 +678,9 @@ export function worktreeRemoval(
   const reasons: string[] = [];
   if (!allowed) reasons.push("session encore ouverte");
   const draft = run.workflow?.result?.delivery === "draft_merge_request";
-  if (!run.mergeRequestUrl) reasons.push("aucune merge request");
-  else if (draft || run.workflow?.state === "blocked") reasons.push("merge request en brouillon sur un run bloqué");
+  const { delivery } = forgeWords(forgeOf(run.issueUrl));
+  if (!run.mergeRequestUrl) reasons.push(`aucune ${delivery}`);
+  else if (draft || run.workflow?.state === "blocked") reasons.push(`${delivery} en brouillon sur un run bloqué`);
   else if (run.status !== "completed") reasons.push("run non terminé");
   if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push("archive des preuves non confirmée");
   reasons.push(...risks);

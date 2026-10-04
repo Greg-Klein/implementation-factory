@@ -1,4 +1,4 @@
-import { actionLabel, agentIdentity, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
+import { actionLabel, agentIdentity, forgeOf, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { now } from "./context.js";
 import { continueDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
@@ -61,7 +61,7 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
   session.state.mergeRequestUrl = url;
   session.markProgress();
   advancePhase(session, 9);
-  session.activity("system", "Merge request ouverte", url);
+  session.activity("system", forgeOf(url) === "github" ? "Pull request ouverte" : "Merge request ouverte", url);
 }
 
 /**

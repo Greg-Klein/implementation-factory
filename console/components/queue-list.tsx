@@ -2,7 +2,7 @@
 
 import { ArrowDownIcon, ArrowUpIcon, CaretRightIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { heldBySchedule, queueGroups, queueMoveTarget, queueStatus, runLabel, scheduleMark } from "@/lib/run-state";
-import { ticketReference } from "@/lib/ticket-urls";
+import { forgeOf, forgeWords, ticketReference } from "@/lib/ticket-urls";
 import type { QueuedRunView } from "@/lib/types";
 
 export type QueueActions = {
@@ -28,6 +28,8 @@ function batchTime(queuedAt: string) {
 function Justification({ entry, label, actions }: { entry: QueuedRunView; label: string; actions: QueueActions }) {
   const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : undefined;
   const branch = entry.blocking?.branch;
+  const words = forgeWords(forgeOf(entry.issueUrl));
+  const blockingWords = forgeWords(forgeOf(entry.blocking?.mergeRequestUrl ?? entry.blocking?.issueUrl));
   return (
     <details className="group/why mt-1">
       <summary className="flex cursor-pointer list-none items-center gap-1 text-[10px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] [&::-webkit-details-marker]:hidden">
@@ -38,12 +40,12 @@ function Justification({ entry, label, actions }: { entry: QueuedRunView; label:
         {entry.detail && <p className="text-[10px] leading-4 text-[var(--ink)]">{entry.detail}</p>}
         {entry.summary && <p className="text-[10px] leading-4 text-[var(--muted)]">Ce ticket : {entry.summary}</p>}
         {entry.reason === "analysis" && <p className="text-[10px] leading-4 text-[var(--muted)]">Les tickets du lot sont comparés pour savoir lesquels peuvent tourner en même temps.</p>}
-        {entry.reason === "merge_unknown" && <p className="text-[10px] leading-4 text-amber-800">GitLab ne répond pas : le ticket reste en attente tant que l’état de la merge request n’est pas connu.</p>}
+        {entry.reason === "merge_unknown" && <p className="text-[10px] leading-4 text-amber-800">{blockingWords.name} ne répond pas : le ticket reste en attente tant que l’état de la {blockingWords.delivery} n’est pas connu.</p>}
         <div>
           <button type="button" className={override} onClick={() => actions.force(entry.id, "base")} aria-label={`Lancer ${label} depuis la base`}>Lancer depuis la base</button>
           <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
             {other
-              ? <>Part sans attendre {other}. Les deux tickets touchent le même code : la seconde merge request devra sans doute être reprise à la main.</>
+              ? <>Part sans attendre {other}. Les deux tickets touchent le même code : la seconde {words.delivery} devra sans doute être reprise à la main.</>
               : <>Part sans attendre la fin de l’analyse. Rien ne dit encore s’il touche le même code qu’un autre ticket.</>}
           </p>
         </div>
@@ -52,7 +54,7 @@ function Justification({ entry, label, actions }: { entry: QueuedRunView; label:
             <button type="button" className={override} onClick={() => actions.force(entry.id, "stacked", entry.blocking?.issueUrl)} aria-label={`Empiler ${label} sur ${branch}`}>
               Empiler sur <span className="font-mono text-[10px]">{branch}</span>
             </button>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Part de la branche de {other} et ouvre sa merge request vers cette branche. Elle ne pourra être mergée qu’après celle de {other}.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Part de la branche de {other} et ouvre sa {words.delivery} vers cette branche. Elle ne pourra être mergée qu’après celle de {other}.</p>
           </div>
         )}
       </div>

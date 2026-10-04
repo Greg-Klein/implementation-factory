@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 
-import { agentIdentity, agentRole, isDeveloperDelegation, pairDelegation, planTaskBoard, plannedTasks } from "../../server/domain";
+import { agentIdentity, agentRole, delegatedTasks, isDeveloperDelegation, pairDelegation, planTaskBoard, plannedTasks } from "../../server/domain";
 import { claudeCode } from "../../server/engine/claude-code";
 import { processHook } from "../../server/hooks";
 import { RunSession } from "../../server/run-session";
@@ -89,6 +89,21 @@ describe("agent names and roles", () => {
     expect(isDeveloperDelegation("implementation-harness:developer")).toBe(true);
     expect(isDeveloperDelegation("implementation-harness:senior-reviewer")).toBe(false);
     expect(isDeveloperDelegation(undefined)).toBe(false);
+  });
+});
+
+describe("the tasks a brief hands over among the reports it names", () => {
+  it("should drop a task whose report is already written, since the brief only cites it", () => {
+    expect(delegatedTasks(["T6", "T7"], ["developer-report-T6.md", "dev-evidence-T6.json"])).toEqual(["T7"]);
+    expect(delegatedTasks(["T1", "T9", "rework2"], ["nested/developer-report-T1.md", "developer-report-T9.md"])).toEqual(["rework2"]);
+  });
+
+  it("should keep several tasks handed over together", () => {
+    expect(delegatedTasks(["T1", "T2"], ["developer-report.md"])).toEqual(["T1", "T2"]);
+  });
+
+  it("should keep every task when all their reports exist, as nothing says which one is redone", () => {
+    expect(delegatedTasks(["T1", "T2"], ["developer-report-T1.md", "developer-report-T2.md"])).toEqual(["T1", "T2"]);
   });
 });
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import { ARCHIVED_ACTIVITIES, broadcastToViewers, now } from "./context.js";
 import { dataRoot } from "./config.js";
-import { emptyState, planTaskBoard, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
+import { emptyState, phaseAfterInference, planTaskBoard, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
 import { engine, type EngineSession } from "./engine/index.js";
 import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
 import { createSignals, pilotActs, type RunSignals } from "./run-health.js";
@@ -53,6 +53,12 @@ export class RunSession {
   healthChain: Promise<void> = Promise.resolve();
   /** Incident actions already answered, by request id, so a second window or a double click acts once. */
   readonly answeredRequests = new Map<string, { outcome: "done" | "refused"; message: string }>();
+  /**
+   * How far the documents, agents and commands seen so far point, whatever the
+   * workflow declares. Kept apart from `state.phase` because the end of a run
+   * that never declares it is still read off them (closeWorkflowIfDone).
+   */
+  inferredPhase = 0;
   /** Why the last `workflow-state.json` was not taken, until a valid one arrives. */
   workflowDiagnostic: string | undefined;
   /** Set once the run left the registry: nothing may evaluate or publish it any more. */
@@ -147,6 +153,14 @@ export class RunSession {
   /** The session executed something: a hook, the transcript growing. Terminal output is not execution. */
   markExecution() {
     this.signals.lastExecutionAt = Date.now();
+  }
+
+  /** A document, an agent or a command points at a phase: it moves the run only while the workflow declares no step. */
+  inferPhase(phase: number) {
+    this.inferredPhase = Math.max(this.inferredPhase, phase);
+    const next = phaseAfterInference(this.state.phase, phase, this.state.workflow);
+    if (next > this.state.phase) this.markProgress();
+    this.state.phase = next;
   }
 
   /** The workflow produced something: an agent, a document, an answer, a merge request. */

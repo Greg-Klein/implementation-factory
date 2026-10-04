@@ -226,6 +226,27 @@ export function phaseForAgent(agentName: string) {
   return 0;
 }
 
+/**
+ * The step the workflow says it is in, as a phase. `workflow-state.json` is the
+ * only thing that knows it: a document tells which step wrote it, not which one
+ * is running. The first of nine developer reports is not the end of the
+ * implementation, and a merge request text drafted while QA still runs opens
+ * nothing.
+ */
+export function declaredPhase(workflow: { step?: string } | undefined) {
+  const step = Number(/^\d+/.exec(workflow?.step ?? "")?.[0]);
+  return step >= 1 && step <= 10 ? step : undefined;
+}
+
+/**
+ * The phase once a document, an agent or a command pointed at `inferred`.
+ * What the console reads off them only stands in for a workflow that declares
+ * no step; one that does is never overtaken by a guess.
+ */
+export function phaseAfterInference(current: number, inferred: number, workflow: { step?: string } | undefined) {
+  return declaredPhase(workflow) === undefined ? Math.max(current, inferred) : current;
+}
+
 export function createsBranch(command: string | undefined) {
   return command !== undefined && /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/.test(command);
 }
@@ -472,6 +493,19 @@ function agentType(name: string) {
 /** Only a developer works a plan task: a reviewer handed the reports to read is not starting one. */
 export function isDeveloperDelegation(target: string | undefined) {
   return target !== undefined && agentType(target) === "developer";
+}
+
+/**
+ * The tasks a developer brief hands over, among the reports it names. A brief
+ * also cites the reports of earlier tasks as reading material, and a report
+ * that already exists is one of those: every task and every rework writes
+ * under a suffix of its own. When every report named exists, the brief asks
+ * for one of them again and nothing says which, so all are kept.
+ */
+export function delegatedTasks(taskIds: string[], artifacts: string[]) {
+  const written = new Set(artifacts.map((artifact) => path.basename(artifact)));
+  const pending = taskIds.filter((taskId) => !written.has(`developer-report-${taskId}.md`));
+  return pending.length > 0 ? pending : taskIds;
 }
 
 /** Women and men alternate so agents launched together look apart. Each name is bound to its own picture in public/avatars. */

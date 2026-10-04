@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { artifactWatchRoot, runWorktreePath, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, reviewPlanNotes, watchedForArtifacts } from "../../server/domain";
+import { artifactWatchRoot, runWorktreePath, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, declaredPhase, phaseAfterInference, phaseForArtifact, resolveArtifactPath, reviewPlanNotes, watchedForArtifacts } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -87,6 +87,23 @@ describe("artifact handling", () => {
 });
 
 describe("reviewer plans", () => {
+  it("should read the phase off the step the workflow declares", () => {
+    expect(declaredPhase({ step: "5" })).toBe(5);
+    expect(declaredPhase({ step: "7.2" })).toBe(7);
+    expect(declaredPhase({ step: "10" })).toBe(10);
+    expect(declaredPhase({ step: "11" })).toBeUndefined();
+    expect(declaredPhase({ step: "review" })).toBeUndefined();
+    expect(declaredPhase({})).toBeUndefined();
+    expect(declaredPhase(undefined)).toBeUndefined();
+  });
+
+  it("should let a document move the phase only while the workflow declares no step", () => {
+    expect(phaseAfterInference(5, 6, undefined)).toBe(6);
+    expect(phaseAfterInference(5, 3, undefined)).toBe(5);
+    expect(phaseAfterInference(5, 6, { step: "5" })).toBe(5);
+    expect(phaseAfterInference(7, 9, { step: "7" })).toBe(7);
+  });
+
   it("should not let a reviewer's plan open or close a phase", () => {
     expect(phaseForArtifact("qa-plan.md")).toBe(0);
     expect(phaseForArtifact("design-inventory.md")).toBe(0);

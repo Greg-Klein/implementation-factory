@@ -21,6 +21,23 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.phase).toBe(5);
   });
 
+  it("should stay on the step the workflow declares when an agent or a merge request points further", () => {
+    session.state.phase = 5;
+    session.state.workflow = { schemaVersion: 1, revision: 4, state: "waiting", step: "5", receivedAt: "2026-10-04T16:00:00.000Z" };
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:senior-reviewer", agent_id: "a1" });
+    expect(session.state.phase).toBe(5);
+    expect(session.inferredPhase).toBe(6);
+  });
+
+  it("should still close a run whose workflow stopped declaring before the end, from what the documents show", () => {
+    session.state.phase = 8;
+    session.state.workflow = { schemaVersion: 1, revision: 9, state: "working", step: "8", receivedAt: "2026-10-04T16:00:00.000Z" };
+    session.inferPhase(10);
+    expect(session.state.phase).toBe(8);
+    hook({ hook_event_name: "Stop" });
+    expect(session.state).toMatchObject({ status: "completed", phase: 10 });
+  });
+
   it("should light up the branch step when the branch is created", () => {
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "git switch -c fix-258" } });
     expect(session.state.phase).toBe(3);

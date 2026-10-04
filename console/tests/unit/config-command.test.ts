@@ -84,6 +84,16 @@ describe("impl config", () => {
     expect(config(["set", "IMPL_WORKTREE_COPY_FILES= "], { IMPL_ENV_FILE: file }).code).toBe(1);
   });
 
+  it("should take an absolute path or nothing for the ticket proposals file and refuse a relative one", () => {
+    const file = envFile();
+    expect(config(["set", "IMPL_TICKET_PROPOSALS_FILE=/tmp/proposals.json"], { IMPL_ENV_FILE: file }).code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("IMPL_TICKET_PROPOSALS_FILE='/tmp/proposals.json'");
+    expect(config(["set", "IMPL_TICKET_PROPOSALS_FILE="], { IMPL_ENV_FILE: file }).code).toBe(0);
+    const { code, stderr } = config(["set", "IMPL_TICKET_PROPOSALS_FILE=~/proposals.json"], { IMPL_ENV_FILE: file });
+    expect(code).toBe(1);
+    expect(stderr).toContain("absolute path");
+  });
+
   it("should write a valid value and point at the restart", () => {
     const file = envFile();
     const { code, stdout } = config(["set", "IMPL_PORT=4321"], { IMPL_ENV_FILE: file });

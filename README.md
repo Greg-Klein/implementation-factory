@@ -234,7 +234,7 @@ The tickets appear in the left list, under **Proposed**. Nothing starts on its o
 
 A ticket launched or dismissed is not proposed again while it stays in the file. If it leaves the file and comes back, it is proposed again. A ticket already queued, running or waiting for its merge is not proposed.
 
-`IMPL_TICKET_PROPOSALS_FILE`, set in the launch environment, names another file by its absolute path. The expected format is described in [contracts/ticket-proposals.md](contracts/ticket-proposals.md).
+The `IMPL_TICKET_PROPOSALS_FILE` setting names another file by its absolute path. The expected format is described in [contracts/ticket-proposals.md](contracts/ticket-proposals.md).
 
 ### One worktree per run
 
@@ -304,6 +304,7 @@ The available settings:
 | `IMPL_NO_OPEN` | `1` to start without opening the browser | `0` |
 | `IMPL_MAX_CONCURRENT_RUNS` | number of runs held in parallel, from 1 to 10; beyond it, launches wait in the queue | `3` |
 | `IMPL_SCHEDULE_TIMEOUT_MINUTES` | minutes given to the analysis of a batch of tickets, per repository, from 1 to 60; past it, the tickets of that repository run one at a time | `5` |
+| `IMPL_TICKET_PROPOSALS_FILE` | absolute path of the file an outside watcher writes the tickets to propose in; empty for `ticket-proposals.json` in the data directory | empty |
 | `IMPL_WORKTREE_DEPENDENCY_DIRS` | names of the dependency directories Git ignores that the worktree of a run takes from the main checkout, at any depth, separated by commas; no build outputs | `node_modules` |
 | `IMPL_WORKTREE_COPY_FILES` | files copied from the main checkout to the worktree of a run, separated by commas: a name pattern such as `.env*` for files Git ignores, or a path from the root of the repository | `.env*,.claude/settings.local.json` |
 | `IMPL_STALL_MINUTES` | minutes without progress before the console raises a doubt about a run in progress (a doubt only: nothing is stopped or restarted) | `10` |

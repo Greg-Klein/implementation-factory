@@ -40,6 +40,12 @@ function validateText(value) {
   return value.trim() ? [] : [issue("error", "a non-empty value is expected")];
 }
 
+/** The console resolves the path as it is written, so a leading ~ would not be expanded. */
+function validateOptionalAbsolutePath(value) {
+  const trimmed = value.trim();
+  return trimmed === "" || path.isAbsolute(trimmed) ? [] : [issue("error", "expected an absolute path, or nothing for the default file")];
+}
+
 /**
  * The permission modes Claude Code accepts, minus "plan", which answers a run
  * with a plan instead of a merge request.
@@ -151,6 +157,16 @@ export const schema = [
     kind: "text",
     readBy: "console",
     validate: validateInteger(1, 60),
+  },
+  {
+    key: "IMPL_TICKET_PROPOSALS_FILE",
+    label: "File of the ticket proposals",
+    comment: "Absolute path of the file an outside watcher keeps up to date with the tickets to propose; leave empty for ticket-proposals.json in the data directory.",
+    help: "Absolute path of the file an outside watcher writes the tickets to propose in. Empty for ticket-proposals.json in the data directory.",
+    fallback: "",
+    kind: "text",
+    readBy: "console",
+    validate: validateOptionalAbsolutePath,
   },
   {
     key: "IMPL_WORKTREE_DEPENDENCY_DIRS",

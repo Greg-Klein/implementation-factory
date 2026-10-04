@@ -1,4 +1,4 @@
-import { actionLabel, agentIdentity, forgeOf, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
+import { actionLabel, agentIdentity, forgeOf, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, delegatedTasks, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { now } from "./context.js";
 import { continueDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
@@ -9,11 +9,6 @@ import { declaredCompletion } from "./workflow-state.js";
 import { sessionStarted } from "./session-prompt.js";
 import { recordRunMetrics } from "./run-metrics-runtime.js";
 import type { RunSession } from "./run-session.js";
-
-function advancePhase(session: RunSession, phase: number) {
-  if (phase > session.state.phase) session.markProgress();
-  session.state.phase = Math.max(session.state.phase, phase);
-}
 
 /**
  * Closes the run once the workflow is over: the pilot handed control back,
@@ -26,7 +21,7 @@ export function closeWorkflowIfDone(session: RunSession) {
   if (!runInProgress(session.state.status) || session.state.pendingQuestion) return false;
   if (session.signals.pilotIdleSince === undefined || session.state.agents.some((agent) => agent.status === "running")) return false;
   const declared = declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
-  if (!declared && (session.state.phase < 9 || session.signals.backgroundWaits.size > 0)) return false;
+  if (!declared && (Math.max(session.state.phase, session.inferredPhase) < 9 || session.signals.backgroundWaits.size > 0)) return false;
   session.state.phase = 10;
   session.state.status = "completed";
   session.state.action = undefined;
@@ -60,7 +55,7 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
   if (!url) return;
   session.state.mergeRequestUrl = url;
   session.markProgress();
-  advancePhase(session, 9);
+  session.inferPhase(9);
   session.activity("system", forgeOf(url) === "github" ? "Pull request opened" : "Merge request opened", url);
 }
 
@@ -134,7 +129,7 @@ function apply(session: RunSession, event: EngineEvent) {
     if (!known && session.state.planDelegations) session.state.planDelegations = pairDelegation(session.state.planDelegations, event.agentName, event.agentId);
     session.refreshPlanTasks();
     session.activity("agent", `${event.agentName} starts`);
-    advancePhase(session, phaseForAgent(event.agentName));
+    session.inferPhase(phaseForAgent(event.agentName));
     resumeFromAttention(session);
     return;
   }
@@ -166,11 +161,11 @@ function apply(session: RunSession, event: EngineEvent) {
   if (event.kind === "tool.start") {
     session.state.action = actionLabel(event.tool, event.command, event.target);
     if (event.planTaskIds && isDeveloperDelegation(event.target)) {
-      session.state.planDelegations = [...session.state.planDelegations ?? [], { agentType: event.target ?? "", taskIds: event.planTaskIds }];
+      session.state.planDelegations = [...session.state.planDelegations ?? [], { agentType: event.target ?? "", taskIds: delegatedTasks(event.planTaskIds, session.state.artifacts) }];
       session.refreshPlanTasks();
     }
     if (createsBranch(event.command)) {
-      advancePhase(session, 3);
+      session.inferPhase(3);
       rememberBranch(session, event.command);
     }
     resumeFromAttention(session);

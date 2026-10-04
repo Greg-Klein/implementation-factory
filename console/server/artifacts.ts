@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
-import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, RUNTIME_RECIPE_FILE, watchedForArtifacts } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, declaredPhase, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, RUNTIME_RECIPE_FILE, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -109,7 +109,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   if (relative === WORKFLOW_STATE_FILE) readWorkflowState(session, await readFile(source, "utf8").catch(() => ""));
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
-  if (completedPhase) session.state.phase = Math.max(session.state.phase, completedPhase + 1);
+  if (completedPhase) session.inferPhase(completedPhase + 1);
   // A document is progress of the workflow, whatever the terminal shows.
   session.markProgress();
   session.publish();
@@ -134,6 +134,8 @@ function readWorkflowState(session: RunSession, content: string) {
   session.state.workflow = reading.state;
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
+  // The step the workflow declares is the phase. It never goes back: a request after the final report reopens an earlier step.
+  session.state.phase = Math.max(session.state.phase, declaredPhase(reading.state) ?? 0);
   if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow: ${reading.state.state}${reading.state.step ? `, step ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
   closeWorkflowIfDone(session);
 }

@@ -5,6 +5,7 @@ import {
   deriveAcceptanceCoverage, isRoundCopy, MAX_REPORT_BYTES, parseCriteriaRegistry, parseEvidenceReport, parsePlanLinks, sourceOfReport,
   type CriteriaRegistry, type EvidenceRecord, type PlanLinks,
 } from "./acceptance.js";
+import type { WorkflowLanguage } from "./acceptance-text.js";
 import { isEvidenceReport } from "./domain.js";
 import type { AcceptanceDiagnostic, AcceptanceReportVersion, AcceptanceView } from "./types.js";
 
@@ -95,26 +96,26 @@ export class EvidenceArchive {
     const data = await this.storage.readSource(relativePath);
     if (!data) return false;
     const receivedAt = this.clock();
-    if (data.byteLength > MAX_REPORT_BYTES) return this.reject(relativePath, hashOf(data), receivedAt, `Document ignoré : il dépasse ${Math.round(MAX_REPORT_BYTES / 1000)} ko.`);
+    if (data.byteLength > MAX_REPORT_BYTES) return this.reject(relativePath, hashOf(data), receivedAt, `Document ignored: it exceeds ${Math.round(MAX_REPORT_BYTES / 1000)} kB.`);
     const hash = hashOf(data);
     if (this.latest(relativePath)?.hash === hash || this.invalid.get(relativePath)?.hash === hash) return false;
     let value: unknown;
     try { value = JSON.parse(data.toString("utf8")); } catch {
-      return this.reject(relativePath, hash, receivedAt, "JSON invalide ou incomplet : la dernière version valide reste affichée, sans compter comme une nouvelle vérification.");
+      return this.reject(relativePath, hash, receivedAt, "Invalid or incomplete JSON: the last valid version stays displayed, without counting as a new verification.");
     }
     const version = (this.latest(relativePath)?.version ?? 0) + 1;
     const base = { file: relativePath, version, receivedAt, hash, current: true, kind, archivePath: `evidence/${relativePath}/v${version}.json` };
     let archived: ArchivedVersion;
     if (kind === "criteria") {
-      if (!parseCriteriaRegistry(value, relativePath).registry) return this.reject(relativePath, hash, receivedAt, "Registre des critères illisible : la dernière version valide reste en vigueur.");
+      if (!parseCriteriaRegistry(value, relativePath).registry) return this.reject(relativePath, hash, receivedAt, "Criteria registry unreadable: the last valid version stays in force.");
       archived = { ...base, items: (value as { criteria: unknown[] }).criteria.length, attachments: [] };
     } else if (kind === "plan") {
-      if (!parsePlanLinks(value)) return this.reject(relativePath, hash, receivedAt, "Plan illisible : la dernière version valide reste en vigueur.");
+      if (!parsePlanLinks(value)) return this.reject(relativePath, hash, receivedAt, "Plan unreadable: the last valid version stays in force.");
       archived = { ...base, items: (value as { tasks: unknown[] }).tasks.length, attachments: [] };
     } else {
       const requested: string[] = [];
       const parsed = parseEvidenceReport(value, { file: relativePath, version, receivedAt, hash }, (source) => { requested.push(source); return undefined; });
-      if (!("records" in parsed)) return this.reject(relativePath, hash, receivedAt, parsed.diagnostics[0]?.message ?? "Rapport de preuves illisible.");
+      if (!("records" in parsed)) return this.reject(relativePath, hash, receivedAt, parsed.diagnostics[0]?.message ?? "Evidence report unreadable.");
       // The captures are copied into this version before it is announced, so a
       // later round writing a new capture under the same name cannot replace it.
       const attachments: ArchivedAttachment[] = [];
@@ -194,7 +195,8 @@ export class EvidenceArchive {
   }
 
   /** The coverage of the run as it stands, from every archived version. */
-  view(): AcceptanceView {
+  /** `language`: English for the interface, the workflow language for the summary the merge request quotes. */
+  view(language: WorkflowLanguage = "en"): AcceptanceView {
     const { registry, diagnostics } = this.registry();
     const reports: { version: AcceptanceReportVersion; records: EvidenceRecord[] }[] = [];
     for (const version of this.versions.filter((entry) => entry.kind === "evidence")) {
@@ -207,7 +209,7 @@ export class EvidenceArchive {
       reports.push({ version: { file: version.file, version: version.version, receivedAt: version.receivedAt, hash: version.hash, source: version.source ?? sourceOfReport(version.file), ...(version.round ? { round: version.round } : {}), items: version.items, current, ...(parsed.status ? { status: parsed.status } : {}), ...(parsed.mandate ? { mandate: parsed.mandate } : {}) }, records: parsed.records });
     }
     for (const [file, invalid] of this.invalid) diagnostics.push({ level: "error", file, message: invalid.message });
-    for (const source of this.pendingAttachments()) diagnostics.push({ level: "warning", file: source, message: "Pièce jointe citée mais pas encore archivée." });
+    for (const source of this.pendingAttachments()) diagnostics.push({ level: "warning", file: source, message: "Attachment cited but not archived yet." });
     const plan = this.plan();
     return deriveAcceptanceCoverage({
       ...(registry ? { registry } : {}),
@@ -217,6 +219,7 @@ export class EvidenceArchive {
       knownSnapshots: new Set(this.knownSnapshots.keys()),
       diagnostics,
       now: this.clock(),
+      language,
     });
   }
 
@@ -279,7 +282,7 @@ export function diskStorage(taskRoot: () => string, runDirectory: string): Archi
     },
     async write(archivePath, data) {
       const target = path.resolve(runDirectory, archivePath);
-      if (!target.startsWith(`${path.resolve(runDirectory)}${path.sep}`)) throw new Error("Chemin d'archive invalide.");
+      if (!target.startsWith(`${path.resolve(runDirectory)}${path.sep}`)) throw new Error("Invalid archive path.");
       await atomicWrite(target, data);
     },
     async read(archivePath) {

@@ -62,7 +62,7 @@ export function isRunDocument(relativePath: string) {
 }
 
 /**
- * The three files the "Preuves" tab reads, and only those: the `-roundN`
+ * The three files the "Evidence" tab reads, and only those: the `-roundN`
  * copies the review orchestrator keeps are history the tab never shows, so a
  * badge raised on one would point at nothing new. Mirrors SOURCES in
  * components/evidence-panel.tsx.
@@ -109,11 +109,11 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
  * an incident where there was only a place given back.
  */
 export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true, trustRefused = false) {
-  if (trustRefused) return "Session fermée, dossier non approuvé";
-  if (stoppedBy === "queue") return "Place libérée pour la file d'attente";
-  if (stoppedBy === "user") return "Session arrêtée par l'utilisateur";
-  if (!workflowComplete) return exitCode === 0 ? "Session terminée avant la fin du workflow" : "Session interrompue";
-  return exitCode === 0 ? "Session terminée" : "Session interrompue";
+  if (trustRefused) return "Session closed, folder not trusted";
+  if (stoppedBy === "queue") return "Slot freed for the queue";
+  if (stoppedBy === "user") return "Session stopped by the user";
+  if (!workflowComplete) return exitCode === 0 ? "Session ended before the workflow finished" : "Session interrupted";
+  return exitCode === 0 ? "Session ended" : "Session interrupted";
 }
 
 /**
@@ -256,26 +256,26 @@ const OPENS_PULL_REQUEST = /\bgh\b[^;&|]*?(?:\bpr\s+create\b|--method\s+POST\b[^
  * comes before being merely a call to GitLab.
  */
 const SHELL_ACTIONS: [RegExp, string][] = [
-  [OPENS_PULL_REQUEST, "Ouverture de la pull request"],
-  [OPENS_MERGE_REQUEST, "Ouverture de la merge request"],
-  [/\bgh\b[^;&|]*\bpr\b/, "Consultation de la pull request"],
-  [/\bglab\b[^;&|]*\bmr\b/, "Consultation de la merge request"],
-  [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Lecture du ticket GitLab"],
-  [/\bgh\b[^;&|]*\bissue\b/, "Lecture du ticket GitHub"],
-  [/\bglab\b/, "Consultation de GitLab"],
-  [/\bgh\b/, "Consultation de GitHub"],
-  [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "Création de la branche"],
-  [/\bgit\b[^;&|]*\bcommit\b/, "Commit des modifications"],
-  [/\bgit\b[^;&|]*\bpush\b/, "Publication de la branche"],
-  [/\bgit\b/, "Inspection du dépôt"],
-  [/\b(?:jest|vitest|pytest|playwright|test:unit|test:integration)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b/, "Exécution des tests"],
-  [/\btsc\b|\btypecheck\b/, "Vérification des types"],
-  [/\b(?:eslint|biome|ruff|lint)\b/, "Analyse statique du code"],
-  [/\b(?:build|make|cargo)\b/, "Build du projet"],
-  [/\b(?:npm|pnpm|yarn)\s+(?:ci|install|add)\b/, "Installation des dépendances"],
-  [/\b(?:grep|rg|ack)\b/, "Recherche dans le code"],
-  [/\b(?:cat|head|tail|less|sed|awk)\b/, "Lecture des fichiers"],
-  [/\b(?:ls|find|tree)\b/, "Exploration du dépôt"],
+  [OPENS_PULL_REQUEST, "Opening the pull request"],
+  [OPENS_MERGE_REQUEST, "Opening the merge request"],
+  [/\bgh\b[^;&|]*\bpr\b/, "Reading the pull request"],
+  [/\bglab\b[^;&|]*\bmr\b/, "Reading the merge request"],
+  [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Reading the GitLab ticket"],
+  [/\bgh\b[^;&|]*\bissue\b/, "Reading the GitHub ticket"],
+  [/\bglab\b/, "Querying GitLab"],
+  [/\bgh\b/, "Querying GitHub"],
+  [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "Creating the branch"],
+  [/\bgit\b[^;&|]*\bcommit\b/, "Committing the changes"],
+  [/\bgit\b[^;&|]*\bpush\b/, "Pushing the branch"],
+  [/\bgit\b/, "Inspecting the repository"],
+  [/\b(?:jest|vitest|pytest|playwright|test:unit|test:integration)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b/, "Running the tests"],
+  [/\btsc\b|\btypecheck\b/, "Checking types"],
+  [/\b(?:eslint|biome|ruff|lint)\b/, "Linting the code"],
+  [/\b(?:build|make|cargo)\b/, "Building the project"],
+  [/\b(?:npm|pnpm|yarn)\s+(?:ci|install|add)\b/, "Installing the dependencies"],
+  [/\b(?:grep|rg|ack)\b/, "Searching the code"],
+  [/\b(?:cat|head|tail|less|sed|awk)\b/, "Reading files"],
+  [/\b(?:ls|find|tree)\b/, "Exploring the repository"],
 ];
 
 function named(prefix: string, target: string | undefined, fallback: string) {
@@ -283,27 +283,27 @@ function named(prefix: string, target: string | undefined, fallback: string) {
 }
 
 const TOOL_ACTIONS: Record<string, (target?: string) => string> = {
-  Read: (target) => named("Lecture de", target, "Lecture d'un fichier"),
-  Edit: (target) => named("Modification de", target, "Modification d'un fichier"),
-  NotebookEdit: (target) => named("Modification de", target, "Modification d'un notebook"),
-  Write: (target) => named("Écriture de", target, "Écriture d'un fichier"),
-  Grep: (target) => target ? `Recherche de « ${target} »` : "Recherche dans le code",
-  Glob: () => "Parcours des fichiers",
-  Task: (target) => target ? `Délégation à ${target}` : "Délégation à un agent",
-  Agent: (target) => target ? `Délégation à ${target}` : "Délégation à un agent",
-  Skill: (target) => target ? `Compétence ${target}` : "Chargement d'une compétence",
-  TodoWrite: () => "Mise à jour du plan",
-  WebSearch: () => "Recherche sur le web",
+  Read: (target) => named("Reading", target, "Reading a file"),
+  Edit: (target) => named("Editing", target, "Editing a file"),
+  NotebookEdit: (target) => named("Editing", target, "Editing a notebook"),
+  Write: (target) => named("Writing", target, "Writing a file"),
+  Grep: (target) => target ? `Searching for "${target}"` : "Searching the code",
+  Glob: () => "Listing files",
+  Task: (target) => target ? `Delegating to ${target}` : "Delegating to an agent",
+  Agent: (target) => target ? `Delegating to ${target}` : "Delegating to an agent",
+  Skill: (target) => target ? `Skill ${target}` : "Loading a skill",
+  TodoWrite: () => "Updating the plan",
+  WebSearch: () => "Searching the web",
   WebFetch: (target) => {
     const host = target && URL.canParse(target) ? new URL(target).host : undefined;
-    return host ? `Consultation de ${host}` : "Consultation du web";
+    return host ? `Querying ${host}` : "Querying the web";
   },
 };
 
 function externalToolAction(tool: string) {
-  if (tool.startsWith("mcp__playwright__")) return "Pilotage du navigateur";
-  if (/figma/i.test(tool)) return "Consultation de Figma";
-  return tool.startsWith("mcp__") ? "Appel d'un outil externe" : undefined;
+  if (tool.startsWith("mcp__playwright__")) return "Driving the browser";
+  if (/figma/i.test(tool)) return "Querying Figma";
+  return tool.startsWith("mcp__") ? "Calling an external tool" : undefined;
 }
 
 /**
@@ -313,7 +313,7 @@ function externalToolAction(tool: string) {
  * says a silent session is working rather than stuck.
  */
 export function actionLabel(tool: string, command?: string, target?: string) {
-  if (tool === "Bash") return SHELL_ACTIONS.find(([pattern]) => pattern.test(command ?? ""))?.[1] ?? "Commande shell";
+  if (tool === "Bash") return SHELL_ACTIONS.find(([pattern]) => pattern.test(command ?? ""))?.[1] ?? "Shell command";
   return TOOL_ACTIONS[tool]?.(target) ?? externalToolAction(tool);
 }
 
@@ -405,8 +405,8 @@ export function phaseForArtifact(relativePath: string) {
  * report that must come after it.
  */
 const REVIEW_PLANS = [
-  { plan: "qa-plan.md", report: "qa-report.md", planLabel: "Le plan de test QA", reportLabel: "le rapport QA" },
-  { plan: "design-inventory.md", report: "designer-review.md", planLabel: "L'inventaire design", reportLabel: "la revue de design" },
+  { plan: "qa-plan.md", report: "qa-report.md", planLabel: "The QA test plan", reportLabel: "the QA report" },
+  { plan: "design-inventory.md", report: "designer-review.md", planLabel: "The design inventory", reportLabel: "the design review" },
 ];
 
 /**
@@ -421,8 +421,8 @@ export function reviewPlanNotes(arrivals: Record<string, string> | undefined) {
     const reportAt = Date.parse(arrivals?.[report] ?? "");
     if (Number.isNaN(reportAt)) continue;
     const planAt = Date.parse(arrivals?.[plan] ?? "");
-    if (Number.isNaN(planAt)) notes.push(`${planLabel} (${plan}) n'est pas arrivé avant ${reportLabel} : rien ne montre qu'il a été écrit en premier.`);
-    else if (planAt > reportAt) notes.push(`${planLabel} (${plan}) est arrivé après ${reportLabel} : rien ne montre qu'il a été écrit en premier.`);
+    if (Number.isNaN(planAt)) notes.push(`${planLabel} (${plan}) did not arrive before ${reportLabel}: nothing shows it was written first.`);
+    else if (planAt > reportAt) notes.push(`${planLabel} (${plan}) arrived after ${reportLabel}: nothing shows it was written first.`);
   }
   return notes;
 }
@@ -485,16 +485,16 @@ const NICKNAMES = [
 ];
 
 const ROLES: Record<string, string> = {
-  developer: "Dev",
-  "ticket-planner": "Planif",
-  "senior-reviewer": "Revue",
-  "qa-reviewer": "QA",
-  "designer-reviewer": "Design",
-  "review-orchestrator": "Orchestration",
-  Explore: "Exploration",
+  developer: "Developer",
+  "ticket-planner": "Planner",
+  "senior-reviewer": "Senior reviewer",
+  "qa-reviewer": "QA reviewer",
+  "designer-reviewer": "Design reviewer",
+  "review-orchestrator": "Review orchestrator",
+  Explore: "Explorer",
 };
 
-/** The short French role an agent type is shown under, or the bare type when it has none. */
+/** The role an agent type is shown under, or the bare type when it has none. */
 export function agentRole(name: string) {
   const type = agentType(name);
   return ROLES[type] ?? type;
@@ -674,22 +674,22 @@ export function worktreeRemoval(
   facts: WorktreeFacts,
 ): { allowed: boolean; automatic: boolean; reasons: string[]; risks: string[] } {
   const allowed = !runHoldsRepository(run);
-  const risks = [...(facts.clean ? [] : ["changements non commités"]), ...(facts.pushed ? [] : ["changements non poussés"])];
+  const risks = [...(facts.clean ? [] : ["uncommitted changes"]), ...(facts.pushed ? [] : ["unpushed changes"])];
   const reasons: string[] = [];
-  if (!allowed) reasons.push("session encore ouverte");
+  if (!allowed) reasons.push("session still open");
   const draft = run.workflow?.result?.delivery === "draft_merge_request";
   const { delivery } = forgeWords(forgeOf(run.issueUrl));
-  if (!run.mergeRequestUrl) reasons.push(`aucune ${delivery}`);
-  else if (draft || run.workflow?.state === "blocked") reasons.push(`${delivery} en brouillon sur un run bloqué`);
-  else if (run.status !== "completed") reasons.push("run non terminé");
-  if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push("archive des preuves non confirmée");
+  if (!run.mergeRequestUrl) reasons.push(`no ${delivery}`);
+  else if (draft || run.workflow?.state === "blocked") reasons.push(`draft ${delivery} on a blocked run`);
+  else if (run.status !== "completed") reasons.push("run not finished");
+  if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push("evidence archive not confirmed");
   reasons.push(...risks);
   return { allowed, automatic: facts.exists && reasons.length === 0, reasons, risks };
 }
 
 /** What the interface says of a worktree, in one line. */
 export function worktreeKeptDetail(reasons: string[]) {
-  return reasons.length > 0 ? `Worktree conservé : ${reasons.join(", ")}` : "Worktree conservé";
+  return reasons.length > 0 ? `Worktree kept: ${reasons.join(", ")}` : "Worktree kept";
 }
 
 /**
@@ -797,45 +797,45 @@ function strings(value: unknown) {
  * contracts/schedule.md. The whole file is refused on the first rule that
  * fails: a schedule that is partly wrong would let two conflicting tickets run
  * together, which is worse than running the batch one ticket at a time.
- * `error` is a French phrase, shown to the user as the reason of the failure.
+ * `error` is a short phrase, shown to the user as the reason of the failure.
  */
 export function validateSchedule(input: { tickets: string[]; known: string[] }, output: unknown): { ok: true; schedule: ScheduleOutput } | { ok: false; error: string } {
   const refuse = (error: string) => ({ ok: false as const, error });
-  if (!output || typeof output !== "object" || Array.isArray(output)) return refuse("la sortie n'est pas un objet JSON");
+  if (!output || typeof output !== "object" || Array.isArray(output)) return refuse("the output is not a JSON object");
   const { tickets, edges } = output as { tickets?: unknown; edges?: unknown };
-  if (!Array.isArray(tickets) || !Array.isArray(edges)) return refuse("il manque le tableau tickets ou edges");
+  if (!Array.isArray(tickets) || !Array.isArray(edges)) return refuse("the tickets or edges array is missing");
   const expected = new Set(input.tickets);
   const known = new Set(input.known);
   const predictions: SchedulePrediction[] = [];
   for (const raw of tickets) {
     const ticket = (raw ?? {}) as Record<string, unknown>;
     const issueUrl = ticket.issue_url;
-    if (typeof issueUrl !== "string" || !expected.has(issueUrl)) return refuse("un ticket de la sortie n'est pas dans l'entrée");
-    if (predictions.some((prediction) => prediction.issueUrl === issueUrl)) return refuse("un ticket apparaît deux fois");
-    if (typeof ticket.confidence !== "string" || !CONFIDENCES.includes(ticket.confidence)) return refuse("une confiance est hors des valeurs prévues");
-    if (typeof ticket.summary !== "string" || !ticket.summary.trim()) return refuse("un résumé est vide");
+    if (typeof issueUrl !== "string" || !expected.has(issueUrl)) return refuse("a ticket of the output is not in the input");
+    if (predictions.some((prediction) => prediction.issueUrl === issueUrl)) return refuse("a ticket appears twice");
+    if (typeof ticket.confidence !== "string" || !CONFIDENCES.includes(ticket.confidence)) return refuse("a confidence is outside the expected values");
+    if (typeof ticket.summary !== "string" || !ticket.summary.trim()) return refuse("a summary is empty");
     predictions.push({ issueUrl, areas: strings(ticket.areas), files: strings(ticket.files), confidence: ticket.confidence as ScheduleConfidence, summary: ticket.summary.trim() });
   }
-  if (predictions.length !== expected.size) return refuse("un ticket de l'entrée n'a pas de prédiction");
+  if (predictions.length !== expected.size) return refuse("a ticket of the input has no prediction");
   const pairs = new Set<string>();
   const links: ScheduleOutputEdge[] = [];
   for (const raw of edges) {
     const edge = (raw ?? {}) as Record<string, unknown>;
     const { a, b, kind, order, reason } = edge;
-    if (typeof a !== "string" || typeof b !== "string" || ![a, b].every((url) => expected.has(url) || known.has(url))) return refuse("une arête cite un ticket inconnu");
-    if (a === b) return refuse("une arête relie un ticket à lui-même");
-    if (!expected.has(a) && !expected.has(b)) return refuse("une arête relie deux tickets déjà connus");
-    if (typeof kind !== "string" || !EDGE_KINDS.includes(kind)) return refuse("un type d'arête est hors des valeurs prévues");
-    if (typeof reason !== "string" || !reason.trim()) return refuse("une raison est vide");
+    if (typeof a !== "string" || typeof b !== "string" || ![a, b].every((url) => expected.has(url) || known.has(url))) return refuse("an edge names an unknown ticket");
+    if (a === b) return refuse("an edge links a ticket to itself");
+    if (!expected.has(a) && !expected.has(b)) return refuse("an edge links two tickets already known");
+    if (typeof kind !== "string" || !EDGE_KINDS.includes(kind)) return refuse("an edge kind is outside the expected values");
+    if (typeof reason !== "string" || !reason.trim()) return refuse("a reason is empty");
     const pair = [a, b].sort().join("\n");
-    if (pairs.has(pair)) return refuse("deux arêtes relient la même paire de tickets");
+    if (pairs.has(pair)) return refuse("two edges link the same pair of tickets");
     pairs.add(pair);
     if (kind === "depends_on") {
       const valid = Array.isArray(order) && order.length === 2 && ((order[0] === a && order[1] === b) || (order[0] === b && order[1] === a));
-      if (!valid) return refuse("une dépendance n'a pas d'ordre valide");
+      if (!valid) return refuse("a dependency has no valid order");
       links.push({ a, b, kind, order: [order[0], order[1]], reason: reason.trim() });
     } else {
-      if (order !== undefined) return refuse("un chevauchement porte un ordre");
+      if (order !== undefined) return refuse("an overlap carries an order");
       links.push({ a, b, kind: "overlap", reason: reason.trim() });
     }
   }
@@ -939,10 +939,10 @@ function conflictBetween(index: ScheduleIndex, left: Launch, right: Launch): Con
   const own = index.tickets.get(runLockKey(left));
   const other = index.tickets.get(runLockKey(right));
   const because = (ticket: ScheduledTicket) => (ticket.failure ? ` (${ticket.failure})` : "");
-  if (own?.analysis === "failed") return { cause: "analysis_failed", detail: `L'analyse du lot a échoué${because(own)} : les tickets de ce dépôt passent un par un.` };
-  if (other?.analysis === "failed") return { cause: "analysis_failed", detail: `L'analyse de ${ticketReference(other.issueUrl)} a échoué${because(other)} : ce ticket passe après lui.` };
-  if (own?.confidence === "low") return { cause: "low_confidence", detail: `Prédiction peu fiable pour ce ticket : il passe seul sur son dépôt.${own.summary ? ` ${own.summary}` : ""}` };
-  if (other?.confidence === "low") return { cause: "low_confidence", detail: `Prédiction peu fiable pour ${ticketReference(other.issueUrl)} : ce ticket passe après lui.${other.summary ? ` ${ticketReference(other.issueUrl)} : ${other.summary}` : ""}` };
+  if (own?.analysis === "failed") return { cause: "analysis_failed", detail: `The batch analysis failed${because(own)}: the tickets of this repository run one at a time.` };
+  if (other?.analysis === "failed") return { cause: "analysis_failed", detail: `The analysis of ${ticketReference(other.issueUrl)} failed${because(other)}: this ticket runs after it.` };
+  if (own?.confidence === "low") return { cause: "low_confidence", detail: `Unreliable prediction for this ticket: it runs alone on its repository.${own.summary ? ` ${own.summary}` : ""}` };
+  if (other?.confidence === "low") return { cause: "low_confidence", detail: `Unreliable prediction for ${ticketReference(other.issueUrl)}: this ticket runs after it.${other.summary ? ` ${ticketReference(other.issueUrl)}: ${other.summary}` : ""}` };
   return undefined;
 }
 
@@ -976,7 +976,7 @@ function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: 
     const base = {
       ...entry,
       ...(own?.summary ? { summary: own.summary } : {}), ...(own?.confidence ? { confidence: own.confidence } : {}),
-      ...(own?.analysis === "failed" ? { analysisFailure: own.failure ?? "analyse en échec" } : {}),
+      ...(own?.analysis === "failed" ? { analysisFailure: own.failure ?? "analysis failed" } : {}),
     };
     const holder = holders.get(runLockKey(entry));
     if (holder) return { ...base, reason: "ticket", blockedBy: holder };
@@ -1087,7 +1087,7 @@ export function pruneSchedule(tickets: ScheduledTicket[], edges: ScheduleEdge[],
 export type StoredQueue = { queue: QueuedRun[]; tickets: ScheduledTicket[]; edges: ScheduleEdge[]; watches: MergeWatch[] };
 
 /** Why a batch whose analysis did not survive a restart runs one ticket at a time. */
-export const INTERRUPTED_ANALYSIS = "console redémarrée pendant l'analyse";
+export const INTERRUPTED_ANALYSIS = "console restarted during the analysis";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

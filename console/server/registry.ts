@@ -222,11 +222,11 @@ export class RunRegistry {
    * while the user is still looking at the form rather than an hour later.
    */
   async launch(request: LaunchRequest): Promise<LaunchOutcome> {
-    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
-    if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
+    if (this.shuttingDown) throw new Error("The application is shutting down.");
+    if (!engine.locate()) throw new Error(`${engine.label} was not found in PATH.`);
     // A path inside a linked worktree, or below the root, names the same repository as its main checkout.
     const repository = await mainCheckout(await resolveProjectDirectory(request.cwd, request.issueUrl));
-    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
+    if (this.shuttingDown) throw new Error("The application is shutting down.");
     const entry = this.entry({ repository, issueUrl: request.issueUrl }, request.instruction);
     // A ticket added beside others already predicted is compared against them before it may start.
     const analysed = !this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length > 0;
@@ -253,8 +253,8 @@ export class RunRegistry {
    * known prediction starts as a lone launch would.
    */
   async enqueueBatch(tickets: ResolvedTicket[], options: { instruction?: string } = {}): Promise<BatchOutcome> {
-    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
-    if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
+    if (this.shuttingDown) throw new Error("The application is shutting down.");
+    if (!engine.locate()) throw new Error(`${engine.label} was not found in PATH.`);
     const outcome = this.admit(tickets, options.instruction);
     const before = new Set(this.sessions.keys());
     await this.drain();
@@ -264,7 +264,7 @@ export class RunRegistry {
 
   private admit(tickets: ResolvedTicket[], instruction: string | undefined, extra: Partial<QueuedRun> = {}) {
     const { accepted, duplicates } = admitBatch(tickets, this.takenTickets());
-    if (accepted.length === 0) throw new Error(tickets.length > 1 ? "Ces tickets sont déjà en file, en cours ou en attente de fusion." : "Ce ticket est déjà en file, en cours ou en attente de fusion.");
+    if (accepted.length === 0) throw new Error(tickets.length > 1 ? "These tickets are already queued, running or waiting for a merge." : "This ticket is already queued, running or waiting for a merge.");
     const batchId = `batch-${crypto.randomUUID().slice(0, 8)}`;
     const entries = accepted.map((ticket) => this.entry(ticket, instruction, { batchId, ...extra }));
     const analyses: [string, QueuedRun[]][] = [];
@@ -323,14 +323,14 @@ export class RunRegistry {
       this.edges = [...this.edges.filter((edge) => edge.repository !== repository || !replaced.has(pair(edge))), ...result.schedule.edges.map((edge) => ({ ...edge, repository }))];
     } else {
       this.tickets = [...this.tickets, ...pending.map((entry) => ({ issueUrl: entry.issueUrl, repository, analysis: "failed" as const, areas: [], files: [], failure: result.failure }))];
-      broadcast({ type: "notice", level: "attention", at: now(), title: "Analyse du lot en échec", detail: `${path.basename(repository)} : ${result.failure}. ${pending.length > 1 ? `Ses ${pending.length} tickets passent` : "Son ticket passe"} un par un, après les autres tickets du dépôt.` });
+      broadcast({ type: "notice", level: "attention", at: now(), title: "Batch analysis failed", detail: `${path.basename(repository)}: ${result.failure}. ${pending.length > 1 ? `Its ${pending.length} tickets run` : "Its ticket runs"} one at a time, after the other tickets of the repository.` });
     }
     const analysed = new Set(pending.map((entry) => entry.id));
     this.queue = this.queue.map((entry) => { if (!analysed.has(entry.id)) return entry; const { analysing: _analysing, ...rest } = entry; return rest; });
     await this.drain();
   }
 
-  /** The canned answer of the demonstration batch, after one step, so the "Analyse en cours" state shows. */
+  /** The canned answer of the demonstration batch, after one step, so the "Analysis in progress" state shows. */
   private async demoAnalysis(urls: string[]): Promise<AnalysisResult> {
     await new Promise<void>((resolve) => this.later(demoStepDuration, resolve));
     const asked = new Set(urls);
@@ -348,10 +348,10 @@ export class RunRegistry {
 
   /** The batch of the demonstration: three invented tickets, one conflict, no repository and no GitLab. */
   startDemoBatch() {
-    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
+    if (this.shuttingDown) throw new Error("The application is shutting down.");
     const tickets = DEMO_BATCH.tickets.map((ticket) => ({ repository: DEMO_CWD, issueUrl: ticket.issueUrl }));
-    if (admitBatch(tickets, this.takenTickets()).accepted.length === 0) throw new Error("Le lot de démonstration est déjà en cours.");
-    const outcome = this.admit(tickets, "Mode démonstration, aucun dépôt ne sera modifié.", { demo: true });
+    if (admitBatch(tickets, this.takenTickets()).accepted.length === 0) throw new Error("The demo batch is already running.");
+    const outcome = this.admit(tickets, "Demo mode, no repository will be modified.", { demo: true });
     void this.drain();
     return outcome;
   }
@@ -361,10 +361,10 @@ export class RunRegistry {
    * `incident`: the scenario where the pilot hands back with nothing next, for the health detector.
    */
   startDemo(scenario: "workflow" | "incident" = "workflow") {
-    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
+    if (this.shuttingDown) throw new Error("The application is shutting down.");
     const launch = demoLaunchState(scenario);
-    if (this.holders().has(runLockKey(launch))) throw new Error("Une démonstration est déjà en cours.");
-    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`Le harnais tient déjà ${maxConcurrentRuns} runs. Libère une place avant de lancer la démonstration.`);
+    if (this.holders().has(runLockKey(launch))) throw new Error("A demo is already running.");
+    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`The harness already holds ${maxConcurrentRuns} runs. Free a slot before starting the demo.`);
     const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, launch));
     if (scenario === "incident") startIncidentDemoRun(session);
     else startDemoRun(session);
@@ -405,7 +405,7 @@ export class RunRegistry {
       // Nobody merges a simulated merge request: the demonstration does, a few steps later.
       if (isSimulatedTicket(watch.issueUrl)) this.later(demoStepDuration * DEMO_MERGE_STEPS, () => void this.applyMergeStatus(watch, "merged"));
     } else if (dependents.length > 0) {
-      broadcast({ type: "notice", level: "info", at: now(), title: `Ticket terminé sans ${forgeWords(forgeOf(state.issueUrl)).delivery}`, detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} n'a ouvert aucune ${forgeWords(forgeOf(state.issueUrl)).delivery} : ${plural(dependents.length, "ticket ne l'attend plus", "tickets ne l'attendent plus")}.` });
+      broadcast({ type: "notice", level: "info", at: now(), title: `Ticket finished without a ${forgeWords(forgeOf(state.issueUrl)).delivery}`, detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} opened no ${forgeWords(forgeOf(state.issueUrl)).delivery}: ${plural(dependents.length, "ticket no longer waits for it", "tickets no longer wait for it")}.` });
     }
     void this.drain();
   }
@@ -427,9 +427,9 @@ export class RunRegistry {
     const subject = `${mergeRequestReference(current.mergeRequestUrl)} (${path.basename(current.repository)} ${ticketReference(current.issueUrl)})`;
     const delivery = forgeOf(current.mergeRequestUrl) === "github" ? "Pull request" : "Merge request";
     if (step.released === "merged") {
-      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: `${delivery} mergée`, detail: `${subject} : ${plural(released, "ticket repart", "tickets repartent")} de la base à jour.` });
+      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: `${delivery} merged`, detail: `${subject}: ${plural(released, "ticket starts", "tickets start")} from the updated base.` });
     } else {
-      broadcast({ type: "notice", level: "attention", at: now(), title: `${delivery} fermée sans être mergée`, detail: `${subject} : ${plural(released, "ticket ne l'attend plus et part", "tickets ne l'attendent plus et partent")} de la base.` });
+      broadcast({ type: "notice", level: "attention", at: now(), title: `${delivery} closed without being merged`, detail: `${subject}: ${plural(released, "ticket no longer waits for it and starts", "tickets no longer wait for it and start")} from the base.` });
     }
     await this.drain();
   }
@@ -449,9 +449,9 @@ export class RunRegistry {
       status: "starting", phase: 1, cwd: repository, repository, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(),
       ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : {}),
     }));
-    session.activity("system", "Session créée", path.basename(repository));
-    if (entry.forced?.mode === "stacked") session.activity("attention", "Départ empilé", `Sur ${entry.forced.baseBranch}, la branche de ${ticketReference(entry.forced.onto)} : la ${forgeWords(forgeOf(entry.issueUrl)).delivery} ciblera cette branche.`);
-    else if (entry.forced) session.activity("attention", "Départ forcé depuis la base", "L'ordonnancement du lot est ignoré pour ce ticket.");
+    session.activity("system", "Session created", path.basename(repository));
+    if (entry.forced?.mode === "stacked") session.activity("attention", "Stacked start", `On ${entry.forced.baseBranch}, the branch of ${ticketReference(entry.forced.onto)}: the ${forgeWords(forgeOf(entry.issueUrl)).delivery} will target this branch.`);
+    else if (entry.forced) session.activity("attention", "Forced start from the base", "The batch schedule is ignored for this ticket.");
     session.publish();
     const abandon = async (message: string) => {
       await session.dispose().catch(() => undefined);
@@ -465,13 +465,13 @@ export class RunRegistry {
     } catch (error) {
       // Never a silent fall back on the main checkout: the run does not start at all.
       const reason = error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : String(error);
-      throw await abandon(`Le worktree du run n'a pas pu être créé dans ${repository} : ${reason}`);
+      throw await abandon(`The run worktree could not be created in ${repository}: ${reason}`);
     }
     const worktree = prepared.worktree.path;
     session.state.cwd = worktree;
     session.state.worktree = prepared.worktree;
-    session.activity("system", "Worktree créé", [worktree, prepared.summary].filter(Boolean).join(" · "));
-    if (prepared.warning) session.activity("attention", "Dépendances non reprises dans le worktree", prepared.warning);
+    session.activity("system", "Worktree created", [worktree, prepared.summary].filter(Boolean).join(" · "));
+    if (prepared.warning) session.activity("attention", "Dependencies not brought into the worktree", prepared.warning);
     session.publish();
     void fetchTicketTitle(entry.issueUrl, repository).then((title) => {
       if (!title) return;
@@ -483,12 +483,12 @@ export class RunRegistry {
     session.state.harness = await harnessVersion();
     session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
-    if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Recette d'exécution reprise", "Conservée d'un run précédent de ce dépôt.");
+    if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Runtime recipe restored", "Kept from a previous run of this repository.");
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) {
       await discardRunWorktree(repository, worktree);
-      throw await abandon("L'application est en cours de fermeture.");
+      throw await abandon("The application is shutting down.");
     }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
     session.engine = engine.start({
@@ -519,7 +519,7 @@ export class RunRegistry {
     });
     session.state.status = "running";
     session.state.sessionActive = true;
-    session.activity("system", `${engine.label} démarré`, command);
+    session.activity("system", `${engine.label} started`, command);
     session.publish();
     return session;
   }
@@ -542,8 +542,8 @@ export class RunRegistry {
       session.state.endedAt = now();
       if (trustRefused) session.state.error = trustRefused;
       else if (session.state.status === "failed") session.state.error = exitCode === 0
-        ? `${engine.label} s'est terminé avant que le workflow n'atteigne un résultat.`
-        : `${engine.label} s'est arrêté avec le code ${exitCode}.`;
+        ? `${engine.label} ended before the workflow reached a result.`
+        : `${engine.label} stopped with code ${exitCode}.`;
     }
     session.activity("system", exitReport(session.stoppedBy, exitCode, complete, Boolean(trustRefused)), `Code ${exitCode}`);
     closeAgentsLeftBehind(session);
@@ -561,7 +561,7 @@ export class RunRegistry {
   /** A worktree left by a shutdown is decided at the next start, when git can be asked without racing the exit. */
   private keepWorktreeForRestart(session: RunSession) {
     const worktree = session.state.worktree;
-    if (worktree?.state === "active") session.state.worktree = { ...worktree, state: "kept", detail: worktreeKeptDetail(["console arrêtée avant la fin du run"]) };
+    if (worktree?.state === "active") session.state.worktree = { ...worktree, state: "kept", detail: worktreeKeptDetail(["console stopped before the end of the run"]) };
   }
 
   /**
@@ -571,7 +571,7 @@ export class RunRegistry {
    */
   async removeWorktree(runId: string, force: boolean): Promise<WorktreeRemovalResult> {
     const session = this.readable(runId);
-    if (!session) return { outcome: "refused", message: "Ce run n'existe plus." };
+    if (!session) return { outcome: "refused", message: "This run no longer exists." };
     const result = await session.serializeHealth(() => removeWorktreeOnRequest(session, force));
     if (session.state.archived) {
       await session.persist();
@@ -589,7 +589,7 @@ export class RunRegistry {
       session.state.action = undefined;
       session.state.status = "stopped";
       session.state.endedAt = now();
-      session.activity("system", "Démonstration arrêtée");
+      session.activity("system", "Demo stopped");
       closeAgentsLeftBehind(session);
       session.publish();
       void this.drain();
@@ -609,14 +609,14 @@ export class RunRegistry {
    */
   async close(runId: string) {
     const session = this.expect(runId);
-    if (session.holdsRepository) throw new Error("Ce run tient encore sa session. Arrête-la avant de le fermer.");
+    if (session.holdsRepository) throw new Error("This run still holds its session. Stop it before closing the run.");
     // Removing the run is the user closing its case: an incident left open would bring it back as an archive at the next start.
     await session.serializeHealth(async () => {
       const at = now();
       const incidents = session.state.incidents ?? [];
       if (!incidents.some((incident) => incident.status === "open")) return;
       session.state.incidents = incidents.map((incident) => incident.status === "open"
-        ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: "Run retiré de la liste" } }
+        ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: "Run removed from the list" } }
         : incident);
       await session.persist();
     });
@@ -638,14 +638,14 @@ export class RunRegistry {
   sendInstruction(runId: string, text: string) {
     const session = this.expect(runId);
     const instruction = text.trim();
-    if (!instruction) throw new Error("L'instruction est vide.");
-    if (!session.engine && !session.demo) throw new Error(`Aucune session ${engine.label} n'est active.`);
+    if (!instruction) throw new Error("The instruction is empty.");
+    if (!session.engine && !session.demo) throw new Error(`No ${engine.label} session is active.`);
     session.engine?.submit(instruction);
     // The user gave the pilot something to do: it is no longer sitting at its prompt for nothing.
     if (session.engine) pilotActs(session.signals, Date.now());
     session.markProgress();
     session.conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction, pending: session.engine !== null });
-    session.activity("system", "Instruction transmise", instruction);
+    session.activity("system", "Instruction sent", instruction);
     session.publish();
     session.signal();
     if (!session.engine) acknowledgeDemoInstruction(session);
@@ -654,11 +654,11 @@ export class RunRegistry {
   /**
    * An action on an incident, checked again against the state the server holds
    * right before its effect. The decision is written before the effect and its
-   * outcome after it: a crash in between leaves "issue inconnue", never a replay.
+   * outcome after it: a crash in between leaves "outcome unknown", never a replay.
    */
   async incidentAction(request: IncidentActionRequest): Promise<IncidentActionResult> {
     const session = this.readable(request.runId);
-    if (!session) return { outcome: "refused", message: "Ce run n'existe plus." };
+    if (!session) return { outcome: "refused", message: "This run no longer exists." };
     return session.serializeHealth(async () => {
       const answered = session.answeredRequests.get(request.requestId);
       if (answered) return { outcome: "duplicate" as const, message: answered.message };
@@ -676,20 +676,20 @@ export class RunRegistry {
       await session.persist();
       let message: string;
       if (request.action === "dismiss") {
-        current = { ...current, status: "dismissed", resolution: { at, outcome: "Classé comme faux positif", detail: request.reason?.trim() } };
-        session.activity("system", `Incident classé comme faux positif : ${current.title}`, request.reason?.trim());
-        message = "Incident classé comme faux positif.";
+        current = { ...current, status: "dismissed", resolution: { at, outcome: "Dismissed as a false positive", detail: request.reason?.trim() } };
+        session.activity("system", `Incident dismissed as a false positive: ${current.title}`, request.reason?.trim());
+        message = "Incident dismissed as a false positive.";
       } else if (request.action === "stop") {
         this.stop(session.id);
-        session.activity("system", "Arrêt demandé depuis l'incident", current.title);
-        message = "Arrêt demandé.";
+        session.activity("system", "Stop requested from the incident", current.title);
+        message = "Stop requested.";
       } else {
         if (session.engine) session.engine.submit(CONTINUATION_INSTRUCTION);
         current = { ...current, continuation: { requestedAt: at, requestId: request.requestId } };
         session.conversationMessage({ id: `local-${crypto.randomUUID()}`, at, author: "user", text: CONTINUATION_INSTRUCTION, pending: session.engine !== null });
-        session.activity("system", "Continuation demandée", current.title);
+        session.activity("system", "Continuation requested", current.title);
         if (session.demo) resumeDemoAfterContinuation(session);
-        message = "Continuation demandée. L'incident se fermera quand la reprise sera observée.";
+        message = "Continuation requested. The incident will close when the resumption is observed.";
       }
       current = withDecision(current, { requestId: request.requestId, action: request.action, at, outcome: "done", detail: message });
       replace(current);
@@ -705,7 +705,7 @@ export class RunRegistry {
 
   cancelQueued(queuedId: string) {
     const remaining = this.queue.filter((entry) => entry.id !== queuedId);
-    if (remaining.length === this.queue.length) throw new Error("Cette demande n'est plus en file.");
+    if (remaining.length === this.queue.length) throw new Error("This request is no longer queued.");
     this.queue = remaining;
     // What it was ahead of may no longer have anything to wait for.
     void this.drain();
@@ -713,7 +713,7 @@ export class RunRegistry {
 
   private queued(queuedId: string) {
     const entry = this.queue.find((candidate) => candidate.id === queuedId);
-    if (!entry) throw new Error("Cette demande n'est plus en file.");
+    if (!entry) throw new Error("This request is no longer queued.");
     return entry;
   }
 
@@ -728,11 +728,11 @@ export class RunRegistry {
     let forced: QueuedRun["forced"] = { mode: "base" };
     if (mode === "stacked") {
       const target = onto ?? this.describe().find((view) => view.id === queuedId)?.blocking?.issueUrl;
-      if (!target) throw new Error("Ce ticket n'attend aucun autre ticket : il n'y a pas de branche sur laquelle l'empiler.");
+      if (!target) throw new Error("This ticket is not waiting for any other ticket: there is no branch to stack it on.");
       const key = runLockKey({ cwd: entry.repository, issueUrl: target });
       const branch = [...this.sessions.values()].find((session) => runLockKey(session.state) === key)?.state.branch
         ?? this.watches.find((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl }) === key)?.branch;
-      if (!branch) throw new Error(`La branche de ${ticketReference(target)} n'est pas encore connue : le départ empilé n'est pas possible.`);
+      if (!branch) throw new Error(`The branch of ${ticketReference(target)} is not known yet: a stacked start is not possible.`);
       forced = { mode: "stacked", baseBranch: branch, onto: ticketIdentity(target) };
     }
     this.queue = this.queue.map((candidate) => candidate === entry ? { ...entry, forced } : candidate);
@@ -744,7 +744,7 @@ export class RunRegistry {
     const entry = this.queued(queuedId);
     const others = this.queue.filter((candidate) => candidate !== entry);
     const position = before === null ? others.length : others.findIndex((candidate) => candidate.id === before);
-    if (position < 0) throw new Error("Cette demande n'est plus en file.");
+    if (position < 0) throw new Error("This request is no longer queued.");
     this.queue = [...others.slice(0, position), entry, ...others.slice(position)];
     void this.drain();
   }
@@ -766,7 +766,7 @@ export class RunRegistry {
       try {
         await this.start(entry);
       } catch (error) {
-        broadcast({ type: "notice", level: "attention", title: "Run en file non démarré", detail: error instanceof Error ? error.message : String(error), at: now() });
+        broadcast({ type: "notice", level: "attention", title: "Queued run not started", detail: error instanceof Error ? error.message : String(error), at: now() });
       }
     }
     if (this.shuttingDown) return;
@@ -807,7 +807,7 @@ export class RunRegistry {
 
   private expect(runId: string) {
     const session = this.sessions.get(runId);
-    if (!session) throw new Error("Ce run n'existe plus.");
+    if (!session) throw new Error("This run no longer exists.");
     return session;
   }
 
@@ -849,7 +849,7 @@ export class RunRegistry {
       if (runInProgress(session.state.status)) {
         session.state.status = "stopped";
         session.state.endedAt = now();
-        session.activity("system", "Session arrêtée à la fermeture de l’application");
+        session.activity("system", "Session stopped when the application closed");
       }
       session.state.sessionActive = false;
       session.state.action = undefined;
@@ -874,7 +874,7 @@ function closeAgentsLeftBehind(session: RunSession) {
   const { agents, abandoned } = closeAbandonedAgents(session.state.agents, now());
   if (abandoned.length === 0) return;
   session.state.agents = agents;
-  session.activity("agent", abandoned.length === 1 ? "Un agent n'a jamais rapporté sa fin" : `${abandoned.length} agents n'ont jamais rapporté leur fin`, abandoned.map((agent) => agent.name).join(" · "));
+  session.activity("agent", abandoned.length === 1 ? "One agent never reported its end" : `${abandoned.length} agents never reported their end`, abandoned.map((agent) => agent.name).join(" · "));
 }
 
 export const registry = new RunRegistry();

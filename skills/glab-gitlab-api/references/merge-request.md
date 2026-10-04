@@ -2,6 +2,8 @@ The caller must authorize publication and supply the source/target branches, tic
 
 # Authorized merge request delivery
 
+The templates and fixed phrases below are written in French. When the workflow language is English ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md)), keep their structure and write every heading and phrase in English, with the fixed forms that contract lists.
+
 **Read the acceptance summary first.** When the console runs the session (`IMPL_RUN_ID` is set), it keeps `.claude/tasks/acceptance-summary.md` up to date from the registry and every evidence file, with the same computation its "Preuves" tab shows: one sentence ("5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié"), the criteria that are not verified and why, and a detail table for step 9. Use it as it is. A criterion it reports unverified, blocked or failed is never reworded as validated, anywhere. When the file is absent (no console), write the same content yourself from the registry and the evidence files, by the same rule: a criterion is verified only when evidence taken on the final code says so.
 
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
@@ -180,7 +182,7 @@ N blocking - N non-blocking - N nitpicks - N praise
 
 Rules for this comment:
 
-- Everything in French and written with `implementation-harness:unslop`, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
+- Everything in the workflow language and written with `implementation-harness:unslop`, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
 - Only what survived the loop, plus what was fixed. No speculation, no hypothetical future problems
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - `### Validation` gives project commands and their results, never how this machine had to run them (see the machine rule above)

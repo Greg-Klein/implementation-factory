@@ -2,7 +2,7 @@
 
 Local interface for driving the `/implementation-harness:implement` command with the Claude Code executable installed on the machine. The harness does not use the Anthropic API directly and needs no API key. The [main README](../README.md#one-command-installation) covers installation and day-to-day use with `impl`.
 
-The interface is in French. Labels and messages are quoted here as they appear on screen.
+The interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
 
 ## Requirements
 
@@ -34,9 +34,9 @@ The command and the agents stay in the `implementation-harness` directory; nothi
 
 ## What the panels show
 
-The conversation panel is read from the session transcript, and Claude Code writes a message there only once the action that followed it has returned. A paragraph can therefore arrive a minute later than in the terminal, which is the only live view. While the session produces output, the panel shows "Claude écrit…" (Claude is writing) to say that the last visible message is not the latest state of the run.
+The conversation panel is read from the session transcript, and Claude Code writes a message there only once the action that followed it has returned. A paragraph can therefore arrive a minute later than in the terminal, which is the only live view. While the session produces output, the panel shows "Claude is writing…" to say that the last visible message is not the latest state of the run.
 
-In a directory Claude Code has never opened, the session starts with its trust prompt, before any hook and any transcript. The console recognises it in the terminal output and shows it in the conversation as a decision: "Claude Code demande de faire confiance à ce dossier", the path, then "Faire confiance et continuer" (trust and continue) or "Refuser" (refuse). It never answers for you, writes to no Claude Code configuration file and passes no flag that skips the question: it types into the terminal the answer you chose. The card disappears as soon as the prompt is no longer on screen, whether you answered here or in the Terminal tab. A refusal closes the session, and the run ends "Arrêté" (stopped) with its reason, with no incident. The detection is written for the wording of Claude Code 2.1.288 (`server/engine/trust-prompt.ts`): if a version rewords it, nothing shows and the answer is given in the Terminal tab, as before.
+In a directory Claude Code has never opened, the session starts with its trust prompt, before any hook and any transcript. The console recognises it in the terminal output and shows it in the conversation as a decision: "Claude Code asks to trust this folder", the path, then "Trust and continue" or "Decline". It never answers for you, writes to no Claude Code configuration file and passes no flag that skips the question: it types into the terminal the answer you chose. The card disappears as soon as the prompt is no longer on screen, whether you answered here or in the Terminal tab. A refusal closes the session, and the run ends "Stopped" with its reason, with no incident. The detection is written for the wording of Claude Code 2.1.288 (`server/engine/trust-prompt.ts`): if a version rewords it, nothing shows and the answer is given in the Terminal tab, as before.
 
 The activity feed keeps only the milestones of the workflow: agents, documents, branch, merge request, pending decisions. The detail of the commands stays in the terminal.
 
@@ -48,13 +48,13 @@ The health of a run is a projection separate from its status (`server/run-health
 
 | Situation observed | Health | What the console shows |
 |---|---|---|
-| A question, folder trust, a permission or an input is awaited | waiting | the question or trust panel, or "Ouvrir le terminal" |
+| A question, folder trust, a permission or an input is awaited | waiting | the question or trust panel, or "Open the terminal" |
 | An agent, a command or a background task is working | healthy or waiting | nothing; past the silence threshold, a doubt |
-| Prolonged silence (`IMPL_STALL_MINUTES`, 10 by default) | doubt | "Aucune progression observée", without stopping or restarting anything |
-| The pilot handed back, nothing runs, nothing is awaited, the workflow is unfinished | incident after 60 s | "Plus aucune action en cours" |
-| An agent ended without the file its contract requires, and nobody took over | incident after 30 s | "Rapport QA attendu", "Plan de test QA attendu", "Inventaire design attendu", "Rapport de T3 attendu"… |
-| No remaining task can run (missing or circular dependency) | incident | "Plan bloqué par ses dépendances" |
-| The session exited before a result, whatever its code | interruption | "Session interrompue" |
+| Prolonged silence (`IMPL_STALL_MINUTES`, 10 by default) | doubt | "No progress observed", without stopping or restarting anything |
+| The pilot handed back, nothing runs, nothing is awaited, the workflow is unfinished | incident after 60 s | "Nothing in progress" |
+| An agent ended without the file its contract requires, and nobody took over | incident after 30 s | "QA report expected", "QA test plan expected", "Design inventory expected", "Report of T3 expected"… |
+| No remaining task can run (missing or circular dependency) | incident | "Plan blocked by its dependencies" |
+| The session exited before a result, whatever its code | interruption | "Session interrupted" |
 
 The required files are `planner-output.json` for `ticket-planner`, `qa-report.md`, `qa-evidence.json` and `qa-plan.md` for `qa-reviewer`, `designer-review.md`, `design-evidence.json` and `design-inventory.md` for `designer-reviewer`, `review-summary.md` for `review-orchestrator`.
 
@@ -62,42 +62,42 @@ A wait declared in `workflow-state.json` never hides a block for long: `await_ag
 
 An incident is unique per stable cause (fingerprint), notified once, recorded in `run.json` and closed only on the event that lifts its cause: the pilot acts again, the file arrives, or the user dismisses it. The actions offered are only the ones that can run:
 
-- **Demander la continuation** (ask to continue): active session, pilot idle, no agent, tool, question or permission in progress. The console submits to the existing session an instruction asking it to read the context, the plan, the reports and the Git state again, to keep files and commits, and not to start over from step 1. The incident stays open, "continuation demandée", until the resumption is observed.
-- **Ouvrir le terminal** (open the terminal), **Arrêter** (stop), **Classer comme faux positif** (dismiss as a false positive, with a reason), and the collapsible diagnosis.
+- **Ask to continue**: active session, pilot idle, no agent, tool, question or permission in progress. The console submits to the existing session an instruction asking it to read the context, the plan, the reports and the Git state again, to keep files and commits, and not to start over from step 1. The incident stays open, "continuation requested", until the resumption is observed.
+- **Open the terminal**, **Stop**, **Dismiss as a false positive** (with a reason), and the collapsible diagnosis.
 
-Each action is sent with the revision of the incident shown and a request identifier. The server checks everything again right before the effect, refuses an action decided on a state that has moved, and runs only once a request sent by two windows. The decision is written before the effect; after a stop between the two, it stays "issue inconnue" (outcome unknown) and is never replayed.
+Each action is sent with the revision of the incident shown and a request identifier. The server checks everything again right before the effect, refuses an action decided on a state that has moved, and runs only once a request sent by two windows. The decision is written before the effect; after a stop between the two, it stays "outcome unknown" and is never replayed.
 
-On restart, a run found in progress gets one interruption incident, once, and its question without a session is kept as context. Runs left with an open incident appear under "Interrompus", read-only, through separate routes (`/api/archive/…`). They have no session, no slot and hold no ticket. Dismissing them removes them from the list; their archive stays on disk. A run with no open incident whose worktree is still on disk appears separately, under "Worktrees conservés" (see [Worktree of a run](#worktree-of-a-run)). `/?demo=incident` plays a run whose pilot hands back with nothing next, to see the detector and the continuation without a repository. `/?demo=batch` plays a batch of three invented tickets, two of them in conflict.
+On restart, a run found in progress gets one interruption incident, once, and its question without a session is kept as context. Runs left with an open incident appear under "Interrupted", read-only, through separate routes (`/api/archive/…`). They have no session, no slot and hold no ticket. Dismissing them removes them from the list; their archive stays on disk. A run with no open incident whose worktree is still on disk appears separately, under "Kept worktrees" (see [Worktree of a run](#worktree-of-a-run)). `/?demo=incident` plays a run whose pilot hands back with nothing next, to see the detector and the continuation without a repository. `/?demo=batch` plays a batch of three invented tickets, two of them in conflict.
 
 Limits: no resumption of a lost Claude Code session (the engine contract does not allow it yet), no LLM supervisor, no agent recreated automatically.
 
 ## Evidence per acceptance criterion
 
-The Preuves (evidence) tab shows what was verified, criterion by criterion. It starts from the register of criteria the pilot writes after clarification (`.claude/tasks/acceptance-criteria.json`), from the links between tasks and criteria in the plan (`criterion_ids` in `planner-output.json`) and from the evidence files (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). The register is described in `commands/implement.md` ("Write the acceptance criteria registry"), the evidence files in `contracts/` (`evidence.md`, `qa.md`, `design.md`, `pilot-evidence.md`).
+The Evidence tab shows what was verified, criterion by criterion. It starts from the register of criteria the pilot writes after clarification (`.claude/tasks/acceptance-criteria.json`), from the links between tasks and criteria in the plan (`criterion_ids` in `planner-output.json`) and from the evidence files (`dev-evidence*.json`, `qa-evidence*.json`, `design-evidence*.json`). The register is described in `commands/implement.md` ("Write the acceptance criteria registry"), the evidence files in `contracts/` (`evidence.md`, `qa.md`, `design.md`, `pilot-evidence.md`).
 
 Each criterion takes a state computed by the server (`server/acceptance.ts`), in this order of priority:
 
 | State | When |
 |---|---|
-| Échec (failed) | a required check has a negative result on the current code, or on an unknown version |
-| Bloqué (blocked) | no failure, but a required check is prevented by a named obstacle (`blocker`) |
-| Non vérifié (unverified) | a check has no evidence, its evidence is old, of unknown version, inconclusive, confirms evidence that is absent, or an earlier failure was not explicitly replaced |
-| Vérifié (verified) | every required check has a positive result taken on the current code, with no failure left beside it |
+| Failed | a required check has a negative result on the current code, or on an unknown version |
+| Blocked | no failure, but a required check is prevented by a named obstacle (`blocker`) |
+| Unverified | a check has no evidence, its evidence is old, of unknown version, inconclusive, confirms evidence that is absent, or an earlier failure was not explicitly replaced |
+| Verified | every required check has a positive result taken on the current code, with no failure left beside it |
 
 Rules that follow:
 
-- A task marked "Terminé" in Suivi means a report exists, never that a criterion is verified. A green lint or typecheck is a general check, attached to no criterion.
+- A task marked "Completed" in Tracking means a report exists, never that a criterion is verified. A green lint or typecheck is a general check, attached to no criterion.
 - A success replaces a failure only if it names it in `supersedes`, checks the same thing and was taken on the current code. Otherwise the failure stays shown and the criterion unverified.
-- The version of the code is the identifier `hooks/code-snapshot.mjs` computes: the git tree of the working directory, untracked files included, ignored files and workflow documents excluded, computed in a throwaway index. Committing the measured state keeps the same identifier, any modification changes it. The workflow calls it through `IMPL_CODE_SNAPSHOT` and each call is logged in `snapshots.jsonl`; an identifier absent from that log is shown as "Version inconnue". The server recomputes the current identifier at each new document and at most every 15 seconds when the tab asks for it.
-- A result the developer reports on its own work carries the note "Résultat rapporté" (reported result); a confirmation is worth what it confirms, on the version where that evidence was taken.
-- A break attempt is a QA evidence item marked `"kind": "attempt"`. When it finds a defect (`fail`), it counts against the criterion it cites. When it finds nothing, it is listed under that criterion with the note "Aucun défaut trouvé" (no defect found), with no green colour and without counting as a verification. An attempt only read in the code is shown as "Lue, non exécutée" (read, not executed). An attempt that cites no criterion produces a warning in the diagnosis.
-- The verdict QA declares in `qa-evidence.json` (`status`) appears in the summary of the tab: "Validé", "Validé avec réserves", "Non concluant" or "Échec", with the round and the mandate if there is one. The server compares this verdict with the evidence (`qaVerdictConsistency`). A `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no observation executed by QA on the current code shows a warning that names those criteria. A confirmation, an attempt and replaced evidence do not count as an observation. A focused pass (`mandate` at the root of the file) answers only for the criteria of its mandate.
+- The version of the code is the identifier `hooks/code-snapshot.mjs` computes: the git tree of the working directory, untracked files included, ignored files and workflow documents excluded, computed in a throwaway index. Committing the measured state keeps the same identifier, any modification changes it. The workflow calls it through `IMPL_CODE_SNAPSHOT` and each call is logged in `snapshots.jsonl`; an identifier absent from that log is shown as "Unknown version". The server recomputes the current identifier at each new document and at most every 15 seconds when the tab asks for it.
+- A result the developer reports on its own work carries the note "Reported result"; a confirmation is worth what it confirms, on the version where that evidence was taken.
+- A break attempt is a QA evidence item marked `"kind": "attempt"`. When it finds a defect (`fail`), it counts against the criterion it cites. When it finds nothing, it is listed under that criterion with the note "No defect found", with no green colour and without counting as a verification. An attempt only read in the code is shown as "Read, not executed". An attempt that cites no criterion produces a warning in the diagnosis.
+- The verdict QA declares in `qa-evidence.json` (`status`) appears in the summary of the tab: "Passed", "Passed with warnings", "Inconclusive" or "Failed", with the round and the mandate if there is one. The server compares this verdict with the evidence (`qaVerdictConsistency`). A `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no observation executed by QA on the current code shows a warning that names those criteria. A confirmation, an attempt and replaced evidence do not count as an observation. A focused pass (`mandate` at the root of the file) answers only for the criteria of its mandate.
 - The server records the first arrival of each document of the run (`artifactArrivals` in `run.json`). When `qa-plan.md` or `design-inventory.md` did not arrive before the corresponding report, the tab shows a remark: nothing shows that the plan was written first. This remark changes no verdict. These two files do not move the step rail, because a reviewer writes them before starting.
-- A run without a register (an older run still on the old contract) shows "Traçabilité par critère indisponible pour ce run" and keeps its reports readable. Criteria rebuilt from an old plan are flagged as such and stay unverified.
+- A run without a register (an older run still on the old contract) shows "Traceability per criterion unavailable for this run" and keeps its reports readable. Criteria rebuilt from an old plan are flagged as such and stay unverified.
 
 `server/evidence-archive.ts` archives each useful version of these files under an immutable path, with its hash and the date it was received, and copies into that version the captures it cites: a capture replaced in round 2 under the same name stays distinct from the one of round 1. The same evidence seen twice (a per-task file then a merged file, a `-roundN` copy) counts once thanks to its identifier. A file caught half written becomes a diagnosis and the last valid version stays in force. Before deleting `.claude/tasks/`, the workflow writes `archive-sync-request.json` and waits for `archive-sync-ack.json`: the server has then archived everything again.
 
-The same computation produces `acceptance-summary.md` and `acceptance-summary.json`, which the server puts in `.claude/tasks/` for the merge request: a one-sentence summary and the unverified criteria for the description, the detailed table for the review comment. When the QA verdict contradicts the evidence, the summary contains a line "Verdict QA à confirmer" and the JSON a `qaWarning` field. The captures are named there by their local path and marked as such, because the workflow links them in GitLab only after upload.
+The same computation produces `acceptance-summary.md` and `acceptance-summary.json`, which the server puts in `.claude/tasks/` for the merge request: a one-sentence summary and the unverified criteria for the description, the detailed table for the review comment. When the QA verdict contradicts the evidence, the summary contains a line "QA verdict to confirm" and the JSON a `qaWarning` field. The captures are named there by their local path and marked as such, because the workflow links them in GitLab only after upload.
 
 Limits of this version: no command is yet correlated to its result by the engine's events, so every result is still declared by the agent that writes it; the server cannot check the content of a piece of evidence, only its consistency and its version.
 
@@ -105,7 +105,7 @@ Limits of this version: no command is yet correlated to its result by the engine
 
 Each ticket run works in its own git worktree, `<project>/.claude/worktrees/<run id>`, which the server creates before opening the session. The [main README](../README.md#one-worktree-per-run) describes what the worktree takes from the main checkout. Demo mode creates none.
 
-Several tickets of one repository run in parallel. The lock is on the pair repository and ticket: a second launch on a ticket already running goes to the queue with the reason "ticket déjà en cours", and starts when the run holding that ticket has given up its session. `IMPL_MAX_CONCURRENT_RUNS` still bounds the total number of sessions. Two tickets of a batch that the analysis judges in conflict do not run together (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)).
+Several tickets of one repository run in parallel. The lock is on the pair repository and ticket: a second launch on a ticket already running goes to the queue with the reason "ticket already running", and starts when the run holding that ticket has given up its session. `IMPL_MAX_CONCURRENT_RUNS` still bounds the total number of sessions. Two tickets of a batch that the analysis judges in conflict do not run together (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)).
 
 Two settings decide what the worktree takes from the main checkout:
 
@@ -116,11 +116,11 @@ Two settings decide what the worktree takes from the main checkout:
 
 The session receives `IMPL_RUN_WORKTREE`, `IMPL_SOURCE_REPOSITORY`, `IMPL_SOURCE_BRANCH` (absent when the main checkout is on a detached HEAD) and `IMPL_WORKTREE_DEPENDENCIES`: `symlink` as soon as one dependency directory is linked, `clone` when all are copied, absent when none was brought over.
 
-Once the session is closed, the server decides what happens to the worktree (`worktreeRemoval` in `server/domain.ts`, pure logic). It removes it on its own when the run is over, the merge request exists and is not a draft, the workflow is not blocked, the evidence archive has been confirmed, the tree is clean and HEAD is on a branch of the remote. Otherwise the state of the run becomes "Worktree conservé" with the reason. The branch is never deleted.
+Once the session is closed, the server decides what happens to the worktree (`worktreeRemoval` in `server/domain.ts`, pure logic). It removes it on its own when the run is over, the merge request exists and is not a draft, the workflow is not blocked, the evidence archive has been confirmed, the tree is clean and HEAD is on a branch of the remote. Otherwise the state of the run becomes "Worktree kept" with the reason. The branch is never deleted.
 
-A kept worktree is removed from the run view, with the **Supprimer le worktree** button, as soon as the session is closed. The page sends `worktree.remove` and receives `worktree.result`: `removed`, `refused` with the reason, or `confirm` with what would be lost (uncommitted changes, unpushed changes). The removal then happens only after confirmation. The server only removes a path directly under `.claude/worktrees/`.
+A kept worktree is removed from the run view, with the **Remove the worktree** button, as soon as the session is closed. The page sends `worktree.remove` and receives `worktree.result`: `removed`, `refused` with the reason, or `confirm` with what would be lost (uncommitted changes, unpushed changes). The removal then happens only after confirmation. The server only removes a path directly under `.claude/worktrees/`.
 
-A run closed or read back after a restart stays listed under "Worktrees conservés" while its worktree is on disk. On start, before listing the archives, the server applies the same rules to the worktrees of earlier runs. A worktree whose session was cut by the console stopping is marked kept at the stop, and decided on at the next start.
+A run closed or read back after a restart stays listed under "Kept worktrees" while its worktree is on disk. On start, before listing the archives, the server applies the same rules to the worktrees of earlier runs. A worktree whose session was cut by the console stopping is marked kept at the stop, and decided on at the next start.
 
 ## Batch of tickets and scheduling
 
@@ -148,10 +148,10 @@ The full list of arguments is in `scheduleArguments` (`server/engine/claude-code
 | Outcome of the analysis | Effect |
 |---|---|
 | Valid file | the predictions and the edges are kept, the analysis directory is deleted |
-| File missing, unreadable or refused | tickets marked "Analyse en échec", in conflict with every ticket of their repository |
+| File missing, unreadable or refused | tickets marked "Analysis failed", in conflict with every ticket of their repository |
 | Timeout exceeded (`IMPL_SCHEDULE_TIMEOUT_MINUTES`, 5 by default) | session killed, same fallback |
 | Console stopped during the analysis | same fallback at the next start |
-| `low` confidence on a ticket | "Prédiction peu fiable", this ticket runs alone on its repository |
+| `low` confidence on a ticket | "Unreliable prediction", this ticket runs alone on its repository |
 
 Tickets whose analysis failed and that are still queued, running or waiting for their merge go into the next analysis of their repository, as tickets to predict and not as `known`. Their prediction is replaced if it succeeds, and they stay failed otherwise. No analysis is opened for them alone.
 
@@ -163,15 +163,15 @@ Each analysis has its `<id>/` directory under `scheduleRoot` (`server/config.ts`
 
 | `reason` | Row shown | When |
 |---|---|---|
-| `ticket` | "En attente, ticket déjà en cours" | a run holds the same ticket |
-| `slot` | "Départ forcé, dès qu’une place est libre" or "Départ empilé sur …" | the entry was forced |
-| `analysis` | "Analyse en cours" | the analysis session has not answered |
-| `conflict` | "En attente, conflit avec #217 en cours" | a run in progress conflicts |
-| `merge` | "Attend que la MR !12 soit mergée (#217)" | the merge request of a finished run is open |
-| `merge_unknown` | "État de la MR !12 inconnu (#217)" | The forge could not be asked ("PR #12" on GitHub) |
-| `dependency` | "Dépend de #217, encore en file" | a `depends_on` edge to an entry ahead of it |
-| `order` | "Passe après #217" | another conflict with an entry ahead of it |
-| `slot` | "En attente, toutes les places sont prises" | nothing else holds it |
+| `ticket` | "Waiting, ticket already running" | a run holds the same ticket |
+| `slot` | "Forced start, as soon as a slot is free" or "Stacked start on …" | the entry was forced |
+| `analysis` | "Analysis in progress" | the analysis session has not answered |
+| `conflict` | "Waiting, conflict with #217 running" | a run in progress conflicts |
+| `merge` | "Waits for MR !12 to be merged (#217)" | the merge request of a finished run is open |
+| `merge_unknown` | "State of MR !12 unknown (#217)" | The forge could not be asked ("PR #12" on GitHub) |
+| `dependency` | "Depends on #217, still queued" | a `depends_on` edge to an entry ahead of it |
+| `order` | "Runs after #217" | another conflict with an entry ahead of it |
+| `slot` | "Waiting, every slot is taken" | nothing else holds it |
 
 `cause` says why two tickets are kept apart: `overlap`, `depends_on`, `analysis_failed` or `low_confidence`. `detail` carries the agent's sentence, or the server's for the last two causes, which says whether the failed analysis or the unreliable prediction belongs to the ticket that waits or to the other one. Only `slot` entries start (`startableEntries`), within the free slots. A held entry takes no slot and the ones after it go ahead.
 
@@ -188,8 +188,8 @@ It is a call made by the Node server. **It opens no Claude session and uses no t
 
 | Answer | Effect |
 |---|---|
-| `merged` | the watch is lifted, the held tickets go, banner "Merge request mergée" |
-| `closed` | same release, banner "Merge request fermée sans être mergée" |
+| `merged` | the watch is lifted, the held tickets go, banner "Merge request merged" |
+| `closed` | same release, banner "Merge request closed without being merged" |
 | `opened`, `locked` | the ticket keeps waiting |
 | `glab` or `gh` failure (network, token, missing binary) | unknown state, the ticket stays held and the row turns orange |
 

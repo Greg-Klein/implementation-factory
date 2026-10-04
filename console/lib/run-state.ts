@@ -40,7 +40,7 @@ export function isWriting(alive: boolean, lastOutputAt: number, now: number) {
  * and every hook payload names the transcript to read the dialogue from. An
  * empty conversation next to that kind of progress means the follower missed
  * the transcript, not that Claude is merely slow to write its next message: the
- * ordinary lag the "Claude réfléchit…" hint covers never reaches this point
+ * ordinary lag the "Claude is thinking…" hint covers never reaches this point
  * empty-handed.
  */
 export function isTranscriptStalled(messageCount: number, phase: number, agentCount: number, artifactCount: number) {
@@ -52,7 +52,7 @@ const DOCUMENT_EXTENSION = /\.(?:md|json|txt)$/i;
 
 /**
  * The run's artifact list doubles as the read authorization of the artifacts
- * API, so it has to carry the evidence screenshots for the "Preuves" tab to be
+ * API, so it has to carry the evidence screenshots for the "Evidence" tab to be
  * allowed to load them. The document reader lists the same array, and a run
  * with a dozen captures buried its reports under them.
  */
@@ -61,7 +61,7 @@ export function generatedDocuments(artifacts: string[]) {
 }
 
 export function pendingAnswerLabel(count: number) {
-  return count === 1 ? "Claude attend une réponse" : `Claude attend ${count} réponses`;
+  return count === 1 ? "Claude is waiting for an answer" : `Claude is waiting for ${count} answers`;
 }
 
 /** How many decisions a run waits on: the questions of the workflow, or the one prompt its session opened on. */
@@ -73,7 +73,7 @@ export function elapsedLabel(start: string, end: string | undefined, now: number
   const milliseconds = (end ? new Date(end).getTime() : now) - new Date(start).getTime();
   const minutes = Math.floor(milliseconds / 60_000);
   const seconds = Math.floor((milliseconds % 60_000) / 1_000);
-  return minutes ? `${minutes} min ${seconds.toString().padStart(2, "0")} s` : `${seconds} s`;
+  return minutes ? `${minutes}m ${seconds.toString().padStart(2, "0")}s` : `${seconds}s`;
 }
 
 /**
@@ -109,8 +109,8 @@ export function sourceRepository(run: { cwd: string; repository?: string }) {
 export function worktreeLabel(run: { cwd: string; repository?: string; worktree?: RunWorktree }) {
   const worktree = run.worktree;
   if (!worktree) return undefined;
-  if (worktree.state === "removed") return worktree.detail ?? "Worktree supprimé";
-  if (worktree.state === "kept") return worktree.detail ?? "Worktree conservé";
+  if (worktree.state === "removed") return worktree.detail ?? "Worktree removed";
+  if (worktree.state === "kept") return worktree.detail ?? "Worktree kept";
   const repository = sourceRepository(run).replace(/\/+$/, "");
   return worktree.path.startsWith(`${repository}/`) ? worktree.path.slice(repository.length + 1) : worktree.path;
 }
@@ -129,34 +129,34 @@ export function mergeRequestLabel(mergeRequestUrl: string | undefined) {
 
 /** The ten steps of the workflow, the eighth named after what the forge of the ticket opens. */
 export function phaseNames(issueUrl: string | undefined) {
-  return ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", `Ouvrir la ${forgeWords(forgeOf(issueUrl)).short}`, "Publier la revue", "Terminer"];
+  return ["Read the ticket", "Clarify", "Create the branch", "Plan", "Implement", "Verify", "Review", `Open the ${forgeWords(forgeOf(issueUrl)).short}`, "Publish the review", "Finish"];
 }
 
 type QueueWait = Pick<QueuedRunView, "reason"> & Partial<Pick<QueuedRunView, "blocking" | "forced">>;
 
 /** Why a queued launch waits, in the few words its row has room for. */
 export function queueReason(entry: QueueWait) {
-  const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : "un autre ticket";
-  if (entry.reason === "ticket") return "ticket déjà en cours";
-  if (entry.reason === "analysis") return "analyse en cours";
-  if (entry.reason === "conflict") return `conflit avec ${other} en cours`;
-  if (entry.reason === "merge") return `attend que la ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} soit mergée (${other})`;
-  if (entry.reason === "merge_unknown") return `état de la ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} inconnu (${other})`;
-  if (entry.reason === "dependency") return `dépend de ${other}, encore en file`;
-  if (entry.reason === "order") return `passe après ${other}`;
-  if (entry.forced?.mode === "stacked") return `départ empilé sur ${entry.forced.baseBranch}, dès qu’une place est libre`;
-  if (entry.forced) return "départ forcé, dès qu’une place est libre";
-  return "toutes les places sont prises";
+  const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : "another ticket";
+  if (entry.reason === "ticket") return "ticket already running";
+  if (entry.reason === "analysis") return "analysis in progress";
+  if (entry.reason === "conflict") return `conflict with ${other}, which is running`;
+  if (entry.reason === "merge") return `waits for ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} to be merged (${other})`;
+  if (entry.reason === "merge_unknown") return `state of ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} unknown (${other})`;
+  if (entry.reason === "dependency") return `depends on ${other}, still queued`;
+  if (entry.reason === "order") return `goes after ${other}`;
+  if (entry.forced?.mode === "stacked") return `stacked start on ${entry.forced.baseBranch}, as soon as a slot is free`;
+  if (entry.forced) return "forced start, as soon as a slot is free";
+  return "all slots are taken";
 }
 
 /** The line a queued row shows: what it waits for, or that its batch is still being analysed. */
 export function queueStatus(entry: QueueWait) {
-  if (entry.reason === "analysis") return "Analyse en cours";
+  if (entry.reason === "analysis") return "Analysis in progress";
   if (entry.reason === "merge" || entry.reason === "merge_unknown" || entry.reason === "dependency" || entry.reason === "order" || entry.forced) {
     const reason = queueReason(entry);
     return reason.charAt(0).toUpperCase() + reason.slice(1);
   }
-  return `En attente, ${queueReason(entry)}`;
+  return `Waiting, ${queueReason(entry)}`;
 }
 
 /** Whether the schedule holds the entry, as opposed to a slot or its own ticket: only then is there something to override. */
@@ -166,8 +166,8 @@ export function heldBySchedule(entry: Pick<QueuedRunView, "reason">) {
 
 /** What a queued row says of the ticket's own prediction, when it changes how the ticket is scheduled. */
 export function scheduleMark(entry: Pick<QueuedRunView, "analysisFailure" | "confidence">) {
-  if (entry.analysisFailure) return { label: "Analyse en échec", title: `Analyse en échec : ${entry.analysisFailure}. Ce ticket passe seul sur son dépôt.` };
-  if (entry.confidence === "low") return { label: "Prédiction peu fiable", title: "Le ticket ne dit pas assez ce qu’il touche. Il passe seul sur son dépôt." };
+  if (entry.analysisFailure) return { label: "Analysis failed", title: `Analysis failed: ${entry.analysisFailure}. This ticket runs alone on its repository.` };
+  if (entry.confidence === "low") return { label: "Unreliable prediction", title: "The ticket does not say enough about what it touches. It runs alone on its repository." };
   return undefined;
 }
 
@@ -229,31 +229,31 @@ export function holdsIdleSession(run: { status: Status; sessionActive?: boolean 
 
 /** What the row of a run says it is doing, in two or three words. */
 export function statusLabel(status: Status) {
-  if (status === "starting") return "Démarrage";
-  if (status === "running") return "En cours";
-  if (status === "attention") return "À toi de jouer";
-  if (status === "completed") return "Terminé";
-  if (status === "stopped") return "Arrêté";
-  if (status === "failed") return "Erreur";
-  return "Disponible";
+  if (status === "starting") return "Starting";
+  if (status === "running") return "Running";
+  if (status === "attention") return "Your turn";
+  if (status === "completed") return "Completed";
+  if (status === "stopped") return "Stopped";
+  if (status === "failed") return "Error";
+  return "Available";
 }
 
 
 export type StatusBadge = { label: string; tone: "decision" | "blocked" | "error" | "stopped" | "neutral" };
 
 /**
- * The Progression badge of an open run. `attention` alone says someone should
- * look, not who: "À toi de jouer" is kept for a real question or a prompt in
+ * The Progress badge of an open run. `attention` alone says someone should
+ * look, not who: "Your turn" is kept for a real question or a prompt in
  * the terminal, a run the monitor found with no next action reads as blocked
  * without implying a question was asked, and a lost session reads as an
  * interruption rather than an error of the workflow.
  */
 export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "sessionPrompt" | "health" | "incidents">): StatusBadge {
   const incident = run.incidents?.findLast((entry) => entry.status === "open");
-  if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: "Interrompu", tone: "error" };
+  if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: "Interrupted", tone: "error" };
   if (run.status === "attention") {
     const humanWait = Boolean(run.pendingQuestion) || Boolean(run.sessionPrompt) || (run.health?.health === "waiting" && (run.health.wait?.reason === "permission" || run.health.wait?.reason === "terminal_interaction"));
-    if (!humanWait && incident) return { label: "Sans suite", tone: "blocked" };
+    if (!humanWait && incident) return { label: "No next step", tone: "blocked" };
     return { label: statusLabel(run.status), tone: "decision" };
   }
   if (run.status === "failed") return { label: statusLabel(run.status), tone: "error" };
@@ -286,8 +286,8 @@ export function healthNotice(run: Pick<RunState, "health" | "incidents" | "archi
   const health = run.health;
   if (!health || run.archived) return undefined;
   const actions: IncidentAction[] = ["open_terminal"];
-  if (health.health === "suspected_stall") return { title: health.title ?? "Aucune progression observée", detail: health.detail ?? "", tone: "doubt", actions };
-  if (health.health === "waiting" && health.wait && SHOWN_WAITS.has(health.wait.reason)) return { title: health.title ?? "Claude Code demande ton attention", detail: health.detail ?? "", tone: "attention", actions };
+  if (health.health === "suspected_stall") return { title: health.title ?? "No progress observed", detail: health.detail ?? "", tone: "doubt", actions };
+  if (health.health === "waiting" && health.wait && SHOWN_WAITS.has(health.wait.reason)) return { title: health.title ?? "Claude Code asks for your attention", detail: health.detail ?? "", tone: "attention", actions };
   return undefined;
 }
 
@@ -307,7 +307,7 @@ export function incidentActions(run: Pick<RunState, "id" | "status" | "sessionAc
 /** The compact word a row of the side list shows for a run's health, when there is one to show. */
 export function healthBadge(run: { health?: string; incident?: { title: string } }) {
   if (run.incident) return { label: run.incident.title, tone: run.health === "interrupted" ? "error" as const : "attention" as const };
-  if (run.health === "suspected_stall") return { label: "Aucune progression observée", tone: "doubt" as const };
+  if (run.health === "suspected_stall") return { label: "No progress observed", tone: "doubt" as const };
   return undefined;
 }
 
@@ -318,10 +318,10 @@ export function healthBadge(run: { health?: string; incident?: { title: string }
  */
 export function acceptanceChip(counts: AcceptanceCounts | undefined) {
   if (!counts || counts.total === 0) return undefined;
-  const parts = [`${counts.verified} critère${counts.verified > 1 ? "s" : ""} vérifié${counts.verified > 1 ? "s" : ""} sur ${counts.total}`];
-  if (counts.failed) parts.push(`${counts.failed} en échec`);
-  if (counts.blocked) parts.push(`${counts.blocked} bloqué${counts.blocked > 1 ? "s" : ""}`);
-  if (counts.unverified) parts.push(`${counts.unverified} non vérifié${counts.unverified > 1 ? "s" : ""}`);
+  const parts = [`${counts.verified} of ${counts.total} criteria verified`];
+  if (counts.failed) parts.push(`${counts.failed} failed`);
+  if (counts.blocked) parts.push(`${counts.blocked} blocked`);
+  if (counts.unverified) parts.push(`${counts.unverified} unverified`);
   const tone = counts.failed ? "error" as const : counts.blocked ? "attention" as const : counts.verified === counts.total ? "verified" as const : "neutral" as const;
   return { label: `${counts.verified}/${counts.total} AC`, title: parts.join(" · "), tone };
 }

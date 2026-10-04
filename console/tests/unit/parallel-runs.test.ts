@@ -21,7 +21,7 @@ const hook = (session: RunSession, payload: Record<string, unknown>) => processH
 
 const question = {
   hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
-  tool_input: { questions: [{ question: "Quelle base ?", header: "Branche", options: [{ label: "develop" }] }] },
+  tool_input: { questions: [{ question: "Which base?", header: "Branch", options: [{ label: "develop" }] }] },
 };
 
 describe("two runs driven at the same time", () => {
@@ -46,7 +46,7 @@ describe("two runs driven at the same time", () => {
     expect(first.state.status).toBe("attention");
     expect(second.state.status).toBe("attention");
 
-    answerQuestion(first, { "Quelle base ?": "develop" });
+    answerQuestion(first, { "Which base?": "develop" });
     expect(first.state.status).toBe("running");
     expect(first.state.pendingQuestion).toBeUndefined();
     // The other run is still blocked on its own decision, and nothing it holds moved.
@@ -60,7 +60,7 @@ describe("two runs driven at the same time", () => {
     let secondReleased = false;
     void Promise.resolve(parkedSecond).then(() => { secondReleased = true; });
 
-    answerQuestion(first, { "Quelle base ?": "develop" });
+    answerQuestion(first, { "Which base?": "develop" });
     await expect(parkedFirst).resolves.toMatchObject({ hookSpecificOutput: { permissionDecision: "allow" } });
     // A promise that resolved would have been observed by the microtask above.
     await Promise.resolve();
@@ -90,7 +90,7 @@ describe("two runs driven at the same time", () => {
 
   it("should refuse a second answer to a question that is no longer waiting", () => {
     void hook(first, question);
-    answerQuestion(first, { "Quelle base ?": "develop" });
-    expect(() => answerQuestion(first, { "Quelle base ?": "main" })).toThrow(/Aucune question/);
+    answerQuestion(first, { "Which base?": "develop" });
+    expect(() => answerQuestion(first, { "Which base?": "main" })).toThrow(/No question/);
   });
 });

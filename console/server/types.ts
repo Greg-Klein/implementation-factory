@@ -3,7 +3,7 @@ import type { Question } from "./domain.js";
 export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type AgentStatus = "running" | "completed" | "failed" | "abandoned";
-/** `nickname`: a first name given in start order within the run, so two agents of one type can be told apart; `avatar`: the picture bound to that name; `role`: the short French label of its type. */
+/** `nickname`: a first name given in start order within the run, so two agents of one type can be told apart; `avatar`: the picture bound to that name; `role`: the label of its type. */
 export type AgentState = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
@@ -22,7 +22,7 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
  */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
-/** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
+/** One task of `planner-output.json`, placed on the "Tracking" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
 /**
  * `assignee`: the agent that last took the task, by id and by the name and role the interface calls it.
@@ -34,7 +34,7 @@ export type PlanTask = { id: string; title: string; complexity?: string; status:
 export type AcceptanceStatus = "verified" | "unverified" | "blocked" | "failed";
 export type AcceptanceCounts = { total: number; verified: number; failed: number; blocked: number; unverified: number; stale: number };
 /**
- * The compact side of the "Preuves" tab, carried by the run state and the side list.
+ * The compact side of the "Evidence" tab, carried by the run state and the side list.
  * `available`: the run wrote a criteria registry; without one the tab falls back on the reports alone.
  * `revision` moves every time the computation is redone with a different result.
  */
@@ -110,13 +110,13 @@ export type AcceptanceCriterionView = {
 };
 export type AcceptanceDiagnostic = { level: "error" | "warning"; message: string; file?: string };
 export type AcceptanceReportVersion = { file: string; version: number; receivedAt: string; hash: string; source?: EvidenceSource; round?: number; items: number; current: boolean; /** The verdict the report declares for itself, QA only. */ status?: string; /** The criteria a focused QA pass covers. */ mandate?: string[] };
-/** Everything the "Preuves" tab shows about one run, computed once on the server and reused by the merge request summary. */
+/** Everything the "Evidence" tab shows about one run, computed once on the server and reused by the merge request summary. */
 export type AcceptanceView = {
   available: boolean;
   registryRevision?: number;
   updatedAt: string;
   counts: AcceptanceCounts;
-  /** "5 critères vérifiés sur 8 · 1 échec · …", the same sentence in the tab and in the merge request. */
+  /** "5 of 8 criteria verified · 1 failed · …", the same sentence in the tab and in the merge request. */
   sentence: string;
   currentSnapshot?: { id: string; capturedAt: string };
   criteria: AcceptanceCriterionView[];
@@ -237,7 +237,7 @@ export type RunState = {
   sessionPrompt?: SessionPrompt;
   /** What the agent is doing at this instant, from the tool it last called. Cleared as soon as it hands control back. */
   action?: string;
-  /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
+  /** When a file of the "Evidence" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
   /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
   ticketTitle?: string;

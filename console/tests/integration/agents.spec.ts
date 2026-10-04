@@ -5,15 +5,15 @@ test.beforeEach(async ({ page }) => resetRun(page));
 
 test("should stop showing an agent as active once the run is over", async ({ page }) => {
   await page.goto("/?demo=1");
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByText("Decision required")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
 
   const agents = page.getByRole("region", { name: "Agents" });
-  await expect(agents.getByText("1 actif", { exact: true })).toBeVisible();
+  await expect(agents.getByText("1 active", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Arrêter" }).click();
+  await page.getByRole("button", { name: "Stop" }).click();
 
   // The stop event can never arrive for an agent whose session is gone, so one
   // still running is abandoned rather than left spinning a timer for good.

@@ -31,8 +31,8 @@ describe("reconciling runs orphaned by a server restart", () => {
     const state = readRun("run-a");
     expect(state.status).toBe("failed");
     expect(state.endedAt).not.toBeNull();
-    expect(state.error).toMatch(/redémarré/);
-    expect(state.activities[0]?.title).toBe("Run interrompu par un redémarrage du serveur");
+    expect(state.error).toMatch(/restarted/);
+    expect(state.activities[0]?.title).toBe("Run interrupted by a server restart");
   });
 
   it("should close every non-terminal status, starting and attention included", async () => {

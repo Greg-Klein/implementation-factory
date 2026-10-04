@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { acceptanceCountsKey, renderAcceptanceSummary } from "./acceptance.js";
 import { readSnapshotLog, takeCodeSnapshot } from "./code-snapshot.js";
-import { dataRoot } from "./config.js";
+import { dataRoot, workflowLanguage } from "./config.js";
 import { engine } from "./engine/index.js";
 import { acceptanceInputKind, atomicWrite, SUMMARY_FILES, SYNC_ACK_FILE } from "./evidence-archive.js";
 import type { RunSession } from "./run-session.js";
@@ -38,8 +38,17 @@ async function identifyCode(session: RunSession, force: boolean) {
   if (snapshot) archive.rememberSnapshot(snapshot.id, snapshot.capturedAt);
 }
 
+/**
+ * The summary goes into the merge request, so it is written in the workflow
+ * language, from a view derived in that language: the interface keeps its own,
+ * in English, out of the same evidence.
+ */
+function workflowSummary(session: RunSession, view: AcceptanceView) {
+  return renderAcceptanceSummary(workflowLanguage === "en" ? view : session.evidence.view(workflowLanguage), workflowLanguage);
+}
+
 async function writeSummary(session: RunSession, view: AcceptanceView) {
-  const summary = renderAcceptanceSummary(view);
+  const summary = workflowSummary(session, view);
   const json = `${JSON.stringify(summary.json, null, 2)}\n`;
   if (session.demo) return;
   const runDirectory = path.join(dataRoot, session.id);
@@ -129,11 +138,11 @@ export async function confirmArchiveSync(session: RunSession, requestPath: strin
     requestId, archivedAt: new Date().toISOString(),
     versions: session.evidence.versions.length,
     pendingAttachments: session.evidence.pendingAttachments(),
-    sentence: renderAcceptanceSummary(view).json.sentence,
+    sentence: workflowSummary(session, view).json.sentence,
   };
   await atomicWrite(path.join(taskRoot, SYNC_ACK_FILE), `${JSON.stringify(acknowledgement, null, 2)}\n`);
   // What the removal of the worktree waits for: from here on, nothing it holds is the only copy.
   session.state.archiveSyncedAt = acknowledgement.archivedAt;
-  session.activity("artifact", "Archive des preuves confirmée", `${acknowledgement.versions} versions conservées`);
+  session.activity("artifact", "Evidence archive confirmed", `${acknowledgement.versions} versions kept`);
   session.publish();
 }

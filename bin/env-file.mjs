@@ -49,8 +49,8 @@ export function serializeValue(value) {
   // Node stops a double-quoted value at the first quote and turns \n into a
   // newline, so these two characters have no representation next to an
   // apostrophe. Failing loudly beats writing a value that reads back wrong.
-  if (value.includes('"')) throw new Error("une valeur ne peut pas contenir à la fois une apostrophe et un guillemet");
-  if (value.includes("\\n")) throw new Error("une valeur contenant une apostrophe ne peut pas contenir la séquence \\n");
+  if (value.includes('"')) throw new Error("a value cannot contain both an apostrophe and a double quote");
+  if (value.includes("\\n")) throw new Error("a value containing an apostrophe cannot contain the sequence \\n");
   return `"${value.replace(/\n/g, "\\n")}"`;
 }
 

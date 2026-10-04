@@ -40,4 +40,4 @@ Vérifiée le <date ISO> sur <commit court>, par le run du ticket <référence>.
 - **Nothing about one run.** No port this run picked, no worktree path, no ticket-specific fixture: those belong in `browser-recipe.md`. Write the override that picks a port, not the port.
 - **Only what was executed in this run or checked again.** Keep an earlier line you did not exercise as it is; remove one you found false.
 - Drop a section with nothing to say. Keep the file under 200 lines: it is read at the start of every run.
-- Written in French with `implementation-harness:unslop`, commands and identifiers unchanged.
+- Written in the workflow language with `implementation-harness:unslop`, commands and identifiers unchanged.

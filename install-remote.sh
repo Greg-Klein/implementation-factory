@@ -5,21 +5,21 @@ repository="${IMPL_REPOSITORY:-https://github.com/Greg-Klein/implementation-harn
 install_dir="${IMPL_INSTALL_DIR:-$HOME/.local/share/implementation-harness}"
 
 if ! command -v git >/dev/null 2>&1; then
-  printf 'Prérequis manquant : git\n' >&2
+  printf 'Missing prerequisite: git\n' >&2
   exit 1
 fi
 
 if [[ -d "$install_dir/.git" ]]; then
-  printf 'Mise à jour de %s…\n' "$install_dir"
+  printf 'Updating %s...\n' "$install_dir"
   if [[ -n "${IMPL_REPOSITORY:-}" ]]; then
     git -C "$install_dir" remote set-url origin "$repository"
   fi
   git -C "$install_dir" pull --ff-only
 elif [[ -e "$install_dir" ]]; then
-  printf 'Le chemin existe déjà mais ne contient pas le dépôt : %s\n' "$install_dir" >&2
+  printf 'The path already exists but does not contain the repository: %s\n' "$install_dir" >&2
   exit 1
 else
-  printf 'Installation dans %s…\n' "$install_dir"
+  printf 'Installing into %s...\n' "$install_dir"
   mkdir -p "$(dirname "$install_dir")"
   git clone "$repository" "$install_dir"
 fi

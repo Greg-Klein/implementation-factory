@@ -23,7 +23,7 @@ export function NoticeStrip({ notice, onDismiss }: { notice?: Notice; onDismiss:
         {attention ? <WarningIcon className="mt-0.5 shrink-0" size={13} weight="fill" /> : <InfoIcon className="mt-0.5 shrink-0" size={13} weight="fill" />}
         <span className="min-w-0"><span className="font-semibold">{notice.title}</span>{notice.detail && <span className="ml-1.5 break-words opacity-80">{notice.detail}</span>}</span>
       </p>
-      <button type="button" onClick={onDismiss} aria-label="Masquer ce message" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
+      <button type="button" onClick={onDismiss} aria-label="Hide this message" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
     </div>
   );
 }

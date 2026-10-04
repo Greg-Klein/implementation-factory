@@ -14,12 +14,12 @@
     "taskIds": ["T3"],
     "agents": ["developer"],
     "expectedArtifact": "qa-report.md",
-    "description": "string, in French: what happens next, in one sentence"
+    "description": "string, in the workflow language: what happens next, in one sentence"
   },
   "result": {
     "delivery": "merge_request | draft_merge_request | none",
     "mergeRequestUrl": "https://…",
-    "blockers": ["string, in French"]
+    "blockers": ["string, in the workflow language"]
   }
 }
 ```

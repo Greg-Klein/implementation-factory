@@ -42,8 +42,8 @@ function statusOf(view: Coverage, id: string) {
 }
 
 async function openEvidence(page: Page) {
-  await page.getByRole("button", { name: /^Ouvrir le run/ }).first().click();
-  await page.getByRole("tab", { name: "Preuves" }).click();
+  await page.getByRole("button", { name: /^Open run/ }).first().click();
+  await page.getByRole("tab", { name: "Evidence" }).click();
 }
 
 const registry = {
@@ -75,7 +75,7 @@ test("should follow a real run from a failed round to a replaced one, and keep b
 
   await expect.poll(async () => { const view = await coverage(request, runId); return [statusOf(view, "AC1"), statusOf(view, "AC2")]; }).toEqual(["failed", "blocked"]);
   await openEvidence(page);
-  await expect(page.getByTestId("acceptance-sentence")).toHaveText("0 critère vérifié sur 2 · 1 échec · 1 bloqué");
+  await expect(page.getByTestId("acceptance-sentence")).toHaveText("0 of 2 criteria verified · 1 failed · 1 blocked");
 
   // Round two rewrites the same report and the same capture name.
   writeTask(worktree, "assets/result.png", "round-2");
@@ -87,7 +87,7 @@ test("should follow a real run from a failed round to a replaced one, and keep b
     ],
   });
 
-  await expect(page.getByTestId("acceptance-sentence")).toHaveText("1 critère vérifié sur 2 · 1 bloqué");
+  await expect(page.getByTestId("acceptance-sentence")).toHaveText("1 of 2 criteria verified · 1 blocked");
   const view = await coverage(request, runId);
   expect(view.criteria[0].checks[0].history.map((entry) => entry.id)).toEqual(["QA-R1-1"]);
   const capture = async (version: number) => Buffer.from((await (await artifact(request, runId, `evidence/qa-evidence.json/v${version}/assets/result.png`)).json() as { content: string }).content, "base64").toString();
@@ -95,12 +95,12 @@ test("should follow a real run from a failed round to a replaced one, and keep b
   expect(await capture(2)).toBe("round-2");
 
   await page.getByTestId("criterion-AC1").getByRole("button").first().click();
-  await page.getByTestId("criterion-AC1").getByText("Historique (1)").click();
-  await expect(page.getByTestId("criterion-AC1").getByText("remplacée par QA-R2-1")).toBeVisible();
+  await page.getByTestId("criterion-AC1").getByText("History (1)").click();
+  await expect(page.getByTestId("criterion-AC1").getByText("replaced by QA-R2-1")).toBeVisible();
 
   // The summary the workflow reads before the merge request says the same thing.
   await expect.poll(() => existsSync(path.join(taskDirectory(worktree), "acceptance-summary.md"))).toBe(true);
-  expect(readFileSync(path.join(taskDirectory(worktree), "acceptance-summary.md"), "utf8")).toContain("1 critère vérifié sur 2 · 1 bloqué");
+  expect(readFileSync(path.join(taskDirectory(worktree), "acceptance-summary.md"), "utf8")).toContain("1 of 2 criteria verified · 1 blocked");
 
   // The code moves after the measurement: the evidence is now stale.
   writeFileSync(path.join(worktree, "app.ts"), "export const answer = 43;\n");
@@ -141,7 +141,7 @@ test("should keep an older run without a criteria registry readable", async ({ p
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
   // The run works in a worktree of the checkout: its task directory and its code are there.
   const worktree = await runDirectory(request, runId);
-  writeTask(worktree, "qa-evidence.json", { source: "qa", status: "PASS", items: [{ label: "Lint", verdict: "pass", command: "npm run lint", actual: "0 avertissement" }] });
+  writeTask(worktree, "qa-evidence.json", { source: "qa", status: "PASS", items: [{ label: "Lint", verdict: "pass", command: "npm run lint", actual: "0 warnings" }] });
   await expect.poll(async () => ((await (await request.get(`/api/runs/${runId}`)).json()) as { state: { artifacts: string[] } }).state.artifacts).toContain("qa-evidence.json");
 
   await page.evaluate((id) => new Promise<void>((resolve) => {
@@ -150,43 +150,43 @@ test("should keep an older run without a criteria registry readable", async ({ p
   }), runId);
 
   await openEvidence(page);
-  await expect(page.getByText("Traçabilité par critère indisponible pour ce run.")).toBeVisible();
+  await expect(page.getByText("Per-criterion traceability unavailable for this run.")).toBeVisible();
   await expect(page.getByRole("list").getByText("Lint", { exact: true }).first()).toBeVisible();
   expect((await coverage(request, runId)).available).toBe(false);
 });
 
 test("should show the demo's criteria in every state, with the replaced round in history", async ({ page }) => {
   await runDemoToCompletion(page);
-  await page.getByRole("tab", { name: "Preuves" }).click();
+  await page.getByRole("tab", { name: "Evidence" }).click();
 
-  await expect(page.getByTestId("acceptance-sentence")).toHaveText("2 critères vérifiés sur 5 · 1 échec · 1 bloqué · 1 non vérifié");
+  await expect(page.getByTestId("acceptance-sentence")).toHaveText("2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified");
   // The row of the run carries the same figures, compact, with the detail in its label.
-  const row = page.getByRole("button", { name: /^Ouvrir le run acme-dashboard/ });
+  const row = page.getByRole("button", { name: /^Open run acme-dashboard/ });
   await expect(row.getByText("2/5 AC", { exact: true })).toBeVisible();
-  await expect(row.getByLabel("2 critères vérifiés sur 5 · 1 en échec · 1 bloqué · 1 non vérifié")).toBeVisible();
-  for (const [id, label] of [["AC1", "Vérifié"], ["AC2", "Vérifié"], ["AC3", "Non vérifié"], ["AC4", "Échec"], ["AC5", "Bloqué"]]) {
+  await expect(row.getByLabel("2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified")).toBeVisible();
+  for (const [id, label] of [["AC1", "Verified"], ["AC2", "Verified"], ["AC3", "Unverified"], ["AC4", "Failed"], ["AC5", "Blocked"]]) {
     await expect(page.getByTestId(`criterion-${id}`).getByRole("button").first()).toContainText(label);
   }
 
   const replaced = page.getByTestId("criterion-AC2");
   await replaced.getByRole("button").first().click();
-  await replaced.getByText("Historique (1)").click();
-  await expect(replaced.getByText("remplacée par QA-R2-4")).toBeVisible();
-  await replaced.getByRole("button", { name: "Agrandir la capture assets/alerte-critique.png" }).last().click();
+  await replaced.getByText("History (1)").click();
+  await expect(replaced.getByText("replaced by QA-R2-4")).toBeVisible();
+  await replaced.getByRole("button", { name: "Enlarge screenshot assets/alerte-critique.png" }).last().click();
   await expect(page.getByRole("dialog", { name: "assets/alerte-critique.png" })).toBeVisible();
   await page.keyboard.press("Escape");
 
   // A break attempt that found nothing sits under its criterion, apart from what verifies it.
   const attempted = page.getByTestId("criterion-AC1");
   await attempted.getByRole("button").first().click();
-  await expect(page.getByTestId("attempts-AC1").getByText("Changer de compte sans recharger la page")).toBeVisible();
-  await expect(page.getByTestId("attempts-AC1").getByText("Aucun défaut trouvé").first()).toBeVisible();
-  await expect(page.getByTestId("qa-verdict")).toContainText("Échec");
+  await expect(page.getByTestId("attempts-AC1").getByText("Switch accounts without reloading the page")).toBeVisible();
+  await expect(page.getByTestId("attempts-AC1").getByText("No defect found").first()).toBeVisible();
+  await expect(page.getByTestId("qa-verdict")).toContainText("Failed");
   await expect(page.getByTestId("qa-verdict-warning")).toHaveCount(0);
   await expect(page.getByTestId("review-notes")).toHaveCount(0);
 
   const stale = page.getByTestId("criterion-AC3");
   await stale.getByRole("button").first().click();
-  await expect(stale.getByText("Preuve ancienne").first()).toBeVisible();
-  await expect(stale.getByText("Résultat rapporté").first()).toBeVisible();
+  await expect(stale.getByText("Stale evidence").first()).toBeVisible();
+  await expect(stale.getByText("Reported result").first()).toBeVisible();
 });

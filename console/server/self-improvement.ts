@@ -68,7 +68,7 @@ function startConflictResolution(worktreeName: string, onto: string) {
   const child = engine.startConflictResolution({ worktreeName, onto });
   if (!child) return false;
   child.on("close", (code) => {
-    notice(code === 0 ? "info" : "attention", code === 0 ? "Rebase assisté terminé" : "Rebase assisté en échec", worktreeName);
+    notice(code === 0 ? "info" : "attention", code === 0 ? "Assisted rebase completed" : "Assisted rebase failed", worktreeName);
   });
   return true;
 }
@@ -99,28 +99,28 @@ export async function realignPendingImprovements() {
     if (!(await worktreeIsClean(worktree).catch(() => false))) continue;
     const name = path.basename(worktree.path);
     if (await rebaseWorktree(worktree, onto).catch(() => false)) {
-      notice("info", "Amélioration rebasée sur le harnais", name);
+      notice("info", "Improvement rebased on the harness", name);
       continue;
     }
     const delegated = startConflictResolution(name, onto);
-    notice("attention", delegated ? "Rebase assisté lancé" : "Rebase impossible",
-      delegated ? `${name} est en conflit avec le harnais, un agent le reprend dans son worktree.`
-        : `${name} est en conflit avec le harnais. La branche est intacte, à reprendre à la main.`);
+    notice("attention", delegated ? "Assisted rebase started" : "Rebase not possible",
+      delegated ? `${name} conflicts with the harness, an agent is taking it over in its worktree.`
+        : `${name} conflicts with the harness. The branch is intact, to be taken over by hand.`);
   }
 }
 
 export async function saveFeedback(session: RunSession, body: string) {
   const feedback = body.trim();
-  if (session.demo) throw new Error("La démonstration n'enregistre pas de retour d’auto-amélioration.");
-  if (!feedback) throw new Error("Le retour est vide.");
-  if (feedback.length > 5_000) throw new Error("Le retour dépasse 5 000 caractères.");
+  if (session.demo) throw new Error("The demo does not record self-improvement feedback.");
+  if (!feedback) throw new Error("The feedback is empty.");
+  if (feedback.length > 5_000) throw new Error("The feedback exceeds 5,000 characters.");
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
     id, runId: session.id, createdAt: now(), status: "pending", feedback,
     issueUrl: session.state.issueUrl, projectDirectory: sourceRepository(session.state),
   }, null, 2));
-  session.activity("artifact", "Retour ajouté à la boucle d’auto-amélioration", `${id}.json`);
+  session.activity("artifact", "Feedback added to the self-improvement loop", `${id}.json`);
   session.publish();
 }
 
@@ -157,7 +157,7 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
     },
     ...(metrics ? { metrics, baseline: metricsBaseline(metrics, others), findings: metricsFindings(metrics, others) } : {}),
   }, null, 2));
-  session.activity("artifact", "Auto-audit mis en file", `${id}.json`);
+  session.activity("artifact", "Self-audit queued", `${id}.json`);
   session.publish();
 }
 
@@ -168,7 +168,7 @@ function startAutonomousImprovement(session: RunSession) {
     void listWorktrees().catch(() => []).then((worktrees) => {
       const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
       if (inFlight) {
-        notice("info", "Auto-amélioration en attente", `${path.basename(inFlight)} n'est pas encore tranché. Fusionne-le ou ignore-le pour libérer la boucle.`);
+        notice("info", "Self-improvement waiting", `${path.basename(inFlight)} has not been decided yet. Merge it or ignore it to free the loop.`);
         return resolve();
       }
       const worktreeName = improvementWorktreeName(session.id);
@@ -184,8 +184,8 @@ function startAutonomousImprovement(session: RunSession) {
       child.stderr.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
       child.on("error", (error) => { launchError = error; });
       child.on("close", (code) => {
-        if (code === 0 && !launchError) notice("info", "Auto-amélioration lancée en tâche de fond", worktreeName);
-        else notice("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));
+        if (code === 0 && !launchError) notice("info", "Self-improvement started in the background", worktreeName);
+        else notice("attention", "Self-improvement not started", normalizeText(launchError?.message ?? output));
         resolve();
       });
     });
@@ -225,14 +225,14 @@ export function scheduleAutonomousReview(session: RunSession) {
   auditedRuns.add(session.id);
   const snapshot = structuredClone(session.archivedState());
   if (!hasAuditableEvidence(snapshot)) {
-    session.activity("system", "Auto-audit sans objet", "Cette exécution n'a produit ni agent, ni document, ni échec à analyser.");
+    session.activity("system", "Self-audit not needed", "This run produced no agent, no document and no failure to analyse.");
     session.publish();
     return;
   }
   auditQueue.push(() => queueAutonomousReview(session, snapshot)
     .then(() => startAutonomousImprovement(session))
     .catch((error) => {
-      session.activity("attention", "Auto-audit impossible", normalizeText(error instanceof Error ? error.message : error));
+      session.activity("attention", "Self-audit not possible", normalizeText(error instanceof Error ? error.message : error));
       session.publish();
     }));
   void drainAudits();

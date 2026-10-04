@@ -26,7 +26,7 @@ describe("run archive persistence", () => {
   it("should keep the repository and the worktree of a run apart from where its session ran", async () => {
     const { RunSession } = await import("../../server/run-session");
     const { normalizeArchivedRun } = await import("../../server/run-incidents");
-    const worktree = { path: "/work/repo/.claude/worktrees/run-worktree", state: "kept" as const, detail: "Worktree conservé : changements non poussés", dependencies: "clone" as const };
+    const worktree = { path: "/work/repo/.claude/worktrees/run-worktree", state: "kept" as const, detail: "Worktree kept: unpushed changes", dependencies: "clone" as const };
     const session = new RunSession("run-worktree", { status: "stopped", phase: 5, cwd: worktree.path, repository: "/work/repo", worktree, archiveSyncedAt: "2026-10-03T10:00:00.000Z" });
     await session.persist();
     const raw = JSON.parse(readFileSync(path.join(dataDirectory, "runs", "run-worktree", "run.json"), "utf8")) as unknown;

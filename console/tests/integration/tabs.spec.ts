@@ -26,7 +26,7 @@ async function selectedTabPill(page: import("@playwright/test").Page) {
 
 test("should fill the selected tab from the first frame the tab bar exists", async ({ page }) => {
   await page.goto("/?demo=1");
-  await page.getByRole("tablist", { name: "Vue de la session" }).waitFor();
+  await page.getByRole("tablist", { name: "Session view" }).waitFor();
 
   // No settling delay on purpose: an indicator that needs one is the bug.
   const onArrival = await selectedTabPill(page);
@@ -40,7 +40,7 @@ test("should keep the selected tab filled across a reload mid-run", async ({ pag
   await page.getByRole("tab", { name: "Terminal" }).click();
 
   await page.reload();
-  await page.getByRole("tablist", { name: "Vue de la session" }).waitFor();
+  await page.getByRole("tablist", { name: "Session view" }).waitFor();
 
   // The tab resets to Conversation, the pill must be on it and its size.
   const afterReload = await selectedTabPill(page);
@@ -50,9 +50,9 @@ test("should keep the selected tab filled across a reload mid-run", async ({ pag
 
 test("should move the pill onto every tab it is sent to", async ({ page }) => {
   await page.goto("/?demo=1");
-  await page.getByRole("tablist", { name: "Vue de la session" }).waitFor();
+  await page.getByRole("tablist", { name: "Session view" }).waitFor();
 
-  for (const label of ["Terminal", "Preuves", "Conversation"]) {
+  for (const label of ["Terminal", "Evidence", "Conversation"]) {
     await page.getByRole("tab", { name: label }).click();
     await expect(async () => {
       const pill = await selectedTabPill(page);

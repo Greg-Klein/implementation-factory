@@ -84,7 +84,7 @@ describe("creating the worktree of a run", () => {
   });
 
   it("should refuse a path outside the directory the harness owns", async () => {
-    await expect(createRunWorktree(repository, path.join(root, "elsewhere"))).rejects.toThrow(/refusé/);
+    await expect(createRunWorktree(repository, path.join(root, "elsewhere"))).rejects.toThrow(/Worktree path refused/);
   });
 
   it("should fail on a directory that is not a git repository rather than create anything", async () => {
@@ -190,7 +190,7 @@ describe("whether a worktree holds work that would be lost", () => {
   });
 
   it("should report a file the workflow left untracked as dirty", async () => {
-    write(worktree, "notes.md", "à reprendre\n");
+    write(worktree, "notes.md", "to pick up again\n");
     await expect(worktreeIsClean({ path: worktree })).resolves.toBe(false);
   });
 
@@ -225,7 +225,7 @@ describe("removing the worktree of a run", () => {
   });
 
   it("should refuse a worktree holding uncommitted work unless forced", async () => {
-    write(worktree, "notes.md", "à reprendre\n");
+    write(worktree, "notes.md", "to pick up again\n");
     await expect(removeRunWorktree(repository, worktree)).rejects.toThrow();
     expect(existsSync(path.join(worktree, "notes.md"))).toBe(true);
     await removeRunWorktree(repository, worktree, { force: true });
@@ -252,8 +252,8 @@ describe("removing the worktree of a run", () => {
   });
 
   it("should refuse to remove anything that is not a worktree of a run", async () => {
-    await expect(removeRunWorktree(repository, repository, { force: true })).rejects.toThrow(/refusé/);
-    await expect(removeRunWorktree(repository, path.join(repository, "packages"), { force: true })).rejects.toThrow(/refusé/);
+    await expect(removeRunWorktree(repository, repository, { force: true })).rejects.toThrow(/Worktree path refused/);
+    await expect(removeRunWorktree(repository, path.join(repository, "packages"), { force: true })).rejects.toThrow(/Worktree path refused/);
     expect(existsSync(path.join(repository, "app.ts"))).toBe(true);
   });
 });
@@ -269,7 +269,7 @@ describe("the repository a launch names", () => {
   it("should refuse a directory that is not a git repository, in words the form can show", async () => {
     const plain = path.join(root, "plain");
     mkdirSync(plain);
-    await expect(mainCheckout(plain)).rejects.toThrow(/n'est pas un dépôt git/);
+    await expect(mainCheckout(plain)).rejects.toThrow(/is not a git repository/);
   });
 
   it("should name the branch the checkout is on, and none on a detached HEAD", async () => {

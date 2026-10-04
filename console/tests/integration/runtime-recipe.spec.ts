@@ -19,17 +19,17 @@ test("should show the runtime recipe kept for a repository, and forget it on req
   writeFileSync(stored, "# Recette d'exécution\n\n## Lancer\n\n- `npm run dev -- --port <port>`\n");
 
   await page.goto("/");
-  await page.getByLabel("Répertoire du projet").fill(sampleCheckout);
+  await page.getByLabel("Project directory").fill(sampleCheckout);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Recette d'exécution" }).click();
+  await page.getByRole("button", { name: "Runtime recipe" }).click();
 
-  const dialog = page.getByRole("dialog", { name: "Recette d'exécution" });
+  const dialog = page.getByRole("dialog", { name: "Runtime recipe" });
   await expect(dialog).toContainText("npm run dev -- --port <port>");
   await expect(dialog).toContainText(sampleCheckout);
 
-  await dialog.getByRole("button", { name: "Oublier la recette" }).click();
-  await expect(dialog).toContainText("Aucune recette pour ce dépôt");
-  await expect(dialog.getByRole("button", { name: "Oublier la recette" })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Forget the recipe" }).click();
+  await expect(dialog).toContainText("No recipe for this repository");
+  await expect(dialog.getByRole("button", { name: "Forget the recipe" })).toHaveCount(0);
   expect(existsSync(stored)).toBe(false);
 
   await page.keyboard.press("Escape");

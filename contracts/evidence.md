@@ -13,7 +13,7 @@ Every evidence file of the run (`dev-evidence-<suffix>.json` and its merge, `qa-
   "items": [
     {
       "id": "unique in the run",
-      "label": "string, in French",
+      "label": "string, in the workflow language",
       "verdict": "pass | fail | not_run | measured | confirmed | unverified",
       "criterionIds": ["AC2"], "checkIds": ["AC2-C1"], "taskIds": ["T3"],
       "method": "test | browser | static_analysis | manual",

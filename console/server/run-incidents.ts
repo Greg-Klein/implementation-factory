@@ -22,19 +22,19 @@ function sameObservations(left: RunIncident["observations"], right: RunIncident[
  * never resolve anything.
  */
 export function resolutionOutcome(incident: RunIncident, input: HealthInput, verdict: HealthVerdict) {
-  if (input.status === "completed") return "Workflow terminé";
-  if (input.status === "stopped") return "Run arrêté";
-  if (input.status === "failed") return "Session terminée";
-  if (verdict.wait?.reason === "user_question") return "Une question attend ta réponse";
-  if (verdict.wait?.reason === "permission" || verdict.wait?.reason === "terminal_interaction") return "Claude Code attend une saisie dans le terminal";
-  if (input.agents.some((agent) => agent.status === "running")) return "Un agent a démarré";
-  const resumed = incident.continuation ? "Reprise observée après la demande de continuation" : "Claude Code a repris la main";
+  if (input.status === "completed") return "Workflow completed";
+  if (input.status === "stopped") return "Run stopped";
+  if (input.status === "failed") return "Session ended";
+  if (verdict.wait?.reason === "user_question") return "A question is waiting for your answer";
+  if (verdict.wait?.reason === "permission" || verdict.wait?.reason === "terminal_interaction") return "Claude Code is waiting for input in the terminal";
+  if (input.agents.some((agent) => agent.status === "running")) return "An agent started";
+  const resumed = incident.continuation ? "Resumption observed after the continuation request" : "Claude Code resumed";
   const idleSince = input.signals.pilotIdleSince;
   if (idleSince === undefined) return resumed;
-  if (incident.kind === "no_next_action" && incident.fingerprint !== `no_next_action:${idleSince}`) return `${resumed}, puis l'a rendue`;
-  if (incident.kind === "missing_result" && verdict.incident?.fingerprint !== incident.fingerprint) return "Résultat reçu";
-  if (incident.kind === "unresolvable_dependency") return "Plan corrigé";
-  return "La cause n'est plus observée";
+  if (incident.kind === "no_next_action" && incident.fingerprint !== `no_next_action:${idleSince}`) return `${resumed}, then handed back`;
+  if (incident.kind === "missing_result" && verdict.incident?.fingerprint !== incident.fingerprint) return "Result received";
+  if (incident.kind === "unresolvable_dependency") return "Plan fixed";
+  return "The cause is no longer observed";
 }
 
 /**
@@ -98,30 +98,30 @@ const INTERFACE_ACTIONS = new Set<IncidentAction>(["answer", "open_terminal", "v
  */
 export function checkIncidentAction(context: ActionContext): ActionCheck {
   const incident = context.incident;
-  if (!incident) return { ok: false, message: "Cet incident n'existe plus." };
-  if (incident.decisions.some((decision) => decision.requestId === context.requestId)) return { ok: false, duplicate: true, message: "Cette action a déjà été prise en compte." };
-  if (INTERFACE_ACTIONS.has(context.action)) return { ok: false, message: "Cette action n'a rien à faire côté serveur." };
-  if (incident.status !== "open") return { ok: false, message: "La situation a changé : cet incident est déjà clos." };
-  if (incident.revision !== context.expectedRevision) return { ok: false, message: "La situation a changé depuis l'affichage. Relis l'incident avant d'agir." };
+  if (!incident) return { ok: false, message: "This incident no longer exists." };
+  if (incident.decisions.some((decision) => decision.requestId === context.requestId)) return { ok: false, duplicate: true, message: "This action has already been taken into account." };
+  if (INTERFACE_ACTIONS.has(context.action)) return { ok: false, message: "This action has nothing to do on the server side." };
+  if (incident.status !== "open") return { ok: false, message: "The situation has changed: this incident is already closed." };
+  if (incident.revision !== context.expectedRevision) return { ok: false, message: "The situation has changed since it was displayed. Read the incident again before acting." };
   if (context.action === "dismiss") {
-    if (!context.reason?.trim()) return { ok: false, message: "Dis en quelques mots pourquoi c'est un faux positif." };
+    if (!context.reason?.trim()) return { ok: false, message: "Say in a few words why it is a false positive." };
     return { ok: true };
   }
-  if (!context.live) return { ok: false, message: "Ce run n'a plus de session : seul le classement reste possible." };
-  if (context.action === "stop") return context.input?.sessionActive ? { ok: true } : { ok: false, message: "La session n'est plus active." };
+  if (!context.live) return { ok: false, message: "This run no longer has a session: it can only be dismissed." };
+  if (context.action === "stop") return context.input?.sessionActive ? { ok: true } : { ok: false, message: "The session is no longer active." };
   if (context.action === "request_continuation") {
     const input = context.input;
-    if (!input?.sessionActive) return { ok: false, message: "La session n'est plus active : rien ne peut reprendre." };
-    if (incident.kind === "lost_session") return { ok: false, message: "Une session perdue ne peut pas reprendre." };
-    if (incident.continuation) return { ok: false, duplicate: true, message: "La continuation a déjà été demandée." };
+    if (!input?.sessionActive) return { ok: false, message: "The session is no longer active: nothing can resume." };
+    if (incident.kind === "lost_session") return { ok: false, message: "A lost session cannot resume." };
+    if (incident.continuation) return { ok: false, duplicate: true, message: "The continuation has already been requested." };
     const signals = input.signals;
-    if (signals.pilotIdleSince === undefined) return { ok: false, message: "La situation a changé : Claude Code travaille de nouveau." };
-    if (input.agents.some((agent) => agent.status === "running")) return { ok: false, message: "La situation a changé : un agent est actif." };
-    if (signals.activeTools.length > 0 || signals.backgroundWaits.length > 0) return { ok: false, message: "La situation a changé : une commande est en cours." };
-    if (input.pendingQuestion || signals.permission || signals.terminalInteraction || signals.unexplainedAttention) return { ok: false, message: "La situation a changé : Claude Code attend une réponse de ta part." };
+    if (signals.pilotIdleSince === undefined) return { ok: false, message: "The situation has changed: Claude Code is working again." };
+    if (input.agents.some((agent) => agent.status === "running")) return { ok: false, message: "The situation has changed: an agent is active." };
+    if (signals.activeTools.length > 0 || signals.backgroundWaits.length > 0) return { ok: false, message: "The situation has changed: a command is running." };
+    if (input.pendingQuestion || signals.permission || signals.terminalInteraction || signals.unexplainedAttention) return { ok: false, message: "The situation has changed: Claude Code is waiting for an answer from you." };
     return { ok: true };
   }
-  return { ok: false, message: "Action inconnue." };
+  return { ok: false, message: "Unknown action." };
 }
 
 export function withDecision(incident: RunIncident, decision: IncidentDecision): RunIncident {
@@ -129,15 +129,15 @@ export function withDecision(incident: RunIncident, decision: IncidentDecision):
 }
 
 /**
- * The instruction sent to a live session on "Demander la continuation": it
+ * The instruction sent to a live session on "Request continuation": it
  * resumes where the workflow stands, it never restarts it.
  */
 export const CONTINUATION_INSTRUCTION = [
-  "Le harnais n'observe plus aucune action en cours sur ce run. Reprends le workflow là où il en est :",
-  "relis le contexte courant, le plan, les rapports et preuves déjà écrits dans .claude/tasks, et l'état Git (branche, commits, fichiers modifiés),",
-  "puis prends la prochaine action encore nécessaire. Conserve les fichiers de travail et les commits existants.",
-  "Ne relance pas la commande initiale et ne repars pas de l'étape 1. Mets à jour workflow-state.json avant d'agir.",
-  "Si tu attends quelque chose de moi, pose la question avec AskUserQuestion.",
+  "The harness no longer observes any action in progress on this run. Resume the workflow where it stands:",
+  "read again the current context, the plan, the reports and evidence already written in .claude/tasks, and the Git state (branch, commits, modified files),",
+  "then take the next action still needed. Keep the existing working files and commits.",
+  "Do not rerun the initial command and do not start again from step 1. Update workflow-state.json before acting.",
+  "If you are waiting for something from me, ask the question with AskUserQuestion.",
 ].join(" ");
 
 /**
@@ -172,7 +172,7 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     revision: typeof incident.revision === "number" ? incident.revision : 1,
     observations: Array.isArray(incident.observations) ? incident.observations : [],
     suggestedActions: Array.isArray(incident.suggestedActions) ? incident.suggestedActions : [],
-    decisions: (Array.isArray(incident.decisions) ? incident.decisions : []).map((decision) => decision.outcome === "pending" ? { ...decision, outcome: "unknown" as const, detail: "Le serveur s'est arrêté avant de confirmer cette action : son issue est inconnue." } : decision),
+    decisions: (Array.isArray(incident.decisions) ? incident.decisions : []).map((decision) => decision.outcome === "pending" ? { ...decision, outcome: "unknown" as const, detail: "The server stopped before confirming this action: its outcome is unknown." } : decision),
   })) : [];
   return {
     id: state.id ?? runId, status: state.status, phase: typeof state.phase === "number" ? state.phase : 0, cwd: state.cwd,
@@ -207,15 +207,15 @@ export function interruptRun(state: RunState, now: string): RunState {
   const incident: RunIncident = {
     id: `incident-${crypto.randomUUID().slice(0, 8)}`, runId: state.id ?? "", kind: "lost_session", status: "open", revision: 1,
     detectedAt: now, updatedAt: now, fingerprint: "lost_session:restart",
-    title: "Session interrompue",
-    reason: "Le serveur du harnais s'est arrêté pendant que ce run était en cours : la session Claude Code a disparu avec lui, et son issue réelle n'a jamais été enregistrée.",
+    title: "Session interrupted",
+    reason: "The harness server stopped while this run was in progress: the Claude Code session went away with it, and its real outcome was never recorded.",
     observations: [
-      { kind: "restart", at: now, detail: "Run trouvé en cours au redémarrage de la console." },
-      { kind: "phase", detail: `Dernière phase atteinte : ${state.phase}/10.` },
-      ...(state.activities[0] ? [{ kind: "activity", at: state.activities[0].at, detail: `Dernier événement : ${state.activities[0].title}.` }] : []),
-      ...(question ? [{ kind: "question", detail: `Question restée sans réponse : ${question}` }] : []),
+      { kind: "restart", at: now, detail: "Run found in progress when the console restarted." },
+      { kind: "phase", detail: `Last phase reached: ${state.phase}/10.` },
+      ...(state.activities[0] ? [{ kind: "activity", at: state.activities[0].at, detail: `Last event: ${state.activities[0].title}.` }] : []),
+      ...(question ? [{ kind: "question", detail: `Question left unanswered: ${question}` }] : []),
     ],
-    expectedNextAction: "Consulter le diagnostic, puis relancer le ticket si le travail doit continuer.",
+    expectedNextAction: "Read the diagnostic, then relaunch the ticket if the work must continue.",
     suggestedActions: ["view_diagnostic", "dismiss"],
     decisions: [],
   };
@@ -228,8 +228,8 @@ export function interruptRun(state: RunState, now: string): RunState {
     sessionPrompt: undefined,
     action: undefined,
     agents: closeAbandonedAgents(state.agents ?? [], now).agents,
-    error: state.error ?? "Le serveur du harnais a redémarré ou s'est arrêté pendant que ce run était en cours ; son issue réelle n'a jamais été enregistrée.",
-    health: { health: "interrupted", title: "Session interrompue", detail: incident.reason, evaluatedAt: now },
+    error: state.error ?? "The harness server restarted or stopped while this run was in progress; its real outcome was never recorded.",
+    health: { health: "interrupted", title: "Session interrupted", detail: incident.reason, evaluatedAt: now },
     incidents: hasInterruption ? incidents : [...incidents, incident],
     schemaVersion: RUN_SCHEMA_VERSION,
   };

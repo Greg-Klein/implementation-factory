@@ -3,7 +3,7 @@ import { expectDemoCompleted, resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
-const toggle = "button[aria-label='Son des alertes']";
+const toggle = "button[aria-label='Alert sound']";
 
 test("should keep the alert sound off until it is asked for", async ({ page }) => {
   await page.goto("/");
@@ -39,10 +39,10 @@ test("should make no sound while the setting is off, and sound once it is on", a
   });
 
   await page.goto("/?demo=1");
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByText("Decision required")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await expectDemoCompleted(page);
   expect(await page.evaluate(() => (window as unknown as { oscillators: number }).oscillators)).toBe(0);
 

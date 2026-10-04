@@ -105,9 +105,9 @@ describe("reviewer plans", () => {
 
   it("should note a plan that arrived after its report, or never", () => {
     const late = reviewPlanNotes({ "qa-plan.md": "2026-09-27T09:11:00.000Z", "qa-report.md": "2026-09-27T09:10:00.000Z" });
-    expect(late).toEqual(["Le plan de test QA (qa-plan.md) est arrivé après le rapport QA : rien ne montre qu'il a été écrit en premier."]);
+    expect(late).toEqual(["The QA test plan (qa-plan.md) arrived after the QA report: nothing shows it was written first."]);
     const missing = reviewPlanNotes({ "designer-review.md": "2026-09-27T09:12:00.000Z" });
-    expect(missing).toEqual(["L'inventaire design (design-inventory.md) n'est pas arrivé avant la revue de design : rien ne montre qu'il a été écrit en premier."]);
+    expect(missing).toEqual(["The design inventory (design-inventory.md) did not arrive before the design review: nothing shows it was written first."]);
   });
 
   it("should not judge an order from an arrival time it cannot read", () => {

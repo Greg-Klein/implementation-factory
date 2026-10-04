@@ -30,7 +30,7 @@ describe("workflow signals from Claude Code hooks", () => {
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm test" } });
     expect(session.state.activities).toEqual([]);
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "git switch -c fix-258" } });
-    expect(session.state.activities).toEqual([expect.objectContaining({ title: "Branche de travail", detail: "fix-258" })]);
+    expect(session.state.activities).toEqual([expect.objectContaining({ title: "Working branch", detail: "fix-258" })]);
   });
 
   it("should stay quiet when the session goes idle while a background agent works", () => {
@@ -63,9 +63,9 @@ describe("workflow signals from Claude Code hooks", () => {
 
   it("should say what the agent is doing, and forget it as soon as the turn ends", () => {
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "glab issue view 258" } });
-    expect(session.state.action).toBe("Lecture du ticket GitLab");
+    expect(session.state.action).toBe("Reading the GitLab ticket");
     hook({ hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "/repo/console/server/domain.ts" } });
-    expect(session.state.action).toBe("Lecture de domain.ts");
+    expect(session.state.action).toBe("Reading domain.ts");
     // The action is an instant, never a milestone: the feed keeps none of it.
     expect(session.state.activities).toEqual([]);
     hook({ hook_event_name: "Stop" });
@@ -74,7 +74,7 @@ describe("workflow signals from Claude Code hooks", () => {
 
   it("should stop claiming an action while it waits for the user to decide", () => {
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm run test:unit" } });
-    expect(session.state.action).toBe("Exécution des tests");
+    expect(session.state.action).toBe("Running the tests");
     hook({
       hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
       tool_input: { questions: [{ question: "Quelle base ?", header: "Branche", options: [{ label: "develop" }] }] },
@@ -166,12 +166,12 @@ describe("workflow signals from Claude Code hooks", () => {
     session.state = { ...session.state, status: "completed", phase: 10, sessionActive: true, endedAt: "2026-09-18T14:00:45.000Z" };
     const parked = hook({
       hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
-      tool_input: { questions: [{ question: "Quelle portée ?", header: "Portée", options: [{ label: "Un fichier" }] }] },
+      tool_input: { questions: [{ question: "Which scope?", header: "Scope", options: [{ label: "One file" }] }] },
     });
-    expect(session.state.pendingQuestion?.questions).toEqual([expect.objectContaining({ question: "Quelle portée ?" })]);
+    expect(session.state.pendingQuestion?.questions).toEqual([expect.objectContaining({ question: "Which scope?" })]);
     expect(session.state.status).toBe("completed");
 
-    answerQuestion(session, { "Quelle portée ?": "Un fichier" });
+    answerQuestion(session, { "Which scope?": "One file" });
     await expect(parked).resolves.toMatchObject({ hookSpecificOutput: { permissionDecision: "allow" } });
     expect(session.state).toMatchObject({ status: "completed", endedAt: "2026-09-18T14:00:45.000Z", pendingQuestion: undefined });
   });
@@ -180,7 +180,7 @@ describe("workflow signals from Claude Code hooks", () => {
     session.state = { ...session.state, status: "stopped", sessionActive: false };
     void hook({
       hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
-      tool_input: { questions: [{ question: "Quelle portée ?", header: "Portée", options: [] }] },
+      tool_input: { questions: [{ question: "Which scope?", header: "Scope", options: [] }] },
     });
     expect(session.state.pendingQuestion).toBeUndefined();
   });

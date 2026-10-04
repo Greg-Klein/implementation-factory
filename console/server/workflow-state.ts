@@ -33,16 +33,16 @@ export type WorkflowStateReading = { state: WorkflowState } | { error: string };
 
 /** Reads the file as untrusted data: anything malformed is a diagnostic, never a state. */
 export function parseWorkflowState(content: string, receivedAt: string): WorkflowStateReading {
-  if (content.length > MAX_BYTES) return { error: "workflow-state.json dépasse la taille admise." };
+  if (content.length > MAX_BYTES) return { error: "workflow-state.json exceeds the allowed size." };
   let value: unknown;
-  try { value = JSON.parse(content); } catch { return { error: "workflow-state.json n'est pas un JSON valide (écriture partielle ?)." }; }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "workflow-state.json n'est pas un objet." };
+  try { value = JSON.parse(content); } catch { return { error: "workflow-state.json is not valid JSON (partial write?)." }; }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "workflow-state.json is not an object." };
   const raw = value as Record<string, unknown>;
-  if (raw.schemaVersion !== 1) return { error: `Version de workflow-state.json inconnue : ${String(raw.schemaVersion)}.` };
+  if (raw.schemaVersion !== 1) return { error: `Unknown workflow-state.json version: ${String(raw.schemaVersion)}.` };
   const revision = raw.revision;
-  if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 1) return { error: "workflow-state.json n'a pas de révision valide." };
+  if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 1) return { error: "workflow-state.json has no valid revision." };
   const state = raw.state;
-  if (typeof state !== "string" || !(STATES as string[]).includes(state)) return { error: `État de workflow inconnu : ${String(state)}.` };
+  if (typeof state !== "string" || !(STATES as string[]).includes(state)) return { error: `Unknown workflow state: ${String(state)}.` };
   const parsed: WorkflowState = { schemaVersion: 1, revision, state: state as WorkflowStateName, receivedAt };
   const step = normalizeText(raw.step);
   if (step) parsed.step = step.slice(0, 40);
@@ -78,8 +78,8 @@ export function parseWorkflowState(content: string, receivedAt: string): Workflo
 export function declaredCompletion(workflow: WorkflowState | undefined, mergeRequestUrl: string | undefined): { complete: boolean; problem?: string } {
   if (!workflow || workflow.state !== "completed") return { complete: false };
   const result = workflow.result;
-  if (!result) return { complete: false, problem: "Fin déclarée sans résultat de livraison." };
-  if (result.delivery === "none") return result.blockers.length > 0 ? { complete: true } : { complete: false, problem: "Fin déclarée sans livraison ni blocage expliqué." };
+  if (!result) return { complete: false, problem: "End declared without a delivery result." };
+  if (result.delivery === "none") return result.blockers.length > 0 ? { complete: true } : { complete: false, problem: "End declared with neither a delivery nor an explained blocker." };
   if (mergeRequestUrl || result.mergeRequestUrl) return { complete: true };
-  return { complete: false, problem: "Fin déclarée avec une merge request que le run n'a jamais ouverte." };
+  return { complete: false, problem: "End declared with a merge request the run never opened." };
 }

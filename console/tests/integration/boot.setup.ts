@@ -19,16 +19,16 @@ test("should bring back a batch whose analysis a restart interrupted, one ticket
   expect(restored.runs.find((run) => run.repository === repository)?.issueUrl).toMatch(/\/issues\/1$/);
   expect(restored.queued).toEqual([expect.objectContaining({
     issueUrl: expect.stringMatching(/\/issues\/2$/), batchId: "batch-restored",
-    reason: "conflict", cause: "analysis_failed", analysisFailure: "console redémarrée pendant l'analyse",
+    reason: "conflict", cause: "analysis_failed", analysisFailure: "console restarted during the analysis",
   })]);
   expect(restored.queued[0].analysing).toBeUndefined();
 
   await page.goto("/");
-  const queue = page.getByRole("group", { name: "Runs en file d'attente" });
-  await expect(queue.getByText("En attente, conflit avec #1 en cours")).toBeVisible();
-  await expect(queue.getByText("Analyse en échec")).toBeVisible();
-  await queue.getByText("Pourquoi il attend").click();
-  await expect(queue.getByText(/console redémarrée pendant l'analyse.*passent un par un/)).toBeVisible();
+  const queue = page.getByRole("group", { name: "Queued runs" });
+  await expect(queue.getByText("Waiting, conflict with #1, which is running")).toBeVisible();
+  await expect(queue.getByText("Analysis failed", { exact: true })).toBeVisible();
+  await queue.getByText("Why it waits").click();
+  await expect(queue.getByText(/console restarted during the analysis.*run one at a time/)).toBeVisible();
 
   // The specs that follow expect an empty console.
   await resetRun(page);

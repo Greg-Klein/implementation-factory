@@ -58,7 +58,7 @@ export async function reconcileInterruptedRuns(runsDirectory: string) {
     if (!state || !runInProgress(state.status)) return;
     // The question it was waiting on is gone with its session, but it says where the run stood.
     const interrupted = interruptRun({ ...state, pendingQuestion: raw.pendingQuestion }, now());
-    const closingEntry: Activity = { id: crypto.randomUUID(), at: now(), kind: "system", title: "Run interrompu par un redémarrage du serveur" };
+    const closingEntry: Activity = { id: crypto.randomUUID(), at: now(), kind: "system", title: "Run interrupted by a server restart" };
     interrupted.activities = [closingEntry, ...interrupted.activities].slice(0, ARCHIVED_ACTIVITIES);
     const temporary = `${runFile}.reconcile.tmp`;
     await writeFile(temporary, JSON.stringify(interrupted, null, 2)).then(() => rename(temporary, runFile)).catch(() => undefined);

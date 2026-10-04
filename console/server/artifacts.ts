@@ -18,8 +18,8 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg
 /** A version kept by the evidence archive: served only when the archive itself wrote that path. */
 async function readArchivedEvidence(session: RunSession, archivePath: string) {
   const buffer = await session.evidence.read(archivePath);
-  if (!buffer) throw new Error("Document introuvable pour ce run.");
-  if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
+  if (!buffer) throw new Error("Document not found for this run.");
+  if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
   const contentType = IMAGE_CONTENT_TYPES[path.extname(archivePath).toLowerCase()];
   if (contentType) return { path: archivePath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: archivePath, content: buffer.toString("utf8") };
@@ -27,10 +27,10 @@ async function readArchivedEvidence(session: RunSession, archivePath: string) {
 
 export async function readArtifact(session: RunSession, artifactPath: string) {
   if (artifactPath.startsWith("evidence/")) return readArchivedEvidence(session, artifactPath);
-  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
+  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
   if (session.demo) {
     const content = demoArtifactContents[artifactPath];
-    if (content === undefined) throw new Error("Document de démonstration introuvable.");
+    if (content === undefined) throw new Error("Demo document not found.");
     const demoContentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
     if (demoContentType) return { path: artifactPath, content, encoding: "base64" as const, contentType: demoContentType };
     return { path: artifactPath, content };
@@ -39,9 +39,9 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
   // The lexical check refuses `..`; the real path refuses a symbolic link
   // planted in the archive that points outside it.
   const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
-  if (!target) throw new Error("Chemin de document invalide.");
+  if (!target) throw new Error("Invalid document path.");
   const buffer = await readFile(target);
-  if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
+  if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
   const contentType = IMAGE_CONTENT_TYPES[path.extname(target).toLowerCase()];
   if (contentType) return { path: artifactPath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: artifactPath, content: buffer.toString("utf8") };
@@ -70,7 +70,7 @@ async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: s
     const copied = await copyFile(source, target).then(() => true, () => false);
     if (copied && !session.state.artifacts.includes(relative)) {
       session.state.artifacts = [...session.state.artifacts, relative];
-      session.activity("artifact", "Capture archivée", relative);
+      session.activity("artifact", "Screenshot archived", relative);
     }
   }
 }
@@ -87,7 +87,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   await copyFile(source, target);
   if (!session.state.artifacts.includes(relative)) {
     session.state.artifacts = [...session.state.artifacts, relative];
-    session.activity("artifact", "Nouvel artefact", relative);
+    session.activity("artifact", "New artifact", relative);
   }
   session.artifactArrived(relative, new Date(writtenAt).toISOString());
   // Every reviewer overwrites its own file on each round, so the list of
@@ -122,7 +122,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
 function readWorkflowState(session: RunSession, content: string) {
   const reading = parseWorkflowState(content, new Date().toISOString());
   if ("error" in reading) {
-    if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignoré", reading.error);
+    if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignored", reading.error);
     session.workflowDiagnostic = reading.error;
     return;
   }
@@ -132,7 +132,7 @@ function readWorkflowState(session: RunSession, content: string) {
   session.state.workflow = reading.state;
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
-  if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow : ${reading.state.state}${reading.state.step ? `, étape ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
+  if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow: ${reading.state.state}${reading.state.step ? `, step ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
   closeWorkflowIfDone(session);
 }
 

@@ -40,9 +40,9 @@ describe("run state selectors", () => {
 
   it("should measure an unfinished step against the current time", () => {
     const start = "2026-09-07T10:00:00.000Z";
-    expect(elapsedLabel(start, undefined, Date.parse("2026-09-07T10:00:31.000Z"))).toBe("31 s");
-    expect(elapsedLabel(start, undefined, Date.parse("2026-09-07T10:02:05.000Z"))).toBe("2 min 05 s");
-    expect(elapsedLabel(start, "2026-09-07T10:00:12.000Z", Date.parse("2026-09-07T11:00:00.000Z"))).toBe("12 s");
+    expect(elapsedLabel(start, undefined, Date.parse("2026-09-07T10:00:31.000Z"))).toBe("31s");
+    expect(elapsedLabel(start, undefined, Date.parse("2026-09-07T10:02:05.000Z"))).toBe("2m 05s");
+    expect(elapsedLabel(start, "2026-09-07T10:00:12.000Z", Date.parse("2026-09-07T11:00:00.000Z"))).toBe("12s");
   });
 
   it("should announce a message on the way only while the session is alive and talking", () => {
@@ -111,21 +111,21 @@ describe("the Progression badge", () => {
     observations: [], suggestedActions: [], decisions: [],
   });
 
-  it("should keep « À toi de jouer » for a real question", () => {
-    expect(runStatusBadge({ status: "attention", pendingQuestion: { id: "q", questions: [] }, incidents: [incident("no_next_action")] })).toEqual({ label: "À toi de jouer", tone: "decision" });
+  it("should keep \"Your turn\" for a real question", () => {
+    expect(runStatusBadge({ status: "attention", pendingQuestion: { id: "q", questions: [] }, incidents: [incident("no_next_action")] })).toEqual({ label: "Your turn", tone: "decision" });
   });
 
-  it("should keep « À toi de jouer » for a prompt waiting in the terminal", () => {
-    expect(runStatusBadge({ status: "attention", health: { health: "waiting", wait: { reason: "permission", since: "" }, evaluatedAt: "" } })).toEqual({ label: "À toi de jouer", tone: "decision" });
+  it("should keep \"Your turn\" for a prompt waiting in the terminal", () => {
+    expect(runStatusBadge({ status: "attention", health: { health: "waiting", wait: { reason: "permission", since: "" }, evaluatedAt: "" } })).toEqual({ label: "Your turn", tone: "decision" });
   });
 
   it("should say a run with no next action is blocked, without implying a question", () => {
-    expect(runStatusBadge({ status: "attention", incidents: [incident("no_next_action")] })).toEqual({ label: "Sans suite", tone: "blocked" });
+    expect(runStatusBadge({ status: "attention", incidents: [incident("no_next_action")] })).toEqual({ label: "No next step", tone: "blocked" });
   });
 
   it("should read a lost session as an interruption, not as an error", () => {
-    expect(runStatusBadge({ status: "failed", incidents: [incident("lost_session")] })).toEqual({ label: "Interrompu", tone: "error" });
-    expect(runStatusBadge({ status: "failed" })).toEqual({ label: "Erreur", tone: "error" });
+    expect(runStatusBadge({ status: "failed", incidents: [incident("lost_session")] })).toEqual({ label: "Interrupted", tone: "error" });
+    expect(runStatusBadge({ status: "failed" })).toEqual({ label: "Error", tone: "error" });
   });
 });
 
@@ -138,7 +138,7 @@ describe("the acceptance chip of a run row", () => {
   });
 
   it("should show verified over total, coloured by the worst state left", () => {
-    expect(acceptanceChip(counts)).toEqual({ label: "2/5 AC", title: "2 critères vérifiés sur 5 · 1 en échec · 1 bloqué · 1 non vérifié", tone: "error" });
+    expect(acceptanceChip(counts)).toEqual({ label: "2/5 AC", title: "2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified", tone: "error" });
     expect(acceptanceChip({ ...counts, failed: 0, unverified: 2 })?.tone).toBe("attention");
     expect(acceptanceChip({ ...counts, verified: 5, failed: 0, blocked: 0, unverified: 0 })).toMatchObject({ label: "5/5 AC", tone: "verified" });
   });
@@ -153,9 +153,9 @@ describe("a session waiting on the folder trust prompt", () => {
 
   it("should read as the user's turn, and as a stop once refused", () => {
     const prompt = { id: "p1", kind: "folder_trust" as const, directory: "/tmp/repo", since: "2026-10-03T09:00:00.000Z" };
-    expect(runStatusBadge({ status: "attention", sessionPrompt: prompt })).toEqual({ label: "À toi de jouer", tone: "decision" });
+    expect(runStatusBadge({ status: "attention", sessionPrompt: prompt })).toEqual({ label: "Your turn", tone: "decision" });
     expect(terminalExitStatus(1, true)).toBe("stopped");
-    expect(runStatusBadge({ status: "stopped" })).toEqual({ label: "Arrêté", tone: "stopped" });
+    expect(runStatusBadge({ status: "stopped" })).toEqual({ label: "Stopped", tone: "stopped" });
   });
 });
 
@@ -177,8 +177,8 @@ describe("a run working in a worktree", () => {
   });
 
   it("should say why a worktree is kept, and that a removed one is gone", () => {
-    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "kept", detail: "Worktree conservé : changements non poussés" } })).toBe("Worktree conservé : changements non poussés");
-    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "removed" } })).toBe("Worktree supprimé");
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "kept", detail: "Worktree kept: unpushed changes" } })).toBe("Worktree kept: unpushed changes");
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "removed" } })).toBe("Worktree removed");
   });
 
   it("should offer the removal only for a worktree still on disk whose session is gone", () => {
@@ -190,8 +190,8 @@ describe("a run working in a worktree", () => {
   });
 
   it("should tell a launch waiting on its own ticket from one waiting on a slot", () => {
-    expect(queueReason({ reason: "ticket" })).toBe("ticket déjà en cours");
-    expect(queueReason({ reason: "slot" })).toBe("toutes les places sont prises");
+    expect(queueReason({ reason: "ticket" })).toBe("ticket already running");
+    expect(queueReason({ reason: "slot" })).toBe("all slots are taken");
   });
 });
 
@@ -199,41 +199,41 @@ describe("what a queued ticket waits for", () => {
   const blocking = { issueUrl: "https://gitlab.com/acme/shop/-/issues/217", mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/12", branch: "feat/217" };
 
   it("should name the ticket it is in conflict with while that one runs", () => {
-    expect(queueStatus({ reason: "conflict", blocking })).toBe("En attente, conflit avec #217 en cours");
+    expect(queueStatus({ reason: "conflict", blocking })).toBe("Waiting, conflict with #217, which is running");
   });
 
   it("should name the merge request it waits for and the ticket behind it", () => {
-    expect(queueReason({ reason: "merge", blocking })).toBe("attend que la MR !12 soit mergée (#217)");
-    expect(queueStatus({ reason: "merge", blocking })).toBe("Attend que la MR !12 soit mergée (#217)");
+    expect(queueReason({ reason: "merge", blocking })).toBe("waits for MR !12 to be merged (#217)");
+    expect(queueStatus({ reason: "merge", blocking })).toBe("Waits for MR !12 to be merged (#217)");
     expect(mergeRequestLabel("ticket-simule://acme-dashboard/-/merge_requests/128")).toBe("MR !128");
   });
 
   it("should say so when the state of that merge request is unknown", () => {
-    expect(queueStatus({ reason: "merge_unknown", blocking })).toBe("État de la MR !12 inconnu (#217)");
+    expect(queueStatus({ reason: "merge_unknown", blocking })).toBe("State of MR !12 unknown (#217)");
   });
 
   it("should call it a pull request, and number it with a hash, when the ticket is on GitHub", () => {
     const onGitHub = { issueUrl: "https://github.com/acme/shop/issues/217", mergeRequestUrl: "https://github.com/acme/shop/pull/12", branch: "feat/217" };
-    expect(queueStatus({ reason: "merge", blocking: onGitHub })).toBe("Attend que la PR #12 soit mergée (#217)");
-    expect(queueStatus({ reason: "merge_unknown", blocking: onGitHub })).toBe("État de la PR #12 inconnu (#217)");
-    expect(phaseNames("https://github.com/acme/shop/issues/217")[7]).toBe("Ouvrir la PR");
-    expect(phaseNames("https://gitlab.com/acme/shop/-/issues/217")[7]).toBe("Ouvrir la MR");
-    expect(phaseNames("ticket-simule://IH-42")[7]).toBe("Ouvrir la MR");
+    expect(queueStatus({ reason: "merge", blocking: onGitHub })).toBe("Waits for PR #12 to be merged (#217)");
+    expect(queueStatus({ reason: "merge_unknown", blocking: onGitHub })).toBe("State of PR #12 unknown (#217)");
+    expect(phaseNames("https://github.com/acme/shop/issues/217")[7]).toBe("Open the PR");
+    expect(phaseNames("https://gitlab.com/acme/shop/-/issues/217")[7]).toBe("Open the MR");
+    expect(phaseNames("ticket-simule://IH-42")[7]).toBe("Open the MR");
   });
 
   it("should tell a dependency from a plain order among queued tickets", () => {
-    expect(queueStatus({ reason: "dependency", blocking })).toBe("Dépend de #217, encore en file");
-    expect(queueStatus({ reason: "order", blocking })).toBe("Passe après #217");
+    expect(queueStatus({ reason: "dependency", blocking })).toBe("Depends on #217, still queued");
+    expect(queueStatus({ reason: "order", blocking })).toBe("Goes after #217");
   });
 
   it("should say the batch is being analysed", () => {
-    expect(queueStatus({ reason: "analysis" })).toBe("Analyse en cours");
+    expect(queueStatus({ reason: "analysis" })).toBe("Analysis in progress");
   });
 
   it("should say a forced ticket only waits for a place, and on which branch it is stacked", () => {
-    expect(queueStatus({ reason: "slot", forced: { mode: "base" } })).toBe("Départ forcé, dès qu’une place est libre");
-    expect(queueStatus({ reason: "slot", forced: { mode: "stacked", baseBranch: "feat/217", onto: blocking.issueUrl } })).toBe("Départ empilé sur feat/217, dès qu’une place est libre");
-    expect(queueStatus({ reason: "slot" })).toBe("En attente, toutes les places sont prises");
+    expect(queueStatus({ reason: "slot", forced: { mode: "base" } })).toBe("Forced start, as soon as a slot is free");
+    expect(queueStatus({ reason: "slot", forced: { mode: "stacked", baseBranch: "feat/217", onto: blocking.issueUrl } })).toBe("Stacked start on feat/217, as soon as a slot is free");
+    expect(queueStatus({ reason: "slot" })).toBe("Waiting, all slots are taken");
   });
 
   it("should offer an override only when the schedule is what holds the ticket", () => {
@@ -243,8 +243,8 @@ describe("what a queued ticket waits for", () => {
   });
 
   it("should mark a ticket that runs alone on its repository, and say why", () => {
-    expect(scheduleMark({ analysisFailure: "délai de 5 min dépassé" })).toMatchObject({ label: "Analyse en échec", title: expect.stringContaining("délai de 5 min dépassé") });
-    expect(scheduleMark({ confidence: "low" })?.label).toBe("Prédiction peu fiable");
+    expect(scheduleMark({ analysisFailure: "5 min timeout exceeded" })).toMatchObject({ label: "Analysis failed", title: expect.stringContaining("5 min timeout exceeded") });
+    expect(scheduleMark({ confidence: "low" })?.label).toBe("Unreliable prediction");
     expect(scheduleMark({ confidence: "high" })).toBeUndefined();
   });
 });

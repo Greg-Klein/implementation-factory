@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { healthNotice, incidentActions } from "@/lib/run-state";
 import type { IncidentAction, IncidentResult, RunIncident, RunState } from "@/lib/types";
 
-const time = (at: string) => new Date(at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+const time = (at: string) => new Date(at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -48,30 +48,30 @@ export function IncidentPanel({ run, connected, result, onAction, onOpenTerminal
         <div className="min-w-0 flex-1">
           <p className="text-[12px] font-semibold leading-5">{notice.title}</p>
           <p className="text-[11px] leading-5 opacity-90">{notice.detail}</p>
-          {incident?.expectedNextAction && <p className="mt-0.5 text-[11px] leading-5"><span className="font-medium">Prochaine action attendue :</span> {incident.expectedNextAction}</p>}
-          {pendingContinuation && <p role="status" className="mt-0.5 text-[11px] leading-5">Continuation demandée à {time(pendingContinuation.requestedAt)}. L’incident se fermera quand la reprise sera observée.</p>}
-          {incident?.decisions.some((decision) => decision.outcome === "unknown") && <p className="mt-0.5 text-[11px] leading-5">Une action a été enregistrée juste avant un arrêt du serveur : son issue est inconnue, elle n’a pas été rejouée.</p>}
+          {incident?.expectedNextAction && <p className="mt-0.5 text-[11px] leading-5"><span className="font-medium">Expected next action:</span> {incident.expectedNextAction}</p>}
+          {pendingContinuation && <p role="status" className="mt-0.5 text-[11px] leading-5">Continuation requested at {time(pendingContinuation.requestedAt)}. The incident will close once the run is seen resuming.</p>}
+          {incident?.decisions.some((decision) => decision.outcome === "unknown") && <p className="mt-0.5 text-[11px] leading-5">An action was recorded just before the server stopped: its outcome is unknown, it was not replayed.</p>}
 
           {actions.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {actions.includes("answer") && <button type="button" onClick={onOpenConversation} className={secondary}><ChatCircleDotsIcon size={12} /> Répondre</button>}
+              {actions.includes("answer") && <button type="button" onClick={onOpenConversation} className={secondary}><ChatCircleDotsIcon size={12} /> Answer</button>}
               {actions.includes("request_continuation") && !pendingContinuation && (
-                <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "request_continuation")} title="Demande à Claude Code de relire le contexte, le plan et l’état Git, puis de reprendre la prochaine action. Rien n’est relancé depuis le début." className="flex items-center gap-1.5 rounded-[11px] bg-[var(--ink)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">
-                  <ArrowClockwiseIcon size={12} /> Demander la continuation
+                <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "request_continuation")} title="Asks Claude Code to read the context, the plan and the Git state again, then resume with the next action. Nothing is restarted from the beginning." className="flex items-center gap-1.5 rounded-[11px] bg-[var(--ink)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">
+                  <ArrowClockwiseIcon size={12} /> Request continuation
                 </button>
               )}
-              {actions.includes("open_terminal") && <button type="button" onClick={onOpenTerminal} className={secondary}><TerminalWindowIcon size={12} /> Ouvrir le terminal</button>}
-              {actions.includes("stop") && <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "stop")} className={secondary}><StopIcon size={12} weight="fill" /> Arrêter</button>}
-              {actions.includes("dismiss") && !dismissing && <button type="button" disabled={!connected} onClick={() => setDismissing(true)} className={`${secondary} text-[var(--muted)]`}>Classer comme faux positif…</button>}
+              {actions.includes("open_terminal") && <button type="button" onClick={onOpenTerminal} className={secondary}><TerminalWindowIcon size={12} /> Open the terminal</button>}
+              {actions.includes("stop") && <button type="button" disabled={!connected} onClick={() => incident && onAction(incident, "stop")} className={secondary}><StopIcon size={12} weight="fill" /> Stop</button>}
+              {actions.includes("dismiss") && !dismissing && <button type="button" disabled={!connected} onClick={() => setDismissing(true)} className={`${secondary} text-[var(--muted)]`}>Mark as false positive…</button>}
             </div>
           )}
 
           {dismissing && incident && (
             <form className="mt-2 flex flex-wrap items-center gap-1.5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) onAction(incident, "dismiss", reason.trim()); }}>
-              <label htmlFor={`dismiss-${incident.id}`} className="sr-only">Pourquoi est-ce un faux positif ?</label>
-              <input id={`dismiss-${incident.id}`} autoFocus value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Pourquoi est-ce un faux positif ?" className="field min-w-0 flex-1 py-1.5 text-[11px]" />
-              <button type="submit" disabled={!reason.trim() || !connected} className={secondary}>Classer</button>
-              <button type="button" onClick={() => { setDismissing(false); setReason(""); }} className={`${secondary} text-[var(--muted)]`}>Annuler</button>
+              <label htmlFor={`dismiss-${incident.id}`} className="sr-only">Why is this a false positive?</label>
+              <input id={`dismiss-${incident.id}`} autoFocus value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Why is this a false positive?" className="field min-w-0 flex-1 py-1.5 text-[11px]" />
+              <button type="submit" disabled={!reason.trim() || !connected} className={secondary}>Mark</button>
+              <button type="button" onClick={() => { setDismissing(false); setReason(""); }} className={`${secondary} text-[var(--muted)]`}>Cancel</button>
             </form>
           )}
 
@@ -81,7 +81,7 @@ export function IncidentPanel({ run, connected, result, onAction, onOpenTerminal
             <div className="mt-2">
               <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex items-center gap-1 text-[10px] font-medium underline-offset-2 hover:underline">
                 <CaretRightIcon size={10} className={`transition-transform duration-200 ${open ? "rotate-90" : ""}`} aria-hidden />
-                Diagnostic · {incident.observations.length} observation{incident.observations.length > 1 ? "s" : ""}
+                Diagnosis · {incident.observations.length} observation{incident.observations.length > 1 ? "s" : ""}
               </button>
               {open && (
                 <ul className="mt-1.5 space-y-1 border-l border-current/20 pl-3">
@@ -91,7 +91,7 @@ export function IncidentPanel({ run, connected, result, onAction, onOpenTerminal
                       {observation.detail}
                     </li>
                   ))}
-                  <li className="text-[10px] leading-4 opacity-70">Détecté à {time(incident.detectedAt)} · révision {incident.revision}</li>
+                  <li className="text-[10px] leading-4 opacity-70">Detected at {time(incident.detectedAt)} · revision {incident.revision}</li>
                 </ul>
               )}
             </div>

@@ -19,8 +19,8 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
   const ended = run.status === "completed" || run.status === "stopped" || run.status === "failed";
   const submitFeedback = () => {
     if (!feedback.trim()) return;
-    // La demonstration montre le panneau sans alimenter la boucle : un retour
-    // simule ecrirait un vrai fichier dans data/feedback/pending/.
+    // The demonstration shows the panel without feeding the loop: a simulated
+    // feedback would write a real file in data/feedback/pending/.
     if (!demo) onFeedback(feedback);
     setFeedback("");
     setQueued(true);
@@ -29,17 +29,17 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
     <aside className="scrollbar-thin flex min-h-0 flex-col bg-[var(--tint)] lg:overflow-y-auto">
       {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-[var(--raised)] p-4">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
-          {demo && <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-mono text-[9px] text-[var(--accent)]">démo</span>}
+          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Improve the harness</label>
+          {demo && <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-mono text-[9px] text-[var(--accent)]">demo</span>}
         </div>
-        <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
-        <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle d’auto-amélioration</button>
-        {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">{demo ? "Retour simulé. Rien n’a été enregistré." : <>Retour enregistré. Lance <code>impl improve</code> pour produire l&apos;amélioration.</>}</p>}
+        <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="What was slow, missing or broken…" className="field mt-2 resize-none text-[11px] leading-4" />
+        <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Add to the self-improvement loop</button>
+        {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">{demo ? "Simulated feedback. Nothing was saved." : <>Feedback saved. Run <code>impl improve</code> to produce the improvement.</>}</p>}
       </div>}
       {run.error && !healthNotice(run)?.incident && <div className="m-4 flex gap-2.5 rounded-2.5 border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
       {!(ended && runningAgents.length === 0) && <section aria-labelledby="active-agents-title" className="shrink-0 border-b border-[var(--line)] p-5">
-        <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
-        {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :
+        <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} active</span></div>
+        {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>No active agent</div> :
           <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
             {agent.nickname ? <div className="relative">
               <AgentAvatar nickname={agent.nickname} avatar={agent.avatar} />
@@ -57,7 +57,7 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
       */}
       <div className="flex-1" />
       <section className="shrink-0 border-t border-[var(--line)] p-5">
-        <button type="button" disabled={documents.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{documents.length}<ArrowRightIcon size={11} /></span></button>
+        <button type="button" disabled={documents.length === 0} onClick={() => setDocumentsOpen(true)} title="Context, plans, test and review reports, MR description" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Generated documents</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{documents.length}<ArrowRightIcon size={11} /></span></button>
       </section>
       {documentsOpen && <DocumentViewer runId={run.id ?? ""} archived={Boolean(run.archived)} documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} onAnswer={() => { setDocumentsOpen(false); onShowQuestion(); }} />}
     </aside>

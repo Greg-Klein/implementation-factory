@@ -11,8 +11,8 @@ test("should show the dialogue and keep the terminal one click away", async ({ p
   await page.goto("/?demo=1");
 
   const conversation = page.getByRole("log", { name: "Conversation" });
-  const composer = page.getByLabel("Instruction pour Claude");
-  await expect(conversation.getByText("Lecture du ticket GitLab simulé…")).toBeVisible();
+  const composer = page.getByLabel("Instruction for Claude");
+  await expect(conversation.getByText("Reading the simulated GitLab ticket…")).toBeVisible();
   await expect(composer).toBeVisible();
 
   await page.getByRole("tab", { name: "Terminal" }).click();
@@ -26,38 +26,38 @@ test("should send a typed instruction into the conversation", async ({ page }) =
   await page.goto("/?demo=1");
 
   const conversation = page.getByRole("log", { name: "Conversation" });
-  await page.getByLabel("Instruction pour Claude").fill("reste sur desktop");
-  await page.getByRole("button", { name: "Envoyer l’instruction" }).click();
+  await page.getByLabel("Instruction for Claude").fill("reste sur desktop");
+  await page.getByRole("button", { name: "Send the instruction" }).click();
 
   await expect(conversation.getByText("reste sur desktop")).toBeVisible();
-  await expect(conversation.getByText("Instruction prise en compte. La démonstration ne modifie aucun dépôt.")).toBeVisible();
-  await expect(page.getByLabel("Instruction pour Claude")).toHaveValue("");
+  await expect(conversation.getByText("Instruction noted. The demonstration does not modify any repository.")).toBeVisible();
+  await expect(page.getByLabel("Instruction for Claude")).toHaveValue("");
 });
 
 test("should say a message is on its way while the session is still talking", async ({ page }) => {
   await page.goto("/?demo=1");
 
   const conversation = page.getByRole("log", { name: "Conversation" });
-  await expect(conversation.getByText("Claude réfléchit…")).toBeVisible();
+  await expect(conversation.getByText("Claude is thinking…")).toBeVisible();
   // Waiting is not enough: the hint says what the wait is on.
-  await expect(conversation.getByText("Lecture du ticket GitLab", { exact: true })).toBeVisible();
+  await expect(conversation.getByText("Reading the GitLab ticket", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await expect(conversation.getByText("Délégation à developer", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
+  await expect(conversation.getByText("Delegating to developer", { exact: true })).toBeVisible();
   await expectDemoCompleted(page);
 
   // The run is over: nothing is being written any more, and no action is claimed.
-  await expect(conversation.getByText("Claude réfléchit…")).toBeHidden();
+  await expect(conversation.getByText("Claude is thinking…")).toBeHidden();
 });
 
 test("should hand back the launch form after a finished run", async ({ page }) => {
   await runDemoToCompletion(page);
 
-  await page.getByRole("button", { name: "Nouveau run" }).click();
+  await page.getByRole("button", { name: "New run" }).click();
 
-  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start implementation" })).toBeVisible();
   await expect(page.getByRole("log", { name: "Conversation" })).toBeHidden();
 });
 
@@ -66,48 +66,48 @@ test("should clear the launch form fields when starting a new run", async ({ pag
 
   // Filled before the ticket URL so the project auto-detection (debounced,
   // and only kicking in while the project field is empty) never overwrites it.
-  await page.getByLabel("Répertoire du projet").fill("acme-dashboard");
-  await page.getByLabel("Ticket GitLab").fill("https://gitlab.com/acme/demo/-/issues/217");
-  await page.getByLabel("Instruction particulière").fill("reste sur desktop");
+  await page.getByLabel("Project directory").fill("acme-dashboard");
+  await page.getByLabel("Ticket GitLab or GitHub").fill("https://gitlab.com/acme/demo/-/issues/217");
+  await page.getByLabel("Special instruction").fill("reste sur desktop");
 
   // Trigger the demo through the socket directly: a fresh navigation to
   // /?demo=1 would reload the page and lose the values just typed above.
   await startDemoRun(page);
 
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByText("Decision required")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await expectDemoCompleted(page);
 
-  await page.getByRole("button", { name: "Nouveau run" }).click();
+  await page.getByRole("button", { name: "New run" }).click();
 
-  await expect(page.getByLabel("Ticket GitLab")).toHaveValue("");
-  await expect(page.getByLabel("Répertoire du projet")).toHaveValue("");
-  await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
+  await expect(page.getByLabel("Ticket GitLab or GitHub")).toHaveValue("");
+  await expect(page.getByLabel("Project directory")).toHaveValue("");
+  await expect(page.getByLabel("Special instruction")).toHaveValue("");
 });
 
 test("should clear the launch form fields when a finished run is closed", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByLabel("Répertoire du projet").fill("acme-dashboard");
-  await page.getByLabel("Ticket GitLab").fill("https://gitlab.com/acme/demo/-/issues/217");
-  await page.getByLabel("Instruction particulière").fill("reste sur desktop");
+  await page.getByLabel("Project directory").fill("acme-dashboard");
+  await page.getByLabel("Ticket GitLab or GitHub").fill("https://gitlab.com/acme/demo/-/issues/217");
+  await page.getByLabel("Special instruction").fill("reste sur desktop");
 
   await startDemoRun(page);
 
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByText("Decision required")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await expectDemoCompleted(page);
 
-  await page.getByRole("button", { name: "Fermer" }).click();
+  await page.getByRole("button", { name: "Close" }).click();
 
-  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
-  await expect(page.getByLabel("Ticket GitLab")).toHaveValue("");
-  await expect(page.getByLabel("Répertoire du projet")).toHaveValue("");
-  await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Start implementation" })).toBeVisible();
+  await expect(page.getByLabel("Ticket GitLab or GitHub")).toHaveValue("");
+  await expect(page.getByLabel("Project directory")).toHaveValue("");
+  await expect(page.getByLabel("Special instruction")).toHaveValue("");
 });
 
 test("should size the instruction field when another run is opened from another tab", async ({ page }) => {
@@ -115,14 +115,14 @@ test("should size the instruction field when another run is opened from another 
   // The tab the user leaves a run on is the tab the next one is opened on, and
   // the conversation is mounted hidden for as long as that lasts.
   await page.getByRole("tab", { name: "Terminal" }).click();
-  await page.getByRole("button", { name: "Arrêter" }).click();
+  await page.getByRole("button", { name: "Stop" }).click();
 
   // A second simulated run, which the page does not open on its own: with two
   // runs in the list, picking one for the user would be guessing.
   await startDemoRun(page);
-  await page.getByRole("button", { name: /^Ouvrir le run/ }).first().click();
+  await page.getByRole("button", { name: /^Open run/ }).first().click();
 
-  const composer = page.getByLabel("Instruction pour Claude");
+  const composer = page.getByLabel("Instruction for Claude");
   await expect(composer).toBeVisible();
   // The placeholder fits on its line: a field measured while hidden is written
   // down to its own padding and scrolls over a single empty line.
@@ -133,7 +133,7 @@ test("should offer a jump back to the last message after scrolling up", async ({
   await runDemoToCompletion(page);
 
   const conversation = page.getByRole("log", { name: "Conversation" });
-  const jump = page.getByRole("button", { name: "Aller au dernier message" });
+  const jump = page.getByRole("button", { name: "Go to the last message" });
   await expect(jump).toBeHidden();
   expect(await conversation.evaluate((list) => list.scrollHeight > list.clientHeight + 80)).toBe(true);
 
@@ -169,6 +169,6 @@ test("should read the dialogue from a transcript created after the first hook, i
   // What is appended afterwards is what the early watcher never saw.
   appendFileSync(transcript, line("m2", "Branche créée, je planifie."));
   await expect.poll(() => messages(runId)).toEqual(["Ticket lu, je crée la branche.", "Branche créée, je planifie."]);
-  await page.getByRole("button", { name: /Ouvrir le run late-transcript/ }).click();
+  await page.getByRole("button", { name: /Open run late-transcript/ }).click();
   await expect(page.getByText("Branche créée, je planifie.")).toBeVisible();
 });

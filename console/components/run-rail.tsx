@@ -75,7 +75,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Ouvrir le run ${runLabel(run)}`}
+        aria-label={`Open run ${runLabel(run)}`}
         aria-current={selected ? "true" : undefined}
         className="flex min-w-0 flex-1 gap-2.5 py-2.5 pl-3.5 pr-1 text-left"
       >
@@ -85,7 +85,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
           <span className={`flex items-baseline justify-between gap-2 ${run.ticketTitle ? "mt-0.5" : ""}`}>
             <span className={`truncate ${run.ticketTitle ? "text-[10px] font-medium text-[var(--ink)]" : "text-[11px] font-semibold text-[var(--ink)]"}`}>{runLabel(run)}</span>
             {waiting
-              ? <span title={`${decisions} décision${decisions > 1 ? "s" : ""} en attente`} className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-amber-800"><WarningIcon size={9} weight="fill" />{decisions}</span>
+              ? <span title={`${decisions} pending decision${decisions > 1 ? "s" : ""}`} className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-amber-800"><WarningIcon size={9} weight="fill" />{decisions}</span>
               : <span className="shrink-0 font-mono text-[9px] text-[var(--muted)]">{run.phase}/{PHASES}</span>}
           </span>
           <span className="mt-0.5 flex items-center gap-1.5 truncate text-[10px] text-[var(--muted)]">
@@ -93,9 +93,9 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
               ? <HealthMark badge={badge} />
               : completed
                 ? <span className="font-medium text-[var(--accent)]">{statusLabel(run.status)}</span>
-                : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session ouverte" : run.action ?? statusLabel(run.status)}</span></>}
-            {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>}
-            {run.tokens !== undefined && <span title={`${run.tokens.toLocaleString("fr-FR")} tokens consommés, cache compris`} aria-label={`${formatTokens(run.tokens)} tokens consommés`} className={`shrink-0 font-mono text-[9px] ${coverage ? "" : "ml-auto"}`}>{formatTokens(run.tokens)}</span>}
+                : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session open" : run.action ?? statusLabel(run.status)}</span></>}
+            {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>}
+            {run.tokens !== undefined && <span title={`${run.tokens.toLocaleString("en-US")} tokens used, cache included`} aria-label={`${formatTokens(run.tokens)} tokens used`} className={`shrink-0 font-mono text-[9px] ${coverage ? "" : "ml-auto"}`}>{formatTokens(run.tokens)}</span>}
             {coverage && <span title={coverage.title} aria-label={coverage.title} className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined ? "" : "ml-auto"} ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
           </span>
           <PhaseBar phase={run.phase} status={run.status} />
@@ -105,8 +105,8 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
         <button
           type="button"
           onClick={onClose}
-          aria-label={`Supprimer le run ${runLabel(run)}`}
-          title="Retirer ce run de la liste. Ses documents restent archivés sur disque."
+          aria-label={`Remove run ${runLabel(run)}`}
+          title="Remove this run from the list. Its documents stay archived on disk."
           className="mr-1.5 mt-2 grid size-6 shrink-0 place-items-center self-start rounded-md text-[var(--muted)] opacity-0 transition hover:bg-[var(--paper)] hover:text-[var(--ink)] focus-visible:opacity-100 active:translate-y-px group-hover:opacity-100"
         >
           <TrashIcon size={12} />
@@ -132,13 +132,13 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
   return (
     <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal relative ${selected ? "bg-[var(--raised)]" : "hover:bg-[var(--raised)]/60"}`}>
       {selected && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--ink)]" />}
-      <button type="button" onClick={onOpen} aria-label={`Consulter l’archive du run ${runLabel(run)}`} aria-current={selected ? "true" : undefined} className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left">
+      <button type="button" onClick={onOpen} aria-label={`View the archive of run ${runLabel(run)}`} aria-current={selected ? "true" : undefined} className="flex w-full items-start gap-2.5 px-3.5 py-2 text-left">
         <ArchiveIcon size={11} className="mt-0.5 shrink-0 text-[var(--muted)]" aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[11px] font-medium text-[var(--ink)]">{run.ticketTitle ?? runLabel(run)}</span>
           {run.incident || run.worktree?.state !== "kept"
-            ? <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-red-700"><WarningCircleIcon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{run.incident?.title ?? "Session interrompue"}</span></span>
-            : <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-[var(--muted)]" title={run.worktree.detail}><FolderDashedIcon size={10} className="shrink-0" aria-hidden /><span className="truncate">{run.worktree.detail ?? "Worktree conservé"}</span></span>}
+            ? <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-medium text-red-700"><WarningCircleIcon size={10} weight="fill" className="shrink-0" aria-hidden /><span className="truncate">{run.incident?.title ?? "Session interrupted"}</span></span>
+            : <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-[var(--muted)]" title={run.worktree.detail}><FolderDashedIcon size={10} className="shrink-0" aria-hidden /><span className="truncate">{run.worktree.detail ?? "Worktree kept"}</span></span>}
         </span>
       </button>
     </div>
@@ -177,20 +177,20 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
   const full = holding >= maxConcurrentRuns;
 
   return (
-    <aside aria-label="Runs du harnais" className="flex min-h-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
+    <aside aria-label="Harness runs" className="flex min-h-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
       <div className="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3.5">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5 text-[11px] font-semibold"><StackIcon size={13} weight="bold" />Runs</h2>
-          <p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]" title={`${holding} session${holding > 1 ? "s" : ""} active${holding > 1 ? "s" : ""} sur ${maxConcurrentRuns} places`}>
-            <span className={full ? "text-amber-700" : "text-[var(--accent)]"}>{holding}</span>/{maxConcurrentRuns} places
+          <p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]" title={`${holding} active session${holding > 1 ? "s" : ""} of ${maxConcurrentRuns} slots`}>
+            <span className={full ? "text-amber-700" : "text-[var(--accent)]"}>{holding}</span>/{maxConcurrentRuns} slots
           </p>
         </div>
         <button
           type="button"
           onClick={onMetrics}
-          aria-label="Mesures des runs"
+          aria-label="Run metrics"
           aria-pressed={metricsOpen}
-          title="Tokens, durées et reprises de chaque run"
+          title="Tokens, durations and rework of each run"
           className={`ml-auto grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${metricsOpen
             ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
             : "border-[var(--line)] text-[var(--muted)] hover:bg-[var(--raised)] hover:text-[var(--ink)]"}`}
@@ -200,9 +200,9 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         <button
           type="button"
           onClick={onNew}
-          aria-label="Nouveau run"
+          aria-label="New run"
           aria-pressed={selectedRunId === null && !metricsOpen}
-          title="Lancer un nouveau run"
+          title="Start a new run"
           className={`grid size-7 shrink-0 place-items-center rounded-lg border transition active:translate-y-px ${selectedRunId === null && !metricsOpen
             ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--on-ink)] hover:opacity-90"
             : "border-[var(--line)] text-[var(--ink)] hover:bg-[var(--raised)]"}`}
@@ -215,8 +215,8 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         {runs.length === 0 && queued.length === 0 && archived.length === 0 && proposals.length === 0 ? (
           <div className="px-3.5 py-6 text-center">
             <div className="mx-auto grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ClockCounterClockwiseIcon size={14} /></div>
-            <p className="mt-2.5 text-[11px] font-medium">Aucun run</p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Colle une ou plusieurs URL de tickets. Le harnais en tient {maxConcurrentRuns} à la fois.</p>
+            <p className="mt-2.5 text-[11px] font-medium">No run</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Paste one or more ticket URLs. The harness runs {maxConcurrentRuns} at a time.</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--line)]">
@@ -231,8 +231,8 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         <ProposalList proposals={proposals} actions={proposalActions} />
 
         {interrupted.length > 0 && (
-          <div role="group" aria-label="Runs interrompus" className="border-t border-[var(--line)]">
-            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs d’une session précédente, restés avec un incident ouvert. Lecture seule.">Interrompus · {interrupted.length}</p>
+          <div role="group" aria-label="Interrupted runs" className="border-t border-[var(--line)]">
+            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs from a previous session, left with an open incident. Read-only.">Interrupted · {interrupted.length}</p>
             <div className="divide-y divide-[var(--line)]">
               {interrupted.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
             </div>
@@ -240,8 +240,8 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         )}
 
         {leftovers.length > 0 && (
-          <div role="group" aria-label="Worktrees conservés" className="border-t border-[var(--line)]">
-            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs sans session dont le worktree est encore sur le disque. Ouvre-les pour le supprimer.">Worktrees conservés · {leftovers.length}</p>
+          <div role="group" aria-label="Worktrees kept" className="border-t border-[var(--line)]">
+            <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]" title="Runs without a session whose worktree is still on disk. Open them to remove it.">Worktrees kept · {leftovers.length}</p>
             <div className="divide-y divide-[var(--line)]">
               {leftovers.map((run, index) => <ArchivedRow key={run.id} run={run} index={index} selected={run.id === selectedRunId} onOpen={() => onOpen(run.id)} />)}
             </div>

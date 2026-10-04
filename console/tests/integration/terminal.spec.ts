@@ -14,9 +14,9 @@ test("should keep what it has printed while the run keeps publishing", async ({ 
   await page.getByRole("tab", { name: "Terminal" }).click();
 
   const screen = page.locator(".xterm-rows");
-  await expect(screen).toContainText("Lecture du ticket GitLab simulé");
-  await expect(screen).toContainText("Critères d’acceptation et cas limites extraits.");
-  await expect(screen).toContainText("Lecture du ticket GitLab simulé");
+  await expect(screen).toContainText("Reading the simulated GitLab ticket");
+  await expect(screen).toContainText("Acceptance criteria and edge cases extracted.");
+  await expect(screen).toContainText("Reading the simulated GitLab ticket");
 });
 
 /**
@@ -36,7 +36,7 @@ test("should size the session only once its panel is on screen", async ({ page }
     .filter((message) => message.type === "terminal.resize"));
 
   await page.goto("/?demo=1");
-  await page.getByRole("tablist", { name: "Vue de la session" }).waitFor();
+  await page.getByRole("tablist", { name: "Session view" }).waitFor();
   expect(await resizes()).toEqual([]);
 
   await page.getByRole("tab", { name: "Terminal" }).click();

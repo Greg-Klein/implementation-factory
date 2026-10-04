@@ -6,7 +6,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 
 ## Language
 
-`summary` and `reason` are written in French, with `implementation-harness:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
+`summary` and `reason` are written in the workflow language ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `IMPL_LANGUAGE`, `fr` for French, English otherwise), with `implementation-harness:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
 
 ---
 
@@ -94,7 +94,7 @@ One entry per ticket of the input `tickets`, in the same order, and no other.
   - `high`: the ticket names the behavior and the code that carries it was found, so `files` is close to the real diff.
   - `medium`: the surface was found but part of the change is a guess (a new file, a refactor of unknown width).
   - `low`: the ticket is too vague, could not be read, or nothing in the repository matches it. `files` and `areas` may be empty. The console treats a `low` ticket as conflicting with every ticket of the repository, so it runs alone. `low` is a statement about this ticket, never a default.
-- `summary`: one French sentence, 200 characters at most, saying what the ticket changes. For a `low` ticket it says what is missing.
+- `summary`: one sentence in the workflow language, 200 characters at most, saying what the ticket changes. For a `low` ticket it says what is missing.
 
 ### `edges[]`
 
@@ -102,7 +102,7 @@ An edge links two tickets that must not run in parallel, or must run in a given 
 
 - `kind: "overlap"`: the two predictions share at least one file, or one narrow area. The two tickets can run in either order but not at the same time. No `order` field.
 - `kind: "depends_on"`: one ticket needs the result of the other, because the forge links them (GitLab "blocks" / "is blocked by", GitHub "blocked by" / "blocking") or because the text of one says so. `order` is required: `[first, second]`, where `first` is implemented before `second`, and the two values are `a` and `b`.
-- `reason`: one short French sentence naming what is shared or what is needed. It never quotes the ticket at length.
+- `reason`: one short sentence in the workflow language naming what is shared or what is needed. It never quotes the ticket at length.
 
 At most one edge per pair of tickets. When a pair both overlaps and depends, write the `depends_on` edge alone: it already keeps the two apart.
 

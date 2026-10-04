@@ -4,38 +4,38 @@ export const demoSelfImprovementDiff = `diff --git a/agents/developer/prompts/sy
 index 3a2f1c8..b7e04d2 100644
 --- a/agents/developer/prompts/system.md
 +++ b/agents/developer/prompts/system.md
-@@ -14,6 +14,9 @@ Tu es l'agent développeur du workflow implementation-harness.
- ## Règles
+@@ -14,6 +14,9 @@ You are the developer agent of the implementation-harness workflow.
+ ## Rules
 
- - Respecte strictement les critères d'acceptation du ticket.
-+- Avant de marquer l'implémentation comme terminée, vérifie que chaque
-+  critère d'acceptation a un test unitaire ou d'intégration correspondant.
-+- Si un critère n'est pas couvert, crée le test avant de passer à la review.
- - Ne modifie pas les fichiers hors du périmètre défini dans le plan.
- - Signale immédiatement tout blocage ou ambiguïté à l'orchestrateur.
+ - Strictly follow the ticket's acceptance criteria.
++- Before marking the implementation as done, check that each
++  acceptance criterion has a matching unit or integration test.
++- If a criterion is not covered, write the test before moving on to the review.
+ - Do not modify files outside the scope defined in the plan.
+ - Report any blocker or ambiguity to the orchestrator immediately.
 
 diff --git a/agents/senior-reviewer/prompts/system.md b/agents/senior-reviewer/prompts/system.md
 index 9f8c3e1..c14a07f 100644
 --- a/agents/senior-reviewer/prompts/system.md
 +++ b/agents/senior-reviewer/prompts/system.md
-@@ -22,7 +22,12 @@ Tu es le reviewer senior du workflow implementation-harness.
- ## Critères de validation
+@@ -22,7 +22,12 @@ You are the senior reviewer of the implementation-harness workflow.
+ ## Validation criteria
 
- - Chaque critère d'acceptation du ticket est couvert par un test.
-+- Les cas limites (timezone, locale, permissions) sont explicitement testés.
- - Le code ne contient pas de régression visible dans les tests existants.
- - L'accessibilité est respectée pour tout composant UI.
+ - Each acceptance criterion of the ticket is covered by a test.
++- Edge cases (timezone, locale, permissions) are explicitly tested.
+ - The code shows no visible regression in the existing tests.
+ - Accessibility is respected for every UI component.
 +
-+## Sur les fuseaux horaires
++## On time zones
 +
-+Vérifie systématiquement que les dates et heures affichées tiennent compte
-+du fuseau horaire de l'utilisateur. C'est un vecteur de régression fréquent
-+identifié dans les runs précédents.
++Always check that displayed dates and times take the user's time zone
++into account. It is a frequent source of regressions
++identified in previous runs.
 `;
 
 /**
  * What the simulated workflow writes for acceptance coverage: five criteria
- * that end in every state the "Preuves" tab knows (verified, failed, blocked,
+ * that end in every state the "Evidence" tab knows (verified, failed, blocked,
  * unverified), and a second review round that replaces a failure of the first
  * while keeping it, and its capture, in the history.
  */
@@ -48,36 +48,36 @@ export const demoAcceptance = {
   "criteria": [
     {
       "id": "AC1",
-      "text": "Les préférences sont enregistrées par utilisateur.",
+      "text": "Preferences are saved per user.",
       "revision": 1,
       "source": {
         "kind": "ticket",
         "reference": "ticket-simule://IH-42",
-        "excerpt": "Les préférences sont enregistrées par utilisateur."
+        "excerpt": "Preferences are saved per user."
       },
       "verification": {
-        "expected": "Un second compte ne voit pas les réglages du premier."
+        "expected": "A second account does not see the first one's settings."
       }
     },
     {
       "id": "AC2",
-      "text": "Les alertes critiques restent affichées quand les notifications sont désactivées, quel que soit le fuseau horaire.",
+      "text": "Critical alerts stay displayed when notifications are turned off, whatever the time zone.",
       "revision": 1,
       "source": {
         "kind": "user_answer",
-        "excerpt": "Garder les alertes critiques"
+        "excerpt": "Keep critical alerts"
       },
       "verification": {
-        "expected": "Alerte critique visible à 23 h en UTC+2.",
+        "expected": "Critical alert visible at 11 pm in UTC+2.",
         "requiredChecks": [
           {
             "id": "AC2-C1",
-            "description": "Alerte visible avec les notifications coupées",
+            "description": "Alert visible with notifications turned off",
             "method": "browser"
           },
           {
             "id": "AC2-C2",
-            "description": "Alerte visible près de minuit dans un autre fuseau",
+            "description": "Alert visible near midnight in another time zone",
             "method": "test"
           }
         ]
@@ -85,49 +85,49 @@ export const demoAcceptance = {
     },
     {
       "id": "AC3",
-      "text": "Le réglage est pris en compte sans rechargement de la page.",
+      "text": "The setting takes effect without reloading the page.",
       "revision": 1,
       "source": {
         "kind": "ticket",
-        "excerpt": "Le réglage est pris en compte sans rechargement de la page."
+        "excerpt": "The setting takes effect without reloading the page."
       }
     },
     {
       "id": "AC4",
-      "text": "Un double clic sur Enregistrer n’envoie qu’une seule requête.",
+      "text": "A double click on Save sends only one request.",
       "revision": 1,
       "source": {
         "kind": "ticket",
-        "excerpt": "Éviter les doubles enregistrements."
+        "excerpt": "Avoid double saves."
       }
     },
     {
       "id": "AC5",
-      "text": "Les préférences sont reprises par l’application mobile.",
+      "text": "Preferences are picked up by the mobile app.",
       "revision": 1,
       "source": {
         "kind": "prd",
-        "excerpt": "Réglages partagés entre web et mobile."
+        "excerpt": "Settings shared between web and mobile."
       }
     }
   ]
 },
   plan: {
   "criteria_revision": 1,
-  "summary": "Préférences de notification par utilisateur, alertes critiques conservées.",
+  "summary": "Per-user notification preferences, critical alerts kept.",
   "acceptance_criteria": [
-    "AC1: Les préférences sont enregistrées par utilisateur.",
-    "AC2: Les alertes critiques restent affichées quand les notifications sont désactivées, quel que soit le fuseau horaire.",
-    "AC3: Le réglage est pris en compte sans rechargement de la page.",
-    "AC4: Un double clic sur Enregistrer n’envoie qu’une seule requête.",
-    "AC5: Les préférences sont reprises par l’application mobile."
+    "AC1: Preferences are saved per user.",
+    "AC2: Critical alerts stay displayed when notifications are turned off, whatever the time zone.",
+    "AC3: The setting takes effect without reloading the page.",
+    "AC4: A double click on Save sends only one request.",
+    "AC5: Preferences are picked up by the mobile app."
   ],
   "tasks": [
     {
       "id": "T1",
-      "title": "Ajouter le modèle de préférences",
-      "summary": "Enregistre les préférences de notification de chaque compte, avec des valeurs par défaut pour les comptes existants.",
-      "description": "Ajouter au profil un objet de préférences de notification (canal, horaires de silence) persisté côté API, avec des valeurs par défaut pour les comptes existants.",
+      "title": "Add the preferences model",
+      "summary": "Saves each account's notification preferences, with default values for existing accounts.",
+      "description": "Add a notification preferences object (channel, quiet hours) to the profile, persisted on the API side, with default values for existing accounts.",
       "file_paths": [
         "src/models/notification-preferences.ts",
         "src/api/preferences.ts"
@@ -141,9 +141,9 @@ export const demoAcceptance = {
     },
     {
       "id": "T2",
-      "title": "Créer le panneau de réglages",
-      "summary": "Ajoute aux réglages un panneau Notifications où les alertes critiques restent toujours actives.",
-      "description": "Créer `NotificationsPanel` dans `src/settings/` : un interrupteur par canal et une plage de silence, lus et écrits par `usePreferences()`.\n\nLes alertes critiques n’ont pas d’interrupteur : le panneau affiche qu’elles restent actives. Le bouton Enregistrer se désactive pendant l’envoi.",
+      "title": "Create the settings panel",
+      "summary": "Adds a Notifications panel to the settings where critical alerts always stay on.",
+      "description": "Create `NotificationsPanel` in `src/settings/`: one toggle per channel and a quiet range, read and written by `usePreferences()`.\n\nCritical alerts have no toggle: the panel says they stay on. The Save button is disabled while the request is being sent.",
       "file_paths": [
         "src/settings/NotificationsPanel.tsx",
         "src/settings/NotificationsPanel.module.css"
@@ -159,9 +159,9 @@ export const demoAcceptance = {
     },
     {
       "id": "T3",
-      "title": "Connecter l’enregistrement optimiste",
-      "summary": "Enregistre chaque réglage dès qu’il change, sans rechargement ni double envoi.",
-      "description": "Enregistrer chaque changement immédiatement avec une mise à jour optimiste, annulée si l’API refuse. Un second clic pendant l’envoi ne relance pas de requête.",
+      "title": "Wire up optimistic saving",
+      "summary": "Saves each setting as soon as it changes, with no reload and no double send.",
+      "description": "Save each change immediately with an optimistic update, rolled back if the API refuses. A second click while the request is being sent does not start another one.",
       "file_paths": [
         "src/settings/useSavePreferences.ts"
       ],
@@ -176,9 +176,9 @@ export const demoAcceptance = {
     },
     {
       "id": "T4",
-      "title": "Tester le fallback des alertes critiques",
-      "summary": "Vérifie que les alertes critiques restent visibles quand les notifications sont coupées.",
-      "description": "Couvrir par des tests l’affichage des alertes critiques quand les notifications sont coupées, y compris autour de minuit dans un autre fuseau.",
+      "title": "Test the critical alerts fallback",
+      "summary": "Checks that critical alerts stay visible when notifications are turned off.",
+      "description": "Cover with tests the display of critical alerts when notifications are turned off, including around midnight in another time zone.",
       "file_paths": [
         "src/alerts/critical-alerts.test.ts"
       ],
@@ -202,7 +202,7 @@ export const demoAcceptance = {
   "items": [
     {
       "id": "T1-E1",
-      "label": "Deux comptes gardent des préférences distinctes",
+      "label": "Two accounts keep separate preferences",
       "verdict": "measured",
       "criterionIds": [
         "AC1"
@@ -214,12 +214,12 @@ export const demoAcceptance = {
       "observedAt": "2026-09-27T09:12:00.000Z",
       "codeSnapshotId": "snap-demo-5c1e0a7d9f2b",
       "codeSnapshotAtEnd": "snap-demo-5c1e0a7d9f2b",
-      "expected": "réglages indépendants",
-      "actual": "compte B inchangé après modification du compte A"
+      "expected": "independent settings",
+      "actual": "account B unchanged after changing account A"
     },
     {
       "id": "T2-E1",
-      "label": "Les alertes critiques restent visibles quand les notifications sont désactivées",
+      "label": "Critical alerts stay visible when notifications are turned off",
       "verdict": "measured",
       "criterionIds": [
         "AC2"
@@ -234,14 +234,14 @@ export const demoAcceptance = {
       "observedAt": "2026-09-27T09:14:00.000Z",
       "codeSnapshotId": "snap-demo-5c1e0a7d9f2b",
       "codeSnapshotAtEnd": "snap-demo-5c1e0a7d9f2b",
-      "expected": "alerte critique affichée",
-      "actual": "alerte critique affichée",
+      "expected": "critical alert displayed",
+      "actual": "critical alert displayed",
       "screenshot": "assets/panneau-preferences.png",
       "note": "Route /settings, viewport 1280x900"
     },
     {
       "id": "T3-E1",
-      "label": "Le panneau enregistre les préférences sans rechargement",
+      "label": "The panel saves preferences without a reload",
       "verdict": "measured",
       "criterionIds": [
         "AC3"
@@ -253,7 +253,7 @@ export const demoAcceptance = {
       "observedAt": "2026-09-27T09:16:00.000Z",
       "codeSnapshotId": "snap-demo-5c1e0a7d9f2b",
       "codeSnapshotAtEnd": "snap-demo-5c1e0a7d9f2b",
-      "actual": "PATCH /api/preferences → 200, état local mis à jour sans reload"
+      "actual": "PATCH /api/preferences → 200, local state updated without a reload"
     }
   ]
 },
@@ -277,7 +277,7 @@ export const demoAcceptance = {
       "verdict": "pass",
       "method": "static_analysis",
       "command": "npm run lint",
-      "actual": "0 avertissement"
+      "actual": "0 warnings"
     },
     {
       "id": "QA-R1-2",
@@ -285,11 +285,11 @@ export const demoAcceptance = {
       "verdict": "pass",
       "method": "static_analysis",
       "command": "npm run typecheck",
-      "actual": "0 erreur"
+      "actual": "0 errors"
     },
     {
       "id": "QA-R1-3",
-      "label": "Tests unitaires",
+      "label": "Unit tests",
       "verdict": "pass",
       "method": "test",
       "command": "npm run test",
@@ -297,7 +297,7 @@ export const demoAcceptance = {
     },
     {
       "id": "QA-R1-4",
-      "label": "Alerte critique près de minuit en UTC+2",
+      "label": "Critical alert near midnight in UTC+2",
       "verdict": "fail",
       "criterionIds": [
         "AC2"
@@ -307,36 +307,36 @@ export const demoAcceptance = {
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:20:00.000Z",
-      "expected": "alerte affichée",
-      "actual": "alerte masquée à 23 h 30",
+      "expected": "alert displayed",
+      "actual": "alert hidden at 11:30 pm",
       "screenshot": "assets/alerte-critique.png"
     },
     {
       "id": "QA-R1-5",
-      "label": "Préférences reprises sur mobile",
+      "label": "Preferences picked up on mobile",
       "verdict": "unverified",
       "criterionIds": [
         "AC5"
       ],
       "method": "manual",
       "blocker": {
-        "reason": "Environnement mobile de recette inaccessible.",
-        "action": "Fournir un build mobile de recette relié à cette branche."
+        "reason": "Mobile staging environment unreachable.",
+        "action": "Provide a mobile staging build linked to this branch."
       }
     },
     {
       "id": "QA-R1-6",
       "kind": "attempt",
-      "label": "Modifier le compte A pendant que le compte B est ouvert",
+      "label": "Change account A while account B is open",
       "verdict": "pass",
       "criterionIds": [
         "AC1"
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:21:00.000Z",
-      "expected": "réglages du compte B inchangés",
-      "command": "Ouvrir /settings avec les comptes A et B, couper les e-mails sur A, recharger B",
-      "actual": "réglages du compte B inchangés"
+      "expected": "account B settings unchanged",
+      "command": "Open /settings with accounts A and B, turn off emails on A, reload B",
+      "actual": "account B settings unchanged"
     }
   ]
 },
@@ -360,7 +360,7 @@ export const demoAcceptance = {
       "verdict": "pass",
       "method": "static_analysis",
       "command": "npm run lint",
-      "actual": "0 avertissement"
+      "actual": "0 warnings"
     },
     {
       "id": "QA-R2-2",
@@ -368,11 +368,11 @@ export const demoAcceptance = {
       "verdict": "pass",
       "method": "static_analysis",
       "command": "npm run typecheck",
-      "actual": "0 erreur"
+      "actual": "0 errors"
     },
     {
       "id": "QA-R2-3",
-      "label": "Tests unitaires",
+      "label": "Unit tests",
       "verdict": "pass",
       "method": "test",
       "command": "npm run test",
@@ -380,7 +380,7 @@ export const demoAcceptance = {
     },
     {
       "id": "QA-R2-4",
-      "label": "Alerte critique près de minuit en UTC+2",
+      "label": "Critical alert near midnight in UTC+2",
       "verdict": "pass",
       "criterionIds": [
         "AC2"
@@ -390,8 +390,8 @@ export const demoAcceptance = {
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:41:00.000Z",
-      "expected": "alerte affichée",
-      "actual": "alerte affichée à 23 h 30",
+      "expected": "alert displayed",
+      "actual": "alert displayed at 11:30 pm",
       "screenshot": "assets/alerte-critique.png",
       "supersedes": [
         "QA-R1-4"
@@ -399,7 +399,7 @@ export const demoAcceptance = {
     },
     {
       "id": "QA-R2-5",
-      "label": "Alerte visible notifications coupées",
+      "label": "Alert visible with notifications off",
       "verdict": "measured",
       "criterionIds": [
         "AC2"
@@ -409,39 +409,39 @@ export const demoAcceptance = {
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:42:00.000Z",
-      "expected": "alerte critique affichée",
-      "actual": "alerte critique affichée",
+      "expected": "critical alert displayed",
+      "actual": "critical alert displayed",
       "screenshot": "assets/panneau-preferences.png"
     },
     {
       "id": "QA-R2-6",
-      "label": "Deux comptes gardent des préférences distinctes",
+      "label": "Two accounts keep separate preferences",
       "verdict": "measured",
       "criterionIds": [
         "AC1"
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:43:00.000Z",
-      "expected": "réglages indépendants",
-      "actual": "compte B inchangé"
+      "expected": "independent settings",
+      "actual": "account B unchanged"
     },
     {
       "id": "QA-R2-7",
       "kind": "attempt",
-      "label": "Double clic sur Enregistrer",
+      "label": "Double click on Save",
       "verdict": "fail",
       "criterionIds": [
         "AC4"
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:44:00.000Z",
-      "expected": "1 requête PATCH",
-      "command": "Ouvrir /settings, double-cliquer sur Enregistrer, lire l’onglet Réseau",
-      "actual": "2 requêtes PATCH observées"
+      "expected": "1 PATCH request",
+      "command": "Open /settings, double-click Save, read the Network tab",
+      "actual": "2 PATCH requests observed"
     },
     {
       "id": "QA-R2-8",
-      "label": "Préférences reprises sur mobile",
+      "label": "Preferences picked up on mobile",
       "verdict": "unverified",
       "criterionIds": [
         "AC5"
@@ -451,34 +451,34 @@ export const demoAcceptance = {
         "QA-R1-5"
       ],
       "blocker": {
-        "reason": "Environnement mobile de recette toujours inaccessible.",
-        "action": "Fournir un build mobile de recette relié à cette branche."
+        "reason": "Mobile staging environment still unreachable.",
+        "action": "Provide a mobile staging build linked to this branch."
       }
     },
     {
       "id": "QA-R2-9",
-      "label": "Réglage pris en compte sans rechargement",
+      "label": "Setting takes effect without a reload",
       "verdict": "confirmed",
       "criterionIds": [
         "AC3"
       ],
       "method": "browser",
       "confirms": "T3-E1",
-      "actual": "PATCH /api/preferences → 200 d’après la mesure du développeur, prise avant la reprise"
+      "actual": "PATCH /api/preferences → 200 according to the developer's measurement, taken before the rework"
     },
     {
       "id": "QA-R2-10",
       "kind": "attempt",
-      "label": "Changer de compte sans recharger la page",
+      "label": "Switch accounts without reloading the page",
       "verdict": "pass",
       "criterionIds": [
         "AC1"
       ],
       "method": "browser",
       "observedAt": "2026-09-27T09:45:00.000Z",
-      "expected": "réglages du compte B affichés",
-      "command": "Ouvrir /settings avec le compte A, se déconnecter, se connecter avec le compte B sans recharger",
-      "actual": "réglages du compte B affichés",
+      "expected": "account B settings displayed",
+      "command": "Open /settings with account A, log out, log in with account B without reloading",
+      "actual": "account B settings displayed",
       "supersedes": [
         "QA-R1-6"
       ]
@@ -486,7 +486,7 @@ export const demoAcceptance = {
     {
       "id": "QA-R2-11",
       "kind": "attempt",
-      "label": "Alerte critique à minuit pile en UTC-11",
+      "label": "Critical alert at midnight sharp in UTC-11",
       "verdict": "pass",
       "criterionIds": [
         "AC2"
@@ -496,22 +496,22 @@ export const demoAcceptance = {
       ],
       "method": "test",
       "observedAt": "2026-09-27T09:46:00.000Z",
-      "expected": "alerte affichée",
+      "expected": "alert displayed",
       "command": "TZ=Pacific/Pago_Pago npm run test -- critical-alerts",
-      "actual": "alerte affichée, 1 test sur 1"
+      "actual": "alert displayed, 1 test out of 1"
     },
     {
       "id": "QA-R2-12",
       "kind": "attempt",
-      "label": "Champ de préférence inconnu envoyé par l’application mobile",
+      "label": "Unknown preference field sent by the mobile app",
       "verdict": "unverified",
       "criterionIds": [
         "AC5"
       ],
       "method": "static_analysis",
-      "expected": "champ inconnu ignoré, réglages connus repris",
-      "command": "Lecture de src/settings/preferences-model.ts:41",
-      "actual": "le modèle ignore les champs inconnus à la lecture, non exécuté faute de build mobile"
+      "expected": "unknown field ignored, known settings picked up",
+      "command": "Reading src/settings/preferences-model.ts:41",
+      "actual": "the model ignores unknown fields on read, not executed for lack of a mobile build"
     }
   ]
 },
@@ -529,10 +529,10 @@ export const demoAcceptance = {
     "items": [
       {
         "id": "DS-R1-1",
-        "label": "Espacement vertical entre les interrupteurs du panneau de préférences, 1280 px, repos",
+        "label": "Vertical spacing between the toggles of the preferences panel, 1280 px, rest",
         "verdict": "pass",
         "method": "browser",
-        "expected": "16 px (maquette du ticket IH-42)",
+        "expected": "16 px (mockup of ticket IH-42)",
         "actual": "16 px",
         "screenshot": "assets/panneau-preferences.png",
         "attachments": [
@@ -541,22 +541,22 @@ export const demoAcceptance = {
       },
       {
         "id": "DS-R1-2",
-        "label": "Anneau de focus clavier de l’interrupteur des notifications par e-mail, 1280 px",
+        "label": "Keyboard focus ring of the email notifications toggle, 1280 px",
         "verdict": "pass",
         "method": "browser",
-        "expected": "anneau visible, contraste d’au moins 3:1 (WCAG 2.4.7 et 1.4.11)",
-        "actual": "anneau de 2 px, contraste 4,6:1",
+        "expected": "visible ring, contrast of at least 3:1 (WCAG 2.4.7 and 1.4.11)",
+        "actual": "2 px ring, contrast 4.6:1",
         "screenshot": "assets/panneau-preferences.png"
       },
       {
         "id": "DS-R1-3",
-        "label": "Panneau de préférences à 360 px, repos",
+        "label": "Preferences panel at 360 px, rest",
         "verdict": "unverified",
         "method": "browser",
-        "expected": "interrupteurs empilés sur une colonne (maquette du ticket IH-42)",
+        "expected": "toggles stacked in one column (mockup of ticket IH-42)",
         "blocker": {
-          "reason": "L’environnement de recette ne sert pas le panneau en dessous de 768 px.",
-          "action": "Activer la route /settings sur le gabarit mobile de recette."
+          "reason": "The staging environment does not serve the panel below 768 px.",
+          "action": "Enable the /settings route on the mobile staging template."
         }
       }
     ]
@@ -569,43 +569,43 @@ export const demoAcceptance = {
 };
 
 export const demoArtifactContents: Record<string, string> = {
-  "ticket-context.md": `# IH-42 · Préférences de notification
+  "ticket-context.md": `# IH-42 · Notification preferences
 
-## Objectif
-Permettre à chaque utilisateur de choisir les notifications reçues tout en conservant les alertes critiques.
+## Goal
+Let each user choose which notifications they receive while keeping critical alerts.
 
-## Critères d’acceptation
-- Les préférences sont enregistrées par utilisateur.
-- Les alertes critiques restent actives.
-- Le réglage est pris en compte sans rechargement de la page.`,
-  "implementation-plan.md": `# Plan d’implémentation
+## Acceptance criteria
+- Preferences are saved per user.
+- Critical alerts stay on.
+- The setting takes effect without reloading the page.`,
+  "implementation-plan.md": `# Implementation plan
 
-1. Ajouter le modèle de préférences.
-2. Créer le panneau de réglages.
-3. Connecter l’enregistrement optimiste.
-4. Ajouter les tests du fallback critique.
-5. Vérifier l’accessibilité et les états d’erreur.`,
-  "developer-report.md": `# Rapport d’implémentation
+1. Add the preferences model.
+2. Create the settings panel.
+3. Wire up optimistic saving.
+4. Add the tests for the critical fallback.
+5. Check accessibility and error states.`,
+  "developer-report.md": `# Implementation report
 
-- Modèle de préférences ajouté.
-- Formulaire connecté au serveur.
-- Mise à jour optimiste avec restauration en cas d’échec.
-- Tests unitaires ajoutés.
+- Preferences model added.
+- Form wired to the server.
+- Optimistic update with rollback on failure.
+- Unit tests added.
 
-Statut : prêt pour review.`,
+Status: ready for review.`,
   "test-report.json": `{
   "status": "passed",
   "tests": 11,
   "passed": 11,
   "failed": 0
 }`,
-  "senior-review-round-1.md": `# Review 1/2 · Changements demandés
+  "senior-review-round-1.md": `# Review 1/2 · Changes requested
 
-## Retours
-1. Le fallback des alertes critiques ignore le fuseau horaire de l’utilisateur.
-2. Aucun test ne couvre ce cas de régression.
+## Findings
+1. The critical alerts fallback ignores the user's time zone.
+2. No test covers this regression case.
 
-Décision : corrections requises avant approbation.`,
+Decision: fixes required before approval.`,
   "test-report-round-2.json": `{
   "status": "passed",
   "tests": 12,
@@ -613,223 +613,223 @@ Décision : corrections requises avant approbation.`,
   "failed": 0,
   "regressionTest": "critical-alert-timezone"
 }`,
-  "senior-review-round-2.md": `# Review 2/2 · Bloquée
+  "senior-review-round-2.md": `# Review 2/2 · Blocked
 
-Les deux retours du premier passage sont résolus :
+Both findings from the first round are resolved:
 
-- le fallback utilise désormais le fuseau horaire de l’utilisateur ;
-- un test de régression couvre ce comportement.
+- the fallback now uses the user's time zone;
+- a regression test covers this behavior.
 
-Reste ouvert :
+Still open:
 
-- **P0** : AC4 n’est pas tenu, un double clic sur Enregistrer envoie deux requêtes PATCH (\`settings/panel.tsx:88\`).
+- **P0**: AC4 is not met, a double click on Save sends two PATCH requests (\`settings/panel.tsx:88\`).
 
-Limite de deux passages atteinte.
+Limit of two rounds reached.
 
-Décision : bloquée. La merge request est ouverte en draft, avec AC4 dans sa section Blocked.`,
-  "qa-plan.md": `# Plan de test QA
+Decision: blocked. The merge request is opened as a draft, with AC4 in its Blocked section.`,
+  "qa-plan.md": `# QA test plan
 
-## Tour 1
+## Round 1
 
-### Matrice de comportement
+### Behavior matrix
 
-| Critère | Comportement attendu | Observation prévue |
+| Criterion | Expected behavior | Planned observation |
 |---|---|---|
-| AC1 | Un second compte ne voit pas les réglages du premier | Deux comptes dans deux sessions, modifier A, relire B |
-| AC2 | L’alerte critique reste affichée, notifications coupées, quel que soit le fuseau | Couper les notifications, déclencher une alerte à 23 h 30 en UTC+2 |
-| AC3 | Le réglage s’applique sans rechargement | Changer un réglage, lire l’onglet Réseau et l’état affiché |
-| AC4 | Un double clic n’envoie qu’une requête | Double clic sur Enregistrer, compter les requêtes PATCH |
-| AC5 | L’application mobile reprend les préférences | Ouvrir le build mobile de recette après un changement sur le web |
+| AC1 | A second account does not see the first one's settings | Two accounts in two sessions, change A, read B again |
+| AC2 | The critical alert stays displayed, notifications off, whatever the time zone | Turn off notifications, trigger an alert at 11:30 pm in UTC+2 |
+| AC3 | The setting applies without a reload | Change a setting, read the Network tab and the displayed state |
+| AC4 | A double click sends only one request | Double click on Save, count the PATCH requests |
+| AC5 | The mobile app picks up the preferences | Open the mobile staging build after a change on the web |
 
-### Grille de risques
+### Risk grid
 
-- Saisie utilisateur : déclenchée (interrupteurs, bouton Enregistrer).
-- Appel réseau : déclenchée (PATCH /api/preferences).
-- État persistant : déclenchée (préférences par utilisateur).
-- Asynchrone : déclenchée (mise à jour optimiste).
-- Données ou migration : déclenchée (nouveau modèle).
-- Permissions : déclenchée (isolation entre comptes).
-- Sécurité observable : non déclenchée, aucune surface nouvelle exposée.
-- Accessibilité : déclenchée (panneau au clavier), couverte par la revue de design.
+- User input: triggered (toggles, Save button).
+- Network call: triggered (PATCH /api/preferences).
+- Persistent state: triggered (per-user preferences).
+- Asynchronous: triggered (optimistic update).
+- Data or migration: triggered (new model).
+- Permissions: triggered (isolation between accounts).
+- Observable security: not triggered, no new surface exposed.
+- Accessibility: triggered (panel with the keyboard), covered by the design review.
 
-### Hypothèses de défaut
+### Defect hypotheses
 
-| Critère | Hypothèse | Déclencheur | Résultat attendu |
+| Criterion | Hypothesis | Trigger | Expected result |
 |---|---|---|---|
-| AC1 | Les réglages sont lus depuis un cache partagé entre sessions | Modifier le compte A pendant que le compte B est ouvert | Réglages du compte B inchangés |
-| AC2 | Le fallback compare les dates en UTC | Alerte à 23 h 30 en UTC+2 | Alerte affichée |
-| AC3 | L’état local n’est mis à jour qu’au rechargement | Changer un réglage sans recharger | Nouvel état affiché |
-| AC4 | Le bouton reste actif pendant l’envoi | Double clic sur Enregistrer | 1 requête PATCH |
-| AC5 | Le client mobile rejette un champ qu’il ne connaît pas | Envoyer une préférence ajoutée par le web | Champ ignoré, réglages connus repris |
+| AC1 | Settings are read from a cache shared between sessions | Change account A while account B is open | Account B settings unchanged |
+| AC2 | The fallback compares dates in UTC | Alert at 11:30 pm in UTC+2 | Alert displayed |
+| AC3 | The local state is only updated on reload | Change a setting without reloading | New state displayed |
+| AC4 | The button stays enabled while the request is being sent | Double click on Save | 1 PATCH request |
+| AC5 | The mobile client rejects a field it does not know | Send a preference added by the web | Field ignored, known settings picked up |
 
-## Tour 2
+## Round 2
 
-### Matrice de comportement
+### Behavior matrix
 
-Inchangée. AC2 est à observer de nouveau sur le code repris.
+Unchanged. AC2 is to be observed again on the reworked code.
 
-### Hypothèses de défaut
+### Defect hypotheses
 
-| Critère | Hypothèse | Déclencheur | Résultat attendu |
+| Criterion | Hypothesis | Trigger | Expected result |
 |---|---|---|---|
-| AC1 | L’état du compte précédent reste en mémoire après un changement de compte | Changer de compte sans recharger | Réglages du compte B affichés |
-| AC2 | La correction ne tient que pour les fuseaux à l’est de UTC | Alerte à minuit pile en UTC-11 | Alerte affichée |`,
-  "qa-report.md": `# Rapport QA
+| AC1 | The previous account's state stays in memory after switching accounts | Switch accounts without reloading | Account B settings displayed |
+| AC2 | The fix only holds for time zones east of UTC | Alert at midnight sharp in UTC-11 | Alert displayed |`,
+  "qa-report.md": `# QA report
 
 ## Verdict
 
 FAIL
 
-AC4 n’est pas tenu : un double clic sur Enregistrer envoie deux requêtes PATCH. AC3 et AC5 restent non vérifiés.
+AC4 is not met: a double click on Save sends two PATCH requests. AC3 and AC5 remain unverified.
 
-## Contrôles
+## Checks
 
-| Contrôle | Commande exécutée | Résultat | Preuve |
+| Check | Command run | Result | Evidence |
 |---|---|---|---|
-| Lint | \`npm run lint\` | pass | 0 avertissement |
-| Typecheck | \`npm run typecheck\` | pass | 0 erreur |
-| Tests unitaires | \`npm run test\` | pass | 12/12 |
-| Tests d’intégration | aucune | not run | le projet simulé n’a pas de suite d’intégration |
-| Visuel (Playwright) | /settings, 1280x900 | pass | assets/panneau-preferences.png, assets/alerte-critique.png |
+| Lint | \`npm run lint\` | pass | 0 warnings |
+| Typecheck | \`npm run typecheck\` | pass | 0 errors |
+| Unit tests | \`npm run test\` | pass | 12/12 |
+| Integration tests | none | not run | the simulated project has no integration suite |
+| Visual (Playwright) | /settings, 1280x900 | pass | assets/panneau-preferences.png, assets/alerte-critique.png |
 
-## Critères observables
+## Observable criteria
 
-| Critère | Verdict | Valeur lue | Backend | Preuve |
+| Criterion | Verdict | Value read | Backend | Evidence |
 |---|---|---|---|---|
-| AC1 | measured live | compte B inchangé | réel | observation en direct, deux sessions |
-| AC2 (AC2-C1) | measured live | alerte critique affichée | réel | assets/panneau-preferences.png |
-| AC2 (AC2-C2) | measured live | alerte affichée à 23 h 30 | réel | assets/alerte-critique.png |
-| AC3 | confirmed from the developer's evidence | PATCH /api/preferences → 200 | réel | T3-E1, prise avant la reprise |
-| AC5 | unverified | aucune | réel | build mobile de recette inaccessible |
+| AC1 | measured live | account B unchanged | real | live observation, two sessions |
+| AC2 (AC2-C1) | measured live | critical alert displayed | real | assets/panneau-preferences.png |
+| AC2 (AC2-C2) | measured live | alert displayed at 11:30 pm | real | assets/alerte-critique.png |
+| AC3 | confirmed from the developer's evidence | PATCH /api/preferences → 200 | real | T3-E1, taken before the rework |
+| AC5 | unverified | none | real | mobile staging build unreachable |
 
-## Critères d’acceptation
+## Acceptance criteria
 
-- AC1 : MET, deux comptes gardent des réglages distincts (mesuré en direct).
-- AC2 : MET, l’alerte critique reste affichée à 23 h 30 en UTC+2, l’échec du tour 1 est remplacé.
-- AC3 : UNVERIFIED, seule la mesure du développeur existe, prise avant la reprise.
-- AC4 : NOT MET, un double clic envoie deux requêtes PATCH.
-- AC5 : UNVERIFIED, environnement mobile de recette inaccessible.
+- AC1: MET, two accounts keep separate settings (measured live).
+- AC2: MET, the critical alert stays displayed at 11:30 pm in UTC+2, the round 1 failure is replaced.
+- AC3: UNVERIFIED, only the developer's measurement exists, taken before the rework.
+- AC4: NOT MET, a double click sends two PATCH requests.
+- AC5: UNVERIFIED, mobile staging environment unreachable.
 
-## Tentatives de mise en échec
+## Break attempts
 
-| Critère | Hypothèse de défaut | Déclencheur | Attendu | Constaté | Mode |
+| Criterion | Defect hypothesis | Trigger | Expected | Observed | Mode |
 |---|---|---|---|---|---|
-| AC1 | L’état du compte précédent reste en mémoire | Changer de compte sans recharger la page | réglages du compte B affichés | réglages du compte B affichés | exécuté |
-| AC2 | La correction ne tient que pour les fuseaux à l’est de UTC | \`TZ=Pacific/Pago_Pago npm run test -- critical-alerts\` | alerte affichée | alerte affichée, 1 test sur 1 | exécuté |
-| AC4 | Le bouton reste actif pendant l’envoi | Double clic sur Enregistrer | 1 requête PATCH | 2 requêtes PATCH observées | exécuté |
-| AC5 | Le client mobile rejette un champ inconnu | Lecture de \`src/settings/preferences-model.ts:41\` | champ inconnu ignoré | le modèle ignore les champs inconnus à la lecture | lu |
+| AC1 | The previous account's state stays in memory | Switch accounts without reloading the page | account B settings displayed | account B settings displayed | executed |
+| AC2 | The fix only holds for time zones east of UTC | \`TZ=Pacific/Pago_Pago npm run test -- critical-alerts\` | alert displayed | alert displayed, 1 test out of 1 | executed |
+| AC4 | The button stays enabled while the request is being sent | Double click on Save | 1 PATCH request | 2 PATCH requests observed | executed |
+| AC5 | The mobile client rejects an unknown field | Reading \`src/settings/preferences-model.ts:41\` | unknown field ignored | the model ignores unknown fields on read | read |
 
-## Problèmes
+## Issues
 
-**P0** : double enregistrement sur double clic
+**P0**: double save on double click
 
-- Exigence violée : critère \`AC4\`, ticket IH-42
-- Reproduit ; introduit par le diff
-- Étapes pour reproduire : ouvrir /settings, modifier un réglage, double-cliquer sur Enregistrer
-- Attendu : 1 requête PATCH
-- Constaté : 2 requêtes PATCH (\`settings/panel.tsx:88\`)
+- Requirement violated: criterion \`AC4\`, ticket IH-42
+- Reproduced; introduced by the diff
+- Steps to reproduce: open /settings, change a setting, double-click Save
+- Expected: 1 PATCH request
+- Observed: 2 PATCH requests (\`settings/panel.tsx:88\`)
 
-## Couverture
+## Coverage
 
-- Grille de risques : saisie utilisateur testée (échec sur le double clic) ; appel réseau testé (PATCH observé) ; état persistant testé (AC1) ; asynchrone testé (échec sur AC4) ; données ou migration non testé, pas de base de recette à migrer ; permissions testées (isolation entre comptes) ; sécurité observable non applicable, aucune surface nouvelle ; accessibilité non applicable ici, couverte par la revue de design
-- Consommateurs des symboles modifiés : le bandeau d’alertes lit les préférences, contrôle de fumée passé sur /dashboard
-- Relances : le test de régression du fuseau a été lancé 3 fois, 3 passages, aucune dépendance à l’ordre constatée
-- Scénarios testés : isolation entre comptes, alerte près de minuit dans deux fuseaux, double clic
-- Scénarios manquants : AC3 sans tentative exécutée, la mesure en direct n’a pas été refaite après la reprise ; AC5 sans tentative exécutée, build mobile inaccessible
+- Risk grid: user input tested (failure on the double click); network call tested (PATCH observed); persistent state tested (AC1); asynchronous tested (failure on AC4); data or migration not tested, no staging database to migrate; permissions tested (isolation between accounts); observable security not applicable, no new surface; accessibility not applicable here, covered by the design review
+- Consumers of the modified symbols: the alerts banner reads the preferences, smoke check passed on /dashboard
+- Reruns: the time zone regression test was run 3 times, 3 passes, no order dependency observed
+- Scenarios tested: isolation between accounts, alert near midnight in two time zones, double click
+- Missing scenarios: AC3 with no executed attempt, the live measurement was not redone after the rework; AC5 with no executed attempt, mobile build unreachable
 
-## Rapprochement
+## Reconciliation
 
-- Scénario ajouté après lecture du rapport développeur : contrôle de fumée du bandeau d’alertes.
-- Hypothèse abandonnée : aucune.
-- Affirmation contredite : le rapport développeur dit l’enregistrement sans double envoi, la tentative sur AC4 montre deux requêtes.
-- Risque restant du reviewer senior, fuseau horaire : testé, ligne AC2 des tentatives.
+- Scenario added after reading the developer report: smoke check of the alerts banner.
+- Hypothesis dropped: none.
+- Claim contradicted: the developer report says saving happens without a double send, the attempt on AC4 shows two requests.
+- Remaining risk from the senior reviewer, time zone: tested, AC2 row of the attempts.
 
-## Non vérifiable
+## Not verifiable
 
-- AC3 : aucune observation en direct sur le code repris. Il faut rejouer le changement de réglage dans le navigateur.
-- AC5 : environnement mobile de recette inaccessible. Il faut un build mobile de recette relié à cette branche.`,
-  "design-inventory.md": `# Inventaire design
+- AC3: no live observation on the reworked code. The setting change has to be replayed in the browser.
+- AC5: mobile staging environment unreachable. A mobile staging build linked to this branch is needed.`,
+  "design-inventory.md": `# Design inventory
 
-Niveau de référence : ticket-mockup (maquette jointe au ticket IH-42).
+Reference level: ticket-mockup (mockup attached to ticket IH-42).
 
-| Élément | Source | Viewports | États et contenus | Périmètre |
+| Element | Source | Viewports | States and content | In scope |
 |---|---|---|---|---|
-| Liste des interrupteurs du panneau de préférences | maquette du ticket | 360, 768, 1280 | repos, contenu long | oui |
-| Interrupteur des notifications par e-mail | maquette du ticket | 1280 | repos, survol, focus clavier, actif, désactivé | oui |
-| Bouton Enregistrer | maquette du ticket | 1280 | repos, focus clavier, chargement | oui |
-| Bandeau d’alerte critique | écran voisin /dashboard | 1280 | repos | non |`,
-  "designer-review.md": `# Revue de design
+| List of toggles of the preferences panel | ticket mockup | 360, 768, 1280 | rest, long content | yes |
+| Email notifications toggle | ticket mockup | 1280 | rest, hover, keyboard focus, active, disabled | yes |
+| Save button | ticket mockup | 1280 | rest, keyboard focus, loading | yes |
+| Critical alert banner | neighboring screen /dashboard | 1280 | rest | no |`,
+  "designer-review.md": `# Design review
 
-## Résumé
+## Summary
 
-- Niveau de référence : ticket-mockup, la maquette jointe au ticket IH-42
-- Évaluation globale : le panneau suit la maquette à 1280 px, la largeur mobile n’a pas pu être atteinte
+- Reference level: ticket-mockup, the mockup attached to ticket IH-42
+- Overall assessment: the panel follows the mockup at 1280 px, the mobile width could not be reached
 
-## Méthode d'inspection
+## Inspection method
 
-- Référence : lue en entier
-- App en direct : inspectée via Playwright
-- Recette : fournie
-- Thème sombre et mouvement réduit : non pris en charge
-- Routes consommatrices : non demandées
-- Niveau de confiance : moyen
+- Reference: read in full
+- Live app: inspected through Playwright
+- Recipe: provided
+- Dark theme and reduced motion: not supported
+- Consumer routes: not requested
+- Confidence level: medium
 
-## Matrice de couverture
+## Coverage matrix
 
-| Écran | Viewport | État ou contenu | Couverture | Captures (référence, live) | Obstacle |
+| Screen | Viewport | State or content | Coverage | Screenshots (reference, live) | Obstacle |
 | --- | --- | --- | --- | --- | --- |
-| Panneau de préférences | 1280 | repos | mesuré | assets/reference-panneau-preferences.png, assets/panneau-preferences.png | |
-| Panneau de préférences | 1280 | focus clavier | mesuré | assets/panneau-preferences.png | invariant, sans capture de référence |
-| Panneau de préférences | 360 | repos | non atteint | | la recette ne sert pas le panneau en dessous de 768 px |
+| Preferences panel | 1280 | rest | measured | assets/reference-panneau-preferences.png, assets/panneau-preferences.png | |
+| Preferences panel | 1280 | keyboard focus | measured | assets/panneau-preferences.png | invariant, no reference screenshot |
+| Preferences panel | 360 | rest | not reached | | staging does not serve the panel below 768 px |
 
-- Lignes d'inventaire dans le périmètre : 3, dont mesurées : 2 (67 %)
+- Inventory rows in scope: 3, of which measured: 2 (67%)
 
-## Matrice des états
+## State matrix
 
-| Élément | Repos | Survol | Focus clavier | Actif | Désactivé | Chargement | Vide | Erreur |
+| Element | Rest | Hover | Keyboard focus | Active | Disabled | Loading | Empty | Error |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Interrupteur des notifications par e-mail | conforme | non atteint | conforme | non atteint | non atteint | sans objet | sans objet | sans objet |
-| Bouton Enregistrer | conforme | non atteint | non atteint | non atteint | sans objet | non atteint | sans objet | sans objet |
+| Email notifications toggle | compliant | not reached | compliant | not reached | not reached | n/a | n/a | n/a |
+| Save button | compliant | not reached | not reached | not reached | n/a | not reached | n/a | n/a |
 
-## Accessibilité
+## Accessibility
 
-| Contrôle | Élément | Seuil | Mesuré | Résultat |
+| Check | Element | Threshold | Measured | Result |
 | --- | --- | --- | --- | --- |
-| focus visible | Interrupteur des notifications par e-mail | contraste 3:1 (WCAG 1.4.11) | 4,6:1 | conforme |
+| visible focus | Email notifications toggle | contrast 3:1 (WCAG 1.4.11) | 4.6:1 | compliant |
 
-## Écarts avec les mesures du développeur
+## Gaps with the developer's measurements
 
-- Éléments, états ou viewports de l'inventaire que le développeur n'a pas mesurés : 360 px, focus clavier
-- Mesurés par le développeur et absents de l'inventaire : aucun
-- Valeurs en désaccord : aucune
+- Inventory elements, states or viewports the developer did not measure: 360 px, keyboard focus
+- Measured by the developer and absent from the inventory: none
+- Values in disagreement: none
 
-## Problèmes bloquants (P0)
+## Blocking issues (P0)
 
-Aucun
+None
 
-## Problèmes importants (P1)
+## Major issues (P1)
 
-Aucun
+None
 
-## Problèmes mineurs (P2)
+## Minor issues (P2)
 
-Aucun
+None
 
-## Écarts préexistants (éléments que le ticket ne touche pas)
+## Pre-existing gaps (elements the ticket does not touch)
 
-Aucun
+None
 
-## Conflits à arbitrer
+## Conflicts to arbitrate
 
-Aucun
+None
 
-## À vérifier par la QA
+## To be checked by QA
 
-- Double-cliquer sur Enregistrer : le bouton ne passe pas à l’état chargement entre les deux clics, observé à 1280 px. Indice de l’état de l’app : deux lignes PATCH dans l’onglet Réseau.
+- Double-click Save: the button does not switch to the loading state between the two clicks, observed at 1280 px. Clue to the app state: two PATCH rows in the Network tab.
 
-## Observations sans référence
+## Observations without a reference
 
-Aucun
+None
 
 ## Verdict
 
@@ -843,26 +843,26 @@ INCONCLUSIVE`,
   "assets/reference-panneau-preferences.png": demoAcceptance.captures.reference,
   "design-evidence.json": JSON.stringify(demoAcceptance.design, null, 2),
   "planner-output.json": JSON.stringify(demoAcceptance.plan, null, 2),
-  "developer-report-T1.md": "# T1 · Modèle de préférences\n\nModèle et migration ajoutés, 3 tests.",
-  "developer-report-T2.md": "# T2 · Panneau de réglages\n\nPanneau accessible au clavier, 4 tests.",
-  "developer-report-T3.md": "# T3 · Enregistrement optimiste\n\nMise à jour optimiste avec retour arrière en cas d’erreur, 3 tests.",
-  "developer-report-T4.md": "# T4 · Fallback des alertes critiques\n\nFuseau horaire pris en compte, test de régression ajouté.",
-  "mr-description.md": `# Draft: IH-42 · Ajouter les préférences de notification
+  "developer-report-T1.md": "# T1 · Preferences model\n\nModel and migration added, 3 tests.",
+  "developer-report-T2.md": "# T2 · Settings panel\n\nPanel usable with the keyboard, 4 tests.",
+  "developer-report-T3.md": "# T3 · Optimistic saving\n\nOptimistic update with rollback on error, 3 tests.",
+  "developer-report-T4.md": "# T4 · Critical alerts fallback\n\nTime zone taken into account, regression test added.",
+  "mr-description.md": `# Draft: IH-42 · Add notification preferences
 
 ## Blocked
-- AC4 : un double clic sur Enregistrer envoie deux requêtes PATCH. Toujours en échec après les deux passages de review.
-- AC5 : bloqué, l’environnement mobile de recette était inaccessible.
+- AC4: a double click on Save sends two PATCH requests. Still failed after the two review rounds.
+- AC5: blocked, the mobile staging environment was unreachable.
 
-## Changements
-- Ajout du panneau de préférences.
-- Enregistrement optimiste des réglages.
-- Conservation des alertes critiques.
-- Prise en compte des retours de review sur le fuseau horaire.
+## Changes
+- Added the preferences panel.
+- Optimistic saving of the settings.
+- Critical alerts kept.
+- Addressed the review findings on the time zone.
 
 ## Validation
-- 12 tests passent.
-- 2 critères vérifiés sur 5 : AC1 et AC2. AC3 reste non vérifié, sa seule mesure date d’avant la reprise.
-- Review senior bloquée au second passage sur AC4.`,
+- 12 tests pass.
+- 2 criteria verified out of 5: AC1 and AC2. AC3 remains unverified, its only measurement predates the rework.
+- Senior review blocked on the second round on AC4.`,
 };
 
 

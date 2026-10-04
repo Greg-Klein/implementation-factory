@@ -18,8 +18,8 @@ import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
 
 function batchNotice(accepted: number, duplicates: number): Notice {
-  const left = duplicates > 0 ? ` ${duplicates} déjà en file, en cours ou en attente de fusion ${duplicates > 1 ? "ont été ignorés" : "a été ignoré"}.` : "";
-  return { level: "info", at: new Date().toISOString(), title: "Lot mis en file", detail: `${accepted} ticket${accepted > 1 ? "s" : ""} ajouté${accepted > 1 ? "s" : ""}. La file dit lesquels démarrent et lesquels attendent.${left}` };
+  const left = duplicates > 0 ? ` ${duplicates} already queued, running or waiting for merge ${duplicates > 1 ? "were skipped" : "was skipped"}.` : "";
+  return { level: "info", at: new Date().toISOString(), title: "Batch queued", detail: `${accepted} ticket${accepted > 1 ? "s" : ""} added. The queue shows which start and which wait.${left}` };
 }
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
@@ -397,14 +397,14 @@ export function Harness() {
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-              <button type="button" role="switch" aria-checked={theme === "dark"} aria-label="Thème sombre" onClick={toggleTheme} title={theme === "dark" ? "Thème sombre, cliquer pour passer en clair" : "Thème clair, cliquer pour passer en sombre"} className="mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px">
+              <button type="button" role="switch" aria-checked={theme === "dark"} aria-label="Dark theme" onClick={toggleTheme} title={theme === "dark" ? "Dark theme, click to switch to light" : "Light theme, click to switch to dark"} className="mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px">
                 {theme === "dark" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
               </button>
-              <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+              <button type="button" role="switch" aria-checked={sound} aria-label="Alert sound" onClick={toggleSound} title={sound ? "Alert sound on, click to mute" : "Alert sound off, click to turn on"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
                 {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
               </button>
-              <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
-              <span className="hidden sm:inline">Serveur local</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
+              <span title="Live connection between this page and the local server of the harness" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
+              <span className="hidden sm:inline">Local server</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connected" : "reconnecting…"}</span>
             </div>
           </header>
 
@@ -412,7 +412,7 @@ export function Harness() {
             {error && (
               <div role="alert" className="flex items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-red-800 md:px-7">
                 <p className="flex min-w-0 items-start gap-2.5 text-[11px] leading-5"><WarningIcon className="mt-0.5 shrink-0" size={14} weight="fill" />{error}</p>
-                <button type="button" onClick={() => setError(undefined)} aria-label="Masquer l'erreur" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
+                <button type="button" onClick={() => setError(undefined)} aria-label="Hide the error" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
               </div>
             )}
             <NoticeStrip notice={notice} onDismiss={() => setNotice(undefined)} />

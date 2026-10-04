@@ -97,7 +97,7 @@ describe("what the side list is told about a run", () => {
         { id: "a1", name: "developer", status: "running", startedAt: "2026-09-18T10:00:00.000Z" },
         { id: "a2", name: "Explore", status: "completed", startedAt: "2026-09-18T09:00:00.000Z" },
       ],
-      messages: [{ id: "m1", at: "2026-09-18T10:01:00.000Z", author: "claude", text: "Plan prêt." }],
+      messages: [{ id: "m1", at: "2026-09-18T10:01:00.000Z", author: "claude", text: "Plan ready." }],
     }));
     expect(summary).toMatchObject({
       id: "run-1", status: "attention", phase: 6, branch: "feat/258",
@@ -114,7 +114,7 @@ describe("what the side list is told about a run", () => {
   });
 
   it("should carry the worktree and what became of it", () => {
-    const worktree = { path: "/work/repo-a/.claude/worktrees/run-1", state: "kept" as const, detail: "Worktree conservé : changements non poussés" };
+    const worktree = { path: "/work/repo-a/.claude/worktrees/run-1", state: "kept" as const, detail: "Worktree kept: unpushed changes" };
     expect(summarizeRun(state({ worktree })).worktree).toEqual(worktree);
     expect(summarizeRun(state())).not.toHaveProperty("worktree");
   });
@@ -211,15 +211,15 @@ describe("the finished sessions the queue takes back", () => {
 
 describe("what the feed says about a session that went away", () => {
   it("should name the queue when the console gave the place back", () => {
-    expect(exitReport("queue", 143)).toBe("Place libérée pour la file d'attente");
+    expect(exitReport("queue", 143)).toBe("Slot freed for the queue");
   });
 
   it("should name the user when they stopped it themselves", () => {
-    expect(exitReport("user", 143)).toBe("Session arrêtée par l'utilisateur");
+    expect(exitReport("user", 143)).toBe("Session stopped by the user");
   });
 
   it("should tell a clean end from an interrupted one when nobody asked for it", () => {
-    expect(exitReport(null, 0)).toBe("Session terminée");
-    expect(exitReport(null, 1)).toBe("Session interrompue");
+    expect(exitReport(null, 0)).toBe("Session ended");
+    expect(exitReport(null, 1)).toBe("Session interrupted");
   });
 });

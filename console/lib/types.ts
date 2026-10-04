@@ -9,7 +9,7 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
-/** One task of `planner-output.json`, placed on the "Suivi" board by what the run has done with it. */
+/** One task of `planner-output.json`, placed on the "Tracking" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
 /** `assignee`: the agent that last took the task, by id and by the name and role the interface calls it. */
 export type PlanTask = { id: string; title: string; complexity?: string; status: PlanTaskStatus; assignee?: { agentId: string; nickname?: string; avatar?: string; role?: string }; criterionIds?: string[]; dependencies?: string[]; summary?: string; description?: string; filePaths?: string[] };
@@ -33,7 +33,7 @@ export type RunState = {
   sessionPrompt?: SessionPrompt;
   /** What Claude is doing at this instant, from the tool it last called. Absent as soon as it hands control back. */
   action?: string;
-  /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
+  /** When a file of the "Evidence" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
   /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
   ticketTitle?: string;

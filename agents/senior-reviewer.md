@@ -29,3 +29,5 @@ After diagnosis, fix justified defects within the mandate. Record each cause, co
 Never edit while a browser measurement is active. The caller normally runs you before design and QA; if it requests diagnosis-only concurrency, return findings and wait for a separate correction invocation. Do not open a browser yourself.
 
 Run the documented checks through `implementation-harness:collect-evidence`, including targeted regression checks for your corrections. Report the exact limitations. Your correction does not close its own finding: the pilot schedules QA on the final code, or the tier-0 independent final verification required by its review policy.
+
+Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language your caller states. If it states none, read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) and the `IMPL_LANGUAGE` variable yourself. That contract also gives the English form of the French headings and fixed phrases the templates use.

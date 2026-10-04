@@ -45,20 +45,20 @@ test("should run two tickets of one repository side by side, each in a worktree 
   const held = await snapshot(request);
   expect(held.runs.filter((run) => run.repository === repository && run.worktree?.state === "active")).toHaveLength(2);
   // Named after the repository and the ticket, never after the worktree directory.
-  await expect(page.getByRole("button", { name: "Ouvrir le run worktree-parallel #1" })).toBeVisible();
-  await page.getByRole("button", { name: "Ouvrir le run worktree-parallel #2" }).click();
-  const progression = page.getByLabel("Progression du run");
-  await expect(progression.getByText("Dépôt", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open run worktree-parallel #1" })).toBeVisible();
+  await page.getByRole("button", { name: "Open run worktree-parallel #2" }).click();
+  const progression = page.getByLabel("Run progress");
+  await expect(progression.getByText("Repository", { exact: true })).toBeVisible();
   await expect(progression.getByText(repository, { exact: true })).toBeVisible();
   await expect(progression.getByText(`.claude/worktrees/${second}`, { exact: true })).toBeVisible();
 
   // The same ticket again waits for the run that holds it, and says so.
   const notice = await sendAndWait<{ type: string; title?: string; detail?: string }>(page, { type: "run.start", cwd: checkout.directory, issueUrl: `${checkout.issueUrl}?tab=notes` }, "notice");
-  expect(notice).toMatchObject({ type: "notice", title: "Run mis en file" });
-  expect(notice.detail).toContain("Ce ticket est déjà en cours sur worktree-parallel");
+  expect(notice).toMatchObject({ type: "notice", title: "Run queued" });
+  expect(notice.detail).toContain("This ticket is already running on worktree-parallel");
   const waiting = await snapshot(request);
   expect(waiting.queued).toEqual([expect.objectContaining({ reason: "ticket", blockedBy: first })]);
-  await expect(page.getByRole("group", { name: "Runs en file d'attente" }).getByText("En attente, ticket déjà en cours")).toBeVisible();
+  await expect(page.getByRole("group", { name: "Queued runs" }).getByText("Waiting, ticket already running")).toBeVisible();
   expect(waiting.runs).toHaveLength(2);
 });
 
@@ -73,28 +73,28 @@ test("should keep the worktree of a stopped run with its reason, ask before losi
   writeFileSync(path.join(worktree, "app.ts"), "export const answer = 43;\n");
   git(worktree, "commit", "-q", "-am", "feat: answer");
   const commit = git(worktree, "rev-parse", "HEAD");
-  writeFileSync(path.join(worktree, "draft.md"), "à reprendre\n");
+  writeFileSync(path.join(worktree, "draft.md"), "to pick up again\n");
 
-  await page.getByRole("button", { name: "Ouvrir le run worktree-keep #1" }).click();
+  await page.getByRole("button", { name: "Open run worktree-keep #1" }).click();
   // No removal while the session works in it.
-  await expect(page.getByRole("button", { name: "Supprimer le worktree" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Arrêter" }).click();
-  const progression = page.getByLabel("Progression du run");
-  await expect(progression.getByText("Worktree conservé : aucune merge request, changements non commités, changements non poussés")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove the worktree" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Stop" }).click();
+  const progression = page.getByLabel("Run progress");
+  await expect(progression.getByText("Worktree kept: no merge request, uncommitted changes, unpushed changes")).toBeVisible();
   expect(existsSync(worktree)).toBe(true);
 
-  await page.getByRole("button", { name: "Supprimer le worktree" }).click();
-  const confirmation = page.getByRole("region", { name: "Confirmer la suppression du worktree" });
-  await expect(confirmation.getByText(/changements non commités et des changements non poussés/)).toBeVisible();
-  await expect(confirmation.getByText(/la branche et ses commits restent/)).toBeVisible();
-  await confirmation.getByRole("button", { name: "Annuler" }).click();
+  await page.getByRole("button", { name: "Remove the worktree" }).click();
+  const confirmation = page.getByRole("region", { name: "Confirm the worktree removal" });
+  await expect(confirmation.getByText(/uncommitted changes and unpushed changes/)).toBeVisible();
+  await expect(confirmation.getByText(/the branch and its commits stay/)).toBeVisible();
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
   await expect(confirmation).toHaveCount(0);
   expect(existsSync(path.join(worktree, "draft.md"))).toBe(true);
 
-  await page.getByRole("button", { name: "Supprimer le worktree" }).click();
-  await confirmation.getByRole("button", { name: "Supprimer quand même" }).click();
-  await expect(progression.getByText("Worktree supprimé", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Supprimer le worktree" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove the worktree" }).click();
+  await confirmation.getByRole("button", { name: "Remove anyway" }).click();
+  await expect(progression.getByText("Worktree removed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove the worktree" })).toHaveCount(0);
   expect(existsSync(worktree)).toBe(false);
   // The branch and its commit stay in the repository, and so does the checkout's own node_modules.
   expect(git(repository, "rev-parse", "feat/1")).toBe(commit);
@@ -107,19 +107,19 @@ test("should keep a closed run within reach while its worktree is on disk, then 
   await page.goto("/");
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
   const worktree = await runDirectory(request, runId);
-  await page.getByRole("button", { name: "Ouvrir le run worktree-closed #1" }).click();
-  await page.getByRole("button", { name: "Arrêter" }).click();
-  await expect(page.getByLabel("Progression du run").getByText(/^Worktree conservé/)).toBeVisible();
-  await page.getByRole("button", { name: "Fermer", exact: true }).click();
+  await page.getByRole("button", { name: "Open run worktree-closed #1" }).click();
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByLabel("Run progress").getByText(/^Worktree kept/)).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
 
-  const leftovers = page.getByRole("group", { name: "Worktrees conservés" });
-  const row = leftovers.getByRole("button", { name: "Consulter l’archive du run worktree-closed #1" });
+  const leftovers = page.getByRole("group", { name: "Worktrees kept" });
+  const row = leftovers.getByRole("button", { name: "View the archive of run worktree-closed #1" });
   await expect(row).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ouvrir le run worktree-closed #1" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open run worktree-closed #1" })).toHaveCount(0);
   await row.click();
-  await page.getByRole("button", { name: "Supprimer le worktree" }).click();
+  await page.getByRole("button", { name: "Remove the worktree" }).click();
   // Nothing uncommitted, but the commit it sits on was never pushed: still asked.
-  await page.getByRole("region", { name: "Confirmer la suppression du worktree" }).getByRole("button", { name: "Supprimer quand même" }).click();
+  await page.getByRole("region", { name: "Confirm the worktree removal" }).getByRole("button", { name: "Remove anyway" }).click();
   await expect(row).toHaveCount(0);
   expect(existsSync(worktree)).toBe(false);
 });

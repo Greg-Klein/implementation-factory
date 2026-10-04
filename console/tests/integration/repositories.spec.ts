@@ -6,10 +6,10 @@ test.beforeEach(async ({ page }) => resetRun(page));
 
 test("should detect and fill a repository from the GitLab issue URL", async ({ page, request }) => {
   const issueUrl = `https://gitlab.com/${sampleProject}/-/issues/42`;
-  await page.getByLabel("Ticket GitLab").fill(issueUrl);
+  await page.getByLabel("Ticket GitLab or GitHub").fill(issueUrl);
 
-  await expect(page.getByLabel(/Répertoire du projet/)).toHaveValue(sampleCheckout);
-  await expect(page.getByText(`Projet · ${sampleProject}`)).toBeVisible();
+  await expect(page.getByLabel(/Project directory/)).toHaveValue(sampleCheckout);
+  await expect(page.getByText(`Project · ${sampleProject}`)).toBeVisible();
 
   const response = await request.get(`/api/repositories?issueUrl=${encodeURIComponent(issueUrl)}`);
   expect(response.ok()).toBe(true);
@@ -20,8 +20,8 @@ test("should detect and fill a repository from the GitLab issue URL", async ({ p
 });
 
 test("should detect a repository from the work item form of the ticket URL", async ({ page }) => {
-  await page.getByLabel("Ticket GitLab").fill(`https://gitlab.com/${sampleProject}/-/work_items/42`);
+  await page.getByLabel("Ticket GitLab or GitHub").fill(`https://gitlab.com/${sampleProject}/-/work_items/42`);
 
-  await expect(page.getByLabel(/Répertoire du projet/)).toHaveValue(sampleCheckout);
-  await expect(page.getByText(`Projet · ${sampleProject}`)).toBeVisible();
+  await expect(page.getByLabel(/Project directory/)).toHaveValue(sampleCheckout);
+  await expect(page.getByText(`Project · ${sampleProject}`)).toBeVisible();
 });

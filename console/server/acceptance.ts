@@ -4,11 +4,14 @@ import type {
   AcceptanceCheckView, AcceptanceCounts, AcceptanceCriterionView, AcceptanceDiagnostic, AcceptanceQaView, AcceptanceReportVersion, AcceptanceStatus, AcceptanceView,
   EvidenceAttachmentView, EvidenceBasis, EvidenceFreshness, EvidenceMethod, EvidenceSource, EvidenceView,
 } from "./types.js";
+import { acceptanceText, type WorkflowLanguage } from "./acceptance-text.js";
+
+export { acceptanceText, workflowLanguageOf, type WorkflowLanguage } from "./acceptance-text.js";
 
 /**
  * Acceptance coverage: which criteria of the ticket were verified, on which
  * code, by whom, and with what. Pure: the files arrive as parsed JSON, the code
- * version as an identifier, the clock as a string. Everything the "Preuves"
+ * version as an identifier, the clock as a string. Everything the "Evidence"
  * tab and the merge request summary say comes out of deriveAcceptanceCoverage,
  * so the two can never tell different stories.
  *
@@ -79,25 +82,25 @@ export function parseCriteriaRegistry(value: unknown, file = "acceptance-criteri
   const diagnostics: Diagnostics = [];
   const root = record(value);
   if (!root || !Array.isArray(root.criteria)) {
-    diagnostics.push({ level: "error", file, message: "Registre des critères illisible : la liste `criteria` est absente." });
+    diagnostics.push({ level: "error", file, message: "Criteria registry unreadable: the `criteria` list is missing." });
     return { diagnostics };
   }
-  if (root.schemaVersion !== 1) diagnostics.push({ level: "warning", file, message: `Version de schéma inattendue (${String(root.schemaVersion)}), lecture tentée comme la version 1.` });
+  if (root.schemaVersion !== 1) diagnostics.push({ level: "warning", file, message: `Unexpected schema version (${String(root.schemaVersion)}), read as version 1.` });
   const revision = positiveInteger(root.revision) ?? 1;
   const criteria: Criterion[] = [];
   const seenCriteria = new Set<string>();
   const seenChecks = new Set<string>();
-  if (root.criteria.length > MAX_CRITERIA) diagnostics.push({ level: "warning", file, message: `Plus de ${MAX_CRITERIA} critères : les suivants sont ignorés.` });
+  if (root.criteria.length > MAX_CRITERIA) diagnostics.push({ level: "warning", file, message: `More than ${MAX_CRITERIA} criteria: the following ones are ignored.` });
   for (const entry of root.criteria.slice(0, MAX_CRITERIA)) {
     const input = record(entry);
     const id = typeof input?.id === "string" ? input.id.trim() : "";
     const statement = text(input?.text);
     if (!input || !IDENTIFIER.test(id) || !statement) {
-      diagnostics.push({ level: "error", file, message: `Critère ignoré : identifiant ou texte manquant (${id || "sans identifiant"}).` });
+      diagnostics.push({ level: "error", file, message: `Criterion ignored: identifier or text missing (${id || "no identifier"}).` });
       continue;
     }
     if (seenCriteria.has(id)) {
-      diagnostics.push({ level: "error", file, message: `Identifiant de critère en double : ${id}. Seule la première occurrence est retenue.` });
+      diagnostics.push({ level: "error", file, message: `Duplicate criterion identifier: ${id}. Only the first occurrence is kept.` });
       continue;
     }
     seenCriteria.add(id);
@@ -108,8 +111,8 @@ export function parseCriteriaRegistry(value: unknown, file = "acceptance-criteri
     for (const candidate of requested.slice(0, MAX_CHECKS)) {
       const check = record(candidate);
       const checkId = typeof check?.id === "string" ? check.id.trim() : "";
-      if (!check || !IDENTIFIER.test(checkId)) { diagnostics.push({ level: "error", file, message: `Contrôle sans identifiant valide ignoré dans ${id}.` }); continue; }
-      if (seenChecks.has(checkId) || seenCriteria.has(checkId) && checkId !== id) { diagnostics.push({ level: "error", file, message: `Identifiant de contrôle en double : ${checkId}.` }); continue; }
+      if (!check || !IDENTIFIER.test(checkId)) { diagnostics.push({ level: "error", file, message: `Check without a valid identifier ignored in ${id}.` }); continue; }
+      if (seenChecks.has(checkId) || seenCriteria.has(checkId) && checkId !== id) { diagnostics.push({ level: "error", file, message: `Duplicate check identifier: ${checkId}.` }); continue; }
       seenChecks.add(checkId);
       const method = METHODS.has(check.method as EvidenceMethod) ? check.method as EvidenceMethod : undefined;
       checks.push({ id: checkId, description: text(check.description) ?? checkId, ...(method ? { method } : {}) });
@@ -211,38 +214,38 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
   const root = record(value);
   const source = sourceOfReport(context.file, root?.source);
   if (!root || !source || !Array.isArray(root.items)) {
-    diagnostics.push({ level: "error", file: context.file, message: "Rapport de preuves illisible : `source` ou `items` manquant." });
+    diagnostics.push({ level: "error", file: context.file, message: "Evidence report unreadable: `source` or `items` missing." });
     return { diagnostics };
   }
   const schemaVersion = root.schemaVersion === undefined ? 1 : root.schemaVersion;
-  if (schemaVersion !== 1 && schemaVersion !== 2) diagnostics.push({ level: "warning", file: context.file, message: `Version de schéma inconnue (${String(schemaVersion)}), lecture tentée comme la version 2.` });
+  if (schemaVersion !== 1 && schemaVersion !== 2) diagnostics.push({ level: "warning", file: context.file, message: `Unknown schema version (${String(schemaVersion)}), read as version 2.` });
   const round = positiveInteger(root.round);
   const producer = record(root.producer);
   const reportSnapshot = record(root.codeSnapshot);
   const reportStart = snapshotReference(reportSnapshot?.atStart) ?? snapshotReference(root.codeSnapshotId);
   const reportEnd = snapshotReference(reportSnapshot?.atEnd);
   const criteriaRevision = positiveInteger(root.criteriaRevision);
-  if (root.items.length > MAX_ITEMS) diagnostics.push({ level: "warning", file: context.file, message: `Plus de ${MAX_ITEMS} éléments : les suivants sont ignorés.` });
+  if (root.items.length > MAX_ITEMS) diagnostics.push({ level: "warning", file: context.file, message: `More than ${MAX_ITEMS} items: the following ones are ignored.` });
   const seenIds = new Map<string, number>();
   const records: EvidenceRecord[] = [];
   let futureDates = 0;
   root.items.slice(0, MAX_ITEMS).forEach((entry, index) => {
     const item = record(entry);
-    if (!item) { diagnostics.push({ level: "error", file: context.file, message: `Élément ${index + 1} ignoré : ce n'est pas un objet.` }); return; }
+    if (!item) { diagnostics.push({ level: "error", file: context.file, message: `Item ${index + 1} ignored: it is not an object.` }); return; }
     const label = text(item.label, 500) ?? text(item.id, 64);
-    if (!label) { diagnostics.push({ level: "error", file: context.file, message: `Élément ${index + 1} ignoré : aucun libellé.` }); return; }
+    if (!label) { diagnostics.push({ level: "error", file: context.file, message: `Item ${index + 1} ignored: no label.` }); return; }
     let verdict = typeof item.verdict === "string" ? item.verdict.trim() : "";
     if (!VERDICTS.has(verdict)) {
-      diagnostics.push({ level: "error", file: context.file, message: `Verdict inconnu « ${verdict || "vide"} » pour « ${label} », lu comme non vérifié.` });
+      diagnostics.push({ level: "error", file: context.file, message: `Unknown verdict "${verdict || "empty"}" for "${label}", read as unverified.` });
       verdict = "unverified";
     }
     const id = typeof item.id === "string" && IDENTIFIER.test(item.id.trim()) ? item.id.trim() : undefined;
     if (id) {
       const count = (seenIds.get(id) ?? 0) + 1;
       seenIds.set(id, count);
-      if (count > 1) diagnostics.push({ level: "error", file: context.file, message: `Identifiant de preuve en double dans le même rapport : ${id}.` });
+      if (count > 1) diagnostics.push({ level: "error", file: context.file, message: `Duplicate evidence identifier in the same report: ${id}.` });
     } else if (schemaVersion === 2) {
-      diagnostics.push({ level: "warning", file: context.file, message: `« ${label} » n'a pas d'identifiant : il ne pourra être ni remplacé ni confirmé.` });
+      diagnostics.push({ level: "warning", file: context.file, message: `"${label}" has no identifier: it can be neither replaced nor confirmed.` });
     }
     const itemProducer = record(item.producer) ?? producer;
     const method = METHODS.has(item.method as EvidenceMethod) ? item.method as EvidenceMethod : undefined;
@@ -303,7 +306,7 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       ...(content.snapshotAtEnd ? { snapshotAtEnd: content.snapshotAtEnd } : {}),
     });
   });
-  if (futureDates > 0) diagnostics.push({ level: "warning", file: context.file, message: `${futureDates} date${futureDates > 1 ? "s" : ""} d'observation postérieure${futureDates > 1 ? "s" : ""} à la réception du fichier, remplacée${futureDates > 1 ? "s" : ""} par l'heure de réception.` });
+  if (futureDates > 0) diagnostics.push({ level: "warning", file: context.file, message: `${futureDates} observation date${futureDates > 1 ? "s" : ""} later than the reception of the file, replaced by the reception time.` });
   const status = text(root.status, 40)?.toUpperCase();
   // Read tolerantly: a list or a single id. Anything else is taken as no mandate, which checks every criterion.
   const mandate = Array.isArray(root.mandate) || typeof root.mandate === "string" ? identifiers(root.mandate) : undefined;
@@ -323,6 +326,8 @@ export type CoverageInput = {
   knownSnapshots?: Set<string>;
   diagnostics?: Diagnostics;
   now: string;
+  /** The language of the reasons and warnings. English, which the interface shows, unless the merge request summary is being written in another one. */
+  language?: WorkflowLanguage;
 };
 
 function freshnessOf(entry: EvidenceRecord, input: CoverageInput): EvidenceFreshness {
@@ -343,12 +348,6 @@ function outcomeOf(view: EvidenceView): Outcome {
   return view.blocker ? "blocked" : "none";
 }
 
-const FRESHNESS_REASON: Record<Exclude<EvidenceFreshness, "current">, string> = {
-  stale: "Preuve ancienne : le code a changé depuis la vérification.",
-  unknown: "Version inconnue : rien ne relie la preuve au code livré.",
-  inconclusive: "Mesure non concluante : le code a changé pendant la vérification.",
-};
-
 const STATUS_ORDER: AcceptanceStatus[] = ["failed", "blocked", "unverified", "verified"];
 
 function worst(statuses: AcceptanceStatus[]): AcceptanceStatus {
@@ -368,10 +367,6 @@ const QA_APPROVALS = new Set(["PASS", "PASS_WITH_WARNINGS"]);
 /** The verdicts of something QA executed itself, as opposed to a confirmation or a code reading. */
 const QA_OBSERVATIONS = new Set(["measured", "pass", "fail"]);
 
-function enumeration(ids: string[]) {
-  return ids.length > 1 ? `${ids.slice(0, -1).join(", ")} et ${ids.at(-1)}` : ids[0] ?? "";
-}
-
 /**
  * Holds the verdict QA declares against its own evidence. Approving (PASS or
  * PASS_WITH_WARNINGS) is inconsistent as long as one criterion has no fresh QA
@@ -379,11 +374,12 @@ function enumeration(ids: string[]) {
  * answers for the criteria of its mandate only; the others have no QA item by
  * design and are never held against it.
  */
-export function qaVerdictConsistency(report: { status: string; file: string; round?: number; mandate?: string[] }, criterionIds: string[], observed: Set<string>): AcceptanceQaView {
+export function qaVerdictConsistency(report: { status: string; file: string; round?: number; mandate?: string[] }, criterionIds: string[], observed: Set<string>, language: WorkflowLanguage = "en"): AcceptanceQaView {
+  const t = acceptanceText(language);
   const mandate = report.mandate ? criterionIds.filter((id) => report.mandate!.includes(id)) : undefined;
   const unobserved = QA_APPROVALS.has(report.status) ? (mandate ?? criterionIds).filter((id) => !observed.has(id)) : [];
   const warning = unobserved.length === 0 ? undefined
-    : `QA annonce ${report.status} alors que ${enumeration(unobserved)} ${unobserved.length > 1 ? "n'ont" : "n'a"} aucune observation QA sur le code actuel.`;
+    : t.qaUnobserved(report.status, t.enumeration(unobserved), unobserved.length);
   return { status: report.status, file: report.file, ...(report.round ? { round: report.round } : {}), ...(mandate ? { mandate } : {}), consistent: unobserved.length === 0, unobserved, ...(warning ? { warning } : {}) };
 }
 
@@ -392,6 +388,7 @@ export function emptyCounts(): AcceptanceCounts {
 }
 
 export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
+  const t = acceptanceText(input.language);
   const diagnostics: Diagnostics = [...input.diagnostics ?? []];
   const latestVersion = new Map<string, number>();
   for (const { version } of input.reports) latestVersion.set(version.file, Math.max(latestVersion.get(version.file) ?? 0, version.version));
@@ -419,7 +416,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
       const latest = entry.view.id ? latestById.get(`${version.file}#${entry.view.id}`) : undefined;
       if (!latest || latest.identity === entry.identity) continue;
       if (outcomeOf(entry.view) === "negative" && outcomeOf(latest.view) !== "negative") {
-        diagnostics.push({ level: "warning", file: version.file, message: `${entry.view.id} a été réécrit sur un échec : l'échec reste compté tant qu'un nouvel identifiant ne le remplace pas avec \`supersedes\`.` });
+        diagnostics.push({ level: "warning", file: version.file, message: t.rewrittenFailure(entry.view.id!) });
         continue;
       }
       rewritten.add(entry.identity);
@@ -435,7 +432,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
   for (const entry of records) if (entry.view.id) byId.set(entry.view.id, [...byId.get(entry.view.id) ?? [], entry]);
   for (const [id, sharing] of byId) {
     if (sharing.length > 1) {
-      diagnostics.push({ level: "warning", message: `L'identifiant ${id} est réutilisé avec un contenu différent : chaque version est gardée comme une preuve distincte.` });
+      diagnostics.push({ level: "warning", message: t.reusedIdentifier(id) });
     }
   }
 
@@ -456,12 +453,12 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     const targets = new Set<string>();
     for (const checkId of view.checkIds) {
       if (checkOwner.has(checkId)) { checks.add(checkId); targets.add(checkOwner.get(checkId)!.id); }
-      else if (input.registry) diagnostics.push({ level: "error", file: view.file, message: `« ${view.label} » cite un contrôle inconnu : ${checkId}.` });
+      else if (input.registry) diagnostics.push({ level: "error", file: view.file, message: t.unknownCheck(view.label, checkId) });
     }
     for (const criterionId of view.criterionIds) {
       const criterion = criteria.find((candidate) => candidate.id === criterionId);
       if (!criterion) {
-        if (input.registry) diagnostics.push({ level: "error", file: view.file, message: `« ${view.label} » cite un critère inconnu : ${criterionId}.` });
+        if (input.registry) diagnostics.push({ level: "error", file: view.file, message: t.unknownCriterion(view.label, criterionId) });
         continue;
       }
       targets.add(criterion.id);
@@ -472,7 +469,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     linkedChecks.set(entry.identity, checks);
     const unlinked = view.criterionIds.length === 0 && view.checkIds.length === 0;
     if (view.kind === "attempt") {
-      if (unlinked && input.registry) diagnostics.push({ level: "warning", file: view.file, message: `La tentative « ${view.label} » ne cite aucun critère : elle n'est rattachée à rien.` });
+      if (unlinked && input.registry) diagnostics.push({ level: "warning", file: view.file, message: t.unlinkedAttempt(view.label) });
       attemptTargets.set(entry.identity, targets);
     }
     if (unlinked) general.add(entry.identity);
@@ -490,8 +487,8 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
           || [...linkedChecks.get(replaced.identity) ?? []].some((check) => linkedChecks.get(entry.identity)?.has(check))
           // Two attempts on the same criterion: the later one replaces the earlier, whichever check each named.
           || [...attemptTargets.get(replaced.identity) ?? []].some((target) => attemptTargets.get(entry.identity)?.has(target));
-        if (!shared) { diagnostics.push({ level: "warning", file: entry.view.file, message: `« ${entry.view.label} » remplace ${replacedId}, qui ne contrôle pas la même chose : remplacement ignoré.` }); continue; }
-        if (entry.view.freshness !== "current") { diagnostics.push({ level: "warning", file: entry.view.file, message: `« ${entry.view.label} » remplace ${replacedId} sans avoir été prise sur le code actuel : remplacement ignoré.` }); continue; }
+        if (!shared) { diagnostics.push({ level: "warning", file: entry.view.file, message: t.replacesOtherCheck(entry.view.label, replacedId) }); continue; }
+        if (entry.view.freshness !== "current") { diagnostics.push({ level: "warning", file: entry.view.file, message: t.replacesWithoutCurrentCode(entry.view.label, replacedId) }); continue; }
         supersededBy.set(replaced.identity, entry.view.id ?? entry.view.label);
       }
     }
@@ -507,21 +504,21 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     const outcome = outcomeOf(entry.view);
     if (entry.view.basis !== "confirmation") return { outcome, freshness: entry.view.freshness };
     const confirmed = entry.view.confirms ? (byId.get(entry.view.confirms) ?? []).map((candidate) => finalByIdentity.get(candidate.identity)!) : [];
-    if (!entry.view.confirms || confirmed.length === 0) return { outcome: "none", freshness: entry.view.freshness, problem: `La preuve confirmée par « ${entry.view.label} » est introuvable.` };
+    if (!entry.view.confirms || confirmed.length === 0) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmedNotFound(entry.view.label) };
     const original = confirmed.find((candidate) => outcomeOf(candidate.view) === "positive" && candidate.view.basis !== "confirmation");
-    if (!original) return { outcome: "none", freshness: entry.view.freshness, problem: `« ${entry.view.label} » confirme une preuve qui n'est pas un résultat positif.` };
+    if (!original) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmsNonPositive(entry.view.label) };
     return { outcome: outcome === "positive" ? "positive" : outcome, freshness: original.view.freshness };
   }
 
   const tasksByCriterion = new Map<string, { id: string; title: string }[]>();
   for (const task of input.plan?.tasks ?? []) {
     for (const criterionId of task.criterionIds) {
-      if (input.registry && !criterionIds.has(criterionId)) { diagnostics.push({ level: "error", file: "planner-output.json", message: `La tâche ${task.id} cite un critère inconnu : ${criterionId}.` }); continue; }
+      if (input.registry && !criterionIds.has(criterionId)) { diagnostics.push({ level: "error", file: "planner-output.json", message: t.taskUnknownCriterion(task.id, criterionId) }); continue; }
       tasksByCriterion.set(criterionId, [...tasksByCriterion.get(criterionId) ?? [], { id: task.id, title: task.title }]);
     }
   }
   if (input.registry && input.plan?.criteriaRevision && input.plan.criteriaRevision < input.registry.revision) {
-    diagnostics.push({ level: "warning", file: "planner-output.json", message: `Le plan a été écrit contre la révision ${input.plan.criteriaRevision} des critères, la révision courante est ${input.registry.revision}.` });
+    diagnostics.push({ level: "warning", file: "planner-output.json", message: t.planRevision(input.plan.criteriaRevision, input.registry.revision) });
   }
 
   const staleCounted = new Set<string>();
@@ -532,7 +529,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
       const counted: { entry: EvidenceRecord; outcome: Outcome; freshness: EvidenceFreshness }[] = [];
       for (const entry of linked) {
         if (entry.view.supersededBy) continue;
-        if ((entry.criteriaRevision ?? 1) < criterion.revision) { reasons.push(`« ${entry.view.label} » a été vérifiée contre une version antérieure du critère.`); continue; }
+        if ((entry.criteriaRevision ?? 1) < criterion.revision) { reasons.push(t.olderCriterionVersion(entry.view.label)); continue; }
         const result = effective(entry);
         if (result.problem) reasons.push(result.problem);
         if (result.freshness === "stale") staleCounted.add(entry.identity);
@@ -545,26 +542,26 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
       let status: AcceptanceStatus;
       if (failing.length > 0) {
         status = "failed";
-        reasons.unshift(...failing.map(({ entry }) => `Échec : ${entry.view.label}${entry.view.actual ? ` (${entry.view.actual})` : ""}.`));
-        if (positives.length > 0) reasons.push("Des résultats contradictoires existent pour ce contrôle.");
+        reasons.unshift(...failing.map(({ entry }) => t.failure(entry.view.label, entry.view.actual)));
+        if (positives.length > 0) reasons.push(t.contradictory);
       } else if (positives.length > 0 && olderFailures.length > 0) {
         status = "unverified";
-        reasons.unshift(`Un échec antérieur n'a pas été explicitement remplacé : ${olderFailures.map(({ entry }) => entry.view.id ?? entry.view.label).join(", ")}.`);
+        reasons.unshift(t.olderFailure(olderFailures.map(({ entry }) => entry.view.id ?? entry.view.label).join(", ")));
       } else if (positives.length > 0) {
         status = "verified";
       } else if (blocked.length > 0 && !counted.some(({ outcome }) => outcome === "positive")) {
         status = "blocked";
-        reasons.unshift(...blocked.map(({ entry }) => `Bloqué : ${entry.view.blocker!.reason}${entry.view.blocker!.action ? ` Action nécessaire : ${entry.view.blocker!.action}` : ""}`));
+        reasons.unshift(...blocked.map(({ entry }) => t.blocked(entry.view.blocker!.reason, entry.view.blocker!.action)));
       } else {
         status = "unverified";
         for (const view of unassigned.get(criterion.id) ?? []) {
-          reasons.push(`« ${view.label} » cite ${criterion.id} sans nommer ce contrôle : elle ne compte que si \`checkIds\` cite ${check.id}.`);
+          reasons.push(t.unnamedCheck(view.label, criterion.id, check.id));
         }
-        if (counted.length === 0 && reasons.length === 0) reasons.push("Aucune preuve ne couvre ce contrôle.");
+        if (counted.length === 0 && reasons.length === 0) reasons.push(t.noEvidence);
         for (const { outcome, freshness, entry } of counted) {
-          if (outcome === "positive" && freshness !== "current") reasons.push(`${FRESHNESS_REASON[freshness]} (« ${entry.view.label} »)`);
-          if (outcome === "negative" && freshness === "inconclusive") reasons.push(`${FRESHNESS_REASON.inconclusive} (« ${entry.view.label} »)`);
-          if (outcome === "none") reasons.push(`Non exécuté : ${entry.view.label}${entry.view.actual ? ` (${entry.view.actual})` : ""}.`);
+          if (outcome === "positive" && freshness !== "current") reasons.push(t.withLabel(t.freshness[freshness], entry.view.label));
+          if (outcome === "negative" && freshness === "inconclusive") reasons.push(t.withLabel(t.freshness.inconclusive, entry.view.label));
+          if (outcome === "none") reasons.push(t.notRun(entry.view.label, entry.view.actual));
         }
       }
       const active = linked.filter((entry) => !entry.view.supersededBy).map((entry) => entry.view);
@@ -573,10 +570,10 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     });
     const tasks = tasksByCriterion.get(criterion.id) ?? [];
     const reasons: string[] = [];
-    if (tasks.length === 0 && input.plan) reasons.push("Aucune tâche du plan ne traite ce critère.");
+    if (tasks.length === 0 && input.plan) reasons.push(t.noTask);
     const attempts = finalRecords.filter((entry) => idleAttempt(entry.view) && attemptTargets.get(entry.identity)?.has(criterion.id)).map((entry) => entry.view);
     const status = worst(checks.map((check) => check.status));
-    if (attempts.length > 0 && status !== "verified") reasons.push("Une tentative de mise en échec qui ne trouve rien ne vérifie pas le critère.");
+    if (attempts.length > 0 && status !== "verified") reasons.push(t.idleAttempt);
     return {
       id: criterion.id, text: criterion.text, status,
       ...(criterion.source ? { source: criterion.source } : {}),
@@ -596,13 +593,13 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     for (const id of view.criterionIds) if (criterionIds.has(id)) observedByQa.add(id);
     for (const checkId of linkedChecks.get(entry.identity) ?? []) observedByQa.add(checkOwner.get(checkId)!.id);
   }
-  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, round: qaReport.round, mandate: qaReport.mandate }, criteria.map((criterion) => criterion.id), observedByQa) : undefined;
+  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, round: qaReport.round, mandate: qaReport.mandate }, criteria.map((criterion) => criterion.id), observedByQa, input.language) : undefined;
 
   // Without a registry the criteria can only be rebuilt from an older plan's
   // strings, and nothing can be tied to them: shown, never verified.
   const reconstructed: AcceptanceCriterionView[] = input.registry ? [] : (input.plan?.legacyCriteria ?? []).map((statement, index) => ({
     id: `AC${index + 1}`, text: statement, status: "unverified" as const, tasks: [], checks: [], unassigned: [], attempts: [], reconstructed: true,
-    reasons: ["Critère reconstruit depuis un plan sans identifiants : aucune preuve ne peut lui être rattachée explicitement."],
+    reasons: [t.reconstructed],
   }));
   const shown = input.registry ? criteriaViews : reconstructed;
   const counts = emptyCounts();
@@ -615,7 +612,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     ...(input.registry ? { registryRevision: input.registry.revision } : {}),
     updatedAt: input.now,
     counts,
-    sentence: coverageSentence(counts),
+    sentence: coverageSentence(counts, input.language),
     ...(input.currentSnapshot ? { currentSnapshot: input.currentSnapshot } : {}),
     criteria: shown,
     general: finalRecords.filter((entry) => general.has(entry.identity) && stillReported.has(entry.identity) && !entry.view.supersededBy).map((entry) => entry.view),
@@ -638,35 +635,25 @@ function dedupeDiagnostics(diagnostics: Diagnostics) {
 
 // --- Summary ----------------------------------------------------------------
 
-export const STATUS_LABEL: Record<AcceptanceStatus, string> = { verified: "Vérifié", failed: "Échec", blocked: "Bloqué", unverified: "Non vérifié" };
-
-/** "5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié", the same sentence in the tab and in the merge request. */
-export function coverageSentence(counts: AcceptanceCounts) {
-  if (counts.total === 0) return "Aucun critère d'acceptation identifié";
-  const head = `${counts.verified} ${counts.verified > 1 ? "critères vérifiés" : "critère vérifié"} sur ${counts.total}`;
-  const tail = [
-    counts.failed ? `${counts.failed} ${counts.failed > 1 ? "échecs" : "échec"}` : "",
-    counts.blocked ? `${counts.blocked} ${counts.blocked > 1 ? "bloqués" : "bloqué"}` : "",
-    counts.unverified ? `${counts.unverified} non ${counts.unverified > 1 ? "vérifiés" : "vérifié"}` : "",
-  ].filter(Boolean);
-  return [head, ...tail].join(" · ");
+/** "5 of 8 criteria verified · 1 failed · 1 blocked · 1 unverified", the same sentence in the tab and, in the workflow language, in the merge request. */
+export function coverageSentence(counts: AcceptanceCounts, language: WorkflowLanguage = "en") {
+  return acceptanceText(language).sentence(counts);
 }
 
 function cell(value: string) {
   return value.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
 }
 
-const SOURCE_LABEL: Record<EvidenceSource, string> = { qa: "QA", design: "Design", developer: "Développeur" };
-
-function evidenceLine(view: EvidenceView) {
+function evidenceLine(view: EvidenceView, language: WorkflowLanguage) {
+  const t = acceptanceText(language);
   const qualifiers = [
-    view.freshness === "stale" ? "preuve ancienne" : "",
-    view.freshness === "unknown" ? "version inconnue" : "",
-    view.freshness === "inconclusive" ? "mesure non concluante" : "",
-    view.basis === "reported" ? "résultat rapporté" : "",
+    view.freshness === "stale" ? t.qualifier.stale : "",
+    view.freshness === "unknown" ? t.qualifier.unknown : "",
+    view.freshness === "inconclusive" ? t.qualifier.inconclusive : "",
+    view.basis === "reported" ? t.qualifier.reported : "",
   ].filter(Boolean);
   const attachments = view.attachments.map((attachment) => `\`${attachment.source}\``).join(", ");
-  return `${SOURCE_LABEL[view.source]} · ${view.label} (${view.verdict}${view.actual ? `, ${view.actual}` : ""})${qualifiers.length ? ` [${qualifiers.join(", ")}]` : ""}${attachments ? ` · pièces locales ${attachments}` : ""}`;
+  return `${t.source[view.source]} · ${view.label} (${view.verdict}${view.actual ? `, ${view.actual}` : ""})${qualifiers.length ? ` [${qualifiers.join(", ")}]` : ""}${attachments ? t.localFiles(attachments) : ""}`;
 }
 
 export type AcceptanceSummary = {
@@ -690,11 +677,14 @@ export type AcceptanceSummary = {
  * The summary the workflow reads before the merge request. Short part for the
  * description, detail for the review comment. Attachments are named by their
  * local path and marked as such: whoever publishes them uploads them first and
- * swaps in the returned link, a local path being unreachable from GitLab.
+ * swaps in the returned link, a local path being unreachable from the forge.
+ * `language` is the workflow language, and `view` must have been derived in
+ * that same language: its reasons are quoted as they are.
  */
-export function renderAcceptanceSummary(view: AcceptanceView): AcceptanceSummary {
-  const sentence = coverageSentence(view.counts);
-  const lines: string[] = ["# Couverture des critères d'acceptation", "", "Généré par la console Implementation Harness, à partir du même calcul que l'onglet Preuves.", ""];
+export function renderAcceptanceSummary(view: AcceptanceView, language: WorkflowLanguage = "en"): AcceptanceSummary {
+  const t = acceptanceText(language);
+  const sentence = t.sentence(view.counts);
+  const lines: string[] = [t.summaryTitle, "", t.summaryOrigin, ""];
   const localAttachments = new Set<string>();
   const criteria = view.criteria.map((criterion) => {
     const evidence = [...criterion.checks.flatMap((check) => check.evidence), ...criterion.unassigned];
@@ -704,44 +694,44 @@ export function renderAcceptanceSummary(view: AcceptanceView): AcceptanceSummary
     return { id: criterion.id, text: criterion.text, status: criterion.status, reasons: [...new Set(reasons)], attachments };
   });
 
-  lines.push("## Bilan pour la description de la merge request", "");
+  lines.push(t.descriptionHeading, "");
   if (!view.available) {
-    lines.push("Traçabilité par critère indisponible pour ce run : aucun registre de critères n'a été écrit. Aucun critère n'est présenté comme vérifié.", "");
+    lines.push(t.unavailable, "");
   } else if (view.counts.total === 0) {
-    lines.push("Aucun critère d'acceptation identifié pour ce run. Rien n'est présenté comme vérifié.", "");
+    lines.push(t.noCriteria, "");
   } else {
     lines.push(sentence, "");
     for (const criterion of criteria.filter((entry) => entry.status !== "verified")) {
-      lines.push(`- **${criterion.id}** ${STATUS_LABEL[criterion.status].toLowerCase()} : ${criterion.text}${criterion.reasons[0] ? ` (${criterion.reasons[0]})` : ""}`);
+      lines.push(t.unverifiedLine(criterion.id, t.status[criterion.status].toLowerCase(), criterion.text, criterion.reasons[0]));
     }
     if (criteria.some((entry) => entry.status !== "verified")) lines.push("");
   }
-  if (view.qa?.warning) lines.push(`Verdict QA à confirmer : ${view.qa.warning}`, "");
+  if (view.qa?.warning) lines.push(t.qaToConfirm(view.qa.warning), "");
 
-  lines.push("## Détail pour le commentaire de review", "");
+  lines.push(t.detailHeading, "");
   if (view.criteria.length > 0) {
-    lines.push("| Critère | État | Preuves |", "| --- | --- | --- |");
+    lines.push(t.tableHeader, "| --- | --- | --- |");
     for (const criterion of view.criteria) {
-      const evidence = [...criterion.checks.flatMap((check) => check.evidence), ...criterion.unassigned].map(evidenceLine);
+      const evidence = [...criterion.checks.flatMap((check) => check.evidence), ...criterion.unassigned].map((entry) => evidenceLine(entry, language));
       const reasons = [...criterion.reasons, ...criterion.checks.flatMap((check) => check.reasons)];
-      const proof = evidence.length ? evidence.join(" ; ") : reasons[0] ?? "Aucune preuve";
-      lines.push(`| ${cell(`${criterion.id} · ${criterion.text}`)} | ${STATUS_LABEL[criterion.status]} | ${cell(proof)} |`);
+      const proof = evidence.length ? evidence.join(t.evidenceSeparator) : reasons[0] ?? t.noProof;
+      lines.push(`| ${cell(`${criterion.id} · ${criterion.text}`)} | ${t.status[criterion.status]} | ${cell(proof)} |`);
     }
     lines.push("");
   }
   if (view.general.length > 0) {
-    lines.push("### Vérifications générales", "");
-    for (const entry of view.general) lines.push(`- ${entry.label} : ${entry.verdict}${entry.command ? ` (\`${entry.command}\`)` : ""}${entry.actual ? `, ${entry.actual}` : ""}`);
+    lines.push(t.generalHeading, "");
+    for (const entry of view.general) lines.push(`${t.generalLine(entry.label, entry.verdict)}${entry.command ? ` (\`${entry.command}\`)` : ""}${entry.actual ? `, ${entry.actual}` : ""}`);
     lines.push("");
   }
   if (localAttachments.size > 0) {
-    lines.push("### Pièces jointes locales", "", "Ces fichiers n'existent que sur la machine du run. Ne les citer dans GitLab qu'une fois uploadés, en remplaçant le chemin par le lien renvoyé ; une pièce non uploadée est mentionnée comme restée locale.", "");
+    lines.push(t.attachmentsHeading, "", t.attachmentsNote, "");
     for (const attachment of localAttachments) lines.push(`- \`${attachment}\``);
     lines.push("");
   }
   if (view.diagnostics.some((diagnostic) => diagnostic.level === "error")) {
-    lines.push("### Anomalies de traçabilité", "");
-    for (const diagnostic of view.diagnostics.filter((entry) => entry.level === "error")) lines.push(`- ${diagnostic.file ? `\`${diagnostic.file}\` : ` : ""}${diagnostic.message}`);
+    lines.push(t.anomaliesHeading, "");
+    for (const diagnostic of view.diagnostics.filter((entry) => entry.level === "error")) lines.push(t.anomalyLine(diagnostic.file, diagnostic.message));
     lines.push("");
   }
   return {

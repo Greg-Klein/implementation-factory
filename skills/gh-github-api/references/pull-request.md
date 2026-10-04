@@ -2,6 +2,8 @@ The caller must authorize publication and supply the source and base branches, t
 
 # Authorized pull request delivery
 
+The templates and fixed phrases below are written in French. When the workflow language is English ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md)), keep their structure and write every heading and phrase in English, with the fixed forms that contract lists.
+
 This is the GitHub counterpart of [the GitLab delivery recipe](../../glab-gitlab-api/references/merge-request.md). The content rules are the same on both forges and are written once, there. Read in that file, as they stand, with "pull request" for "merge request":
 
 - the opening paragraphs on the acceptance summary;

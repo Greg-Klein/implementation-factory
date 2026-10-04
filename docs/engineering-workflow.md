@@ -4,7 +4,7 @@ The harness separates the responsibilities of the agents, the reusable methods a
 
 The [architecture diagram](architecture.html) shows the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML page, to open in a browser.
 
-The reports the workflow writes and the console's interface are in French. Section names and fixed phrases are quoted here as they are written.
+The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
 
 ## Who owns what
 
@@ -71,7 +71,7 @@ The developer's self-check method is not the review plan. Reviewers start from t
 
 The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
 
-Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. Once its plan is written, QA also reads the `## À vérifier par la QA` section of the design review and the `## Risques restants` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
+Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. Once its plan is written, QA also reads the `## To be checked by QA` section of the design review and the `## Remaining risks` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
 
 Independence does not guarantee the absence of bias. A diagnosis already present in the brief is declared as such, then a competing explanation is examined. Reworks necessarily expose the findings of the previous round. No quota of defects is imposed.
 
@@ -154,7 +154,7 @@ The user can override from the queue: a start from the base, which ignores the s
 
 ### Stacked start
 
-A ticket held by another one can start before the first one's merge request is merged. It is a decision of the user, taken in the queue ("Empiler sur `<branche>`"), never a choice of the console. It is offered when the branch of the first ticket is known. The console then passes `IMPL_BASE_BRANCH`, the name of that branch.
+A ticket held by another one can start before the first one's merge request is merged. It is a decision of the user, taken in the queue ("Stack on `<branch>`"), never a choice of the console. It is offered when the branch of the first ticket is known. The console then passes `IMPL_BASE_BRANCH`, the name of that branch.
 
 - `commands/implement.md` does not ask the base branch question at step 2. The base is that branch.
 - Step 3 creates the ticket's branch from `origin/<base>` after the fetch, or from the local reference, with the rules of the run worktree. The pilot never checks out the base branch and does not write to it. If it exists neither on the remote nor locally, it stops and says so.
@@ -171,7 +171,7 @@ The contract is `contracts/qa.md`, the method `skills/review-change/references/b
 - QA writes `qa-plan.md` before opening an author's report. This plan holds the behaviour matrix per criterion, the classes of the risk grid the change triggers and the defect hypotheses, each with its trigger and the expected result.
 - The risk grid has eight classes: user input, network call, persistent state, asynchronous work, data or migration, permissions, observable security, accessibility. The report says for each class whether it is tested, not applicable (with the reason) or not tested (with the obstacle).
 - QA works in order of risk. The observations of the criteria and the break attempts come first, the general checks last. QA reuses a general check without running it again when the caller provides its result with the code snapshot identifier and that identifier is the one at the start of its session.
-- Each criterion gets at least one executed break attempt. The attempts appear in the `## Tentatives de mise en échec` section of the report and in `qa-evidence.json`, as items with `"kind": "attempt"`. An attempt only read in the code does not count towards this minimum.
+- Each criterion gets at least one executed break attempt. The attempts appear in the `## Break attempts` section of the report and in `qa-evidence.json`, as items with `"kind": "attempt"`. An attempt only read in the code does not count towards this minimum.
 - A criterion is MET only on an observation QA executed in its session, on the delivered code. A reading of the code or the confirmation of a piece of the developer's evidence gives UNVERIFIED, unless the required check of the criterion has the `static_analysis` method.
 - QA writes the report and the evidence after each block of work, so a stop leaves a usable result. Until the last block, the verdict written is `INCONCLUSIVE`.
 - The `## Rapprochement` section says what the plan, the reports of the developer and the senior and the hypotheses passed on added or changed compared with `qa-plan.md`.
@@ -185,12 +185,12 @@ The QA verdicts are `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` and `FAIL`. The
 
 The contract is `contracts/design.md`, the method `skills/figma-review/`. Despite its name, this skill applies with or without Figma. The designer does not read the product code.
 
-The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. With Figma frames, the review happens as soon as the change is visible in the interface. Without Figma (levels `ticket-mockup` and `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design non vérifié" line.
+The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. With Figma frames, the review happens as soon as the change is visible in the interface. Without Figma (levels `ticket-mockup` and `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design not verified" line.
 
 | Reference level | Source | Severity |
 | --- | --- | --- |
 | `figma` | Frames provided and readable. | Full scale. |
-| `ticket-mockup` | Mockups or captures attached to the ticket. | A gap established on the image alone is P2 at most, noted "à confirmer". It becomes P1 or P0 when an objective check fails on the same element. |
+| `ticket-mockup` | Mockups or captures attached to the ticket. | A gap established on the image alone is P2 at most, noted "to confirm". It becomes P1 or P0 when an objective check fails on the same element. |
 | `live-neighbours` | 2 or 3 screens already shipped, and `design-reference.md` when the pilot provides it. | A gap is P1 at most. Neighbouring screens that disagree give no reference. |
 
 The designer uses the highest level the brief allows and declares it at the top of the report. A property that level leaves open is judged at the next level. The pilot writes `design-reference.md` when the repository has token files, a brand document or a component library, with their paths and the useful values, so the designer does not open the source code.
@@ -203,11 +203,11 @@ The designer uses the highest level the brief allows and declares it at the top 
 - The dark theme and reduced motion are replayed when the application supports them. Their absence is noted in the method without becoming a finding.
 - Each label of the inventory is compared with the string of the reference, case and punctuation included.
 - The brief lists 3 to 5 routes that consume the shared components the diff modifies. The designer opens each one and adds none.
-- Each finding cites its reference: Figma node, mockup file, neighbouring screen and measured value, token of `design-reference.md`, WCAG threshold or named invariant. A remark with no reference goes into "Observations sans référence", a non-blocking section limited to three lines.
+- Each finding cites its reference: Figma node, mockup file, neighbouring screen and measured value, token of `design-reference.md`, WCAG threshold or named invariant. A remark with no reference goes into "Observations without a reference", a non-blocking section limited to three lines.
 
 The report contains a coverage matrix, with one row per screen, viewport and required state or content case. A cell is measured only if the designer reached it in the application, read its values and kept the pair of captures. The verdict is `INCONCLUSIVE` when a required viewport or an explicitly required state is not reached, when the measured coverage is under 80%, or when no reference level could be established.
 
-A design verdict of `INCONCLUSIVE`, or a review triggered but not started because the application was unreachable, does not block READY. The review summary writes it under `## Design non vérifié` with the reason. The pilot carries the words "design non vérifié" into the merge request description, the review comment and the final report.
+A design verdict of `INCONCLUSIVE`, or a review triggered but not started because the application was unreachable, does not block READY. The review summary writes it under `## Design not verified` with the reason. The pilot carries the words "design not verified" into the merge request description, the review comment and the final report.
 
 ## Rules enforced by a mechanism
 
@@ -224,7 +224,7 @@ A refused call is not forwarded to the console. A guard that cannot read what it
 
 ## Runtime recipe of a repository
 
-How the app of a target repository is started, reached and driven is the same from one ticket to the next. The pilot writes it to `.claude/tasks/runtime-recipe.md` under `contracts/runtime-recipe.md` at the end of a run that drove the app. The console keeps every version under `repositories/<checkout>-<digest>/runtime-recipe.md` in its data directory, outside the target repository, and puts it back in the task directory of the next run of that repository. The pilot reads it at step 1, checks what it relies on, and corrects the lines it found false. The file holds no secret and nothing specific to one run; `browser-recipe.md` keeps the fixtures of the ticket. Without the console the file is lost with the task directory. The console shows the recipe of a repository from the "Dépôt" line of a run and from the launch form ("Recette d'exécution"), with the date it was written, and "Oublier la recette" drops it: the next run of that repository starts from none and writes a new one, while a run already going keeps its copy.
+How the app of a target repository is started, reached and driven is the same from one ticket to the next. The pilot writes it to `.claude/tasks/runtime-recipe.md` under `contracts/runtime-recipe.md` at the end of a run that drove the app. The console keeps every version under `repositories/<checkout>-<digest>/runtime-recipe.md` in its data directory, outside the target repository, and puts it back in the task directory of the next run of that repository. The pilot reads it at step 1, checks what it relies on, and corrects the lines it found false. The file holds no secret and nothing specific to one run; `browser-recipe.md` keeps the fixtures of the ticket. Without the console the file is lost with the task directory. The console shows the recipe of a repository from the "Repository" line of a run and from the launch form ("Runtime recipe"), with the date it was written, and "Forget the recipe" drops it: the next run of that repository starts from none and writes a new one, while a run already going keeps its copy.
 
 ## Questions the code or the app can answer
 
@@ -236,7 +236,7 @@ The base branch follows the same rule. When the repository offers a single candi
 
 A `fix` ticket is reproduced before it is fixed: the developer records the failing observation, then runs the same reproduction after the fix. A defect nobody reproduced leaves its criterion unverified.
 
-Before a code finding enters rework, the orchestrator (the pilot at tiers 0 and 1) checks that it names the input, state or call site that reaches the defect. A finding without one goes back to its reviewer once, then under `## Constats écartés` of the summary with its author and the reason. An unmet criterion, a failed check and a security finding at a changed trust boundary are never dismissed that way. At tier 0 the senior reviewer names the one fact the change is safe because of and establishes it by running code.
+Before a code finding enters rework, the orchestrator (the pilot at tiers 0 and 1) checks that it names the input, state or call site that reaches the defect. A finding without one goes back to its reviewer once, then under `## Dismissed findings` of the summary with its author and the reason. An unmet criterion, a failed check and a security finding at a changed trust boundary are never dismissed that way. At tier 0 the senior reviewer names the one fact the change is safe because of and establishes it by running code.
 
 ## Handoff and stability
 

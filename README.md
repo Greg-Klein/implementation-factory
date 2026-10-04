@@ -6,7 +6,7 @@ The repository contains a Claude Code plugin whose `/implementation-harness:impl
 
 The interface opens in the browser with the `impl` command, which serves the compiled version of the checkout. There is no desktop application. The harness runs from its own repository, so the self-improvement loop can modify the code that is running.
 
-The console's interface is in French. Labels and messages are quoted here as they appear on screen.
+The console's interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
 
 ## How agents and skills are organised
 
@@ -33,7 +33,7 @@ The pilot picks a review tier from the size of the diff:
 
 QA writes its test plan to `qa-plan.md` before opening the author's reports, then tries to make each criterion fail. It declares a criterion met only on an observation it ran itself. When a criterion has no observation, the verdict is `INCONCLUSIVE` and the merge request is opened as a draft, with those criteria named.
 
-The design review works without Figma. With Figma frames, it runs as soon as the change is visible in the interface. Without Figma, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design non vérifié" (design not verified), with the reason.
+The design review works without Figma. With Figma frames, it runs as soon as the change is visible in the interface. Without Figma, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design not verified" (design not verified), with the reason.
 
 See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [architecture diagram](docs/architecture.html) shows on one page the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML file, to open in a browser from the checkout.
 
@@ -102,11 +102,11 @@ An unknown command is refused with the help and a non-zero exit code, and the se
 
 ```console
 $ impl status
-Serveur   : en écoute sur http://127.0.0.1:3210 (PID 76579)
-Build     : caiz9bak8t_BsOXSZHCmN sur disque
-API       : répond
-Runs      : 2/3 places occupées, 3 affiché(s), 1 en file
-Ressources: 11 servies, build à jour
+Server    : listening on http://127.0.0.1:3210 (PID 76579)
+Build     : caiz9bak8t_BsOXSZHCmN on disk
+API       : answers
+Runs      : 2/3 slots taken, 3 shown, 1 queued
+Assets    : 11 served, build up to date
 ```
 
 To explore the interface with no ticket and no call to Claude Code:
@@ -115,7 +115,7 @@ To explore the interface with no ticket and no call to Claude Code:
 impl demo
 ```
 
-This command opens a simulated local scenario with progress, agents, generated documents and interactive decisions. Each step lasts five seconds. The first review asks for fixes and sends the work back to the implementation agent, then a second review approves the changes. The Preuves (evidence) tab shows five criteria in every possible state, including a first-round failure replaced in the second round and kept in the history with its capture. The demo modifies no repository, does not contact GitLab and does not feed the self-improvement loop. Two other scenarios open from the address, on a server that is already running: `/?demo=incident` plays a run whose pilot hands back with nothing next, and `/?demo=batch` plays a batch of three invented tickets, two of which touch the same code. Demo mode adds no control to the normal interface: the improvement approval and the feedback field are shown as in real use, marked `démo`, and their actions stay simulated.
+This command opens a simulated local scenario with progress, agents, generated documents and interactive decisions. Each step lasts five seconds. The first review asks for fixes and sends the work back to the implementation agent, then a second review approves the changes. The Evidence tab shows five criteria in every possible state, including a first-round failure replaced in the second round and kept in the history with its capture. The demo modifies no repository, does not contact GitLab and does not feed the self-improvement loop. Two other scenarios open from the address, on a server that is already running: `/?demo=incident` plays a run whose pilot hands back with nothing next, and `/?demo=batch` plays a batch of three invented tickets, two of which touch the same code. Demo mode adds no control to the normal interface: the improvement approval and the feedback field are shown as in real use, marked `demo`, and their actions stay simulated.
 
 To restart a server that is already running:
 
@@ -145,17 +145,17 @@ Several tickets of the same repository can run at the same time, because each ru
 - **one run per ticket of a repository.** Two sessions on the same ticket would fight over its branch and its merge request;
 - **`IMPL_MAX_CONCURRENT_RUNS` sessions in total** (3 by default). Each one is a real Claude Code session, with its own quota and CPU.
 
-A launch that hits either limit goes to the queue, shown under the list with the reason it waits, "ticket déjà en cours" (ticket already running) or "toutes les places sont prises" (every slot is taken). It starts on its own as soon as the ticket or a slot is free. The queue is saved in `queue.json`, under the [data directory](#configuration), with the schedule that holds it, and survives a restart. The requests that were only waiting for a slot start as soon as the server listens again, without anyone launching them again. The ones waiting for a merge request keep waiting for it. A cross removes a request from the queue.
+A launch that hits either limit goes to the queue, shown under the list with the reason it waits, "ticket already running" or "every slot is taken". It starts on its own as soon as the ticket or a slot is free. The queue is saved in `queue.json`, under the [data directory](#configuration), with the schedule that holds it, and survives a restart. The requests that were only waiting for a slot start as soon as the server listens again, without anyone launching them again. The ones waiting for a merge request keep waiting for it. A cross removes a request from the queue.
 
-A finished run whose session is still open keeps its slot and its ticket. The **Libérer la place** (free the slot) button closes that session and lets the queue move. When a queued launch is waiting for that ticket or that slot, the harness closes the session itself. Once the session is closed, the bin icon on its row, or the **Fermer** (close) button of the view, removes the run from the list. Its documents, its conversation and its log stay archived in `runs/<id>/`, under the data directory.
+A finished run whose session is still open keeps its slot and its ticket. The **Free the slot** button closes that session and lets the queue move. When a queued launch is waiting for that ticket or that slot, the harness closes the session itself. Once the session is closed, the bin icon on its row, or the **Close** button of the view, removes the run from the list. Its documents, its conversation and its log stay archived in `runs/<id>/`, under the data directory.
 
 The notifications, the tab title and the tab icon cover every run at once, because the run that needs an answer is rarely the one you are looking at. Messages that concern no run in particular (a request put in the queue, an improvement rebased) show in a banner under the header.
 
-The **Suivi** (tracking) tab shows the tasks of the plan (`planner-output.json`) in three columns, To Do, In Progress and Done. A task moves to in progress when the orchestrator gives it to a `developer` agent, and to done when its report `developer-report-<id>.md` is written. Each agent of a run gets a first name and a photo, in the order it starts, and the card shows the agent that holds the task, as "Tom · Dev". The same name appears in the agents panel.
+The **Tracking** tab shows the tasks of the plan (`planner-output.json`) in three columns, To Do, In Progress and Done. A task moves to in progress when the orchestrator gives it to a `developer` agent, and to done when its report `developer-report-<id>.md` is written. Each agent of a run gets a first name and a photo, in the order it starts, and the card shows the agent that holds the task, as "Tom · Dev". The same name appears in the agents panel.
 
-The **Documents générés** (generated documents) button opens a built-in reader for the ticket context, the plans, the test reports, the reviews and the MR descriptions kept during the run.
+The **Generated documents** button opens a built-in reader for the ticket context, the plans, the test reports, the reviews and the MR descriptions kept during the run.
 
-The reader does not interrupt the run. If Claude Code asks a question while you are reading, a banner flags the pending decision and the **Répondre** (answer) button closes the reader to show the clarification card.
+The reader does not interrupt the run. If Claude Code asks a question while you are reading, a banner flags the pending decision and the **Answer** button closes the reader to show the clarification card.
 
 The progress panel sums up the deliverable of the run: the ticket, the working branch as soon as the workflow creates it, and the merge request as soon as it is opened. The ticket and the merge request are clickable, the branch is there to be read back. The merge request is read from the output of the command that opens it, so it appears without the workflow having to declare it.
 
@@ -171,7 +171,7 @@ The harness runs Claude Code in the worktree of the run with the plugin of this 
 
 The **Ticket** field accepts several URLs, one per line, GitLab and GitHub mixed. URLs separated by spaces, commas or semicolons on one line are read too. Under the field, the form gives the number of tickets recognised, the duplicates ignored and the lines that are not a ticket URL. While a line is invalid, the batch does not start.
 
-From two tickets on, the directory field disappears: the repository of each ticket is detected from its URL, in the roots of `IMPL_SEARCH_ROOTS`. The specific instruction applies to every ticket of the batch. The button becomes **Lancer les N tickets** (launch the N tickets).
+From two tickets on, the directory field disappears: the repository of each ticket is detected from its URL, in the roots of `IMPL_SEARCH_ROOTS`. The specific instruction applies to every ticket of the batch. The button becomes **Start N tickets**.
 
 The batch is accepted or refused as a whole. If a single ticket has no checkout, nothing is queued and the banner says which one. A ticket the harness already has, queued, running or behind a merge request it watches, is left out, and the banner gives the count.
 
@@ -183,25 +183,25 @@ Before starting, the harness compares the tickets of one repository. To do so it
 - A ticket alone in its repository, with no other known ticket to compare with, starts without analysis.
 - A ticket added later is compared with the predictions already made for the tickets queued, running or waiting for their merge. Those are not computed again.
 - Two tickets of different repositories never hold each other.
-- The analysis has `IMPL_SCHEDULE_TIMEOUT_MINUTES` minutes (5 by default). If it fails, runs past that time or returns an invalid file, the tickets concerned run one at a time on their repository and the queue shows "Analyse en échec" (analysis failed). A restart of the console during the analysis has the same effect. The next analysis of the same repository takes these tickets again with the new ones, as long as they are queued, running or waiting for their merge. No analysis is started for them alone.
-- A ticket too vague to predict is marked "Prédiction peu fiable" (unreliable prediction) and runs alone on its repository.
+- The analysis has `IMPL_SCHEDULE_TIMEOUT_MINUTES` minutes (5 by default). If it fails, runs past that time or returns an invalid file, the tickets concerned run one at a time on their repository and the queue shows "Analysis failed". A restart of the console during the analysis has the same effect. The next analysis of the same repository takes these tickets again with the new ones, as long as they are queued, running or waiting for their merge. No analysis is started for them alone.
+- A ticket too vague to predict is marked "Unreliable prediction" and runs alone on its repository.
 
 #### What the queue shows
 
-The queue shows under the runs in progress, by batch ("Lot de 14:32 · 3 tickets en file"), then by repository. Each row says what the ticket is waiting for:
+The queue shows under the runs in progress, by batch ("Batch of 14:32 · 3 tickets queued"), then by repository. Each row says what the ticket is waiting for:
 
 | Row | What the ticket is waiting for |
 |---|---|
-| "Analyse en cours" | the answer of the analysis session |
-| "En attente, conflit avec #217 en cours" | #217 is running and touches the same code |
-| "Attend que la MR !12 soit mergée (#217)" | the run of #217 is over, its merge request is not merged yet |
-| "État de la MR !12 inconnu (#217)" | The forge does not answer; the ticket stays held until the state is known. A GitHub ticket reads "PR #12" |
-| "Dépend de #217, encore en file" | #217 has to go first, and has not started |
-| "Passe après #217" | the two tickets conflict, #217 is ahead in the queue |
-| "En attente, ticket déjà en cours" | a run already holds this ticket |
-| "En attente, toutes les places sont prises" | a slot |
+| "Analysis in progress" | the answer of the analysis session |
+| "Waiting, conflict with #217 running" | #217 is running and touches the same code |
+| "Waits for MR !12 to be merged (#217)" | the run of #217 is over, its merge request is not merged yet |
+| "State of MR !12 unknown (#217)" | The forge does not answer; the ticket stays held until the state is known. A GitHub ticket reads "PR #12" |
+| "Depends on #217, still queued" | #217 has to go first, and has not started |
+| "Runs after #217" | the two tickets conflict, #217 is ahead in the queue |
+| "Waiting, ticket already running" | a run already holds this ticket |
+| "Waiting, every slot is taken" | a slot |
 
-A ticket held by the schedule takes no slot, and the tickets behind it that conflict with nothing go ahead. The **Pourquoi il attend** (why it waits) disclosure gives the reason the agent wrote and the summary of the ticket. The arrows change the order of the tickets of one repository, the cross removes a ticket from the queue. A ticket another one depends on stays ahead of it, whatever order is chosen.
+A ticket held by the schedule takes no slot, and the tickets behind it that conflict with nothing go ahead. The **Why it waits** disclosure gives the reason the agent wrote and the summary of the ticket. The arrows change the order of the tickets of one repository, the cross removes a ticket from the queue. A ticket another one depends on stays ahead of it, whatever order is chosen.
 
 A ticket in conflict waits for the other ticket's merge request to be merged, not only for its run to end: it then starts from the updated base. If that merge request is closed without being merged, or if the run ends without opening one, the ticket is released and the banner says so.
 
@@ -209,8 +209,8 @@ A ticket in conflict waits for the other ticket's merge request to be merged, no
 
 The disclosure offers two forced starts. A forced ticket still waits for a free slot, and does not start while a run holds the same ticket.
 
-- **Lancer depuis la base** (start from the base). The ticket starts from the base branch without waiting for the other one. Both tickets touch the same code, so the second merge request will probably have to be reworked by hand. Also offered during the analysis: nothing says yet whether the ticket conflicts.
-- **Empiler sur `<branche>`** (stack on a branch). The ticket starts from the other ticket's branch, and its merge request targets that branch. It can only be merged after the other one. When the other one is merged and its branch deleted, GitLab retargets the second. GitHub does too, but only when it deletes the branch itself ("Delete branch" on the merged pull request, or the repository setting that deletes head branches): a branch deleted with `gh pr merge --delete-branch` or `git push --delete` closes the stacked pull request instead. Offered only when the other ticket's branch already exists.
+- **Start from the base**. The ticket starts from the base branch without waiting for the other one. Both tickets touch the same code, so the second merge request will probably have to be reworked by hand. Also offered during the analysis: nothing says yet whether the ticket conflicts.
+- **Stack on `<branch>`**. The ticket starts from the other ticket's branch, and its merge request targets that branch. It can only be merged after the other one. When the other one is merged and its branch deleted, GitLab retargets the second. GitHub does too, but only when it deletes the branch itself ("Delete branch" on the merged pull request, or the repository setting that deletes head branches): a branch deleted with `gh pr merge --delete-branch` or `git push --delete` closes the stacked pull request instead. Offered only when the other ticket's branch already exists.
 
 #### What it costs
 
@@ -227,10 +227,10 @@ The disclosure offers two forced starts. A forced ticket still waits for a free 
 
 The harness can show tickets found by an outside tool, for example a script that asks GitLab for a label, an assignee and a status. That tool writes the list of tickets it found to `console/data/ticket-proposals.json`, and the harness reads the file again every five seconds. The two share nothing else: either can be stopped without affecting the other, and without the file the harness works as before.
 
-The tickets appear in the left list, under **Proposés** (proposed). Nothing starts on its own:
+The tickets appear in the left list, under **Proposed**. Nothing starts on its own:
 
-- **Lancer** (launch) queues the ticket like a pasted URL. **Tout lancer** (launch all) sends them as one batch, so the tickets of one repository are compared before they start.
-- **Ignorer** (dismiss) removes the ticket from the list.
+- **Start** queues the ticket like a pasted URL. **Start all** sends them as one batch, so the tickets of one repository are compared before they start.
+- **Dismiss** removes the ticket from the list.
 
 A ticket launched or dismissed is not proposed again while it stays in the file. If it leaves the file and comes back, it is proposed again. A ticket already queued, running or waiting for its merge is not proposed.
 
@@ -261,9 +261,9 @@ Once the session is closed, the harness removes the worktree itself when all the
 
 The ticket's branch is never deleted, and the merge request stays.
 
-In every other case the worktree is kept, so the work can be resumed, and the activity feed gives the reason, for example "aucune merge request" (no merge request) or "changements non poussés" (unpushed changes). As soon as its session is closed, the run view offers the **Supprimer le worktree** (remove the worktree) button. If the worktree holds uncommitted or unpushed work, the harness says what would be lost and asks for confirmation. What is not committed is then lost, the branch and its commits stay in the repository.
+In every other case the worktree is kept, so the work can be resumed, and the activity feed gives the reason, for example "no merge request" or "unpushed changes". As soon as its session is closed, the run view offers the **Remove the worktree** button. If the worktree holds uncommitted or unpushed work, the harness says what would be lost and asks for confirmation. What is not committed is then lost, the branch and its commits stay in the repository.
 
-A run removed from the list with **Fermer**, or left by a stop of the console, stays reachable while its worktree is on disk: it appears in the **Worktrees conservés** (kept worktrees) group of the left column, or under **Interrompus** (interrupted) if it also carries an open incident. On start, the harness applies the same rules to the worktrees of earlier runs: it removes the ones that meet the conditions, forgets the ones whose directory is gone and keeps the others with their reason.
+A run removed from the list with **Close**, or left by a stop of the console, stays reachable while its worktree is on disk: it appears in the **Kept worktrees** group of the left column, or under **Interrupted** if it also carries an open incident. On start, the harness applies the same rules to the worktrees of earlier runs: it removes the ones that meet the conditions, forgets the ones whose directory is gone and keeps the others with their reason.
 
 Launched without the console, the plugin works as before, directly in the checkout.
 
@@ -296,6 +296,7 @@ The available settings:
 |---|---|---|
 | `IMPL_SEARCH_ROOTS` | roots where checkouts are looked for, separated by commas | `~/workspace` |
 | `IMPL_PERMISSION_MODE` | permission mode of each run: `manual`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions` | `auto` |
+| `IMPL_LANGUAGE` | language of what a run writes for people (questions, reports, merge request or pull request text): `en` or `fr`. The interface itself is always in English | `en` |
 | `IMPL_SELF_IMPROVEMENT_AUTORUN` | self-audit at the end of each run | `true` |
 | `IMPL_REMOTE_CONTROL` | Remote Control on the terminal of a run | `true` |
 | `IMPL_PORT` | listening port | `3210` |
@@ -373,7 +374,7 @@ When git stops on a conflict, the harness aborts the rebase and the branch stays
 
 The harness announces the merge only if it moved its branch. Git answers "Already up to date" with a zero exit code, and a conflict leaves the repository half merged. In that second case, the harness aborts the merge and keeps the worktree. When git brings nothing, the harness tells apart two situations the exit code does not distinguish:
 
-- **the commits of the branch are already contained in the harness**, because the work was redone by hand. The worktree is no longer of use. The harness removes it with its branch and logs "Améliorations déjà présentes" (improvements already present). Refusing this case left no exact way out, since "Fusionner" (merge) said nothing had been merged and "Ignorer" (dismiss) recorded as dismissed work that had in fact been kept;
+- **the commits of the branch are already contained in the harness**, because the work was redone by hand. The worktree is no longer of use. The harness removes it with its branch and logs "Improvements already present". Refusing this case left no exact way out, since "Merge" said nothing had been merged and "Dismiss" recorded as dismissed work that had in fact been kept;
 - **the branch carries no commit**, and the agent may still be writing. The worktree is kept. The cleanup happens only if the worktree also has nothing uncommitted, because the diagnosis a failed validation leaves there exists nowhere else.
 
 ## How it works
@@ -384,7 +385,7 @@ Claude Code remains the engine of the workflow. The harness adds:
 - batch scheduling: an analysis session per repository predicts what each ticket would touch, the server holds back the tickets in conflict and reads the state of the awaited merge requests and pull requests with `glab` and `gh`, with no Claude session (see `console/README.md`);
 - an interactive pseudo-terminal per run, connected to the interface over WebSocket. Each page subscribes to the run it shows and receives only its terminal and its state, while the list of runs is sent to every page;
 - Claude Code hooks to follow the agents and the tools, then show and resolve the structured questions in the interface;
-- an evidence record per acceptance criterion: the pilot writes a register of identified criteria, each piece of evidence cites them with the version of the code it checked, and the server computes for each criterion whether it is verified, failed, blocked or unverified, in the Preuves tab as in the merge request summary. A QA break attempt that finds no defect is shown under its criterion without counting as a verification. The server flags a QA verdict of `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no QA observation on the current code (see `console/README.md`);
+- an evidence record per acceptance criterion: the pilot writes a register of identified criteria, each piece of evidence cites them with the version of the code it checked, and the server computes for each criterion whether it is verified, failed, blocked or unverified, in the Evidence tab as in the merge request summary. A QA break attempt that finds no defect is shown under its criterion without counting as a verification. The server flags a QA verdict of `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no QA observation on the current code (see `console/README.md`);
 - detection of runs with no next action: the server tells who can move a run forward (the user, an agent, a background task, nobody), opens an explicit incident when the pilot handed back with nothing next or when the session was lost, and offers only the actions that are possible, including a request to continue sent to the session still active (see `console/README.md`);
 - a watch on `.claude/tasks/` to follow the steps and keep the reports before they are cleaned up. That directory belongs to the target repository and an interrupted run had no time to clean it: only the files written since the run started are attached to it, those left by an earlier run are ignored and do not move the step rail. The watch is set on `.claude/` and restricted to `tasks/`, because the workflow deletes and recreates that directory during a run, and a watch set on it would not wake up afterwards.
 

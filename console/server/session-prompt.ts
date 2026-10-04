@@ -17,14 +17,14 @@ import type { RunSession } from "./run-session.js";
  * engine only types what they chose.
  */
 
-const TRUST_REFUSED = "Le dossier n'a pas été approuvé : la session s'est fermée avant de démarrer le workflow.";
+const TRUST_REFUSED = "The folder was not trusted: the session closed before starting the workflow.";
 
 function show(session: RunSession, event: Extract<EngineEvent, { kind: "session.prompt" }>) {
   if (session.state.sessionPrompt || !session.state.sessionActive || !runInProgress(session.state.status)) return false;
   session.state.sessionPrompt = { id: crypto.randomUUID(), kind: event.prompt, directory: event.directory, since: now() };
   session.state.status = "attention";
   session.state.action = undefined;
-  session.activity("attention", `${engine.label} demande de faire confiance à ce dossier`, event.directory);
+  session.activity("attention", `${engine.label} asks to trust this folder`, event.directory);
   return true;
 }
 
@@ -33,7 +33,7 @@ function drop(session: RunSession, started: boolean) {
   if (!session.state.sessionPrompt) return false;
   session.state.sessionPrompt = undefined;
   if (session.state.status === "attention" && !session.state.pendingQuestion) session.state.status = "running";
-  if (started) session.activity("system", "Dossier approuvé dans le terminal");
+  if (started) session.activity("system", "Folder trusted in the terminal");
   return true;
 }
 
@@ -53,8 +53,8 @@ export function sessionStarted(session: RunSession) {
 
 export function answerSessionPrompt(session: RunSession, promptId: string, decision: SessionPromptDecision) {
   const prompt = session.state.sessionPrompt;
-  if (!prompt || prompt.id !== promptId) throw new Error("Cette demande n'attend plus de réponse.");
-  if (!session.engine) throw new Error(`Aucune session ${engine.label} n'est active.`);
+  if (!prompt || prompt.id !== promptId) throw new Error("This request is no longer waiting for an answer.");
+  if (!session.engine) throw new Error(`No ${engine.label} session is active.`);
   // Said before the keystrokes leave: the exit that follows a refusal must find its reason.
   if (decision === "refuse") session.endedBy = "trust_refused";
   const typed = session.engine.answerPrompt(decision);
@@ -63,9 +63,9 @@ export function answerSessionPrompt(session: RunSession, promptId: string, decis
     session.endedBy = null;
     session.publish();
     session.signal();
-    throw new Error("La demande n'est plus à l'écran. Vérifie l'onglet Terminal.");
+    throw new Error("The request is no longer on screen. Check the Terminal tab.");
   }
-  session.activity("system", decision === "accept" ? "Confiance accordée au dossier" : "Confiance refusée, la session se ferme", prompt.directory);
+  session.activity("system", decision === "accept" ? "Folder trusted" : "Trust declined, the session is closing", prompt.directory);
   session.markExecution();
   session.publish();
   session.signal();

@@ -45,18 +45,18 @@ describe("work that is silent on purpose", () => {
     expect(evaluateRunHealth(quiet, T0 + minutes(9), policy)).toMatchObject({ health: "waiting", wait: { reason: "agent" } });
     const doubt = evaluateRunHealth(quiet, T0 + minutes(11), policy);
     expect(doubt.health).toBe("suspected_stall");
-    expect(doubt.detail).toMatch(/Un agent est toujours déclaré actif/);
+    expect(doubt.detail).toMatch(/One agent is still declared active/);
     expect(doubt.incident).toBeUndefined();
   });
 
   it("should treat a long test run as work, then as a doubt, never as a stall", () => {
     const signals = createSignals(T0);
-    recordEngineSignal(signals, { kind: "tool.start", tool: "Bash", command: "npm test", toolUseId: "t1", background: false, endReported: true }, T0, "Exécution des tests");
+    recordEngineSignal(signals, { kind: "tool.start", tool: "Bash", command: "npm test", toolUseId: "t1", background: false, endReported: true }, T0, "Running the tests");
     const running = { ...input(), signals: healthSignalsView(signals) };
     expect(evaluateRunHealth(running, T0 + minutes(5), policy).health).toBe("healthy");
     const doubt = evaluateRunHealth(running, T0 + minutes(12), policy);
     expect(doubt.health).toBe("suspected_stall");
-    expect(doubt.detail).toMatch(/Exécution des tests/);
+    expect(doubt.detail).toMatch(/Running the tests/);
     expect(doubt.incident).toBeUndefined();
   });
 
@@ -72,7 +72,7 @@ describe("work that is silent on purpose", () => {
   });
 
   it("should trust a wait the workflow declares on a process until the doubt threshold", () => {
-    const declared = workflow({ state: "waiting", nextAction: { kind: "await_process", taskIds: [], agents: [], description: "Serveur de dev en démarrage" } });
+    const declared = workflow({ state: "waiting", nextAction: { kind: "await_process", taskIds: [], agents: [], description: "Dev server starting" } });
     const waitingRun = input({ workflow: declared }, { pilotIdleSince: T0 });
     expect(evaluateRunHealth(waitingRun, T0 + minutes(5), policy)).toMatchObject({ health: "waiting", wait: { reason: "tool" } });
     expect(evaluateRunHealth(waitingRun, T0 + minutes(11), policy).health).toBe("suspected_stall");
@@ -85,7 +85,7 @@ describe("a pilot with nothing next", () => {
     expect(evaluateRunHealth(idle, T0 + seconds(59), policy).incident).toBeUndefined();
     const verdict = evaluateRunHealth(idle, T0 + seconds(61), policy);
     expect(verdict.health).toBe("stalled");
-    expect(verdict.incident).toMatchObject({ kind: "no_next_action", fingerprint: `no_next_action:${T0}`, title: "Plus aucune action en cours" });
+    expect(verdict.incident).toMatchObject({ kind: "no_next_action", fingerprint: `no_next_action:${T0}`, title: "Nothing in progress" });
     expect(verdict.incident!.observations.map((observation) => observation.kind)).toEqual(expect.arrayContaining(["turn", "agents", "question", "workflow"]));
     expect(verdict.incident!.suggestedActions).toContain("request_continuation");
     // The same hand-back evaluated again is the same cause.
@@ -103,12 +103,12 @@ describe("a pilot with nothing next", () => {
     const declared = workflow({ state: "waiting", nextAction: { kind: "await_agent", taskIds: ["T3"], agents: ["developer"] } });
     const verdict = evaluateRunHealth(input({ workflow: declared }, { pilotIdleSince: T0 }), T0 + minutes(2), policy);
     expect(verdict.incident?.kind).toBe("no_next_action");
-    expect(verdict.incident!.observations.find((observation) => observation.kind === "declared_wait")?.detail).toMatch(/aucun agent ne tourne/);
+    expect(verdict.incident!.observations.find((observation) => observation.kind === "declared_wait")?.detail).toMatch(/no agent is running/);
   });
 
   it("should say so when the workflow never declares its next step, without requiring it", () => {
     const verdict = evaluateRunHealth(input({}, { pilotIdleSince: T0 }), T0 + minutes(2), policy);
-    expect(verdict.incident!.observations.find((observation) => observation.kind === "workflow")?.detail).toMatch(/Aucun workflow-state\.json/);
+    expect(verdict.incident!.observations.find((observation) => observation.kind === "workflow")?.detail).toMatch(/No workflow-state\.json/);
   });
 
   it("should restart every grace from the wake-up after the machine slept", () => {
@@ -120,11 +120,11 @@ describe("a pilot with nothing next", () => {
   });
 
   it("should take a declared end that holds, and question one that does not", () => {
-    const delivered = workflow({ state: "completed", result: { delivery: "draft_merge_request", mergeRequestUrl: "https://gitlab.example/p/-/merge_requests/9", blockers: ["AC3 bloqué"] } });
+    const delivered = workflow({ state: "completed", result: { delivery: "draft_merge_request", mergeRequestUrl: "https://gitlab.example/p/-/merge_requests/9", blockers: ["AC3 blocked"] } });
     expect(evaluateRunHealth(input({ workflow: delivered }, { pilotIdleSince: T0 }), T0 + minutes(5), policy).health).toBe("healthy");
     const claimed = workflow({ state: "completed", result: { delivery: "merge_request", blockers: [] } });
     const verdict = evaluateRunHealth(input({ workflow: claimed }, { pilotIdleSince: T0 }), T0 + minutes(5), policy);
-    expect(verdict.incident?.observations.find((observation) => observation.kind === "completion")?.detail).toMatch(/jamais ouverte/);
+    expect(verdict.incident?.observations.find((observation) => observation.kind === "completion")?.detail).toMatch(/never opened/);
   });
 });
 
@@ -136,7 +136,7 @@ describe("a result its producer never wrote", () => {
     const run = input({ agents: [qa] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
     expect(evaluateRunHealth(run, T0 + seconds(20), policy).incident).toBeUndefined();
     const verdict = evaluateRunHealth(run, T0 + seconds(31), policy);
-    expect(verdict.incident).toMatchObject({ kind: "missing_result", title: "Rapport QA attendu", fingerprint: "missing_result:qa1:qa-report.md" });
+    expect(verdict.incident).toMatchObject({ kind: "missing_result", title: "QA report expected", fingerprint: "missing_result:qa1:qa-report.md" });
   });
 
   it("should stay quiet once the report arrives, or when the pilot took over after the agent", () => {
@@ -150,10 +150,10 @@ describe("a result its producer never wrote", () => {
     expect(requiredFiles({ id: "qa1", name: "implementation-harness:qa-reviewer" }, [])).toEqual(["qa-report.md", "qa-evidence.json", "qa-plan.md"]);
     expect(requiredFiles({ id: "ds1", name: "implementation-harness:designer-reviewer" }, [])).toEqual(["designer-review.md", "design-evidence.json", "design-inventory.md"]);
     const withoutPlan = input({ agents: [qa], artifacts: ["qa-report.md", "qa-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
-    expect(evaluateRunHealth(withoutPlan, T0 + seconds(40), policy).incident).toMatchObject({ kind: "missing_result", title: "Plan de test QA attendu", fingerprint: "missing_result:qa1:qa-plan.md" });
+    expect(evaluateRunHealth(withoutPlan, T0 + seconds(40), policy).incident).toMatchObject({ kind: "missing_result", title: "QA test plan expected", fingerprint: "missing_result:qa1:qa-plan.md" });
     const designer = agent({ id: "ds1", name: "implementation-harness:designer-reviewer", status: "completed", endedAt: ended });
     const withoutInventory = input({ agents: [designer], artifacts: ["designer-review.md", "design-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
-    expect(evaluateRunHealth(withoutInventory, T0 + seconds(40), policy).incident?.title).toBe("Inventaire design attendu");
+    expect(evaluateRunHealth(withoutInventory, T0 + seconds(40), policy).incident?.title).toBe("Design inventory expected");
   });
 
   it("should require nothing of a reviewer that answers in chat", () => {
@@ -181,7 +181,7 @@ describe("a plan nothing can execute", () => {
   it("should raise the precise diagnosis rather than the generic one", () => {
     const verdict = evaluateRunHealth(input({ planTasks: [{ id: "T1", status: "done" }, { id: "T2", status: "todo", dependencies: ["T9"] }] }, { pilotIdleSince: T0 }), T0 + minutes(2), policy);
     expect(verdict.incident).toMatchObject({ kind: "unresolvable_dependency" });
-    expect(verdict.incident!.reason).toMatch(/T2 dépend de T9/);
+    expect(verdict.incident!.reason).toMatch(/T2 depends on T9/);
   });
 });
 

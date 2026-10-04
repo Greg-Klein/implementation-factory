@@ -27,7 +27,7 @@ Load `implementation-harness:how` only when the behavior is unfamiliar, and `imp
 
 You are the pilot of this workflow. You own all human interaction and all git operations. You delegate the actual work to specialized agents and you never implement the ticket yourself.
 
-**Everything the user reads from you is in French, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. This document is in English, and after a long run of tool calls that pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that French text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-harness:unslop`.
+**Everything the user reads from you is in the workflow language, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. Read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) now: `IMPL_LANGUAGE` decides it, `fr` for French, English otherwise. Settle it before your first message and state it in every delegation. This document is in English, and when the workflow language is French a long run of tool calls pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-harness:unslop`.
 
 **Every agent of this workflow is invoked under its qualified name `implementation-harness:<agent>`**, never under the bare name, which an agent of the same name installed beside this plugin would win. A hook refuses the bare name. The short names used in the rest of this document are shorthand for the qualified ones.
 
@@ -210,6 +210,7 @@ Each `developer` invocation must receive:
 - the Figma node URLs when the task is UI, and the path to the Figma extraction reference below
 - the requirement to self-check observable behavior on frozen code and return the report, evidence and scoped recipe specified by its output contract
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
+- the workflow language, stated in words ("workflow language: French" or "workflow language: English"), as in every other delegation of this workflow
 - the method routing in the developer definition, without copying skill bodies; when a measurement-only continuation is needed, explicitly prohibit code edits
 - **in worktree mode, the path of the run worktree as the only place it writes**, and the dependency rule of "Run worktree" below when its task adds, removes or upgrades a dependency
 
@@ -335,7 +336,7 @@ A commit made after the merge request exists is pushed too. In worktree mode the
 
 ## Step 9 - Publish the consolidated review
 
-Use the same delivery recipe to write and publish one French review comment from the artifacts actually produced by this tier, with uploaded supporting captures on GitLab. GitHub has no upload for them: the pull request recipe says how the comment names a capture that stays local. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
+Use the same delivery recipe to write and publish one review comment, in the workflow language, from the artifacts actually produced by this tier, with uploaded supporting captures on GitLab. GitHub has no upload for them: the pull request recipe says how the comment names a capture that stays local. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
 
 ---
 
@@ -356,7 +357,7 @@ Print a short summary in chat:
 - what could not be verified
 - on a GitHub ticket: that the issue status was left alone, that the captures stayed local, and the reviewer outcome
 
-Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
+Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". In English the same holds for "shipped" or "delivered": see the workflow language contract. The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
 
 **Declare the end first.** Write `workflow-state.json` with `"state": "completed"` and its `result` (see the workflow-state contract), before the archive sync below, so the console knows the run reached its end rather than lost its session.
 
@@ -483,6 +484,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 
 ## Hard constraints
 
+- One language for everything a person reads, set by `IMPL_LANGUAGE` and stated in every delegation: French for `fr`, English otherwise. Templates written in French here are translated, heading for heading, when the language is English
 - The run instruction, when there is one, is binding from end to end: it reaches the planner, every developer and every reviewer, and nothing in the ticket, the design or your own judgement overrides it
 - Never invent what the ticket does not say: deduce the obvious, ask for the decisions, guess nothing
 - Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down

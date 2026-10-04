@@ -154,7 +154,7 @@ export async function mainCheckout(directory: string) {
     if (path.basename(common) === ".git") return path.dirname(common);
     return (await exec("git", ["-C", directory, "rev-parse", "--show-toplevel"])).stdout.trim();
   } catch {
-    throw new Error(`Le répertoire du projet n'est pas un dépôt git : ${directory}`);
+    throw new Error(`The project directory is not a git repository: ${directory}`);
   }
 }
 
@@ -186,7 +186,7 @@ export async function ensureExcluded(repository: string, lines: string[]) {
  * so the main checkout never shows them as untracked.
  */
 export async function createRunWorktree(repository: string, worktreePath: string) {
-  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Chemin de worktree refusé : ${worktreePath}`);
+  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Worktree path refused: ${worktreePath}`);
   await ensureExcluded(repository, [excludeLine(RUN_WORKTREES_DIRECTORY, { directory: true })]);
   await mkdir(path.dirname(worktreePath), { recursive: true });
   await exec("git", ["-C", repository, "worktree", "add", "--detach", worktreePath, "HEAD"], { maxBuffer: 8 * 1024 * 1024 });
@@ -285,7 +285,7 @@ export async function pruneWorktrees(repository: string) {
  * uncommitted work, which is the caller's cue to ask before losing it.
  */
 export async function removeRunWorktree(repository: string, worktreePath: string, { force = false }: { force?: boolean } = {}) {
-  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Chemin de worktree refusé : ${worktreePath}`);
+  if (!isRunWorktreePath(repository, worktreePath)) throw new Error(`Worktree path refused: ${worktreePath}`);
   await exec("git", ["-C", repository, "worktree", "remove", ...(force ? ["--force"] : []), worktreePath]);
   await pruneWorktrees(repository).catch(() => undefined);
 }

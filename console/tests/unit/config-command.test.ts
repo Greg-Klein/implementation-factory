@@ -36,9 +36,9 @@ describe("impl config", () => {
     expect(code).toBe(0);
     expect(stdout).toMatch(/IMPL_PORT\s+4321\s+\.env/);
     expect(stdout).toMatch(/IMPL_HOST\s+0\.0\.0\.0\s+shell/);
-    expect(stdout).toMatch(/IMPL_SEARCH_ROOTS\s+~\/workspace\s+défaut/);
-    expect(stdout).toMatch(/IMPL_WORKTREE_DEPENDENCY_DIRS\s+node_modules\s+défaut/);
-    expect(stdout).toMatch(/IMPL_WORKTREE_COPY_FILES\s+\.env\*,\.claude\/settings\.local\.json\s+défaut/);
+    expect(stdout).toMatch(/IMPL_SEARCH_ROOTS\s+~\/workspace\s+default/);
+    expect(stdout).toMatch(/IMPL_WORKTREE_DEPENDENCY_DIRS\s+node_modules\s+default/);
+    expect(stdout).toMatch(/IMPL_WORKTREE_COPY_FILES\s+\.env\*,\.claude\/settings\.local\.json\s+default/);
   });
 
   it("should let a shell variable win over the file", () => {
@@ -50,21 +50,21 @@ describe("impl config", () => {
   it("should refuse an unknown key", () => {
     const { code, stderr } = config(["set", "IMPL_INCONNU=1"], { IMPL_ENV_FILE: envFile() });
     expect(code).toBe(1);
-    expect(stderr).toContain("Variable inconnue");
+    expect(stderr).toContain("Unknown variable");
   });
 
   it("should refuse an invalid port instead of writing it", () => {
     const file = envFile("IMPL_PORT='3210'\n");
     const { code, stderr } = config(["set", "IMPL_PORT=0"], { IMPL_ENV_FILE: file });
     expect(code).toBe(1);
-    expect(stderr).toContain("entier attendu");
+    expect(stderr).toContain("expected an integer");
     expect(readFileSync(file, "utf8")).toBe("IMPL_PORT='3210'\n");
   });
 
   it("should refuse a boolean that is neither true nor false", () => {
     const { code, stderr } = config(["set", "IMPL_SELF_IMPROVEMENT_AUTORUN=oui"], { IMPL_ENV_FILE: envFile() });
     expect(code).toBe(1);
-    expect(stderr).toContain("true ou false");
+    expect(stderr).toContain("true or false");
   });
 
   it("should refuse a permission mode Claude Code does not accept", () => {
@@ -106,14 +106,14 @@ describe("impl config", () => {
   it("should warn about an unknown key without failing", () => {
     const { code, stdout } = config(["check"], { IMPL_ENV_FILE: envFile("IMPL_OUBLIEE='1'\n") });
     expect(code).toBe(0);
-    expect(stdout).toContain("clé inconnue");
+    expect(stdout).toContain("unknown key");
   });
 
   it("should refuse to rewrite a line whose quote is never closed", () => {
     const file = envFile("IMPL_PORT='3210\n");
     const { code, stderr } = config(["set", "IMPL_PORT=4321"], { IMPL_ENV_FILE: file });
     expect(code).toBe(1);
-    expect(stderr).toContain("Guillemet non fermé");
+    expect(stderr).toContain("Unclosed quote");
     expect(readFileSync(file, "utf8")).toBe("IMPL_PORT='3210\n");
   });
 
@@ -121,7 +121,7 @@ describe("impl config", () => {
     const { code, stdout, stderr } = config([], { IMPL_ENV_FILE: envFile() });
     expect(code).toBe(0);
     expect(stdout).toContain("IMPL_SEARCH_ROOTS");
-    expect(stderr).toContain("Terminal non interactif");
+    expect(stderr).toContain("Non-interactive terminal");
   });
 
   it("should keep .env.example identical to the schema template", () => {

@@ -37,29 +37,29 @@ describe("whether the console removes a worktree on its own", () => {
   });
 
   it("should keep it when the run opened no merge request", () => {
-    expect(worktreeRemoval(delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), safe)).toMatchObject({ allowed: true, automatic: false, reasons: ["aucune merge request"], risks: [] });
+    expect(worktreeRemoval(delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), safe)).toMatchObject({ allowed: true, automatic: false, reasons: ["no merge request"], risks: [] });
     expect(worktreeRemoval(delivered({ status: "failed", mergeRequestUrl: undefined }), safe).automatic).toBe(false);
-    expect(worktreeRemoval({ ...delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), issueUrl: "https://github.com/acme/shop/issues/7" }, safe).reasons).toEqual(["aucune pull request"]);
+    expect(worktreeRemoval({ ...delivered({ status: "stopped", mergeRequestUrl: undefined, workflow: undefined }), issueUrl: "https://github.com/acme/shop/issues/7" }, safe).reasons).toEqual(["no pull request"]);
   });
 
   it("should keep it when the merge request is a draft on a blocked run", () => {
     const draft = worktreeRemoval(delivered({ workflow: workflow({ result: { delivery: "draft_merge_request", mergeRequestUrl: MR, blockers: ["QA"] } }) }), safe);
-    expect(draft).toMatchObject({ automatic: false, reasons: ["merge request en brouillon sur un run bloqué"] });
+    expect(draft).toMatchObject({ automatic: false, reasons: ["draft merge request on a blocked run"] });
     expect(worktreeRemoval(delivered({ workflow: workflow({ state: "blocked" }) }), safe).automatic).toBe(false);
   });
 
   it("should keep it when a run with a merge request did not finish", () => {
-    expect(worktreeRemoval(delivered({ status: "failed" }), safe)).toMatchObject({ automatic: false, reasons: ["run non terminé"] });
+    expect(worktreeRemoval(delivered({ status: "failed" }), safe)).toMatchObject({ automatic: false, reasons: ["run not finished"] });
   });
 
   it("should wait for the archive of the evidence to be confirmed", () => {
-    expect(worktreeRemoval(delivered({ archiveSyncedAt: undefined }), safe)).toMatchObject({ automatic: false, reasons: ["archive des preuves non confirmée"] });
+    expect(worktreeRemoval(delivered({ archiveSyncedAt: undefined }), safe)).toMatchObject({ automatic: false, reasons: ["evidence archive not confirmed"] });
   });
 
   it("should keep it when the tree is dirty or its commits are not on the remote, and name what a removal would lose", () => {
-    expect(worktreeRemoval(delivered(), { exists: true, clean: false, pushed: true })).toMatchObject({ automatic: false, risks: ["changements non commités"] });
-    expect(worktreeRemoval(delivered(), { exists: true, clean: true, pushed: false })).toMatchObject({ automatic: false, risks: ["changements non poussés"] });
-    expect(worktreeRemoval(delivered(), { exists: true, clean: false, pushed: false }).risks).toEqual(["changements non commités", "changements non poussés"]);
+    expect(worktreeRemoval(delivered(), { exists: true, clean: false, pushed: true })).toMatchObject({ automatic: false, risks: ["uncommitted changes"] });
+    expect(worktreeRemoval(delivered(), { exists: true, clean: true, pushed: false })).toMatchObject({ automatic: false, risks: ["unpushed changes"] });
+    expect(worktreeRemoval(delivered(), { exists: true, clean: false, pushed: false }).risks).toEqual(["uncommitted changes", "unpushed changes"]);
   });
 
   it("should ask no confirmation for a kept worktree that holds nothing to lose", () => {
@@ -71,9 +71,9 @@ describe("whether the console removes a worktree on its own", () => {
   });
 
   it("should say in one line why a worktree is kept", () => {
-    expect(worktreeKeptDetail(["changements non poussés"])).toBe("Worktree conservé : changements non poussés");
-    expect(worktreeKeptDetail(["aucune merge request", "changements non commités"])).toBe("Worktree conservé : aucune merge request, changements non commités");
-    expect(worktreeKeptDetail([])).toBe("Worktree conservé");
+    expect(worktreeKeptDetail(["unpushed changes"])).toBe("Worktree kept: unpushed changes");
+    expect(worktreeKeptDetail(["no merge request", "uncommitted changes"])).toBe("Worktree kept: no merge request, uncommitted changes");
+    expect(worktreeKeptDetail([])).toBe("Worktree kept");
   });
 });
 

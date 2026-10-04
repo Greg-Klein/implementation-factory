@@ -46,7 +46,7 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
   const tabButtonRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
   // What the user was last shown in each tab. A review round overwrites the same
-  // evidence files, so the write stamp is the only thing that says the Preuves
+  // evidence files, so the write stamp is the only thing that says the Evidence
   // tab holds something new; for the dialogue it is the last message.
   const [seenEvidenceAt, setSeenEvidenceAt] = useState<string>();
   const [seenMessageId, setSeenMessageId] = useState<string>();
@@ -59,8 +59,8 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
    * is not news to them.
    */
   const unread: Partial<Record<Tab, string>> = {
-    conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "décision en attente" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
-    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
+    conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "pending decision" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "new message" : undefined,
+    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "new evidence" : undefined,
   };
 
   // Switching run switches subject: what had been read in the previous one says
@@ -106,14 +106,14 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
       <PhaseRail run={run} onOpenRecipe={actions.openRecipe} />
       <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
         <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2">
-          <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">
+          <div ref={setTabList} role="tablist" aria-label="Session view" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">
             {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--tab-selected)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
-            {([["conversation", "Conversation"], ["suivi", "Suivi"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
+            {([["conversation", "Conversation"], ["suivi", "Tracking"], ["terminal", "Terminal"], ["preuves", "Evidence"]] as const).map(([value, label]) => {
               const fresh = unread[value];
               return (
                 <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-[var(--on-tab-selected)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
                   {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "suivi" ? <KanbanIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                  {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} depuis ta dernière visite de cet onglet`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                  {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                 </button>
               );
             })}
@@ -126,11 +126,11 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
               to keep or to give up, hence an action of its own, named for what
               it frees rather than for what it stops.
             */}
-            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient une place. Elle se fermera d'elle-même si un run en file l'attend." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
-            {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
-            {run.archived && <span title="Run d’une session précédente, relu depuis son archive : il n’a plus de session et ne reçoit aucune instruction." className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">Archive</span>}
-            {canRemoveWorktree(run) && <button type="button" disabled={!connected} onClick={() => actions.removeWorktree(false)} title="Supprime le répertoire de travail de ce run. La branche et ses commits restent dans le dépôt. Une confirmation est demandée si du travail n'est ni commité ni poussé." className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><FolderDashedIcon size={12} className="shrink-0" /> Supprimer le worktree</button>}
-            {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
+            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="The session stays open and holds a slot. It will close on its own if a queued run waits for it." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Free the slot</button>}
+            {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Stop</button>}
+            {run.archived && <span title="Run from a previous session, read back from its archive: it has no session any more and takes no instruction." className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">Archive</span>}
+            {canRemoveWorktree(run) && <button type="button" disabled={!connected} onClick={() => actions.removeWorktree(false)} title="Removes the working directory of this run. The branch and its commits stay in the repository. A confirmation is asked if some work is neither committed nor pushed." className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><FolderDashedIcon size={12} className="shrink-0" /> Remove the worktree</button>}
+            {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title="Remove this run from the list. Its documents stay archived on disk." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Close</button>}
           </div>
         </div>
         <WorktreePanel result={worktreeResult && worktreeResult.runId === run.id && canRemoveWorktree(run) ? worktreeResult : undefined} connected={connected} onConfirm={() => actions.removeWorktree(true)} onDismiss={actions.dismissWorktreeResult} />

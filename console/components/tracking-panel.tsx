@@ -13,7 +13,7 @@ const COLUMNS: { status: PlanTaskStatus; title: string }[] = [
   { status: "done", title: "Done" },
 ];
 
-const STATUS_LABEL: Record<PlanTaskStatus, string> = { todo: "À faire", in_progress: "En cours", done: "Terminée" };
+const STATUS_LABEL: Record<PlanTaskStatus, string> = { todo: "To do", in_progress: "In progress", done: "Done" };
 
 function StatusMark({ status }: { status: PlanTaskStatus }) {
   if (status === "done") return <span role="img" aria-label={STATUS_LABEL.done} className="grid size-4.5 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-[var(--on-accent)]"><CheckIcon size={10} weight="bold" /></span>;
@@ -41,7 +41,7 @@ function TaskCard({ task, onOpen }: { task: PlanTask; onOpen: () => void }) {
           <span className="block min-w-0 flex-1 text-xs font-medium leading-relaxed text-[var(--ink)]">{task.title}</span>
         </span>
         <span className="mt-2.5 flex items-center gap-2 pl-7">
-          {task.complexity && <span title="Complexité estimée par le plan" className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[10px] text-[var(--muted)]">{task.complexity}</span>}
+          {task.complexity && <span title="Complexity estimated by the plan" className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono text-[10px] text-[var(--muted)]">{task.complexity}</span>}
           <Assignee task={task} />
           <span className="ml-auto shrink-0 font-mono text-[10px] text-[var(--muted)]">{task.id}</span>
         </span>
@@ -88,27 +88,27 @@ function TaskDetail({ task, onClose }: { task: PlanTask; onClose: () => void }) 
             <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-[var(--muted)]">
               <span className="font-mono">{task.id}</span>
               <span>{STATUS_LABEL[task.status]}</span>
-              {task.complexity && <span title="Complexité estimée par le plan" className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono">{task.complexity}</span>}
+              {task.complexity && <span title="Complexity estimated by the plan" className="rounded-full bg-[var(--paper)] px-2 py-0.5 font-mono">{task.complexity}</span>}
               <Assignee task={task} />
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="grid size-7 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] active:translate-y-px"><XIcon size={14} /></button>
+          <button type="button" onClick={onClose} aria-label="Close" className="grid size-7 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)] active:translate-y-px"><XIcon size={14} /></button>
         </header>
         <div className="scrollbar-thin min-h-0 space-y-4 overflow-y-auto px-5 py-4">
           {abstract
             ? <p className="text-xs leading-relaxed text-[var(--ink)]"><InlineText text={markCode(abstract)} /></p>
-            : <p className="text-xs leading-relaxed text-[var(--muted)]">Le plan ne décrit pas cette tâche au-delà de son titre.</p>}
+            : <p className="text-xs leading-relaxed text-[var(--muted)]">The plan does not describe this task beyond its title.</p>}
           {task.description && hasMoreDetail(task) && <details className="rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
-            <summary className="cursor-pointer text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">Détail pour le développeur</summary>
+            <summary className="cursor-pointer text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)]">Detail for the developer</summary>
             <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-[var(--ink)]">
               {detailParagraphs(task.description).map((paragraph, index) => <p key={index}><InlineText text={markCode(paragraph)} /></p>)}
             </div>
           </details>}
-          {task.filePaths && <DetailSection title="Fichiers">
+          {task.filePaths && <DetailSection title="Files">
             <ul className="space-y-1">{task.filePaths.map((file) => <li key={file} className="break-all font-mono text-[11px] text-[var(--ink)]">{file}</li>)}</ul>
           </DetailSection>}
-          {task.criterionIds && <DetailSection title="Critères couverts"><IdChips ids={task.criterionIds} /></DetailSection>}
-          {task.dependencies && <DetailSection title="Dépend de"><IdChips ids={task.dependencies} /></DetailSection>}
+          {task.criterionIds && <DetailSection title="Criteria covered"><IdChips ids={task.criterionIds} /></DetailSection>}
+          {task.dependencies && <DetailSection title="Depends on"><IdChips ids={task.dependencies} /></DetailSection>}
         </div>
       </section>
     </div>
@@ -125,8 +125,8 @@ export function TrackingPanel({ run }: { run: RunState }) {
       <div data-testid="tracking-empty" className="grid flex-1 place-items-center p-8 text-center">
         <div className="max-w-xs">
           <KanbanIcon size={18} className="mx-auto text-[var(--muted)]" />
-          <p className="mt-3 text-xs font-medium text-[var(--ink)]">Pas encore de plan pour ce run.</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">Les tâches apparaissent ici dès que le plan d’implémentation est écrit, puis avancent seules au fil du run.</p>
+          <p className="mt-3 text-xs font-medium text-[var(--ink)]">No plan for this run yet.</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">Tasks appear here as soon as the implementation plan is written, then move on their own as the run goes.</p>
         </div>
       </div>
     );
@@ -139,7 +139,7 @@ export function TrackingPanel({ run }: { run: RunState }) {
           <section key={status} data-testid={`tracking-column-${status}`} aria-labelledby={`tracking-${status}`} className="rounded-lg border border-[var(--line)] bg-[var(--paper)] p-2.5">
             <h3 id={`tracking-${status}`} className="flex items-center gap-2 px-1.5 pb-2.5 pt-1 text-sm font-semibold">
               {title}
-              <span role="status" aria-live="polite" aria-label={`${column.length} tâche${column.length > 1 ? "s" : ""}`} className="rounded-full bg-[var(--line)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--ink)]">{column.length}</span>
+              <span role="status" aria-live="polite" aria-label={`${column.length} task${column.length > 1 ? "s" : ""}`} className="rounded-full bg-[var(--line)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--ink)]">{column.length}</span>
             </h3>
             <ul className="space-y-2">{column.map((task) => <TaskCard key={task.id} task={task} onOpen={() => setOpenId(task.id)} />)}</ul>
           </section>

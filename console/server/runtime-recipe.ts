@@ -32,7 +32,7 @@ export async function seedRuntimeRecipe(repository: string, worktree: string) {
 export async function keepRuntimeRecipe(session: RunSession, source: string) {
   const size = await stat(source).then((file) => file.size, () => 0);
   if (!size || size > MAX_RECIPE_BYTES) {
-    if (size) session.activity("attention", "Recette d'exécution non conservée", `Le fichier dépasse ${MAX_RECIPE_BYTES / 1000} ko.`);
+    if (size) session.activity("attention", "Runtime recipe not kept", `The file exceeds ${MAX_RECIPE_BYTES / 1000} kB.`);
     return;
   }
   const stored = runtimeRecipeStore(storageRoot, sourceRepository(session.state));
@@ -40,9 +40,9 @@ export async function keepRuntimeRecipe(session: RunSession, source: string) {
     await mkdir(path.dirname(stored), { recursive: true });
     await copyFile(source, `${stored}.tmp`);
     await rename(`${stored}.tmp`, stored);
-    session.activity("artifact", "Recette d'exécution conservée", "Reprise au prochain run de ce dépôt.");
+    session.activity("artifact", "Runtime recipe kept", "Reused at the next run of this repository.");
   } catch (error) {
-    session.activity("attention", "Recette d'exécution non conservée", error instanceof Error ? error.message : String(error));
+    session.activity("attention", "Runtime recipe not kept", error instanceof Error ? error.message : String(error));
   }
 }
 

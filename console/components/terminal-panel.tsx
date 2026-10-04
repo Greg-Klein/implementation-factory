@@ -78,5 +78,5 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
     return () => { observer.disconnect(); inputDisposable.dispose(); terminal.dispose(); terminalRef.current = null; };
   }, []);
 
-  return <div ref={containerRef} className="h-[calc(100%-48px)] min-h-[492px] w-full" aria-label="Terminal Claude Code" />;
+  return <div ref={containerRef} className="h-[calc(100%-48px)] min-h-[492px] w-full" aria-label="Claude Code terminal" />;
 });

@@ -19,11 +19,11 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
 }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const query = value.trim().toLocaleLowerCase("fr");
+  const query = value.trim().toLocaleLowerCase("en");
   const suggestions = useMemo(() => {
     if (!query) return [];
     return repositories.filter((repository) =>
-      `${repository.project} ${repository.path} ${repository.resolvedPath}`.toLocaleLowerCase("fr").includes(query),
+      `${repository.project} ${repository.path} ${repository.resolvedPath}`.toLocaleLowerCase("en").includes(query),
     ).slice(0, 7);
   }, [query, repositories]);
   const listOpen = open && query.length > 0;
@@ -38,9 +38,9 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
   return (
     <div className="relative mb-5">
       <div className="mb-2 flex min-h-4 items-center justify-between gap-3">
-        <label htmlFor="project-directory" className="text-xs font-medium">Répertoire du projet <span className="font-normal text-[var(--muted)]">· facultatif</span></label>
+        <label htmlFor="project-directory" className="text-xs font-medium">Project directory <span className="font-normal text-[var(--muted)]">· optional</span></label>
         <span className="truncate text-right font-mono text-[9px] text-[var(--accent)]">
-          {detecting ? "Détection…" : detectedProject ? `Projet · ${detectedProject}` : ""}
+          {detecting ? "Detecting…" : detectedProject ? `Project · ${detectedProject}` : ""}
         </span>
       </div>
       <div className="relative">
@@ -65,12 +65,12 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
             if (event.key === "Enter") { event.preventDefault(); select(suggestions[activeIndex]); }
             if (event.key === "Escape") setOpen(false);
           }}
-          placeholder="Détecté depuis le ticket, ou commence à taper…"
+          placeholder="Detected from the ticket, or start typing…"
           className="field !pl-10 !pr-9 font-mono text-xs"
         />
         {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
       </div>
-      {!listOpen && value.trim().startsWith("/") && <button type="button" onClick={() => onOpenRecipe(value.trim())} title="Ce que le harnais retient pour lancer l'application de ce dépôt" className="mt-1.5 text-[11px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Recette d&apos;exécution</button>}
+      {!listOpen && value.trim().startsWith("/") && <button type="button" onClick={() => onOpenRecipe(value.trim())} title="What the harness keeps to start the application of this repository" className="mt-1.5 text-[11px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button>}
       {listOpen && (
         <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-[var(--raised)] p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
           {suggestions.length > 0 ? suggestions.map((repository, index) => (
@@ -86,9 +86,9 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
             >
               <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-[var(--raised)] text-[var(--accent)]"><GitBranchIcon size={13} /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
-              {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Introuvable</span>}
+              {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Not found</span>}
             </button>
-          )) : <p className="px-3 py-3 text-[11px] text-[var(--muted)]">Aucun dépôt déclaré ne correspond.</p>}
+          )) : <p className="px-3 py-3 text-[11px] text-[var(--muted)]">No declared repository matches.</p>}
         </div>
       )}
     </div>
@@ -106,12 +106,12 @@ function TicketCount({ parsed }: { parsed: ParsedTickets }) {
   return (
     <div id="ticket-count" aria-live="polite" className="-mt-3 mb-5 space-y-1 text-[11px] leading-4">
       <p className="text-[var(--accent)]">
-        {tickets.length === 0 ? "Aucun ticket reconnu" : `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} reconnu${tickets.length > 1 ? "s" : ""}`}
-        {duplicates.length > 0 && <span className="text-[var(--muted)]"> · {duplicates.length} doublon{duplicates.length > 1 ? "s" : ""} ignoré{duplicates.length > 1 ? "s" : ""}</span>}
+        {tickets.length === 0 ? "No ticket recognized" : `${tickets.length} ticket${tickets.length > 1 ? "s" : ""} recognized`}
+        {duplicates.length > 0 && <span className="text-[var(--muted)]"> · {duplicates.length} duplicate{duplicates.length > 1 ? "s" : ""} skipped</span>}
       </p>
       {invalid.length > 0 && (
         <ul className="text-red-700">
-          {invalid.map((entry, index) => <li key={`${entry.line}-${index}`}>Ligne {entry.line} : <span className="break-all font-mono text-[10px]">{entry.text}</span> n’est pas une URL de ticket GitLab ou GitHub.</li>)}
+          {invalid.map((entry, index) => <li key={`${entry.line}-${index}`}>Line {entry.line}: <span className="break-all font-mono text-[10px]">{entry.text}</span> is not a GitLab or GitHub ticket URL.</li>)}
         </ul>
       )}
     </div>
@@ -133,29 +133,29 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
     <section className="scrollbar-thin grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(340px,.8fr)]">
       <div className="flex flex-col justify-between px-6 py-10 md:px-10 md:py-14 lg:px-[4vw]">
         <div className="reveal">
-          <p className="mb-8 font-mono text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--accent)]">Nouvelle exécution</p>
-          <h2 className="max-w-190 text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-5xl">Du ticket à la MR,<span className="block text-[var(--muted)]">sans perdre le fil.</span></h2>
-          <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Lance ton workflow Claude Code habituel. Les agents, les documents générés et les revues remontent ici pendant que le terminal reste pleinement interactif.</p>
+          <p className="mb-8 font-mono text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--accent)]">New run</p>
+          <h2 className="max-w-190 text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-5xl">From ticket to merge request,<span className="block text-[var(--muted)]">without losing the thread.</span></h2>
+          <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Start your usual Claude Code workflow. Agents, generated documents and reviews show up here while the terminal stays fully interactive.</p>
         </div>
         <div className="mt-12 flex items-center gap-8 border-t border-[var(--line)] pt-5 text-xs text-[var(--muted)]">
-          <span className="flex items-center gap-2"><RobotIcon size={15} /> 6 agents spécialisés</span>
-          <span className="flex items-center gap-2"><FileTextIcon size={15} /> Historique local</span>
+          <span className="flex items-center gap-2"><RobotIcon size={15} /> 6 specialized agents</span>
+          <span className="flex items-center gap-2"><FileTextIcon size={15} /> Local history</span>
         </div>
       </div>
 
       <div className="flex items-center border-t border-[var(--line)] bg-[var(--backdrop)] p-5 md:p-8 lg:border-l lg:border-t-0">
         <form className="w-full rounded-5.5 border border-[var(--raised)]/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_var(--highlight)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
           <div className="mb-7 flex items-start justify-between">
-            <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
+            <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configure the run</h3><p className="mt-1 text-xs text-[var(--muted)]">The command will run in the chosen project.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
           </div>
           <label className="mb-5 block">
-            <span className="mb-2 block text-xs font-medium">Ticket <span className="font-normal text-[var(--muted)]">GitLab ou GitHub · un par ligne pour en lancer plusieurs</span></span>
+            <span className="mb-2 block text-xs font-medium">Ticket <span className="font-normal text-[var(--muted)]">GitLab or GitHub · one per line to start several</span></span>
             <textarea
               value={issueUrl}
               onChange={(event) => setIssueUrl(event.target.value)}
               onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && canStart) { event.preventDefault(); onStart(); } }}
-              placeholder="https://gitlab.com/…/-/issues/217 ou https://github.com/…/issues/217"
+              placeholder="https://gitlab.com/…/-/issues/217 or https://github.com/…/issues/217"
               rows={Math.min(Math.max(lines, 1), 8)}
               spellCheck={false}
               autoComplete="off"
@@ -165,11 +165,11 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
           </label>
           <TicketCount parsed={parsed} />
           {batch
-            ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">Le dépôt de chaque ticket est détecté depuis son URL. Les tickets d’un même dépôt sont comparés avant de démarrer : ceux qui touchent le même code passent l’un après l’autre.</p>
+            ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">The repository of each ticket is detected from its URL. Tickets of the same repository are compared before they start: those that touch the same code run one after the other.</p>
             : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} onOpenRecipe={onOpenRecipe} />}
-          <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· {batch ? "facultatif, appliquée à tous les tickets du lot" : "facultatif"}</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
+          <label className="block"><span className="mb-2 block text-xs font-medium">Special instruction <span className="font-normal text-[var(--muted)]">· {batch ? "optional, applied to every ticket of the batch" : "optional"}</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop only, do not touch tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
-            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Lancer les ${parsed.tickets.length} tickets` : "Lancer l’implémentation"}</span><ArrowRightIcon size={16} />
+            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Start ${parsed.tickets.length} tickets` : "Start implementation"}</span><ArrowRightIcon size={16} />
           </button>
         </form>
       </div>

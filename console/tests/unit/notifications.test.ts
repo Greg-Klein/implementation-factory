@@ -18,8 +18,8 @@ describe("run notifications", () => {
     expect(runAlert(run(), run(waiting))).toEqual({
       runId: "run-1",
       tag: "question-q1",
-      title: "Claude attend une réponse",
-      body: "repo · le workflow attend ta décision pour continuer.",
+      title: "Claude is waiting for an answer",
+      body: "repo · the workflow is waiting for your decision to continue.",
       cue: "attention",
     });
   });
@@ -32,14 +32,14 @@ describe("run notifications", () => {
   });
 
   it("should call back when the session waits without a structured question", () => {
-    expect(runAlert(run(), run({ status: "attention" }))?.title).toBe("Claude Code attend ton attention");
+    expect(runAlert(run(), run({ status: "attention" }))?.title).toBe("Claude Code is waiting for your attention");
   });
 
   it("should call back when the run ends, and name the merge request when there is one", () => {
-    expect(runAlert(run(), run({ status: "completed" }))?.body).toBe("Le run est allé au bout.");
+    expect(runAlert(run(), run({ status: "completed" }))?.body).toBe("The run reached its end.");
     expect(runAlert(run(), run({ status: "completed", mergeRequestUrl: "https://gitlab.com/acme/-/merge_requests/1" }))?.body)
       .toBe("https://gitlab.com/acme/-/merge_requests/1");
-    expect(runAlert(run(), run({ status: "failed", error: "Code 2" }))?.title).toBe("Le run a échoué · repo");
+    expect(runAlert(run(), run({ status: "failed", error: "Code 2" }))?.title).toBe("The run failed · repo");
   });
 
   it("should stay silent on anything that is not a transition", () => {
@@ -50,14 +50,14 @@ describe("run notifications", () => {
   });
 
   it("should call back once when an incident opens, not a second time for the attention that comes with it", () => {
-    const incident = { id: "incident-1", kind: "no_next_action" as const, title: "Plus aucune action en cours", revision: 1 };
+    const incident = { id: "incident-1", kind: "no_next_action" as const, title: "Nothing in progress", revision: 1 };
     const alert = runAlert(run(), run({ status: "attention", health: "stalled", incident }));
-    expect(alert).toMatchObject({ tag: "incident-incident-1", title: "Plus aucune action en cours · repo", cue: "attention" });
+    expect(alert).toMatchObject({ tag: "incident-incident-1", title: "Nothing in progress · repo", cue: "attention" });
     expect(runAlert(run({ status: "attention", incident }), run({ status: "attention", incident: { ...incident, revision: 2 } }))).toBeUndefined();
   });
 
   it("should voice a doubt once, and never on a run already waiting for the user", () => {
-    expect(runAlert(run(), run({ health: "suspected_stall" }))?.title).toBe("Aucune progression observée · repo");
+    expect(runAlert(run(), run({ health: "suspected_stall" }))?.title).toBe("No progress observed · repo");
     expect(runAlert(run({ health: "suspected_stall" }), run({ health: "suspected_stall" }))).toBeUndefined();
     expect(runAlert(run({ status: "attention" }), run({ status: "attention", health: "suspected_stall" }))).toBeUndefined();
   });
@@ -86,14 +86,14 @@ describe("run notifications", () => {
   });
 
   it("should say in the tab what the whole console would show", () => {
-    expect(documentTitle([run(waiting)])).toBe("● Claude attend une réponse · Implementation Harness");
-    expect(documentTitle([run({ id: "a", ...waiting }), run({ id: "b", ...waiting })])).toBe("● 2 runs attendent une réponse · Implementation Harness");
-    expect(documentTitle([run({ status: "attention" })])).toBe("● Attention requise · Implementation Harness");
-    expect(documentTitle([run({ id: "a", status: "attention" }), run({ id: "b", status: "attention" })])).toBe("● Attention requise (2) · Implementation Harness");
-    expect(documentTitle([run({ status: "completed" })])).toBe("✓ Terminé · Implementation Harness");
-    expect(documentTitle([run({ status: "failed" })])).toBe("✗ Échec · Implementation Harness");
-    expect(documentTitle([run()])).toBe("1 run en cours · Implementation Harness");
-    expect(documentTitle([run({ id: "a" }), run({ id: "b" })])).toBe("2 runs en cours · Implementation Harness");
+    expect(documentTitle([run(waiting)])).toBe("● Claude is waiting for an answer · Implementation Harness");
+    expect(documentTitle([run({ id: "a", ...waiting }), run({ id: "b", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Harness");
+    expect(documentTitle([run({ status: "attention" })])).toBe("● Needs attention · Implementation Harness");
+    expect(documentTitle([run({ id: "a", status: "attention" }), run({ id: "b", status: "attention" })])).toBe("● Needs attention (2) · Implementation Harness");
+    expect(documentTitle([run({ status: "completed" })])).toBe("✓ Completed · Implementation Harness");
+    expect(documentTitle([run({ status: "failed" })])).toBe("✗ Failed · Implementation Harness");
+    expect(documentTitle([run()])).toBe("1 run in progress · Implementation Harness");
+    expect(documentTitle([run({ id: "a" }), run({ id: "b" })])).toBe("2 runs in progress · Implementation Harness");
     expect(documentTitle([])).toBe("Implementation Harness");
   });
 
@@ -114,22 +114,22 @@ describe("the folder trust prompt in notifications", () => {
     expect(runAlert(run(), run(prompted))).toEqual({
       runId: "run-1",
       tag: "session-prompt-p1",
-      title: "Claude Code demande de faire confiance au dossier",
-      body: "repo · la session ne démarre pas sans ta décision.",
+      title: "Claude Code asks to trust this folder",
+      body: "repo · the session does not start without your decision.",
       cue: "attention",
     });
     expect(runAlert(run(prompted), run(prompted))).toBeUndefined();
   });
 
   it("should count the prompt as a decision in the tab title and the favicon", () => {
-    expect(documentTitle([run(prompted)])).toBe("● Claude attend une réponse · Implementation Harness");
-    expect(documentTitle([run(prompted), run({ id: "run-2", ...waiting })])).toBe("● 2 runs attendent une réponse · Implementation Harness");
+    expect(documentTitle([run(prompted)])).toBe("● Claude is waiting for an answer · Implementation Harness");
+    expect(documentTitle([run(prompted), run({ id: "run-2", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Harness");
     expect(faviconColor([run({ sessionPromptId: "p1" })])).toBe("#d97706");
   });
 
   it("should say why a run stopped on a refused folder", () => {
-    const reason = "Le dossier n'a pas été approuvé : la session s'est fermée avant de démarrer le workflow.";
+    const reason = "The folder was not trusted: the session closed before starting the workflow.";
     expect(runAlert(run(prompted), run({ status: "stopped", error: reason }))).toMatchObject({ tag: "stopped-run-1", body: reason, cue: "done" });
-    expect(runAlert(run(), run({ status: "stopped" }))).toMatchObject({ body: "Tu as arrêté la session avant la fin du workflow." });
+    expect(runAlert(run(), run({ status: "stopped" }))).toMatchObject({ body: "You stopped the session before the end of the workflow." });
   });
 });

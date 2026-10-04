@@ -20,27 +20,27 @@ export function runAlert(previous: RunSummary | undefined, next: RunSummary): Ru
   if (!previous || previous.id !== next.id) return undefined;
   const where = runLabel(next);
   if (next.pendingQuestionCount > 0 && previous.pendingQuestionCount === 0)
-    return { runId: next.id, tag: `question-${next.pendingQuestionId}`, title: pendingAnswerLabel(next.pendingQuestionCount), body: `${where} · le workflow attend ta décision pour continuer.`, cue: "attention" };
+    return { runId: next.id, tag: `question-${next.pendingQuestionId}`, title: pendingAnswerLabel(next.pendingQuestionCount), body: `${where} · the workflow is waiting for your decision to continue.`, cue: "attention" };
   if (next.sessionPromptId && next.sessionPromptId !== previous.sessionPromptId)
-    return { runId: next.id, tag: `session-prompt-${next.sessionPromptId}`, title: "Claude Code demande de faire confiance au dossier", body: `${where} · la session ne démarre pas sans ta décision.`, cue: "attention" };
+    return { runId: next.id, tag: `session-prompt-${next.sessionPromptId}`, title: "Claude Code asks to trust this folder", body: `${where} · the session does not start without your decision.`, cue: "attention" };
   if (next.status === "completed" && runInProgress(previous.status))
-    return { runId: next.id, tag: `completed-${next.id}`, title: `Workflow terminé · ${where}`, body: next.mergeRequestUrl ?? "Le run est allé au bout.", cue: "done" };
+    return { runId: next.id, tag: `completed-${next.id}`, title: `Workflow completed · ${where}`, body: next.mergeRequestUrl ?? "The run reached its end.", cue: "done" };
   // A failed run is over too, and what happens next is the user's call either
   // way: the workflow has always used the same cue for both.
   if (next.status === "failed" && runInProgress(previous.status))
-    return { runId: next.id, tag: `failed-${next.id}`, title: `Le run a échoué · ${where}`, body: next.error ?? "La session s'est interrompue.", cue: "done" };
+    return { runId: next.id, tag: `failed-${next.id}`, title: `The run failed · ${where}`, body: next.error ?? "The session was interrupted.", cue: "done" };
   // A stop the user asked for is over too, but it never went all the way: it
   // must never read like the "completed" case above.
   if (next.status === "stopped" && runInProgress(previous.status))
-    return { runId: next.id, tag: `stopped-${next.id}`, title: `Run arrêté · ${where}`, body: next.error ?? "Tu as arrêté la session avant la fin du workflow.", cue: "done" };
+    return { runId: next.id, tag: `stopped-${next.id}`, title: `Run stopped · ${where}`, body: next.error ?? "You stopped the session before the end of the workflow.", cue: "done" };
   // One alert per incident, whatever else changed with it: its opening is the news.
   if (next.incident && next.incident.id !== previous.incident?.id && next.pendingQuestionCount === 0)
-    return { runId: next.id, tag: `incident-${next.incident.id}`, title: `${next.incident.title} · ${where}`, body: "Ouvre le run pour voir ce qui a été observé et ce que tu peux faire.", cue: "attention" };
+    return { runId: next.id, tag: `incident-${next.incident.id}`, title: `${next.incident.title} · ${where}`, body: "Open the run to see what was observed and what you can do.", cue: "attention" };
   if (next.pendingQuestionCount === 0 && next.status === "attention" && previous.status !== "attention")
-    return { runId: next.id, tag: `attention-${next.id}`, title: "Claude Code attend ton attention", body: `${where} · le run est en pause tant que tu n'as pas repris la main.`, cue: "attention" };
+    return { runId: next.id, tag: `attention-${next.id}`, title: "Claude Code is waiting for your attention", body: `${where} · the run is paused until you take over.`, cue: "attention" };
   // A doubt is worth one call, never on a run already waiting for the user: that one was called already.
   if (next.health === "suspected_stall" && previous.health !== "suspected_stall" && next.status !== "attention" && next.pendingQuestionCount === 0)
-    return { runId: next.id, tag: `suspected-${next.id}`, title: `Aucune progression observée · ${where}`, body: "Un doute, pas un verdict : rien n’a été arrêté ni relancé.", cue: "attention" };
+    return { runId: next.id, tag: `suspected-${next.id}`, title: `No progress observed · ${where}`, body: "A doubt, not a verdict: nothing was stopped or restarted.", cue: "attention" };
   return undefined;
 }
 
@@ -61,14 +61,14 @@ export function runAlerts(previous: RunSummary[], next: RunSummary[]): RunAlert[
 export function documentTitle(runs: RunSummary[]) {
   const waiting = runs.filter((run) => pendingDecisions(run) > 0);
   if (waiting.length === 1) return `● ${pendingAnswerLabel(pendingDecisions(waiting[0]))} · ${NAME}`;
-  if (waiting.length > 1) return `● ${waiting.length} runs attendent une réponse · ${NAME}`;
+  if (waiting.length > 1) return `● ${waiting.length} runs are waiting for an answer · ${NAME}`;
   const attention = runs.filter((run) => run.status === "attention").length;
-  if (attention > 0) return `● Attention requise${attention > 1 ? ` (${attention})` : ""} · ${NAME}`;
+  if (attention > 0) return `● Needs attention${attention > 1 ? ` (${attention})` : ""} · ${NAME}`;
   const active = runs.filter((run) => runInProgress(run.status)).length;
-  if (active > 0) return `${active} run${active > 1 ? "s" : ""} en cours · ${NAME}`;
-  if (runs.some((run) => run.status === "failed")) return `✗ Échec · ${NAME}`;
-  if (runs.some((run) => run.status === "completed")) return `✓ Terminé · ${NAME}`;
-  if (runs.some((run) => run.status === "stopped")) return `○ Arrêté · ${NAME}`;
+  if (active > 0) return `${active} run${active > 1 ? "s" : ""} in progress · ${NAME}`;
+  if (runs.some((run) => run.status === "failed")) return `✗ Failed · ${NAME}`;
+  if (runs.some((run) => run.status === "completed")) return `✓ Completed · ${NAME}`;
+  if (runs.some((run) => run.status === "stopped")) return `○ Stopped · ${NAME}`;
   return NAME;
 }
 

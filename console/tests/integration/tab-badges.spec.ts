@@ -10,15 +10,15 @@ test.beforeEach(async ({ page }) => resetRun(page));
  */
 test("should flag new evidence on the tab, and stop flagging it once read", async ({ page }) => {
   await page.goto("/?demo=1");
-  const badge = page.getByRole("img", { name: "nouvelles preuves" });
-  const evidenceTab = page.getByRole("tab", { name: "Preuves" });
+  const badge = page.getByRole("img", { name: "new evidence" });
+  const evidenceTab = page.getByRole("tab", { name: "Evidence" });
 
   // Nothing has been written yet, so there is nothing to flag.
   await expect(badge).toBeHidden();
 
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
 
   await expect(badge).toBeVisible();
   await evidenceTab.click();
@@ -31,15 +31,15 @@ test("should flag new evidence on the tab, and stop flagging it once read", asyn
 
 test("should flag again when a later round rewrites the same file", async ({ page }) => {
   await page.goto("/?demo=1");
-  const badge = page.getByRole("img", { name: "nouvelles preuves" });
+  const badge = page.getByRole("img", { name: "new evidence" });
 
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
 
   // Read the first write, then leave the tab.
   await expect(badge).toBeVisible();
-  await page.getByRole("tab", { name: "Preuves" }).click();
+  await page.getByRole("tab", { name: "Evidence" }).click();
   await expect(badge).toBeHidden();
   await page.getByRole("tab", { name: "Conversation" }).click();
 
@@ -62,8 +62,8 @@ test("should read the evidence file again when it is written a second time", asy
 
   await page.goto("/?demo=1");
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await expectDemoCompleted(page);
 
   // dev-evidence.json is written at one step and the stamp moves again at a
@@ -75,18 +75,18 @@ test("should read the evidence file again when it is written a second time", asy
 
 test("should flag a new message on the Conversation tab, and clear it on reading", async ({ page }) => {
   await page.goto("/?demo=1");
-  const badge = page.getByRole("img", { name: "nouveau message" });
+  const badge = page.getByRole("img", { name: "new message" });
 
   // Scoped to the dialogue: the demo writes the same line to the terminal too,
   // and xterm renders it into the DOM.
   const conversation = page.getByRole("log", { name: "Conversation" });
   // The first message lands while the Conversation tab is the one being read.
-  await expect(conversation.getByText("Lecture du ticket GitLab simulé…")).toBeVisible();
+  await expect(conversation.getByText("Reading the simulated GitLab ticket…")).toBeVisible();
   await expect(badge).toBeHidden();
 
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await page.getByRole("tab", { name: "Terminal" }).click();
 
   await expect(badge).toBeVisible();
@@ -102,9 +102,9 @@ test("should flag a new message on the Conversation tab, and clear it on reading
  */
 test("should flag the answer to an instruction that lands while another tab is read", async ({ page, request }) => {
   await runDemoToCompletion(page);
-  const badge = page.getByRole("img", { name: "nouveau message" });
+  const badge = page.getByRole("img", { name: "new message" });
   // The last thing the demo says, a step after it completes.
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText(/^Auto-audit terminé\./)).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText(/^Self-audit completed\./)).toBeVisible();
 
   await page.getByRole("tab", { name: "Terminal" }).click();
   await expect(badge).toBeHidden();
@@ -116,13 +116,13 @@ test("should flag the answer to an instruction that lands while another tab is r
 
   await page.getByRole("tab", { name: "Conversation" }).click();
   await expect(badge).toBeHidden();
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Instruction prise en compte. La démonstration ne modifie aucun dépôt.")).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Instruction noted. The demonstration does not modify any repository.")).toBeVisible();
 });
 
 test("should keep the tab bar aligned when a dot appears on the first tab", async ({ page }) => {
   await page.goto("/?demo=1");
   await page.getByRole("tab", { name: "Terminal" }).click();
-  await expect(page.getByRole("img", { name: /nouveau message|décision en attente/ })).toBeVisible();
+  await expect(page.getByRole("img", { name: /new message|pending decision/ })).toBeVisible();
 
   // Conversation is the first tab, so its dot shifts every button after it.
   // The pill slides there over a 200ms CSS transition, so retry until it settles.
@@ -147,21 +147,21 @@ test("should never flag the tab the user is already reading", async ({ page }) =
   await page.goto("/?demo=1");
 
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await page.getByRole("tab", { name: "Preuves" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
+  await page.getByRole("tab", { name: "Evidence" }).click();
   await expectDemoCompleted(page);
 
-  await expect(page.getByRole("img", { name: "nouvelles preuves" })).toBeHidden();
+  await expect(page.getByRole("img", { name: "new evidence" })).toBeHidden();
 });
 
 test("should flag a pending decision on the Conversation tab, where it is answered", async ({ page }) => {
   await page.goto("/?demo=1");
   await page.getByRole("tab", { name: "Terminal" }).click();
 
-  const badge = page.getByRole("img", { name: "décision en attente" });
+  const badge = page.getByRole("img", { name: "pending decision" });
   await expect(badge).toBeVisible();
   await page.getByRole("tab", { name: "Conversation" }).click();
   await expect(badge).toBeHidden();
-  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Décision requise")).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Decision required")).toBeVisible();
 });

@@ -155,14 +155,14 @@ describe("a run against the others", () => {
   it("should compare to the delivered runs only, the run itself left out", () => {
     const { runs, scope } = comparableRuns(others[0], others);
     expect(runs.map((entry) => entry.runId)).toEqual(["b", "c"]);
-    expect(scope).toBe("tous les runs livrés");
+    expect(scope).toBe("all delivered runs");
   });
 
   it("should compare within the review tier once three runs share it", () => {
     const tiered = ["x", "y", "z"].map((id) => measured(id, 2_000_000, { reviewTier: 2 }));
     const { runs, scope } = comparableRuns(measured("new", 2_000_000, { reviewTier: 2 }), [...others, ...tiered]);
     expect(runs.map((entry) => entry.runId)).toEqual(["x", "y", "z"]);
-    expect(scope).toBe("palier de revue 2");
+    expect(scope).toBe("review tier 2");
   });
 
   it("should give the medians of what it compares to", () => {

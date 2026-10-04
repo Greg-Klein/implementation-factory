@@ -30,14 +30,14 @@ import type { ClientMessage } from "./types.js";
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
   if (worktreeName.startsWith("demo-")) {
     demoState.pendingImprovement = undefined;
-    notice("info", merge ? "Améliorations fusionnées (démo)" : "Améliorations ignorées (démo)", worktreeName);
+    notice("info", merge ? "Improvements merged (demo)" : "Improvements ignored (demo)", worktreeName);
     return;
   }
   const worktree = await findWorktree(worktreeName);
-  if (!worktree) throw new Error(`Aucun worktree d'auto-amélioration "${worktreeName}" à traiter.`);
+  if (!worktree) throw new Error(`No self-improvement worktree "${worktreeName}" to process.`);
   let harnessMoved = false;
   if (merge) {
-    if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
+    if (!worktree.branch) throw new Error(`The worktree "${worktreeName}" is on no branch.`);
     // The harness may have moved since the branch was cut, by an earlier promotion
     // or by hand. Replaying it here is what keeps the promise the button makes:
     // without it, a merge that conflicts is aborted and handed back to the user.
@@ -46,7 +46,7 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     // before the checkout actually moved.
     const before = await headCommit(pluginRoot);
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
-      .catch((error) => { throw new Error(`La fusion de ${worktreeName} a échoué et a été annulée, le worktree est conservé : ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
+      .catch((error) => { throw new Error(`The merge of ${worktreeName} failed and was rolled back, the worktree is kept: ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
     // Git brings nothing in two cases its exit code cannot tell apart: a branch
     // whose commits the harness already contains, and one that holds no commit at
     // all. The first is work landed by hand, and refusing to clean it up left no
@@ -55,12 +55,12 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     // mid-write, so the worktree only goes when it has nothing uncommitted either.
     const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
     if (!merged && !spent)
-      throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
+      throw new Error(`${worktreeName} brings no commit to merge. Nothing was merged, the worktree is kept.`);
     // Prompts apply to the next run on their own; the console's code only after
     // a restart, which it cannot do itself while sessions may be running under it.
     const restart = merged && mergeNeedsRestart(await changedPaths(pluginRoot, before, "HEAD").catch(() => []));
-    if (restart) notice("attention", "Améliorations fusionnées, relance nécessaire", `${worktreeName} modifie la console : lance impl restart pour l'appliquer.`);
-    else notice("info", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
+    if (restart) notice("attention", "Improvements merged, restart needed", `${worktreeName} changes the console: run impl restart to apply it.`);
+    else notice("info", merged ? "Improvements merged" : "Improvements already present", worktreeName);
     harnessMoved = merged;
   } else {
     // Merging already refuses to destroy a worktree with something uncommitted
@@ -68,8 +68,8 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     // way, or "Ignorer" becomes the one button that can erase a diagnosis the
     // validation step deliberately left uncommitted after a failed check.
     if (!(await worktreeIsClean(worktree)))
-      throw new Error(`${worktreeName} contient des changements non validés : les ignorer les détruirait. Rien n'a été touché.`);
-    notice("info", "Améliorations ignorées", worktreeName);
+      throw new Error(`${worktreeName} holds uncommitted changes: ignoring them would destroy them. Nothing was touched.`);
+    notice("info", "Improvements ignored", worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
   // The checkout just moved under every branch still waiting, which is exactly what
@@ -120,14 +120,14 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     }
     send(socket, {
       type: "notice", level: "info", at: now(), queuedId: outcome.queued.id,
-      title: "Run mis en file",
+      title: "Run queued",
       detail: outcome.queued.reason === "ticket"
-        ? `Ce ticket est déjà en cours sur ${path.basename(outcome.queued.repository)}. Le run démarrera quand celui qui le tient aura rendu sa session.`
+        ? `This ticket is already running on ${path.basename(outcome.queued.repository)}. The run will start when the one holding it gives its session back.`
         : outcome.queued.reason === "slot"
-          ? `${path.basename(outcome.queued.repository)} démarrera dès qu'une place sera libre.`
+          ? `${path.basename(outcome.queued.repository)} will start as soon as a slot is free.`
           : outcome.queued.reason === "analysis"
-            ? `${path.basename(outcome.queued.repository)} : le ticket est comparé à ceux déjà en file ou en cours sur ce dépôt avant de démarrer.`
-            : `${path.basename(outcome.queued.repository)} : le ticket attend un autre ticket du même dépôt. La file dit lequel.`,
+            ? `${path.basename(outcome.queued.repository)}: the ticket is compared with those already queued or running on this repository before it starts.`
+            : `${path.basename(outcome.queued.repository)}: the ticket is waiting for another ticket of the same repository. The queue says which one.`,
     });
     return;
   }
@@ -141,7 +141,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "proposal.accept" || message.type === "proposal.dismiss") {
     // Only what is proposed right now: a page showing an older list decides nothing about a ticket that left it.
     const issueUrls = registry.proposals.proposed(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
-    if (issueUrls.length === 0) throw new Error("Ce ticket n'est plus proposé.");
+    if (issueUrls.length === 0) throw new Error("This ticket is no longer proposed.");
     // An accepted proposal is a batch like a pasted one. Remembered only once queued: a refused one stays proposed.
     if (message.type === "proposal.accept") await registry.enqueueBatch(await resolvePastedTickets(issueUrls));
     await registry.proposals.handle(issueUrls);
@@ -169,27 +169,27 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     return;
   }
   if (message.type === "recipe.forget") {
-    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Chemin de dépôt invalide.");
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
     send(socket, { type: "recipe.result", repository: message.repository, forgotten: await forgetRuntimeRecipe(message.repository) });
     return;
   }
   if (message.type === "question.answer") {
     const session = registry.get(message.runId);
-    if (!session) throw new Error("Ce run n'existe plus.");
+    if (!session) throw new Error("This run no longer exists.");
     answerQuestion(session, message.answers);
     return;
   }
   if (message.type === "sessionPrompt.answer") {
     const session = registry.get(message.runId);
-    if (!session) throw new Error("Ce run n'existe plus.");
-    if (message.decision !== "accept" && message.decision !== "refuse") throw new Error("Décision inconnue.");
+    if (!session) throw new Error("This run no longer exists.");
+    if (message.decision !== "accept" && message.decision !== "refuse") throw new Error("Unknown decision.");
     answerSessionPrompt(session, message.promptId, message.decision);
     return;
   }
   if (message.type === "feedback.submit") {
     // An archived run is worth learning from too: feedback only writes a file, it never reaches a session.
     const session = registry.readable(message.runId);
-    if (!session) throw new Error("Ce run n'existe plus.");
+    if (!session) throw new Error("This run no longer exists.");
     await saveFeedback(session, message.body);
     return;
   }
@@ -221,7 +221,7 @@ await app.prepare();
 const server = createServer(async (request, response) => {
   // A page on another site that got a name of its own resolved to this address
   // still sends that name: refused before anything is read or run.
-  if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Hôte non autorisé." }); return; }
+  if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Host not allowed." }); return; }
   const requestPath = request.url?.split("?")[0];
   if (request.method === "POST" && requestPath === "/api/hooks") {
     const token = new URL(request.url ?? "", "http://console").searchParams.get("token") ?? request.headers["x-impl-hook-token"]?.toString();
@@ -242,12 +242,12 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === "GET" && requestPath === "/api/metrics") {
     try { respond(response, 200, { runs: await registry.metrics() }); }
-    catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Mesures indisponibles." }); }
+    catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Metrics unavailable." }); }
     return;
   }
   if (request.method === "GET" && requestPath === "/api/repositories/recipe") {
     const repository = new URL(request.url ?? "", `http://${hostname}:${port}`).searchParams.get("repository") ?? "";
-    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Chemin de dépôt invalide." }); return; }
+    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Invalid repository path." }); return; }
     // The store is named after a digest of the path, so whatever is asked only ever reads a recipe the console wrote.
     respond(response, 200, { repository, recipe: await readRuntimeRecipe(repository) ?? null });
     return;
@@ -256,17 +256,17 @@ const server = createServer(async (request, response) => {
   const acceptanceRoute = request.method === "GET" ? requestPath?.match(/^\/api\/runs\/([^/]+)\/acceptance$/) : null;
   if (acceptanceRoute) {
     const session = registry.get(decodeURIComponent(acceptanceRoute[1]));
-    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
     // Asking is also a moment to look at the code again (at most every few
     // seconds): evidence goes stale when the code moves, and nothing else
     // would say so while the run is quiet.
     try { respond(response, 200, await refreshAcceptance(session)); }
-    catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Couverture indisponible." }); }
+    catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Coverage unavailable." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/runs/")) {
     const session = registry.get(decodeURIComponent(request.url.slice("/api/runs/".length).split("?")[0]));
-    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
     respond(response, 200, { state: session.state });
     return;
   }
@@ -274,56 +274,56 @@ const server = createServer(async (request, response) => {
   const archiveAcceptance = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)\/acceptance$/) : null;
   if (archiveAcceptance) {
     const archived = registry.archive.get(decodeURIComponent(archiveAcceptance[1]));
-    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
     respond(response, 200, archived.acceptanceView ?? archived.evidence.view());
     return;
   }
   const archiveRun = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)$/) : null;
   if (archiveRun) {
     const archived = registry.archive.get(decodeURIComponent(archiveRun[1]));
-    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
     respond(response, 200, { state: archived.state });
     return;
   }
   if (request.method === "GET" && requestPath === "/api/archive/artifacts") {
     const requestUrl = new URL(request.url ?? "", `http://${hostname}:${port}`);
     const archived = registry.archive.get(requestUrl.searchParams.get("runId") ?? undefined);
-    if (!archived) { respond(response, 404, { error: "Ce run archivé n'existe pas." }); return; }
+    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
     try { respond(response, 200, await readArtifact(archived, requestUrl.searchParams.get("path") ?? "")); }
-    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document introuvable." }); }
+    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const session = registry.get(requestUrl.searchParams.get("runId") ?? undefined);
-    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
     try { respond(response, 200, await readArtifact(session, requestUrl.searchParams.get("path") ?? "")); }
-    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document introuvable." }); }
+    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/diff")) {
     const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
-    if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Nom de worktree invalide." }); return; }
+    if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Invalid worktree name." }); return; }
     if (worktreeName.startsWith("demo-")) { respond(response, 200, { diff: demoSelfImprovementDiff }); return; }
     try {
       const worktree = await findWorktree(worktreeName);
-      if (!worktree) { respond(response, 404, { error: "Worktree introuvable." }); return; }
+      if (!worktree) { respond(response, 404, { error: "Worktree not found." }); return; }
       const diff = await worktreeDiff(worktree);
-      respond(response, 200, { diff: diff || "(aucune modification détectée)" });
-    } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Erreur git." }); }
+      respond(response, 200, { diff: diff || "(no change detected)" });
+    } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Git error." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/report")) {
     const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
-    if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Nom de worktree invalide." }); return; }
+    if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Invalid worktree name." }); return; }
     const report = await readImprovementReport(worktreeName);
-    if (report === undefined) { respond(response, 404, { error: "Rapport introuvable." }); return; }
+    if (report === undefined) { respond(response, 404, { error: "Report not found." }); return; }
     respond(response, 200, { report });
     return;
   }
   if (request.method === "GET" && request.url === "/api/self-improvement/pending") {
     try { respond(response, 200, { items: await listPendingImprovements() }); }
-    catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : "Erreur git." }); }
+    catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : "Git error." }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/repositories")) {
@@ -362,12 +362,12 @@ wss.on("connection", (socket) => {
       message = JSON.parse(raw.toString()) as ClientMessage;
       await handleClientMessage(socket, message);
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Impossible d'exécuter cette action.";
+      const text = error instanceof Error ? error.message : "Unable to run this action.";
       // Answered to the page that asked, never written into a run's state: a
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined });
-      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.accept") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
+      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.accept") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
     }
   });
   socket.on("close", () => clients.delete(socket));
@@ -378,11 +378,11 @@ await new Promise<void>((resolve, reject) => {
   server.listen(port, hostname, () => { server.off("error", reject); resolve(); });
 });
 const address = server.address();
-if (!address || typeof address === "string") throw new Error("Le serveur n'a pas de port TCP.");
+if (!address || typeof address === "string") throw new Error("The server has no TCP port.");
 setListeningPort(address.port);
 const url = `http://${hostname}:${port}`;
 console.log(`Implementation Harness: ${url}`);
-if (!isLoopbackHost(hostname)) console.warn(`Attention : la console écoute sur ${hostname}, elle est joignable depuis le réseau. Quiconque l'atteint peut piloter les sessions ${engine.label} en cours.`);
+if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. Anyone who reaches it can drive the ${engine.label} sessions in progress.`);
 // Launches accepted before the last shutdown start now that the server is up.
 void registry.drain();
 // Hooks a session spooled while nothing else arrived, and runs with nothing

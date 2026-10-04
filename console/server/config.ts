@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { concurrencyLimit, listSetting, permissionMode, positiveDuration, scheduleDirectory } from "./domain.js";
+import { workflowLanguageOf } from "./acceptance-text.js";
 import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -14,7 +15,7 @@ try {
 } catch (error) {
   // A missing .env is the normal case; anything else means the file is there
   // but unusable, and staying silent would hide a broken configuration.
-  if (existsSync(envFile)) console.warn(`Configuration ignorée, ${envFile} est illisible : ${error instanceof Error ? error.message : error}`);
+  if (existsSync(envFile)) console.warn(`Configuration ignored, ${envFile} is unreadable: ${error instanceof Error ? error.message : error}`);
 }
 export const pluginRoot = path.resolve(process.env.IMPL_PLUGIN_ROOT?.trim() || path.join(consoleRoot, ".."));
 export const storageRoot = path.resolve(process.env.IMPL_DATA_DIR ?? path.join(consoleRoot, "data"));
@@ -32,6 +33,8 @@ export function selfImprovementAutorun() { return process.env.IMPL_SELF_IMPROVEM
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
+/** The language of what a run writes for people; the interface is in English whatever it says. */
+export const workflowLanguage = workflowLanguageOf(process.env.IMPL_LANGUAGE);
 export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);

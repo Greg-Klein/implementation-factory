@@ -22,7 +22,7 @@ function available(command: string) {
   return spawnSync("bash", ["-c", `command -v ${command}`], { stdio: "ignore" }).status === 0;
 }
 
-/** Un port sur lequel rien n'écoute, pour ne jamais toucher une exécution réelle. */
+/** A port nothing listens on, so a real execution is never touched. */
 async function freePort() {
   const probe = createServer();
   await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
@@ -60,7 +60,7 @@ describe("implementation-harness launcher", () => {
     for (const flag of ["--help", "-h"]) {
       const { code, stdout } = launch([flag]);
       expect(code).toBe(0);
-      expect(stdout).toContain("Usage :");
+      expect(stdout).toContain("Usage:");
     }
   });
 
@@ -68,29 +68,29 @@ describe("implementation-harness launcher", () => {
     const port = await freePort();
     const { code, stderr } = launch(["statut"], { IMPL_PORT: String(port), IMPL_NO_OPEN: "1" });
     expect(code).toBe(1);
-    expect(stderr).toContain("Commande inconnue : statut");
+    expect(stderr).toContain("Unknown command: statut");
   });
 
   it("should refuse extra arguments", async () => {
     const port = await freePort();
     const { code, stderr } = launch(["demo", "extra"], { IMPL_PORT: String(port), IMPL_NO_OPEN: "1" });
     expect(code).toBe(1);
-    expect(stderr).toContain("Trop d'arguments");
+    expect(stderr).toContain("Too many arguments");
   });
 
   it("should report a quiet port on stop", async () => {
     const port = await freePort();
     const { code, stdout } = launch(["stop"], { IMPL_PORT: String(port) });
     expect(code).toBe(0);
-    expect(stdout).toContain("Aucun serveur");
+    expect(stdout).toContain("No Implementation Harness server");
   });
 
   it("should report a stopped server with its own exit code", async () => {
     const port = await freePort();
     const { code, stdout } = launch(["status"], { IMPL_PORT: String(port) });
-    // 3 distingue "arrêté" d'une erreur d'usage, qui sort en 1.
+    // 3 tells "stopped" from a usage error, which exits with 1.
     expect(code).toBe(3);
-    expect(stdout).toContain("Arrêté");
+    expect(stdout).toContain("Stopped");
   });
 
   const canInspectPorts = available("lsof");
@@ -115,8 +115,8 @@ describe("implementation-harness launcher", () => {
     try {
       const { code, stderr } = launch(["restart", "bogus"], { IMPL_PORT: String(port), IMPL_NO_OPEN: "1" });
       expect(code).toBe(1);
-      expect(stderr).toContain("restart n'accepte que le mode démo");
-      // Une invocation refusée ne doit pas laisser le serveur arrêté derrière elle.
+      expect(stderr).toContain("restart only accepts the demo mode");
+      // A refused invocation must not leave the server stopped behind it.
       expect(await waitForExit(child, 500)).toBe(false);
     } finally {
       child.kill("SIGKILL");
@@ -130,7 +130,7 @@ describe("implementation-harness launcher", () => {
     try {
       const { code, stdout } = launch(["stop"], { IMPL_PORT: String(port) });
       expect(code).toBe(0);
-      expect(stdout).toContain("Arrêt du serveur");
+      expect(stdout).toContain("Stopping the Implementation Harness server");
       // Le contrat de restart : un serveur en cours sert le manifeste Next.js de
       // son propre build, donc il doit disparaitre avant qu'un autre demarre.
       expect(await waitForExit(child, 5_000)).toBe(true);
@@ -180,8 +180,8 @@ describe("implementation-harness launcher", () => {
 
   it("should take the listening host from the .env file", () => {
     const { stdout } = launch(["help"], { IMPL_ENV_FILE: envFile("IMPL_HOST='0.0.0.0'\nIMPL_PORT='4399'\n"), IMPL_PORT: "", IMPL_HOST: "" });
-    expect(stdout).toContain("effective : 0.0.0.0");
-    expect(stdout).toContain("effectif : 4399");
+    expect(stdout).toContain("in effect: 0.0.0.0");
+    expect(stdout).toContain("in effect: 4399");
   });
 
   it("should fall back to the default port when the .env file is missing", () => {

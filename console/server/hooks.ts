@@ -34,7 +34,7 @@ export function closeWorkflowIfDone(session: RunSession) {
   // sits idle at its prompt and may be killed much later.
   session.state.endedAt = now();
   session.markProgress();
-  session.activity("attention", "Workflow terminé");
+  session.activity("attention", "Workflow completed");
   // The figures of the run as delivered; the session's exit writes them once more, final.
   void recordRunMetrics(session).catch(() => undefined);
   scheduleAutonomousReview(session);
@@ -50,7 +50,7 @@ function rememberBranch(session: RunSession, command: string | undefined) {
   const branch = branchFromCommand(command);
   if (!branch || session.state.branch === branch) return;
   session.state.branch = branch;
-  session.activity("system", "Branche de travail", branch);
+  session.activity("system", "Working branch", branch);
 }
 
 /** The merge request is the deliverable of the run, and its address exists nowhere but in the output of the command that opened it. */
@@ -61,7 +61,7 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
   session.state.mergeRequestUrl = url;
   session.markProgress();
   advancePhase(session, 9);
-  session.activity("system", forgeOf(url) === "github" ? "Pull request ouverte" : "Merge request ouverte", url);
+  session.activity("system", forgeOf(url) === "github" ? "Pull request opened" : "Merge request opened", url);
 }
 
 /**
@@ -78,7 +78,7 @@ function waitForQuestionAnswer(session: RunSession, event: Extract<EngineEvent, 
   // the next turn end close it again, a second time, with a second self-audit.
   if (runInProgress(session.state.status)) session.state.status = "attention";
   session.state.action = undefined;
-  session.activity("attention", event.questions.length > 1 ? `${event.questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
+  session.activity("attention", event.questions.length > 1 ? `${event.questions.length} decisions are waiting for your answer` : "A decision is waiting for your answer");
 
   return new Promise<unknown>((resolve) => {
     session.resolvePendingQuestion = resolve;
@@ -88,14 +88,14 @@ function waitForQuestionAnswer(session: RunSession, event: Extract<EngineEvent, 
 }
 
 export function answerQuestion(session: RunSession, answers: Record<string, string>) {
-  if (!session.state.pendingQuestion) throw new Error("Aucune question n'attend de réponse.");
+  if (!session.state.pendingQuestion) throw new Error("No question is waiting for an answer.");
   const normalizedAnswers = normalizeAnswers(session.state.pendingQuestion.questions, answers);
-  if (!normalizedAnswers) throw new Error("Réponds à chaque question avant de continuer.");
+  if (!normalizedAnswers) throw new Error("Answer every question before continuing.");
   if (!session.pendingQuestionInput || !session.resolvePendingQuestion) {
-    if (!session.demo) throw new Error(`Le pont de réponse avec ${engine.label} n'est plus actif.`);
+    if (!session.demo) throw new Error(`The answer bridge with ${engine.label} is no longer active.`);
     session.state.pendingQuestion = undefined;
     if (session.state.status === "attention") session.state.status = "running";
-    session.activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
+    session.activity("system", "Answers received", Object.values(normalizedAnswers).join(" · "));
     session.markProgress();
     session.publish();
     session.signal();
@@ -109,7 +109,7 @@ export function answerQuestion(session: RunSession, answers: Record<string, stri
   session.pendingQuestionInput = null;
   session.state.pendingQuestion = undefined;
   if (session.state.status === "attention") session.state.status = "running";
-  session.activity("system", `Réponse transmise à ${engine.label}`);
+  session.activity("system", `Answer sent to ${engine.label}`);
   session.markProgress();
   session.publish();
   session.signal();
@@ -133,7 +133,7 @@ function apply(session: RunSession, event: EngineEvent) {
     session.state.agents = [{ id: event.agentId, name: event.agentName, ...identity, role: agentRole(event.agentName), status: "running", startedAt: now() }, ...session.state.agents.filter((agent) => agent.id !== event.agentId)];
     if (!known && session.state.planDelegations) session.state.planDelegations = pairDelegation(session.state.planDelegations, event.agentName, event.agentId);
     session.refreshPlanTasks();
-    session.activity("agent", `${event.agentName} démarre`);
+    session.activity("agent", `${event.agentName} starts`);
     advancePhase(session, phaseForAgent(event.agentName));
     resumeFromAttention(session);
     return;
@@ -144,7 +144,7 @@ function apply(session: RunSession, event: EngineEvent) {
     // announce an agent finishing that the feed never saw start.
     if (stopped) {
       session.state.agents = session.state.agents.map((agent) => agent.id === stopped.id ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-      session.activity("agent", `${stopped.name} termine`);
+      session.activity("agent", `${stopped.name} finishes`);
     }
     resumeFromAttention(session);
     return;
@@ -153,7 +153,7 @@ function apply(session: RunSession, event: EngineEvent) {
     const killed = session.state.agents.find((agent) => agent.id === event.agentId && agent.status === "running");
     if (killed) {
       session.state.agents = session.state.agents.map((agent) => agent.id === killed.id ? { ...agent, status: "abandoned" as const, endedAt: now() } : agent);
-      session.activity("agent", `${killed.name} arrêté`);
+      session.activity("agent", `${killed.name} stopped`);
     }
     resumeFromAttention(session);
     return;
@@ -184,7 +184,7 @@ function apply(session: RunSession, event: EngineEvent) {
   if (event.kind === "attention") {
     session.state.status = "attention";
     session.state.action = undefined;
-    const title = event.cause === "permission" ? "Permission attendue dans le terminal" : event.cause === "terminal_interaction" ? "Saisie attendue dans le terminal" : `${engine.label} attend ton attention`;
+    const title = event.cause === "permission" ? "Waiting for permission in the terminal" : event.cause === "terminal_interaction" ? "Waiting for input in the terminal" : `${engine.label} is waiting for your attention`;
     session.activity("attention", title, event.message);
     return;
   }
@@ -193,7 +193,7 @@ function apply(session: RunSession, event: EngineEvent) {
   session.state.action = undefined;
   if (session.state.agents.some((agent) => agent.status === "running")) {
     session.state.status = "running";
-    session.activity("agent", "Tour terminé, un agent continue en tâche de fond");
+    session.activity("agent", "Turn ended, an agent continues in the background");
     return;
   }
   if (closeWorkflowIfDone(session)) return;
@@ -201,7 +201,7 @@ function apply(session: RunSession, event: EngineEvent) {
   // cannot see, or nothing left to do. The health monitor tells the two apart
   // after a grace period, with an incident when nothing is going to happen.
   session.state.status = "running";
-  session.activity("system", `${engine.label} a rendu la main`);
+  session.activity("system", `${engine.label} handed back`);
 }
 
 /**

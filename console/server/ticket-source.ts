@@ -15,8 +15,8 @@ import type { ResolvedTicket } from "./types.js";
  */
 export async function resolvePastedTickets(issueUrls: string[]): Promise<ResolvedTicket[]> {
   const parsed = parseTicketUrls(issueUrls.join("\n"));
-  if (parsed.invalid.length > 0) throw new Error(`URL de ticket non reconnue : ${parsed.invalid.map((entry) => entry.text).join(", ")}`);
-  if (parsed.tickets.length === 0) throw new Error("Aucun ticket dans le lot.");
+  if (parsed.invalid.length > 0) throw new Error(`Ticket URL not recognised: ${parsed.invalid.map((entry) => entry.text).join(", ")}`);
+  if (parsed.tickets.length === 0) throw new Error("No ticket in the batch.");
   const resolved: ResolvedTicket[] = [];
   const failures: string[] = [];
   for (const issueUrl of parsed.tickets) {

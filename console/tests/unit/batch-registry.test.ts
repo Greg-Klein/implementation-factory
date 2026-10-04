@@ -132,7 +132,7 @@ describe("a batch of tickets", () => {
 
   it("should analyse each repository on its own, and never hold a ticket for another repository", async () => {
     // The same numbers in both repositories, and an edge the fixture gives to each.
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
     const api = repository("api");
     const { registry, started, queued } = harness();
@@ -144,7 +144,7 @@ describe("a batch of tickets", () => {
   });
 
   it("should leave out a ticket it already has, and analyse only the new ones against the known ones", async () => {
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }, { a: 104, b: 103, kind: "depends_on", order: [103, 104], reason: "A besoin du ticket 103." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 104, b: 103, kind: "depends_on", order: [103, 104], reason: "Needs ticket 103." }] });
     const shop = repository("shop");
     const { registry, numbers, queued, waiting } = harness();
     await registry.enqueueBatch(tickets(shop, 101, 102, 103));
@@ -157,12 +157,12 @@ describe("a batch of tickets", () => {
     expect(call.input.tickets).toEqual([{ issue_url: url(104) }]);
     expect(call.input.known.map((known) => [known.issue_url, known.state])).toEqual([[url(101), "running"], [url(102), "queued"], [url(103), "running"]]);
     expect(call.input.known[0].files).toEqual(["src/ticket-101.ts"]);
-    expect(waiting(104)).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "A besoin du ticket 103." });
-    await expect(registry.enqueueBatch(tickets(shop, 101, 102))).rejects.toThrow(/déjà en file, en cours ou en attente de fusion/);
+    expect(waiting(104)).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "Needs ticket 103." });
+    await expect(registry.enqueueBatch(tickets(shop, 101, 102))).rejects.toThrow(/already queued, running or waiting for a merge/);
   });
 
   it("should wait for the merge request of a finished run, then start from the updated base", async () => {
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
     const { registry, numbers, waiting, finish, merge } = harness();
     await registry.enqueueBatch(tickets(shop, 101, 102));
@@ -171,7 +171,7 @@ describe("a batch of tickets", () => {
     await until(() => Boolean(waiting(102)?.reason.startsWith("merge")), "the wait to become a merge wait");
     expect(waiting(102)?.blocking).toMatchObject({ issueUrl: url(101), mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/12", branch: "feat/101" });
     // The ticket behind an unmerged merge request is still one the console has.
-    await expect(registry.enqueueBatch(tickets(shop, 101))).rejects.toThrow(/en attente de fusion/);
+    await expect(registry.enqueueBatch(tickets(shop, 101))).rejects.toThrow(/waiting for a merge/);
     // GitLab not answering keeps holding, and says so.
     await merge("unknown");
     expect(waiting(102)?.reason).toBe("merge_unknown");
@@ -185,7 +185,7 @@ describe("a batch of tickets", () => {
   });
 
   it("should release what waits when the merge request is closed, or when the run ends without one", async () => {
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }, { a: 102, b: 103, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 102, b: 103, kind: "overlap", reason: "Same file." }] });
     const { registry, numbers, finish, merge } = harness();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103));
     await until(() => numbers().length === 1, "the first ticket to start");
@@ -205,8 +205,8 @@ describe("a batch of tickets", () => {
     await until(() => numbers().length === 1, "the first ticket to start");
     await until(analysed(queued), "the analysis to fail");
     expect(numbers()).toEqual([101]);
-    expect(waiting(102)).toMatchObject({ reason: "conflict", cause: "analysis_failed", analysisFailure: "fichier de sortie absent" });
-    expect(waiting(103)?.detail).toContain("fichier de sortie absent");
+    expect(waiting(102)).toMatchObject({ reason: "conflict", cause: "analysis_failed", analysisFailure: "output file missing" });
+    expect(waiting(103)?.detail).toContain("output file missing");
     finish(101);
     await until(() => numbers().length === 2, "the second ticket to start");
     expect(numbers()).toEqual([101, 102]);
@@ -218,14 +218,14 @@ describe("a batch of tickets", () => {
     const refused = harness();
     await refused.registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     await until(() => refused.numbers().length === 1, "the first ticket to start");
-    expect(refused.waiting(102)?.analysisFailure).toMatch(/sortie refusée, il manque le tableau/);
+    expect(refused.waiting(102)?.analysisFailure).toMatch(/output refused, the tickets or edges array is missing/);
 
     fixture({ mode: "hang" });
     const hanging = harness();
     await hanging.registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     expect(hanging.queued().map((entry) => entry.reason)).toEqual(["analysis", "analysis"]);
     await until(() => hanging.numbers().length === 1, "the timeout");
-    expect(hanging.waiting(102)?.analysisFailure).toMatch(/délai de 2 s dépassé/);
+    expect(hanging.waiting(102)?.analysisFailure).toMatch(/timeout of 2 s exceeded/);
   });
 
   /** Ticket 101 as a batch whose analysis wrote no file left it: failed, run alone, its merge request open, the rest of the batch removed. */
@@ -249,7 +249,7 @@ describe("a batch of tickets", () => {
   it("should predict again a ticket whose analysis failed when a later batch of its repository is analysed", async () => {
     const shop = repository("shop");
     const { registry, numbers, queued } = await failedAndAwaitingMerge(shop);
-    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "fichier de sortie absent" });
+    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "output file missing" });
     // The new analysis answers for the three tickets and links none of them.
     fixture({});
     await registry.enqueueBatch(tickets(shop, 102, 103));
@@ -266,12 +266,12 @@ describe("a batch of tickets", () => {
   it("should hold a new ticket behind a ticket predicted again only when the new analysis links them", async () => {
     const shop = repository("shop");
     const { registry, numbers, queued, waiting, merge } = await failedAndAwaitingMerge(shop);
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     await registry.enqueueBatch(tickets(shop, 102, 103));
     await until(analysed(queued), "the second analysis");
     await until(() => numbers().length === 2, "the free ticket to start");
     expect(numbers()).toEqual([101, 103]);
-    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "overlap", detail: "Même fichier.", blocking: { issueUrl: url(101) } });
+    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "overlap", detail: "Same file.", blocking: { issueUrl: url(101) } });
     expect(waiting(102)?.analysisFailure).toBeUndefined();
     await merge("merged");
     await until(() => numbers().length === 3, "the held ticket to start");
@@ -284,9 +284,9 @@ describe("a batch of tickets", () => {
     await registry.enqueueBatch(tickets(shop, 102, 103));
     await until(analysed(queued), "the second analysis to fail");
     expect(calls()[1].input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
-    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "fichier de sortie absent" });
+    expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "output file missing" });
     expect(numbers()).toEqual([101]);
-    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "analysis_failed", analysisFailure: expect.stringMatching(/sortie refusée/), detail: expect.stringMatching(/^L'analyse du lot a échoué \(sortie refusée/) });
+    expect(waiting(102)).toMatchObject({ reason: "merge", cause: "analysis_failed", analysisFailure: expect.stringMatching(/output refused/), detail: expect.stringMatching(/^The batch analysis failed \(output refused/) });
   });
 
   it("should not open an analysis for a single ticket beside a failed one, and blame the failed ticket for the wait", async () => {
@@ -295,7 +295,7 @@ describe("a batch of tickets", () => {
     await registry.enqueueBatch(tickets(shop, 104));
     expect(calls()).toHaveLength(1);
     expect(numbers()).toEqual([101]);
-    expect(waiting(104)).toMatchObject({ reason: "merge", cause: "analysis_failed", detail: "L'analyse de #101 a échoué (fichier de sortie absent) : ce ticket passe après lui." });
+    expect(waiting(104)).toMatchObject({ reason: "merge", cause: "analysis_failed", detail: "The analysis of #101 failed (output file missing): this ticket runs after it." });
     expect(waiting(104)?.analysisFailure).toBeUndefined();
   });
 
@@ -308,7 +308,7 @@ describe("a batch of tickets", () => {
   });
 
   it("should start a held ticket from the base when forced, within the run limit", async () => {
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }, { a: 101, b: 105, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 101, b: 105, kind: "overlap", reason: "Same file." }] });
     const { registry, numbers, waiting, started } = harness();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103, 104, 105));
     await until(() => numbers().length === 3, "three tickets to start");
@@ -330,7 +330,7 @@ describe("a batch of tickets", () => {
     await registry.enqueueBatch(tickets(repository("shop"), 102, 101));
     await until(() => numbers().length === 1, "the dependency to start first");
     expect(numbers()).toEqual([101]);
-    expect(() => registry.forceQueued(waiting(102)!.id, "stacked")).toThrow(/branche de #101 n'est pas encore connue/);
+    expect(() => registry.forceQueued(waiting(102)!.id, "stacked")).toThrow(/branch of #101 is not known yet/);
     started[0].state.branch = "feat/101-promo";
     registry.forceQueued(waiting(102)!.id, "stacked", url(101));
     await until(() => numbers().length === 2, "the stacked ticket to start");
@@ -348,8 +348,8 @@ describe("a batch of tickets", () => {
     expect(queued().map((entry) => entry.id)).toEqual([first, second, third]);
     registry.cancelQueued(second);
     expect(queued().map((entry) => entry.id)).toEqual([first, third]);
-    expect(() => registry.moveQueued(second, null)).toThrow(/plus en file/);
-    expect(() => registry.forceQueued(second, "base")).toThrow(/plus en file/);
+    expect(() => registry.moveQueued(second, null)).toThrow(/no longer queued/);
+    expect(() => registry.forceQueued(second, "base")).toThrow(/no longer queued/);
   });
 });
 
@@ -357,7 +357,7 @@ describe("the queue across a restart", () => {
   const queueFile = () => path.join(storage, "data", "queue.json");
 
   it("should write the queue with its schedule, and nothing of a run that left", async () => {
-    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Même fichier." }] });
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
     const { registry, numbers } = harness();
     await registry.enqueueBatch(tickets(shop, 101, 102));
@@ -377,7 +377,7 @@ describe("the queue across a restart", () => {
     writeFileSync(queueFile(), JSON.stringify({
       version: 2,
       queue: [entry(101), entry(102, { analysing: true }), entry(103, { analysing: true })],
-      tickets: [], edges: [{ repository: shop, a: url(98), b: url(101), kind: "overlap", reason: "Même fichier." }],
+      tickets: [], edges: [{ repository: shop, a: url(98), b: url(101), kind: "overlap", reason: "Same file." }],
       watches: [{ issueUrl: url(98), repository: shop, mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/9", branch: "feat/98", state: "open", since: new Date().toISOString() }],
     }));
     const { registry, numbers, waiting, merge } = harness();
@@ -387,7 +387,7 @@ describe("the queue across a restart", () => {
     // repository, so it waits for that merge too rather than start beside it.
     expect(numbers()).toEqual([]);
     expect(waiting(101)?.reason).toMatch(/^merge/);
-    expect(waiting(102)).toMatchObject({ cause: "analysis_failed", analysisFailure: "console redémarrée pendant l'analyse" });
+    expect(waiting(102)).toMatchObject({ cause: "analysis_failed", analysisFailure: "console restarted during the analysis" });
     expect(waiting(102)?.reason).toMatch(/^merge/);
     await merge("merged");
     // One ticket at a time from here, in the order asked.

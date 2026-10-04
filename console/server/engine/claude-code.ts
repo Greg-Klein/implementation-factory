@@ -217,7 +217,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
 
 function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
-  if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
+  if (!executable) throw new Error("Claude Code was not found in PATH.");
   const sessionName = `implementation-harness ${sessionLabel}`;
   // --remote-control takes an optional name, so leaving it empty would let the
   // parser swallow the prompt that follows as that name.

@@ -43,49 +43,49 @@ describe("the output file of a scheduling session", () => {
   it("should be refused when it is not an object holding the two arrays", () => {
     expect(error(undefined)).toBeDefined();
     expect(error([])).toBeDefined();
-    expect(error({ tickets: [] })).toMatch(/tableau/);
-    expect(error({ edges: [] })).toMatch(/tableau/);
+    expect(error({ tickets: [] })).toMatch(/array/);
+    expect(error({ edges: [] })).toMatch(/array/);
   });
 
   it("should be refused when a ticket is unknown, missing or repeated", () => {
-    expect(error(output({ tickets: [prediction(101), prediction(102), prediction(104)] }))).toMatch(/pas dans l'entrée/);
-    expect(error(output({ tickets: [prediction(101), prediction(102), prediction(98)] }))).toMatch(/pas dans l'entrée/);
-    expect(error(output({ tickets: [prediction(101), prediction(102)] }))).toMatch(/pas de prédiction/);
-    expect(error(output({ tickets: [prediction(101), prediction(101), prediction(102)] }))).toMatch(/deux fois/);
+    expect(error(output({ tickets: [prediction(101), prediction(102), prediction(104)] }))).toMatch(/not in the input/);
+    expect(error(output({ tickets: [prediction(101), prediction(102), prediction(98)] }))).toMatch(/not in the input/);
+    expect(error(output({ tickets: [prediction(101), prediction(102)] }))).toMatch(/no prediction/);
+    expect(error(output({ tickets: [prediction(101), prediction(101), prediction(102)] }))).toMatch(/twice/);
   });
 
   it("should be refused on a confidence outside the enum or an empty summary", () => {
-    expect(error(output({ tickets: [prediction(101, { confidence: "certain" }), prediction(102), prediction(103)] }))).toMatch(/confiance/);
-    expect(error(output({ tickets: [prediction(101, { summary: "  " }), prediction(102), prediction(103)] }))).toMatch(/résumé/);
+    expect(error(output({ tickets: [prediction(101, { confidence: "certain" }), prediction(102), prediction(103)] }))).toMatch(/confidence/);
+    expect(error(output({ tickets: [prediction(101, { summary: "  " }), prediction(102), prediction(103)] }))).toMatch(/summary is empty/);
   });
 
   it("should be refused when an edge names an unknown ticket, itself, or two known tickets", () => {
-    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "overlap", reason: "Fichier commun.", ...overrides }] });
-    expect(error(edge({ b: url(404) }))).toMatch(/inconnu/);
-    expect(error(edge({ b: url(101) }))).toMatch(/lui-même/);
-    expect(validateSchedule({ tickets: [url(101)], known: [url(98), url(99)] }, { tickets: [prediction(101)], edges: [{ a: url(98), b: url(99), kind: "overlap", reason: "Fichier commun." }] })).toMatchObject({ ok: false, error: expect.stringMatching(/déjà connus/) });
+    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "overlap", reason: "Shared file.", ...overrides }] });
+    expect(error(edge({ b: url(404) }))).toMatch(/unknown ticket/);
+    expect(error(edge({ b: url(101) }))).toMatch(/to itself/);
+    expect(validateSchedule({ tickets: [url(101)], known: [url(98), url(99)] }, { tickets: [prediction(101)], edges: [{ a: url(98), b: url(99), kind: "overlap", reason: "Shared file." }] })).toMatchObject({ ok: false, error: expect.stringMatching(/already known/) });
   });
 
   it("should be refused on a kind outside the enum or an empty reason", () => {
-    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "overlap", reason: "Fichier commun.", ...overrides }] });
-    expect(error(edge({ kind: "blocks" }))).toMatch(/type d'arête/);
-    expect(error(edge({ reason: "" }))).toMatch(/raison/);
+    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "overlap", reason: "Shared file.", ...overrides }] });
+    expect(error(edge({ kind: "blocks" }))).toMatch(/edge kind/);
+    expect(error(edge({ reason: "" }))).toMatch(/reason is empty/);
   });
 
   it("should be refused when a dependency has no valid order, or an overlap carries one", () => {
-    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "depends_on", reason: "Besoin du résultat.", ...overrides }] });
-    expect(error(edge({}))).toMatch(/ordre/);
-    expect(error(edge({ order: [url(101)] }))).toMatch(/ordre/);
-    expect(error(edge({ order: [url(101), url(103)] }))).toMatch(/ordre/);
-    expect(error(edge({ order: [url(101), url(101)] }))).toMatch(/ordre/);
-    expect(error(edge({ kind: "overlap", order: [url(101), url(102)] }))).toMatch(/chevauchement/);
+    const edge = (overrides: Record<string, unknown>) => output({ edges: [{ a: url(101), b: url(102), kind: "depends_on", reason: "Needs the result.", ...overrides }] });
+    expect(error(edge({}))).toMatch(/no valid order/);
+    expect(error(edge({ order: [url(101)] }))).toMatch(/no valid order/);
+    expect(error(edge({ order: [url(101), url(103)] }))).toMatch(/no valid order/);
+    expect(error(edge({ order: [url(101), url(101)] }))).toMatch(/no valid order/);
+    expect(error(edge({ kind: "overlap", order: [url(101), url(102)] }))).toMatch(/overlap carries an order/);
     expect(validateSchedule(input, edge({ order: [url(102), url(101)] })).ok).toBe(true);
   });
 
   it("should be refused when two edges link the same pair, whichever is `a`", () => {
     expect(error(output({ edges: [
-      { a: url(101), b: url(102), kind: "overlap", reason: "Fichier commun." },
-      { a: url(102), b: url(101), kind: "depends_on", order: [url(101), url(102)], reason: "Besoin du résultat." },
-    ] }))).toMatch(/même paire/);
+      { a: url(101), b: url(102), kind: "overlap", reason: "Shared file." },
+      { a: url(102), b: url(101), kind: "depends_on", order: [url(101), url(102)], reason: "Needs the result." },
+    ] }))).toMatch(/same pair/);
   });
 });

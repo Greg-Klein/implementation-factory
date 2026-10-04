@@ -16,8 +16,8 @@ repo_root="$(cd -P "$(dirname "$script_path")/.." && pwd)"
 console_dir="$repo_root/console"
 env_file="${IMPL_ENV_FILE:-$repo_root/.env}"
 
-# Un .env est une donnee, jamais un script : on l'analyse au lieu de le sourcer,
-# et la derniere affectation gagne, comme process.loadEnvFile cote serveur.
+# A .env is data, never a script: it is parsed instead of sourced, and the
+# last assignment wins, like process.loadEnvFile on the server side.
 env_file_value() {
   local key="$1" line value
   [[ -f "$env_file" ]] || return 0
@@ -47,35 +47,35 @@ command="${1:-}"
 
 usage() {
   cat <<USAGE
-Usage : $program [commande]
+Usage: $program [command]
 
-  (aucune)  démarre l'interface et ouvre le navigateur
-  demo      démarre l'interface sur un scénario simulé, sans dépôt ni ticket
-  restart   arrête le serveur en cours puis relance la version compilée
-  stop      arrête le serveur en cours
-  status    indique si un serveur écoute et s'il sert le build sur disque
-  config    lit et modifie la configuration locale (.env)
-  improve   traite les retours d'auto-amélioration avec Claude Code
-  help      affiche cette aide
+  (none)    starts the interface and opens the browser
+  demo      starts the interface on a simulated scenario, with no repository or ticket
+  restart   stops the running server then starts the compiled version again
+  stop      stops the running server
+  status    says whether a server is listening and whether it serves the build on disk
+  config    reads and changes the local configuration (.env)
+  improve   handles the self-improvement feedback with Claude Code
+  help      shows this help
 
-restart accepte le mode démo : $program restart demo
-config accepte ses propres sous-commandes : $program config help
+restart accepts the demo mode: $program restart demo
+config accepts its own subcommands: $program config help
 
-Configuration ($env_file) :
-  IMPL_SEARCH_ROOTS              racines où chercher les checkouts
-  IMPL_SELF_IMPROVEMENT_AUTORUN  auto-audit à la fin de chaque run
-  IMPL_REMOTE_CONTROL=false      run sans Remote Control
-  IMPL_PORT                      port d'écoute (effectif : $app_port)
-  IMPL_HOST                      interface d'écoute (effective : $app_host)
-  IMPL_NO_OPEN=1                 ne pas ouvrir le navigateur
-  IMPL_DEMO_STEP_MS              durée d'une étape du mode démo
-  IMPL_MAX_CONCURRENT_RUNS       runs tenus en parallèle (1 à 10)
+Configuration ($env_file):
+  IMPL_SEARCH_ROOTS              roots searched for the checkouts
+  IMPL_SELF_IMPROVEMENT_AUTORUN  self-audit at the end of each run
+  IMPL_REMOTE_CONTROL=false      run without Remote Control
+  IMPL_PORT                      listening port (in effect: $app_port)
+  IMPL_HOST                      listening interface (in effect: $app_host)
+  IMPL_NO_OPEN=1                 do not open the browser
+  IMPL_DEMO_STEP_MS              duration of a demo mode step
+  IMPL_MAX_CONCURRENT_RUNS       runs held in parallel (1 to 10)
 
-Une variable posée dans le shell l'emporte sur le .env, qui l'emporte sur le
-défaut. Modifier ces valeurs : $program config
+A variable set in the shell wins over the .env, which wins over the
+default. Change these values: $program config
 
-Codes de sortie de status : 0 en écoute et cohérent, 1 en écoute mais
-incohérent, 3 arrêté.
+Exit codes of status: 0 listening and consistent, 1 listening but
+inconsistent, 3 stopped.
 USAGE
 }
 
@@ -88,16 +88,16 @@ reject() {
 case "$command" in
   help|--help|-h) usage; exit 0 ;;
   ""|demo|restart|stop|status|config|improve) ;;
-  *) reject "Commande inconnue : $command" ;;
+  *) reject "Unknown command: $command" ;;
 esac
 
 if [[ "$command" != "restart" && "$command" != "config" && $# -gt 1 ]]; then
-  reject "Trop d'arguments : $*"
+  reject "Too many arguments: $*"
 fi
 
 if [[ "$command" == "config" ]]; then
   if ! command -v node >/dev/null 2>&1; then
-    printf 'Prérequis manquant : node\n' >&2
+    printf 'Missing prerequisite: node\n' >&2
     exit 1
   fi
   shift
@@ -122,10 +122,10 @@ stop_server() {
   local pids
   pids="$(listening_pids)"
   if [[ -z "$pids" ]]; then
-    printf 'Aucun serveur Implementation Harness en écoute sur le port %s.\n' "$app_port"
+    printf 'No Implementation Harness server listening on port %s.\n' "$app_port"
     return 0
   fi
-  printf 'Arrêt du serveur Implementation Harness (PID %s)…\n' "$(echo $pids)"
+  printf 'Stopping the Implementation Harness server (PID %s)...\n' "$(echo $pids)"
   kill $pids 2>/dev/null || true
   for _ in {1..40}; do
     if [[ -z "$(listening_pids)" ]]; then
@@ -133,11 +133,11 @@ stop_server() {
     fi
     sleep 0.25
   done
-  printf 'Arrêt forcé.\n'
+  printf 'Forced stop.\n'
   kill -9 $(listening_pids) 2>/dev/null || true
   sleep 0.5
   if [[ -n "$(listening_pids)" ]]; then
-    printf 'Le port %s reste occupé. Libère-le manuellement avant de relancer.\n' "$app_port" >&2
+    printf 'Port %s is still in use. Free it by hand before starting again.\n' "$app_port" >&2
     exit 1
   fi
 }
@@ -147,46 +147,46 @@ if [[ "$command" == "stop" ]]; then
   exit 0
 fi
 
-# Le serveur en cours sert le manifeste Next.js du build present a son
-# demarrage. Apres une recompilation, ses feuilles de style pointent vers des
-# fichiers effaces : la page s'affiche sans style. On verifie donc les
-# ressources reellement servies, pas seulement la presence d'un processus.
+# The running server serves the Next.js manifest of the build present when it
+# started. After a rebuild, its style sheets point to deleted files: the page
+# shows unstyled. So the assets actually served are checked, not only the
+# presence of a process.
 status_report() {
   local pids
   pids="$(listening_pids)"
   if [[ -z "$pids" ]]; then
-    printf 'Arrêté. Aucun serveur en écoute sur le port %s.\n' "$app_port"
+    printf 'Stopped. No server listening on port %s.\n' "$app_port"
     return 3
   fi
-  printf 'Serveur   : en écoute sur %s (PID %s)\n' "$app_url" "$(echo $pids)"
+  printf 'Server    : listening on %s (PID %s)\n' "$app_url" "$(echo $pids)"
 
-  local build_id="(inconnu)"
+  local build_id="(unknown)"
   if [[ -f "$console_dir/.next/BUILD_ID" ]]; then
     build_id="$(cat "$console_dir/.next/BUILD_ID")"
   fi
-  printf 'Build     : %s sur disque\n' "$build_id"
+  printf 'Build     : %s on disk\n' "$build_id"
 
   if ! command -v curl >/dev/null 2>&1; then
-    printf 'Ressources: non vérifiées, curl est absent.\n'
+    printf 'Assets    : not checked, curl is missing.\n'
     return 0
   fi
 
   local runs
   if ! runs="$(curl -fsS "$app_url/api/runs" 2>/dev/null)" || ! printf '%s' "$runs" | grep -q '"runs"'; then
-    printf 'API       : /api/runs ne répond pas comme le harnais.\n' >&2
-    printf 'Un autre programme occupe peut-être le port %s.\n' "$app_port" >&2
+    printf 'API       : /api/runs does not answer like the harness.\n' >&2
+    printf 'Another program may be using port %s.\n' "$app_port" >&2
     return 1
   fi
-  printf 'API       : répond\n'
-  # Un harnais tient plusieurs runs : le statut dit combien occupent une place,
-  # combien attendent, et sur combien de places.
+  printf 'API       : answers\n'
+  # A harness holds several runs: the status says how many hold a slot, how
+  # many wait, and out of how many slots.
   if command -v node >/dev/null 2>&1; then
     printf '%s' "$runs" | node -e '
       let raw = ""; process.stdin.on("data", (chunk) => { raw += chunk; });
       process.stdin.on("end", () => {
         const { runs = [], queued = [], maxConcurrentRuns = 0 } = JSON.parse(raw);
         const holding = runs.filter((run) => run.holdsRepository).length;
-        console.log(`Runs      : ${holding}/${maxConcurrentRuns} places occupées, ${runs.length} affiché(s), ${queued.length} en file`);
+        console.log(`Runs      : ${holding}/${maxConcurrentRuns} slots taken, ${runs.length} shown, ${queued.length} queued`);
       });' 2>/dev/null || true
   fi
 
@@ -194,7 +194,7 @@ status_report() {
   page="$(curl -fsS "$app_url/" 2>/dev/null || true)"
   assets="$(printf '%s' "$page" | grep -o '/_next/static/[^"\\]*' | sort -u || true)"
   if [[ -z "$assets" ]]; then
-    printf 'Ressources: aucune ressource référencée, rien à vérifier.\n'
+    printf 'Assets    : no asset referenced, nothing to check.\n'
     return 0
   fi
   while IFS= read -r asset; do
@@ -205,12 +205,12 @@ status_report() {
   done <<< "$assets"
 
   if (( missing > 0 )); then
-    printf 'Ressources: %s sur %s introuvable(s).\n' "$missing" "$total" >&2
-    printf 'Le serveur sert un build plus ancien que celui sur disque.\n' >&2
-    printf 'Relance-le : %s restart\n' "$program" >&2
+    printf 'Assets    : %s of %s not found.\n' "$missing" "$total" >&2
+    printf 'The server serves a build older than the one on disk.\n' >&2
+    printf 'Restart it: %s restart\n' "$program" >&2
     return 1
   fi
-  printf 'Ressources: %s servies, build à jour\n' "$total"
+  printf 'Assets    : %s served, build up to date\n' "$total"
   return 0
 }
 
@@ -225,10 +225,10 @@ if [[ "$command" == "restart" ]]; then
   command="${1:-}"
   case "$command" in
     ""|demo) ;;
-    *) reject "restart n'accepte que le mode démo, reçu : $command" ;;
+    *) reject "restart only accepts the demo mode, got: $command" ;;
   esac
   if [[ $# -gt 1 ]]; then
-    reject "Trop d'arguments : $*"
+    reject "Too many arguments: $*"
   fi
   stop_server
 fi
@@ -248,7 +248,7 @@ open_app() {
 
 if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/runs" >/dev/null 2>&1; then
   open_app
-  printf 'Implementation Harness est déjà disponible sur %s\n' "$app_url"
+  printf 'Implementation Harness is already available at %s\n' "$app_url"
   exit 0
 fi
 

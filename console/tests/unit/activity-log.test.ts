@@ -25,11 +25,11 @@ describe("activity log", () => {
 
   it("should keep each run's history to itself, however many are going at once", () => {
     const first = startRun("run-before");
-    first.activity("system", "Session créée");
+    first.activity("system", "Session created");
     first.activity("agent", "developer");
     const second = startRun("run-after");
-    second.activity("system", "Session créée");
-    expect(second.archivedState().activities).toEqual([expect.objectContaining({ title: "Session créée" })]);
+    second.activity("system", "Session created");
+    expect(second.archivedState().activities).toEqual([expect.objectContaining({ title: "Session created" })]);
     expect(first.archivedState().activities).toHaveLength(2);
   });
 });

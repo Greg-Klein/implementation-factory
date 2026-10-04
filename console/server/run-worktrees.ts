@@ -17,7 +17,7 @@ import type { RunState, RunWorktree } from "./types.js";
 
 export type WorktreeRemovalResult = { outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] };
 
-const REMOVED = "Worktree supprimé";
+const REMOVED = "Worktree removed";
 
 /**
  * Creates the worktree and fills it. A failure to create it is the caller's
@@ -31,9 +31,9 @@ export async function prepareRunWorktree(repository: string, runId: string): Pro
   try {
     const provisioned = await provisionWorktree(repository, worktreePath, { dependencyDirectories: worktreeDependencyDirectories, copyFiles: worktreeCopyFiles });
     const parts = [
-      provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dossier${provisioned.cloned.length > 1 ? "s" : ""} de dépendances cloné${provisioned.cloned.length > 1 ? "s" : ""}` : "",
-      provisioned.linked.length > 0 ? `${provisioned.linked.length} lié${provisioned.linked.length > 1 ? "s" : ""} par lien symbolique` : "",
-      provisioned.copied.length > 0 ? `${provisioned.copied.length} fichier${provisioned.copied.length > 1 ? "s" : ""} de configuration copié${provisioned.copied.length > 1 ? "s" : ""}` : "",
+      provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dependency ${provisioned.cloned.length > 1 ? "directories" : "directory"} cloned` : "",
+      provisioned.linked.length > 0 ? `${provisioned.linked.length} linked by symlink` : "",
+      provisioned.copied.length > 0 ? `${provisioned.copied.length} configuration file${provisioned.copied.length > 1 ? "s" : ""} copied` : "",
     ].filter(Boolean);
     return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", ") };
   } catch (error) {
@@ -58,13 +58,13 @@ async function settle(state: RunState): Promise<RunWorktree | undefined> {
   const facts = await worktreeFacts(worktree.path);
   if (!facts.exists) {
     await pruneWorktrees(repository).catch(() => undefined);
-    return { ...worktree, state: "removed", detail: "Worktree introuvable sur le disque" };
+    return { ...worktree, state: "removed", detail: "Worktree not found on disk" };
   }
   const decision = worktreeRemoval(state, facts);
   if (decision.automatic && isRunWorktreePath(repository, worktree.path)) {
     const removed = await removeRunWorktree(repository, worktree.path).then(() => true, () => false);
     if (removed) return { ...worktree, state: "removed", detail: REMOVED };
-    return { ...worktree, state: "kept", detail: worktreeKeptDetail(["git a refusé la suppression"]) };
+    return { ...worktree, state: "kept", detail: worktreeKeptDetail(["git refused the removal"]) };
   }
   return { ...worktree, state: "kept", detail: worktreeKeptDetail(decision.reasons) };
 }
@@ -81,7 +81,7 @@ export async function settleRunWorktree(session: RunSession) {
   if (settled.state === before?.state && settled.detail === before.detail) return;
   if (settled.state === "removed") await session.artifactWatcher?.close().catch(() => undefined);
   session.state.worktree = settled;
-  session.activity("system", settled.state === "removed" ? REMOVED : "Worktree conservé", settled.state === "removed" ? settled.path : settled.detail);
+  session.activity("system", settled.state === "removed" ? REMOVED : "Worktree kept", settled.state === "removed" ? settled.path : settled.detail);
   session.publish();
 }
 
@@ -92,11 +92,11 @@ export async function settleRunWorktree(session: RunSession) {
  */
 export async function removeWorktreeOnRequest(session: RunSession, force: boolean): Promise<WorktreeRemovalResult> {
   const worktree = session.state.worktree;
-  if (!worktree) return { outcome: "refused", message: "Ce run n'a pas de worktree." };
+  if (!worktree) return { outcome: "refused", message: "This run has no worktree." };
   if (worktree.state === "removed") return { outcome: "removed", message: REMOVED };
-  if (runHoldsRepository(session.state)) return { outcome: "refused", message: "Ce run tient encore sa session. Arrête-la avant de supprimer son worktree." };
+  if (runHoldsRepository(session.state)) return { outcome: "refused", message: "This run still holds its session. Stop it before removing its worktree." };
   const repository = sourceRepository(session.state);
-  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: "Ce chemin n'est pas un worktree créé par le harnais. Rien n'a été supprimé." };
+  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: "This path is not a worktree created by the harness. Nothing was removed." };
   const facts = await worktreeFacts(worktree.path);
   const applied = (next: RunWorktree, title: string) => {
     session.state.worktree = next;
@@ -105,21 +105,21 @@ export async function removeWorktreeOnRequest(session: RunSession, force: boolea
   };
   if (!facts.exists) {
     await pruneWorktrees(repository).catch(() => undefined);
-    applied({ ...worktree, state: "removed", detail: "Worktree introuvable sur le disque" }, "Worktree déjà absent du disque");
-    return { outcome: "removed", message: "Ce worktree n'était plus sur le disque." };
+    applied({ ...worktree, state: "removed", detail: "Worktree not found on disk" }, "Worktree already gone from disk");
+    return { outcome: "removed", message: "This worktree was no longer on disk." };
   }
   const { risks } = worktreeRemoval(session.state, facts);
   if (risks.length > 0 && !force) {
-    return { outcome: "confirm", risks, message: `Ce worktree contient des ${risks.join(" et des ")}. Le supprimer perd ce qui n'est pas commité ; la branche et ses commits restent dans le dépôt.` };
+    return { outcome: "confirm", risks, message: `This worktree holds ${risks.join(" and ")}. Removing it loses what is not committed; the branch and its commits stay in the repository.` };
   }
   try {
     await session.artifactWatcher?.close().catch(() => undefined);
     await removeRunWorktree(repository, worktree.path, { force: !facts.clean });
   } catch (error) {
-    return { outcome: "refused", message: `git a refusé la suppression : ${error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : error}` };
+    return { outcome: "refused", message: `git refused the removal: ${error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : error}` };
   }
-  applied({ ...worktree, state: "removed", detail: REMOVED }, risks.length > 0 ? "Worktree supprimé malgré un travail non sauvegardé" : REMOVED);
-  return { outcome: "removed", message: "Worktree supprimé. La branche est conservée." };
+  applied({ ...worktree, state: "removed", detail: REMOVED }, risks.length > 0 ? "Worktree removed despite unsaved work" : REMOVED);
+  return { outcome: "removed", message: "Worktree removed. The branch is kept." };
 }
 
 /**
@@ -141,7 +141,7 @@ export async function reconcileRunWorktrees(runsDirectory: string) {
       if (!state?.worktree || state.worktree.state === "removed") continue;
       const settled = await settle(state);
       if (!settled || (settled.state === state.worktree.state && settled.detail === state.worktree.detail)) continue;
-      const title = settled.state === "removed" ? (settled.detail ?? REMOVED) : "Worktree conservé";
+      const title = settled.state === "removed" ? (settled.detail ?? REMOVED) : "Worktree kept";
       const activities = [{ id: crypto.randomUUID(), at: now(), kind: "system" as const, title, detail: settled.state === "removed" ? settled.path : settled.detail }, ...(Array.isArray(raw.activities) ? raw.activities : [])].slice(0, ARCHIVED_ACTIVITIES);
       const temporary = `${runFile}.worktree.tmp`;
       await writeFile(temporary, JSON.stringify({ ...raw, worktree: settled, activities }, null, 2));

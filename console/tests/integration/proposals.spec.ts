@@ -19,17 +19,17 @@ test("should propose the tickets a watcher found and start nothing until one is 
   const other = issueUrl.replace(/\/1$/, "/2");
   found([{ url: issueUrl, title: "Corriger le panier" }, { url: other }]);
 
-  const proposed = page.getByRole("group", { name: "Tickets proposés" });
-  await expect(proposed.getByText("Proposés · 2")).toBeVisible();
+  const proposed = page.getByRole("group", { name: "Proposed tickets" });
+  await expect(proposed.getByText("Proposed · 2")).toBeVisible();
   await expect(proposed.getByText("Corriger le panier")).toBeVisible();
   expect((await snapshot(request)).runs).toEqual([]);
 
   // Dismissed: gone from the list, and not proposed again while the watcher still finds it.
-  await proposed.getByRole("button", { name: "Ignorer proposals-launch #2" }).click();
-  await expect(proposed.getByText("Proposés · 1")).toBeVisible();
+  await proposed.getByRole("button", { name: "Dismiss proposals-launch #2" }).click();
+  await expect(proposed.getByText("Proposed · 1")).toBeVisible();
   found([{ url: issueUrl, title: "Corriger le panier" }, { url: other }]);
 
-  await proposed.getByRole("button", { name: "Lancer proposals-launch #1" }).click();
+  await proposed.getByRole("button", { name: "Start proposals-launch #1" }).click();
   await expect.poll(async () => (await snapshot(request)).runs.map((run) => run.issueUrl)).toEqual([issueUrl]);
   await expect(proposed).toHaveCount(0);
   expect((await snapshot(request)).proposals).toEqual([]);
@@ -39,8 +39,8 @@ test("should keep a ticket proposed when it has no checkout to run in", async ({
   const issueUrl = "https://gitlab.com/group/no-such-checkout/-/issues/5";
   found([{ url: issueUrl }]);
 
-  const proposed = page.getByRole("group", { name: "Tickets proposés" });
-  await proposed.getByRole("button", { name: "Lancer no-such-checkout #5" }).click();
-  await expect(page.getByText("Lancement refusé")).toBeVisible();
+  const proposed = page.getByRole("group", { name: "Proposed tickets" });
+  await proposed.getByRole("button", { name: "Start no-such-checkout #5" }).click();
+  await expect(page.getByText("Launch refused")).toBeVisible();
   expect((await snapshot(request)).proposals.map((proposal) => proposal.issueUrl)).toEqual([issueUrl]);
 });

@@ -14,18 +14,18 @@ const metrics = (overrides: { status?: RunMetrics["outcome"]["status"]; tokens?:
 describe("metrics as the interface writes them", () => {
   it("should write tokens in thousands, then in millions with a decimal comma", () => {
     expect(formatTokens(950)).toBe("950");
-    expect(formatTokens(72_506)).toBe("73 k");
-    expect(formatTokens(3_355_667)).toBe("3,36 M");
+    expect(formatTokens(72_506)).toBe("73k");
+    expect(formatTokens(3_355_667)).toBe("3.36M");
   });
 
   it("should write a duration in seconds, minutes, then hours", () => {
-    expect(formatDuration(42_000)).toBe("42 s");
-    expect(formatDuration(6 * 60_000 + 20_000)).toBe("6 min");
-    expect(formatDuration(135 * 60_000)).toBe("2 h 15");
+    expect(formatDuration(42_000)).toBe("42s");
+    expect(formatDuration(6 * 60_000 + 20_000)).toBe("6m");
+    expect(formatDuration(135 * 60_000)).toBe("2h 15m");
   });
 
   it("should write a share as a whole percentage", () => {
-    expect(formatShare(0.868)).toBe("87 %");
+    expect(formatShare(0.868)).toBe("87%");
   });
 
   it("should count the review passes beyond the first and the corrections", () => {
@@ -35,7 +35,7 @@ describe("metrics as the interface writes them", () => {
 
   it("should write the sizes of the plan, or the number of tasks when it gave none", () => {
     expect(planSizes(metrics({ tasks: 3, sizes: { S: 2, M: 1, L: 0 } }))).toBe("2 S · 1 M");
-    expect(planSizes(metrics({ tasks: 2 }))).toBe("2 tâches");
+    expect(planSizes(metrics({ tasks: 2 }))).toBe("2 tasks");
     expect(planSizes(metrics())).toBe("");
   });
 

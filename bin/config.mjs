@@ -11,7 +11,7 @@ import { applyEdits, readValues, renderExample, unterminatedKeys } from "./env-f
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = process.env.IMPL_ENV_FILE ?? path.join(repoRoot, ".env");
 const launcher = path.join(repoRoot, "bin", "implementation-harness");
-const SOURCE_LABELS = { shell: "shell", file: ".env", fallback: "défaut" };
+const SOURCE_LABELS = { shell: "shell", file: ".env", fallback: "default" };
 
 function readEnvText() {
   try {
@@ -59,57 +59,57 @@ function missingKeys() {
 function problems() {
   const found = settings().flatMap(({ descriptor, value }) =>
     descriptor.validate(value).map((entry) => ({ ...entry, key: descriptor.key })));
-  const unknown = unknownKeys().map((key) => ({ severity: "avertissement", key, message: "clé inconnue, le harnais ne la lit pas" }));
-  const absent = missingKeys().map((key) => ({ severity: "information", key, message: `absente du .env, valeur par défaut appliquée (${descriptorFor(key).fallback})` }));
-  const broken = unterminatedKeys(readEnvText()).map((key) => ({ severity: "erreur", key, message: "guillemet non fermé, la ligne ne peut pas être réécrite" }));
+  const unknown = unknownKeys().map((key) => ({ severity: "warning", key, message: "unknown key, the harness does not read it" }));
+  const absent = missingKeys().map((key) => ({ severity: "info", key, message: `missing from the .env, default value applied (${descriptorFor(key).fallback})` }));
+  const broken = unterminatedKeys(readEnvText()).map((key) => ({ severity: "error", key, message: "unclosed quote, the line cannot be rewritten" }));
   return [...broken, ...found, ...unknown, ...absent];
 }
 
 function usage() {
-  console.log(`Usage : impl config [sous-commande]
+  console.log(`Usage: impl config [subcommand]
 
-  (aucune)          assistant interactif
-  list              configuration effective et provenance de chaque valeur
-  get CLÉ           valeur effective d'une variable
-  set CLÉ=VALEUR    écrit une variable sans passer par l'assistant
-  path              chemin du fichier .env
-  edit              ouvre le .env dans $EDITOR puis le vérifie
-  check             vérifie la configuration sans rien écrire
-  template          imprime le .env.example correspondant au schéma
+  (none)            interactive assistant
+  list              configuration in effect and where each value comes from
+  get KEY           value in effect of a variable
+  set KEY=VALUE     writes a variable without going through the assistant
+  path              path of the .env file
+  edit              opens the .env in $EDITOR then checks it
+  check             checks the configuration without writing anything
+  template          prints the .env.example matching the schema
 
-Une variable posée dans le shell l'emporte sur le .env, qui l'emporte sur le défaut.
-Codes de sortie de check : 0 valide, 1 au moins une erreur.`);
+A variable set in the shell wins over the .env, which wins over the default.
+Exit codes of check: 0 valid, 1 at least one error.`);
 }
 
 function commandList() {
-  console.log(`Fichier : ${envPath}${existsSync(envPath) ? "" : " (absent)"}\n`);
+  console.log(`File: ${envPath}${existsSync(envPath) ? "" : " (missing)"}\n`);
   for (const { descriptor, value, source } of settings()) {
     console.log(`${descriptor.key.padEnd(30)} ${value.padEnd(34)} ${SOURCE_LABELS[source]}`);
   }
   const unknown = unknownKeys();
-  if (unknown.length > 0) console.log(`\nClés inconnues dans le .env : ${unknown.join(", ")}`);
+  if (unknown.length > 0) console.log(`\nUnknown keys in the .env: ${unknown.join(", ")}`);
   return 0;
 }
 
 function commandCheck(quiet) {
   const found = problems();
-  const failed = found.some((entry) => entry.severity === "erreur");
+  const failed = found.some((entry) => entry.severity === "error");
   if (found.length === 0) {
-    if (!quiet) console.log(`Configuration valide : ${envPath}`);
+    if (!quiet) console.log(`Configuration valid: ${envPath}`);
     return 0;
   }
   const write = failed ? console.error : console.log;
-  write(`Fichier : ${envPath}`);
-  const width = { erreur: "Erreur       ", avertissement: "Avertissement", information: "Information  " };
-  for (const entry of found) write(`${width[entry.severity]} ${entry.key} : ${entry.message}`);
-  if (failed) write("\nCorrige la configuration : impl config");
+  write(`File: ${envPath}`);
+  const width = { error: "Error  ", warning: "Warning", info: "Info   " };
+  for (const entry of found) write(`${width[entry.severity]} ${entry.key}: ${entry.message}`);
+  if (failed) write("\nFix the configuration: impl config");
   return failed ? 1 : 0;
 }
 
 function commandGet(key) {
   const entry = settings().find((candidate) => candidate.descriptor.key === key);
   if (!entry) {
-    console.error(`Variable inconnue : ${key}`);
+    console.error(`Unknown variable: ${key}`);
     return 1;
   }
   console.log(entry.value);
@@ -117,15 +117,15 @@ function commandGet(key) {
 }
 
 function reportInvalid(key, value) {
-  const errors = descriptorFor(key).validate(value).filter((entry) => entry.severity === "erreur");
-  for (const entry of errors) console.error(`${key} : ${entry.message}`);
+  const errors = descriptorFor(key).validate(value).filter((entry) => entry.severity === "error");
+  for (const entry of errors) console.error(`${key}: ${entry.message}`);
   return errors.length > 0;
 }
 
 function persist(edits) {
   const broken = unterminatedKeys(readEnvText()).filter((key) => key in edits);
   if (broken.length > 0) {
-    console.error(`Guillemet non fermé dans le .env pour ${broken.join(", ")}. Corrige la ligne avec impl config edit.`);
+    console.error(`Unclosed quote in the .env for ${broken.join(", ")}. Fix the line with impl config edit.`);
     return false;
   }
   writeEnvText(applyEdits(readEnvText(), edits, schema));
@@ -135,34 +135,34 @@ function persist(edits) {
 function commandSet(assignment) {
   const separator = assignment.indexOf("=");
   if (separator <= 0) {
-    console.error("Forme attendue : impl config set CLÉ=VALEUR");
+    console.error("Expected form: impl config set KEY=VALUE");
     return 1;
   }
   const key = assignment.slice(0, separator);
   const value = assignment.slice(separator + 1);
   if (!descriptorFor(key)) {
-    console.error(`Variable inconnue : ${key}`);
+    console.error(`Unknown variable: ${key}`);
     return 1;
   }
   if (reportInvalid(key, value)) return 1;
   if (!persist({ [key]: value })) return 1;
-  console.log(`${key} écrit dans ${envPath}`);
+  console.log(`${key} written to ${envPath}`);
   console.log(needsRestart(descriptorFor(key))
-    ? "Relance le harnais pour appliquer : impl restart"
-    : "Pris en compte au prochain démarrage : impl");
+    ? "Restart the harness to apply: impl restart"
+    : "Applied at the next start: impl");
   return 0;
 }
 
 function commandEdit() {
   if (!process.stdin.isTTY) {
-    console.error("Terminal non interactif : « impl config path » donne le fichier à éditer.");
+    console.error("Non-interactive terminal: 'impl config path' gives the file to edit.");
     return 1;
   }
   const editor = process.env.VISUAL ?? process.env.EDITOR ?? "vi";
   if (!existsSync(envPath)) writeEnvText(renderExample(schema));
   const result = spawnSync(editor, [envPath], { stdio: "inherit" });
   if (result.error) {
-    console.error(`Impossible de lancer ${editor} : ${result.error.message}`);
+    console.error(`Cannot start ${editor}: ${result.error.message}`);
     return 1;
   }
   return commandCheck(false);
@@ -174,7 +174,7 @@ function commandEdit() {
  */
 function ask(rl, prompt) {
   return new Promise((resolve, reject) => {
-    const onClose = () => reject(new Error("entrée fermée"));
+    const onClose = () => reject(new Error("input closed"));
     rl.once("close", onClose);
     rl.question(prompt).then(resolve, reject).finally(() => rl.off("close", onClose));
   });
@@ -194,7 +194,7 @@ function normalize(descriptor, answer) {
 }
 
 function hint(descriptor) {
-  if (descriptor.kind === "boolean" || descriptor.kind === "flag") return " (oui/non)";
+  if (descriptor.kind === "boolean" || descriptor.kind === "flag") return " (yes/no)";
   if (descriptor.kind === "choice") return ` (${descriptor.options.join(", ")})`;
   return "";
 }
@@ -210,7 +210,7 @@ async function harnessIsListening() {
 }
 
 async function runAssistant() {
-  console.log(`Configuration d'Implementation Harness\nFichier : ${envPath}${existsSync(envPath) ? "" : " (il sera créé)"}\n`);
+  console.log(`Implementation Harness configuration\nFile: ${envPath}${existsSync(envPath) ? "" : " (it will be created)"}\n`);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const edits = {};
   const previousPort = valueOf("IMPL_PORT");
@@ -219,12 +219,12 @@ async function runAssistant() {
       console.log(`${descriptor.label} (${descriptor.key})`);
       console.log(`  ${descriptor.help}`);
       if (source === "shell") {
-        console.log(`  Posée dans le shell à « ${value} », elle l'emportera sur le .env.\n`);
+        console.log(`  Set in the shell to '${value}', it will win over the .env.\n`);
       }
       for (;;) {
         const answer = normalize(descriptor, await ask(rl, `  [${value}]${hint(descriptor)} > `));
         if (answer === "" || answer === value) break;
-        const errors = descriptor.validate(answer).filter((entry) => entry.severity === "erreur");
+        const errors = descriptor.validate(answer).filter((entry) => entry.severity === "error");
         if (errors.length === 0) {
           edits[descriptor.key] = answer;
           break;
@@ -234,7 +234,7 @@ async function runAssistant() {
       console.log("");
     }
   } catch {
-    console.error("Abandon.");
+    console.error("Aborted.");
     return 1;
   } finally {
     rl.close();
@@ -251,29 +251,29 @@ async function runAssistant() {
   const ordered = Object.fromEntries(schema.filter((descriptor) => descriptor.key in edits).map((descriptor) => [descriptor.key, edits[descriptor.key]]));
   const changed = Object.keys(ordered);
   if (changed.length === 0) {
-    console.log("Aucun changement.");
+    console.log("No change.");
     return commandCheck(false);
   }
   if (!persist(ordered)) return 1;
-  console.log(`${changed.length} clé(s) écrite(s) dans ${envPath}.`);
+  console.log(`${changed.length} key(s) written to ${envPath}.`);
   const status = commandCheck(true);
 
   if (!changed.some((key) => needsRestart(descriptorFor(key)))) return status;
   if (!(await harnessIsListening())) {
-    console.log("Relance le harnais pour appliquer : impl restart");
+    console.log("Restart the harness to apply: impl restart");
     return status;
   }
   const confirm = readline.createInterface({ input: process.stdin, output: process.stdout });
   let answer = "";
   try {
-    answer = (await ask(confirm, "Un serveur est en écoute. Le relancer maintenant ? [o/N] ")).trim().toLowerCase();
+    answer = (await ask(confirm, "A server is listening. Restart it now? [y/N] ")).trim().toLowerCase();
   } catch {
     answer = "";
   } finally {
     confirm.close();
   }
   if (!/^(o|oui|y|yes)$/.test(answer)) {
-    console.log("Relance le harnais pour appliquer : impl restart");
+    console.log("Restart the harness to apply: impl restart");
     return status;
   }
   // Stopping needs the port the running server was started with, not the new one.
@@ -292,23 +292,23 @@ switch (subcommand) {
   case "template": process.stdout.write(renderExample(schema)); process.exit(0); break;
   case "edit": process.exit(commandEdit()); break;
   case "get":
-    if (!argument) { console.error("Forme attendue : impl config get CLÉ"); process.exit(1); }
+    if (!argument) { console.error("Expected form: impl config get KEY"); process.exit(1); }
     process.exit(commandGet(argument));
     break;
   case "set":
-    if (!argument) { console.error("Forme attendue : impl config set CLÉ=VALEUR"); process.exit(1); }
+    if (!argument) { console.error("Expected form: impl config set KEY=VALUE"); process.exit(1); }
     process.exit(commandSet(process.argv.slice(3).join("=")));
     break;
   case "":
     if (!process.stdin.isTTY) {
       commandList();
-      console.error("\nTerminal non interactif : utilise « impl config set CLÉ=VALEUR ».");
+      console.error("\nNon-interactive terminal: use 'impl config set KEY=VALUE'.");
       process.exit(0);
     }
     process.exit(await runAssistant());
     break;
   default:
-    console.error(`Sous-commande inconnue : ${subcommand}\n`);
+    console.error(`Unknown subcommand: ${subcommand}\n`);
     usage();
     process.exit(1);
 }

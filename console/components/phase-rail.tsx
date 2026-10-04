@@ -44,8 +44,8 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
   const phases = phaseNames(run.issueUrl);
 
   return (
-    <aside aria-label="Progression du run" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
-      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}>{(badge.tone === "decision" || badge.tone === "blocked") && <WarningIcon size={10} weight="fill" />}{badge.tone === "error" && <WarningCircleIcon size={10} weight="fill" />}{badge.label}</span></div>
+    <aside aria-label="Run progress" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
+      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">Progress</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}>{(badge.tone === "decision" || badge.tone === "blocked") && <WarningIcon size={10} weight="fill" />}{badge.tone === "error" && <WarningCircleIcon size={10} weight="fill" />}{badge.label}</span></div>
       <ol>{phases.map((phase, index) => {
         // The last step is only ticked when the run itself is over, never just
         // because the workflow reached it.
@@ -58,7 +58,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
       })}</ol>
       {(run.issueUrl || run.branch || run.mergeRequestUrl) && (
         <div className="mt-6 border-t border-[var(--line)] pt-4">
-          <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">Livrable</p>
+          <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">Deliverable</p>
           {run.issueUrl && <Deliverable icon={<TicketIcon size={12} />} label={reference(run.issueUrl, "#")} title={run.issueUrl} href={externalHref(run.issueUrl)} />}
           {run.branch && <Deliverable icon={<GitBranchIcon size={12} />} label={run.branch} title={run.branch} />}
           {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, forgeWords(forgeOf(run.mergeRequestUrl)).sigil)} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
@@ -67,14 +67,14 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
       <div className="mt-6 border-t border-[var(--line)] pt-4">
         <dl className="space-y-2">
           <div>
-            <dt className="text-[10px] font-semibold text-[var(--muted)]">Dépôt</dt>
+            <dt className="text-[10px] font-semibold text-[var(--muted)]">Repository</dt>
             <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={repository}>{repository}</dd>
             {/* A recipe belongs to a real checkout: the demonstration has none. */}
-            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="Ce que le harnais retient pour lancer l'application de ce dépôt" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Recette d&apos;exécution</button></dd>}
+            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="What the harness keeps to start the application of this repository" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button></dd>}
           </div>
           {run.baseBranch && (
             <div>
-              <dt className="text-[10px] font-semibold text-[var(--muted)]">Empilé sur</dt>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">Stacked on</dt>
               <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.baseBranch}>{run.baseBranch}</dd>
             </div>
           )}
@@ -82,7 +82,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
             <div>
               <dt className="text-[10px] font-semibold text-[var(--muted)]">Worktree</dt>
               <dd className={`font-mono text-[10px] ${run.worktree.state === "active" ? "truncate text-[var(--ink)]" : "leading-4 text-[var(--muted)]"}`} title={run.worktree.path}>{worktree}</dd>
-              {run.worktree.state === "active" && run.worktree.dependencies === "symlink" && <dd className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Dépendances liées au checkout principal</dd>}
+              {run.worktree.state === "active" && run.worktree.dependencies === "symlink" && <dd className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Dependencies linked to the main checkout</dd>}
             </div>
           )}
         </dl>
@@ -90,8 +90,8 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
         {run.usage && (
           <div className="mt-3">
             <p className="text-[10px] font-semibold text-[var(--muted)]">Tokens</p>
-            <p className="font-mono text-[10px] text-[var(--ink)]" title={`${run.usage.total.toLocaleString("fr-FR")} tokens lus et écrits, cache compris`}>{formatTokens(run.usage.total)}</p>
-            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Pilote {formatTokens(run.usage.pilot)} en {run.usage.pilotCalls} appels{run.usage.agents > 0 ? `, ${run.usage.agents} agent${run.usage.agents > 1 ? "s" : ""}` : ""}</p>
+            <p className="font-mono text-[10px] text-[var(--ink)]" title={`${run.usage.total.toLocaleString("en-US")} tokens read and written, cache included`}>{formatTokens(run.usage.total)}</p>
+            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Pilot {formatTokens(run.usage.pilot)} in {run.usage.pilotCalls} calls{run.usage.agents > 0 ? `, ${run.usage.agents} agent${run.usage.agents > 1 ? "s" : ""}` : ""}</p>
           </div>
         )}
       </div>

@@ -65,7 +65,7 @@ export class RunSession {
   readonly demoFiles = new Map<string, Buffer>();
   /** Every version of the documents acceptance coverage is computed from. See evidence-archive.ts. */
   readonly evidence: EvidenceArchive;
-  /** The last coverage computed, served whole to the "Preuves" tab; the run state carries only its figures. */
+  /** The last coverage computed, served whole to the "Evidence" tab; the run state carries only its figures. */
   acceptanceView: AcceptanceView | null = null;
   /** What the figures last published were computed from, so an unchanged recomputation publishes nothing. */
   acceptanceKey = "";
@@ -138,7 +138,7 @@ export class RunSession {
       : [...this.state.messages, message].slice(-400);
   }
 
-  /** Moves the cards of the "Suivi" board after anything they are read from changed: the plan, a delegation, an agent or a report. */
+  /** Moves the cards of the "Tracking" board after anything they are read from changed: the plan, a delegation, an agent or a report. */
   refreshPlanTasks() {
     if (!this.state.planTasks) return;
     this.state.planTasks = planTaskBoard(this.state.planTasks, this.state.planDelegations ?? [], this.state.agents, this.state.artifacts);

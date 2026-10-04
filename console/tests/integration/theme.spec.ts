@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const toggle = "button[aria-label='Thème sombre']";
+const toggle = "button[aria-label='Dark theme']";
 const theme = (page: import("@playwright/test").Page) => page.evaluate(() => document.documentElement.dataset.theme);
 
 test("should follow the system theme until one is picked", async ({ page }) => {

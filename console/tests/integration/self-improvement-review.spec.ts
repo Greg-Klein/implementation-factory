@@ -38,5 +38,5 @@ test("should answer a groundless approval to the page, without touching any run"
       });
     }),
   );
-  expect(error).toContain("auto-amélioration");
+  expect(error).toContain("No self-improvement worktree");
 });

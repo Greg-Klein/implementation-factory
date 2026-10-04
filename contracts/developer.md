@@ -22,7 +22,7 @@ You MUST produce:
   "items": [
     {
       "id": "<suffix>-E1",
-      "label": "string (what was measured, in French)",
+      "label": "string (what was measured, in the workflow language)",
       "verdict": "measured",
       "criterionIds": ["AC2"], "checkIds": ["AC2-C1"], "taskIds": ["<task id>"],
       "method": "browser",
@@ -35,7 +35,7 @@ You MUST produce:
 }
 ```
 
-One item per row of the `## Preuves navigateur` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app. `label`, `expected`, `actual` and `note` are written in French, matching the table; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
+One item per row of the `## Preuves navigateur` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app. `label`, `expected`, `actual` and `note` are written in the workflow language, matching the table; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
 
 - **`id`**: `<suffix>-E<n>`. Before a continuation or repeated invocation, read your previous suffixed evidence and the merged `dev-evidence.json`; allocate above the highest number ever used for this suffix. New measurements, including a formerly unverified check, always get new ids and name the older ids in `supersedes`. Never recycle table positions as ids. If you cannot establish earlier ids, ask the caller for a fresh suffix rather than guessing. An unchanged observation retains its id and exact content.
 - **`criterionIds`** are the registry ids (`.claude/tasks/acceptance-criteria.json`) the row measures, among those your task serves; add `checkIds` when that criterion lists several required checks, since a row that names only such a criterion counts for none of its checks. A row that measures no criterion cites none.

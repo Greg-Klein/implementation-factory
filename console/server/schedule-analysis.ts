@@ -32,22 +32,22 @@ export async function analyseTickets(repository: string, tickets: string[], know
     await mkdir(directory, { recursive: true, mode: 0o700 });
     await writeFile(inputPath, JSON.stringify(scheduleInput(repository, tickets, known), null, 2));
   } catch {
-    return { ok: false, failure: "fichier d'entrée impossible à écrire" };
+    return { ok: false, failure: "input file could not be written" };
   }
   const session = engine.startSchedule({ repository, pluginDir: pluginRoot, inputPath, outputPath, timeoutMs: scheduleTimeoutMs });
   if (!session) return fail(`${engine.label} introuvable`);
   onSession?.(session);
   const { timedOut, log } = await session.finished;
   onSession?.(null);
-  if (timedOut) return fail(`délai de ${duration(scheduleTimeoutMs)} dépassé`, log);
+  if (timedOut) return fail(`timeout of ${duration(scheduleTimeoutMs)} exceeded`, log);
   let output: unknown;
   try {
     output = JSON.parse(await readFile(outputPath, "utf8"));
   } catch (error) {
-    return fail((error as NodeJS.ErrnoException).code === "ENOENT" ? "fichier de sortie absent" : "fichier de sortie illisible", log);
+    return fail((error as NodeJS.ErrnoException).code === "ENOENT" ? "output file missing" : "output file unreadable", log);
   }
   const validation = validateSchedule({ tickets, known: known.map(({ ticket }) => ticket.issueUrl) }, output);
-  if (!validation.ok) return fail(`sortie refusée, ${validation.error}`, log);
+  if (!validation.ok) return fail(`output refused, ${validation.error}`, log);
   await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   return { ok: true, schedule: validation.schedule };
 }

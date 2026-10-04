@@ -94,15 +94,15 @@ describe("the health monitor on a live run", () => {
     await monitor.applyHealth(session, T0 + 90_000, policy);
     expect(session.state.incidents).toHaveLength(1);
     expect(session.state.status).toBe("attention");
-    expect(session.state.health).toMatchObject({ health: "stalled", title: "Plus aucune action en cours" });
-    expect(session.state.activities.filter((entry) => entry.title === "Plus aucune action en cours")).toHaveLength(1);
+    expect(session.state.health).toMatchObject({ health: "stalled", title: "Nothing in progress" });
+    expect(session.state.activities.filter((entry) => entry.title === "Nothing in progress")).toHaveLength(1);
     // Terminal output is not a resumption.
     session.appendTerminal("⠋ Thinking…");
     await monitor.applyHealth(session, T0 + 95_000, policy);
     expect(session.state.incidents![0].status).toBe("open");
     health.recordEngineSignal(session.signals, { kind: "tool.start", tool: "Read", toolUseId: "r1", background: false, endReported: false }, T0 + 100_000);
     await monitor.applyHealth(session, T0 + 100_000, policy);
-    expect(session.state.incidents![0]).toMatchObject({ status: "resolved", resolution: { outcome: "Claude Code a repris la main" } });
+    expect(session.state.incidents![0]).toMatchObject({ status: "resolved", resolution: { outcome: "Claude Code resumed" } });
     expect(session.state.status).toBe("running");
   });
 
@@ -162,7 +162,7 @@ describe("actions on an incident", () => {
     ]);
     expect(first.outcome).toBe("done");
     expect(second.outcome).toBe("refused");
-    expect(second.message).toMatch(/situation a changé/);
+    expect(second.message).toMatch(/situation has changed/);
     expect(submitted).toEqual([incidents.CONTINUATION_INSTRUCTION]);
     // The same request sent again is answered, not run again.
     expect(await registry.incidentAction({ ...request, requestId: "window-a" })).toMatchObject({ outcome: "duplicate" });
@@ -173,7 +173,7 @@ describe("actions on an incident", () => {
     expect(current.decisions).toEqual([expect.objectContaining({ requestId: "window-a", outcome: "done" })]);
     health.recordEngineSignal(session.signals, { kind: "tool.start", tool: "Read", toolUseId: "r1", background: false, endReported: false }, T0 + 70_000);
     await monitor.applyHealth(session, T0 + 70_000, policy);
-    expect(session.state.incidents![0].resolution?.outcome).toBe("Reprise observée après la demande de continuation");
+    expect(session.state.incidents![0].resolution?.outcome).toBe("Resumption observed after the continuation request");
   });
 
   it("should refuse a continuation once the session started working again between display and click", async () => {
@@ -183,7 +183,7 @@ describe("actions on an incident", () => {
     session.state.agents = [{ id: "a1", name: "implementation-harness:developer", status: "running", startedAt: new Date(T0).toISOString() }];
     const result = await registry.incidentAction({ runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "r1", action: "request_continuation" });
     expect(result).toMatchObject({ outcome: "refused" });
-    expect(result.message).toMatch(/un agent est actif/);
+    expect(result.message).toMatch(/an agent is active/);
     expect(submitted).toEqual([]);
   });
 
@@ -201,8 +201,8 @@ describe("actions on an incident", () => {
     const registry = registryWith(session);
     const request = { runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, action: "dismiss" as const };
     expect(await registry.incidentAction({ ...request, requestId: "d0" })).toMatchObject({ outcome: "refused" });
-    expect(await registry.incidentAction({ ...request, requestId: "d1", reason: "Il attendait ma réponse dans le chat" })).toMatchObject({ outcome: "done" });
-    expect(session.state.incidents![0]).toMatchObject({ status: "dismissed", resolution: { outcome: "Classé comme faux positif", detail: "Il attendait ma réponse dans le chat" } });
+    expect(await registry.incidentAction({ ...request, requestId: "d1", reason: "It was waiting for my answer in the chat" })).toMatchObject({ outcome: "done" });
+    expect(session.state.incidents![0]).toMatchObject({ status: "dismissed", resolution: { outcome: "Dismissed as a false positive", detail: "It was waiting for my answer in the chat" } });
     await monitor.applyHealth(session, T0 + 120_000, policy);
     expect(session.state.incidents).toHaveLength(1);
     expect(session.state.health?.health).toBe("healthy");
@@ -218,20 +218,20 @@ describe("after a restart", () => {
   const read = (runId: string) => JSON.parse(readFileSync(path.join(runsDirectory, runId, "run.json"), "utf8")) as RunState;
 
   it("should add one interruption incident, keep an unanswerable question as context only, and do it once", async () => {
-    writeRun("run-restart", { status: "attention", pendingQuestion: { id: "q1", questions: [{ question: "Quelle base ?", header: "Branche", options: [{ label: "develop" }], multiSelect: false }] } });
+    writeRun("run-restart", { status: "attention", pendingQuestion: { id: "q1", questions: [{ question: "Which base?", header: "Branch", options: [{ label: "develop" }], multiSelect: false }] } });
     await reconcileInterruptedRuns(runsDirectory);
     await reconcileInterruptedRuns(runsDirectory);
     const state = read("run-restart");
     expect(state).toMatchObject({ status: "failed", sessionActive: false, health: { health: "interrupted" } });
     expect(state.pendingQuestion).toBeUndefined();
     expect(state.incidents).toHaveLength(1);
-    expect(state.incidents![0].observations.find((observation) => observation.kind === "question")?.detail).toMatch(/Quelle base/);
+    expect(state.incidents![0].observations.find((observation) => observation.kind === "question")?.detail).toMatch(/Which base/);
   });
 
   it("should date an interrupted run at its last known activity, not at the restart that found it", async () => {
     const lastSeen = new Date(T0 + 20 * 60_000).toISOString();
     writeRun("run-dated", {
-      activities: [{ id: "a2", at: lastSeen, kind: "agent", title: "qa-reviewer démarre" }, { id: "a1", at: new Date(T0 + 60_000).toISOString(), kind: "system", title: "Session créée" }],
+      activities: [{ id: "a2", at: lastSeen, kind: "agent", title: "qa-reviewer starts" }, { id: "a1", at: new Date(T0 + 60_000).toISOString(), kind: "system", title: "Session created" }],
       agents: [{ id: "qa", name: "qa-reviewer", status: "running", startedAt: new Date(T0 + 5 * 60_000).toISOString() }],
     });
     await reconcileInterruptedRuns(runsDirectory);
@@ -272,7 +272,7 @@ describe("after a restart", () => {
     const incident = archived!.state.incidents![0];
     expect(await registry.incidentAction({ runId: archived!.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "c1", action: "request_continuation" }))
       .toMatchObject({ outcome: "refused" });
-    expect(await registry.incidentAction({ runId: archived!.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "c2", action: "dismiss", reason: "Relancé à la main" }))
+    expect(await registry.incidentAction({ runId: archived!.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "c2", action: "dismiss", reason: "Restarted by hand" }))
       .toMatchObject({ outcome: "done" });
     archive.release(archived!.id);
     expect(archive.get("run-archived")).toBeUndefined();

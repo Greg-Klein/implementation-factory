@@ -23,14 +23,14 @@ describe("the folder trust prompt as a pending decision", () => {
     prompt();
     expect(session.state.sessionPrompt).toMatchObject({ kind: "folder_trust", directory });
     expect(session.state.status).toBe("attention");
-    expect(session.state.activities[0]).toMatchObject({ kind: "attention", title: "Claude Code demande de faire confiance à ce dossier", detail: directory });
+    expect(session.state.activities[0]).toMatchObject({ kind: "attention", title: "Claude Code asks to trust this folder", detail: directory });
     expect(summarizeRun(session.state).sessionPromptId).toBe(session.state.sessionPrompt!.id);
   });
 
   it("should keep the run waiting on the user for as long as the prompt is there", () => {
     prompt();
     const input = (sessionPrompt: boolean) => ({ status: session.state.status, sessionActive: true, stoppedBy: null, pendingQuestion: false, sessionPrompt, agents: [], artifacts: [], signals: healthSignalsView(createSignals(0)) });
-    expect(evaluateRunHealth(input(true), 3_600_000)).toMatchObject({ health: "waiting", wait: { reason: "user_question", on: "toi" }, title: "Décision attendue" });
+    expect(evaluateRunHealth(input(true), 3_600_000)).toMatchObject({ health: "waiting", wait: { reason: "user_question", on: "you" }, title: "Waiting for a decision" });
     expect(evaluateRunHealth(input(false), 1_000)).toEqual({ health: "healthy" });
   });
 
@@ -59,7 +59,7 @@ describe("the folder trust prompt as a pending decision", () => {
     expect(session.state.sessionPrompt).toBeUndefined();
     expect(session.state.status).toBe("running");
     expect(session.endedBy).toBeNull();
-    expect(session.state.activities[0]).toMatchObject({ title: "Confiance accordée au dossier" });
+    expect(session.state.activities[0]).toMatchObject({ title: "Folder trusted" });
   });
 
   it("should type the refusal and remember why the session is about to end", () => {
@@ -68,14 +68,14 @@ describe("the folder trust prompt as a pending decision", () => {
     expect(answers).toHaveBeenCalledWith("refuse");
     expect(session.state.sessionPrompt).toBeUndefined();
     expect(session.endedBy).toBe("trust_refused");
-    expect(closeSessionPrompt(session)).toMatch(/dossier n'a pas été approuvé/);
-    expect(exitReport(null, 1, false, true)).toBe("Session fermée, dossier non approuvé");
+    expect(closeSessionPrompt(session)).toMatch(/folder was not trusted/);
+    expect(exitReport(null, 1, false, true)).toBe("Session closed, folder not trusted");
   });
 
   it("should refuse an answer to a prompt that is no longer the one waiting", () => {
-    expect(() => answerSessionPrompt(session, "none", "accept")).toThrow("Cette demande n'attend plus de réponse.");
+    expect(() => answerSessionPrompt(session, "none", "accept")).toThrow("This request is no longer waiting for an answer.");
     prompt();
-    expect(() => answerSessionPrompt(session, "another", "accept")).toThrow("Cette demande n'attend plus de réponse.");
+    expect(() => answerSessionPrompt(session, "another", "accept")).toThrow("This request is no longer waiting for an answer.");
     expect(answers).not.toHaveBeenCalled();
     expect(session.state.sessionPrompt).toBeDefined();
   });
@@ -83,7 +83,7 @@ describe("the folder trust prompt as a pending decision", () => {
   it("should say so, and type nothing, when the dialog already left the screen", () => {
     answers.mockReturnValue(false);
     prompt();
-    expect(() => answerSessionPrompt(session, session.state.sessionPrompt!.id, "refuse")).toThrow(/n'est plus à l'écran/);
+    expect(() => answerSessionPrompt(session, session.state.sessionPrompt!.id, "refuse")).toThrow(/is no longer on screen/);
     expect(session.state.sessionPrompt).toBeUndefined();
     expect(session.endedBy).toBeNull();
   });
@@ -93,7 +93,7 @@ describe("the folder trust prompt as a pending decision", () => {
     applySessionEvent(session, { kind: "session.prompt.end" });
     expect(session.state.sessionPrompt).toBeUndefined();
     expect(session.state.status).toBe("running");
-    expect(session.state.activities[0]).toMatchObject({ title: "Dossier approuvé dans le terminal" });
+    expect(session.state.activities[0]).toMatchObject({ title: "Folder trusted in the terminal" });
   });
 
   it("should drop the prompt by itself on the first hook, even one the harness has no event for", () => {
@@ -105,7 +105,7 @@ describe("the folder trust prompt as a pending decision", () => {
 
   it("should read an exit on the prompt as a refusal typed in the terminal", () => {
     prompt();
-    expect(closeSessionPrompt(session)).toMatch(/dossier n'a pas été approuvé/);
+    expect(closeSessionPrompt(session)).toMatch(/folder was not trusted/);
     expect(session.state.sessionPrompt).toBeUndefined();
     expect(session.endedBy).toBe("trust_refused");
   });

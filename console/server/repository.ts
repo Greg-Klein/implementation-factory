@@ -80,13 +80,13 @@ export async function detectProjectDirectory(issueUrl: string, known?: Repositor
 export async function resolveProjectDirectory(input: string, issueUrl: string) {
   if (input.trim()) {
     const explicit = path.resolve(expandHome(input.trim()));
-    if (!existsSync(explicit)) throw new Error("Le répertoire du projet n'existe pas.");
+    if (!existsSync(explicit)) throw new Error("The project directory does not exist.");
     return explicit;
   }
   const project = ticketProjectPath(issueUrl);
-  if (!project) throw new Error("L'URL du ticket n'est pas reconnue : il faut une issue GitLab ou GitHub.");
+  if (!project) throw new Error("The ticket URL is not recognised: it must be a GitLab or GitHub issue.");
   // A checkout cloned a moment ago is not in the cached scan yet: look again before refusing.
   const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;
-  throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute sa racine à IMPL_SEARCH_ROOTS.`);
+  throw new Error(`No checkout found for ${project}. Give its path or add its root to IMPL_SEARCH_ROOTS.`);
 }

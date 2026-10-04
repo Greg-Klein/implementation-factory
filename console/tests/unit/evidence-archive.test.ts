@@ -47,7 +47,7 @@ describe("evidence archive", () => {
     const view = archive.view();
     expect(archive.versions.filter((version) => version.file === "qa-evidence.json")).toHaveLength(1);
     expect(view.criteria[0].status).toBe("verified");
-    expect(view.diagnostics.some((diagnostic) => diagnostic.file === "qa-evidence.json" && diagnostic.message.includes("JSON invalide"))).toBe(true);
+    expect(view.diagnostics.some((diagnostic) => diagnostic.file === "qa-evidence.json" && diagnostic.message.includes("Invalid or incomplete JSON"))).toBe(true);
   });
 
   it("should keep a round one capture distinct from the round two capture of the same name", async () => {
@@ -76,7 +76,7 @@ describe("evidence archive", () => {
     await archive.ingest("qa-evidence.json");
     put("qa-evidence-round1.json", qa(1, "measured live"));
     await archive.ingest("qa-evidence-round1.json");
-    expect(archive.view().diagnostics.filter((diagnostic) => diagnostic.message.includes("Verdict inconnu"))).toHaveLength(1);
+    expect(archive.view().diagnostics.filter((diagnostic) => diagnostic.message.includes("Unknown verdict"))).toHaveLength(1);
     put("qa-evidence.json", qa(1, "pass"));
     await archive.ingest("qa-evidence.json");
     const view = archive.view();

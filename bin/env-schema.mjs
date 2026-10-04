@@ -17,27 +17,27 @@ function issue(severity, message) {
 
 function validateRoots(value) {
   const roots = splitRoots(value);
-  if (roots.length === 0) return [issue("erreur", "au moins une racine de recherche est attendue")];
+  if (roots.length === 0) return [issue("error", "at least one search root is expected")];
   return roots.flatMap((root) =>
-    existsSync(path.resolve(expandHome(root))) ? [] : [issue("avertissement", `racine introuvable : ${root}`)]);
+    existsSync(path.resolve(expandHome(root))) ? [] : [issue("warning", `root not found: ${root}`)]);
 }
 
 function validateEnum(allowed) {
-  return (value) => (allowed.includes(value) ? [] : [issue("erreur", `valeur attendue : ${allowed.join(" ou ")}`)]);
+  return (value) => (allowed.includes(value) ? [] : [issue("error", `expected value: ${allowed.join(" or ")}`)]);
 }
 
 function validateInteger(min, max) {
   return (value) => {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-      return [issue("erreur", `entier attendu entre ${min} et ${max}`)];
+      return [issue("error", `expected an integer between ${min} and ${max}`)];
     }
     return [];
   };
 }
 
 function validateText(value) {
-  return value.trim() ? [] : [issue("erreur", "une valeur non vide est attendue")];
+  return value.trim() ? [] : [issue("error", "a non-empty value is expected")];
 }
 
 /**
@@ -46,12 +46,15 @@ function validateText(value) {
  */
 export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"];
 
+/** The languages a run can write in. Anything else is read as English by the console. */
+export const workflowLanguages = ["en", "fr"];
+
 export const schema = [
   {
     key: "IMPL_SEARCH_ROOTS",
-    label: "Racines de recherche des dépôts",
+    label: "Repository search roots",
     comment: "Comma-separated directories scanned, up to two levels deep, for the checkout of a GitLab or GitHub issue.",
-    help: "Répertoires parcourus, jusqu'à deux niveaux, pour retrouver le checkout d'un ticket. Séparés par des virgules.",
+    help: "Directories scanned, up to two levels deep, to find the checkout of a ticket. Comma-separated.",
     fallback: "~/workspace",
     kind: "list",
     readBy: "console",
@@ -59,9 +62,9 @@ export const schema = [
   },
   {
     key: "IMPL_PERMISSION_MODE",
-    label: "Mode de permission des runs",
+    label: "Permission mode of the runs",
     comment: "Permission mode every run is started with; 'manual' asks before each tool and stops an unattended run.",
-    help: "Mode de permission de chaque run. « manual » demande avant chaque outil et bloque un run non surveillé.",
+    help: "Permission mode of every run. 'manual' asks before each tool and blocks an unattended run.",
     fallback: "auto",
     kind: "choice",
     options: permissionModes,
@@ -69,10 +72,21 @@ export const schema = [
     validate: validateEnum(permissionModes),
   },
   {
+    key: "IMPL_LANGUAGE",
+    label: "Language of what the workflow writes",
+    comment: "Language of what the workflow writes for people (questions, reports, merge request text): 'en' or 'fr'. The interface itself is in English.",
+    help: "Language of the questions, the reports and the merge request text a run writes: 'en' for English, 'fr' for French. The interface stays in English.",
+    fallback: "en",
+    kind: "choice",
+    options: workflowLanguages,
+    readBy: "console",
+    validate: validateEnum(workflowLanguages),
+  },
+  {
     key: "IMPL_SELF_IMPROVEMENT_AUTORUN",
-    label: "Auto-audit à la fin de chaque run",
+    label: "Self-audit at the end of each run",
     comment: "Run a Claude Code self-audit after every completed workflow.",
-    help: "Lance une auto-analyse Claude Code après chaque workflow terminé.",
+    help: "Runs a Claude Code self-audit after every completed workflow.",
     fallback: "true",
     kind: "boolean",
     readBy: "console",
@@ -80,9 +94,9 @@ export const schema = [
   },
   {
     key: "IMPL_REMOTE_CONTROL",
-    label: "Remote Control sur le terminal d'un run",
+    label: "Remote Control on the terminal of a run",
     comment: "Set to 'false' to start a run without Remote Control, which makes its terminal reachable from claude.ai on your own account.",
-    help: "Rend le terminal d'un run joignable depuis claude.ai, sur le compte déjà authentifié.",
+    help: "Makes the terminal of a run reachable from claude.ai, on the account already authenticated.",
     fallback: "true",
     kind: "boolean",
     readBy: "console",
@@ -90,9 +104,9 @@ export const schema = [
   },
   {
     key: "IMPL_PORT",
-    label: "Port d'écoute",
+    label: "Listening port",
     comment: "Port the local server and the browser use.",
-    help: "Port du serveur local et de l'interface.",
+    help: "Port of the local server and the interface.",
     fallback: "3210",
     kind: "port",
     readBy: "both",
@@ -100,9 +114,9 @@ export const schema = [
   },
   {
     key: "IMPL_HOST",
-    label: "Interface d'écoute",
+    label: "Listening interface",
     comment: "Network interface the local server binds to.",
-    help: "Interface réseau du serveur local.",
+    help: "Network interface of the local server.",
     fallback: "127.0.0.1",
     kind: "text",
     readBy: "console",
@@ -110,9 +124,9 @@ export const schema = [
   },
   {
     key: "IMPL_NO_OPEN",
-    label: "Démarrer sans ouvrir le navigateur",
+    label: "Start without opening the browser",
     comment: "Set to 1 to start without opening the browser.",
-    help: "1 pour démarrer sans ouvrir le navigateur.",
+    help: "1 to start without opening the browser.",
     fallback: "0",
     kind: "flag",
     readBy: "launcher",
@@ -120,9 +134,9 @@ export const schema = [
   },
   {
     key: "IMPL_MAX_CONCURRENT_RUNS",
-    label: "Runs tenus en parallèle",
+    label: "Runs held in parallel",
     comment: "How many Claude Code sessions the console holds at once; further launches wait in a queue.",
-    help: "Nombre de sessions Claude Code tenues en même temps. Au-delà, les lancements attendent en file.",
+    help: "Number of Claude Code sessions held at once. Past it, launches wait in the queue.",
     fallback: "3",
     kind: "text",
     readBy: "console",
@@ -130,9 +144,9 @@ export const schema = [
   },
   {
     key: "IMPL_SCHEDULE_TIMEOUT_MINUTES",
-    label: "Délai de l'analyse d'un lot, en minutes",
+    label: "Time allowed for the analysis of a batch, in minutes",
     comment: "Minutes the analysis of a batch of tickets may take per repository; past it, the tickets of that repository run one at a time.",
-    help: "Minutes laissées à l'analyse d'un lot de tickets, par dépôt. Au-delà, les tickets de ce dépôt passent un par un.",
+    help: "Minutes allowed for the analysis of a batch of tickets, per repository. Past it, the tickets of that repository run one at a time.",
     fallback: "5",
     kind: "text",
     readBy: "console",
@@ -140,9 +154,9 @@ export const schema = [
   },
   {
     key: "IMPL_WORKTREE_DEPENDENCY_DIRS",
-    label: "Dossiers de dépendances repris dans le worktree d'un run",
+    label: "Dependency directories brought into the worktree of a run",
     comment: "Comma-separated names of ignored dependency directories the worktree of a run takes from the main checkout, at any depth: cloned copy-on-write, symlinked where a clone is not possible. Never list build outputs.",
-    help: "Noms des dossiers de dépendances ignorés par git que le worktree d'un run reprend du checkout principal, à toute profondeur. Séparés par des virgules. Pas de sorties de build.",
+    help: "Names of the dependency directories ignored by git that the worktree of a run takes from the main checkout, at any depth. Comma-separated. No build outputs.",
     fallback: "node_modules",
     kind: "list",
     readBy: "console",
@@ -150,9 +164,9 @@ export const schema = [
   },
   {
     key: "IMPL_WORKTREE_COPY_FILES",
-    label: "Fichiers de configuration copiés dans le worktree d'un run",
+    label: "Configuration files copied into the worktree of a run",
     comment: "Comma-separated ignored files copied from the main checkout into the worktree of a run: a name pattern such as .env*, or a path from the repository root.",
-    help: "Fichiers ignorés par git copiés du checkout principal vers le worktree d'un run : un motif de nom comme .env*, ou un chemin depuis la racine du dépôt. Séparés par des virgules.",
+    help: "Files ignored by git copied from the main checkout into the worktree of a run: a name pattern such as .env*, or a path from the repository root. Comma-separated.",
     fallback: ".env*,.claude/settings.local.json",
     kind: "list",
     readBy: "console",
@@ -160,9 +174,9 @@ export const schema = [
   },
   {
     key: "IMPL_STALL_MINUTES",
-    label: "Silence avant un doute, en minutes",
+    label: "Silence before a doubt, in minutes",
     comment: "Minutes without any progress before the console voices a doubt about a run in progress. A doubt only: it never stops nor restarts anything.",
-    help: "Minutes sans aucune progression avant que la console exprime un doute sur un run en cours. Un doute seulement : rien n'est arrêté ni relancé.",
+    help: "Minutes without any progress before the console voices a doubt about a run in progress. A doubt only: nothing is stopped or restarted.",
     fallback: "10",
     kind: "text",
     readBy: "console",
@@ -170,9 +184,9 @@ export const schema = [
   },
   {
     key: "IMPL_DEMO_STEP_MS",
-    label: "Durée d'une étape du mode démo, en millisecondes",
+    label: "Duration of a demo mode step, in milliseconds",
     comment: "Duration of each step of the simulated scenario, in milliseconds.",
-    help: "Durée de chaque étape du scénario simulé, en millisecondes.",
+    help: "Duration of each step of the simulated scenario, in milliseconds.",
     fallback: "5000",
     kind: "duration",
     readBy: "console",

@@ -74,7 +74,7 @@ export async function applyHealth(session: RunSession, now: number, policy: Heal
     if (status !== session.state.status) { session.state.status = status; changed = true; }
   }
   for (const incident of transition.opened) session.activity("attention", incident.title, incident.reason);
-  for (const incident of transition.resolved) session.activity("system", `Incident clos : ${incident.title}`, incident.resolution?.outcome);
+  for (const incident of transition.resolved) session.activity("system", `Incident closed: ${incident.title}`, incident.resolution?.outcome);
   if (!changed) return false;
   session.publish();
   // An incident is only worth something if it survives the next crash.

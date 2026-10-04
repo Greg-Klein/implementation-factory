@@ -12,7 +12,7 @@ const plan: PlanTask[] = [
   { id: "T3", title: "Tests", status: "todo" },
 ];
 
-const agent = (id: string, nickname: string): AgentState => ({ id, name: "implementation-harness:developer", nickname, avatar: `/avatars/${nickname.toLowerCase()}.webp`, role: "Dev", status: "running", startedAt: "2026-09-27T10:00:00.000Z" });
+const agent = (id: string, nickname: string): AgentState => ({ id, name: "implementation-harness:developer", nickname, avatar: `/avatars/${nickname.toLowerCase()}.webp`, role: "Developer", status: "running", startedAt: "2026-09-27T10:00:00.000Z" });
 
 describe("plan task ids read from a delegation", () => {
   const delegate = (tool: string, input: Record<string, unknown>) => claudeCode.event({ hook_event_name: "PreToolUse", tool_name: tool, tool_input: input });
@@ -71,14 +71,14 @@ describe("agent names and roles", () => {
     expect(agentIdentity(25).nickname).toBe("Tom 3");
   });
 
-  it("should map every workflow agent type to a short French role", () => {
-    expect(agentRole("implementation-harness:developer")).toBe("Dev");
-    expect(agentRole("ticket-planner")).toBe("Planif");
-    expect(agentRole("implementation-harness:senior-reviewer")).toBe("Revue");
-    expect(agentRole("qa-reviewer")).toBe("QA");
-    expect(agentRole("implementation-harness:designer-reviewer")).toBe("Design");
-    expect(agentRole("review-orchestrator")).toBe("Orchestration");
-    expect(agentRole("Explore")).toBe("Exploration");
+  it("should map every workflow agent type to its role name", () => {
+    expect(agentRole("implementation-harness:developer")).toBe("Developer");
+    expect(agentRole("ticket-planner")).toBe("Planner");
+    expect(agentRole("implementation-harness:senior-reviewer")).toBe("Senior reviewer");
+    expect(agentRole("qa-reviewer")).toBe("QA reviewer");
+    expect(agentRole("implementation-harness:designer-reviewer")).toBe("Design reviewer");
+    expect(agentRole("review-orchestrator")).toBe("Review orchestrator");
+    expect(agentRole("Explore")).toBe("Explorer");
   });
 
   it("should fall back to the bare type for an unknown agent", () => {
@@ -126,7 +126,7 @@ describe("the tracking board", () => {
   it("should keep a done task done when it is reworked, under its latest agent", () => {
     const delegations = [{ agentType: "developer", taskIds: ["T1"], agentId: "a1" }, { agentType: "developer", taskIds: ["T1"], agentId: "a4" }];
     const [task] = planTaskBoard(plan, delegations, [agent("a1", "Léa"), agent("a4", "Inès")], ["developer-report-T1.md"]);
-    expect(task).toMatchObject({ status: "done", assignee: { agentId: "a4", nickname: "Inès", avatar: "/avatars/inès.webp", role: "Dev" } });
+    expect(task).toMatchObject({ status: "done", assignee: { agentId: "a4", nickname: "Inès", avatar: "/avatars/inès.webp", role: "Developer" } });
   });
 
   it("should show no assignee until the delegated agent has started", () => {
@@ -152,8 +152,8 @@ describe("the tracking board fed by hooks", () => {
     start("a1");
     start("a2");
     expect(session.state.planTasks).toMatchObject([
-      { id: "T1", status: "in_progress", assignee: { agentId: "a1", nickname: "Léa", role: "Dev" } },
-      { id: "T2", status: "in_progress", assignee: { agentId: "a2", nickname: "Tom", role: "Dev" } },
+      { id: "T1", status: "in_progress", assignee: { agentId: "a1", nickname: "Léa", role: "Developer" } },
+      { id: "T2", status: "in_progress", assignee: { agentId: "a2", nickname: "Tom", role: "Developer" } },
       { id: "T3", status: "todo" },
     ]);
   });
@@ -174,6 +174,6 @@ describe("the tracking board fed by hooks", () => {
     start("a1");
     start("a2");
     start("a1");
-    expect(session.state.agents.find((entry) => entry.id === "a1")).toMatchObject({ nickname: "Léa", role: "Dev" });
+    expect(session.state.agents.find((entry) => entry.id === "a1")).toMatchObject({ nickname: "Léa", role: "Developer" });
   });
 });

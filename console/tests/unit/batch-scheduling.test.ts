@@ -14,7 +14,7 @@ function queued(iid: number, overrides: Partial<QueuedRun> = {}): QueuedRun {
 function running(iid: number, overrides: Partial<ScheduleRun> = {}): ScheduleRun {
   return { id: `run-${iid}`, cwd: `${SHOP}/.claude/worktrees/run-${iid}`, repository: SHOP, issueUrl: url(iid), status: "running", ...overrides };
 }
-const overlap = (a: number, b: number, repository = SHOP): ScheduleEdge => ({ repository, a: url(a), b: url(b), kind: "overlap", reason: `Les tickets ${a} et ${b} modifient le même fichier.` });
+const overlap = (a: number, b: number, repository = SHOP): ScheduleEdge => ({ repository, a: url(a), b: url(b), kind: "overlap", reason: `Tickets ${a} and ${b} change the same file.` });
 const dependsOn = (first: number, second: number): ScheduleEdge => ({ repository: SHOP, a: url(second), b: url(first), kind: "depends_on", order: [url(first), url(second)], reason: `Le ticket ${second} a besoin du ticket ${first}.` });
 const predicted = (iid: number, overrides: Partial<ScheduledTicket> = {}): ScheduledTicket => ({ issueUrl: url(iid), repository: SHOP, analysis: "done", areas: [], files: [], confidence: "high", summary: `Ticket ${iid}.`, ...overrides });
 const watch = (iid: number, overrides: Partial<MergeWatch> = {}): MergeWatch => ({ issueUrl: url(iid), repository: SHOP, mergeRequestUrl: `https://gitlab.com/acme/shop/-/merge_requests/${iid - 100}`, branch: `feat/${iid}`, runId: `run-${iid}`, state: "open", since: "2026-10-01T10:00:00.000Z", ...overrides });
@@ -36,7 +36,7 @@ describe("the entries that start", () => {
   it("should hold a ticket that overlaps a running one, and say which and why", () => {
     const context = { runs: [running(98)], edges: [overlap(98, 101)] };
     expect(start([queued(101)], context)).toEqual([]);
-    expect(view([queued(101)], context, "q101")).toMatchObject({ reason: "conflict", blockedBy: "run-98", cause: "overlap", detail: "Les tickets 98 et 101 modifient le même fichier.", blocking: { issueUrl: url(98), runId: "run-98" } });
+    expect(view([queued(101)], context, "q101")).toMatchObject({ reason: "conflict", blockedBy: "run-98", cause: "overlap", detail: "Tickets 98 and 101 change the same file.", blocking: { issueUrl: url(98), runId: "run-98" } });
   });
 
   it("should let later tickets that conflict with nothing pass a held one, which takes no slot", () => {
@@ -117,12 +117,12 @@ describe("the entries that start", () => {
   });
 
   it("should run a low confidence ticket alone on its repository", () => {
-    const tickets = [predicted(101), predicted(102, { confidence: "low", summary: "Rien à chercher dans ce ticket." }), predicted(103)];
+    const tickets = [predicted(101), predicted(102, { confidence: "low", summary: "Nothing to search for in this ticket." }), predicted(103)];
     // 103 conflicts with 102 like every ticket of the repository, so it keeps its place behind it.
     expect(start([queued(101), queued(102), queued(103)], { tickets })).toEqual(["q101"]);
     // Moved to the end of the queue, the vague ticket lets the others go first.
     expect(start([queued(101), queued(103), queued(102)], { tickets })).toEqual(["q101", "q103"]);
-    expect(view([queued(101), queued(102)], { tickets }, "q102")).toMatchObject({ reason: "order", cause: "low_confidence", confidence: "low", detail: expect.stringContaining("Rien à chercher dans ce ticket.") });
+    expect(view([queued(101), queued(102)], { tickets }, "q102")).toMatchObject({ reason: "order", cause: "low_confidence", confidence: "low", detail: expect.stringContaining("Nothing to search for in this ticket.") });
     // Alone means against what runs and what awaits its merge too.
     expect(start([queued(102)], { tickets, runs: [running(98)] })).toEqual([]);
     expect(start([queued(102)], { tickets, watches: [watch(98)] })).toEqual([]);
@@ -134,10 +134,10 @@ describe("the entries that start", () => {
   });
 
   it("should run the tickets of a failed analysis one at a time, with the reason", () => {
-    const tickets = [101, 102, 103].map((iid) => predicted(iid, { analysis: "failed", confidence: undefined, summary: undefined, failure: "délai de 5 min dépassé" }));
+    const tickets = [101, 102, 103].map((iid) => predicted(iid, { analysis: "failed", confidence: undefined, summary: undefined, failure: "5 min timeout exceeded" }));
     const queue = [queued(101), queued(102), queued(103)];
     expect(start(queue, { tickets })).toEqual(["q101"]);
-    expect(view(queue, { tickets }, "q102")).toMatchObject({ reason: "order", cause: "analysis_failed", analysisFailure: "délai de 5 min dépassé", detail: expect.stringContaining("délai de 5 min dépassé"), blocking: { issueUrl: url(101) } });
+    expect(view(queue, { tickets }, "q102")).toMatchObject({ reason: "order", cause: "analysis_failed", analysisFailure: "5 min timeout exceeded", detail: expect.stringContaining("5 min timeout exceeded"), blocking: { issueUrl: url(101) } });
     expect(start(queue.slice(1), { tickets, runs: [running(101)] })).toEqual([]);
     expect(view(queue.slice(1), { tickets, runs: [running(101)] }, "q102")).toMatchObject({ reason: "conflict", cause: "analysis_failed", blockedBy: "run-101" });
     expect(start(queue.slice(1), { tickets, watches: [watch(101)] })).toEqual([]);
@@ -145,9 +145,9 @@ describe("the entries that start", () => {
   });
 
   it("should blame the ticket whose analysis failed, not the ticket that waits for it", () => {
-    const failed = { analysis: "failed" as const, confidence: undefined, summary: undefined, failure: "fichier de sortie absent" };
+    const failed = { analysis: "failed" as const, confidence: undefined, summary: undefined, failure: "output file missing" };
     const tickets = [predicted(101, failed), predicted(102), predicted(103, { ...failed, failure: undefined })];
-    const other = "L'analyse de #101 a échoué (fichier de sortie absent) : ce ticket passe après lui.";
+    const other = "The analysis of #101 failed (output file missing): this ticket runs after it.";
     // 102 was predicted: behind 101 in the queue, running or awaiting its merge, the failure it names is 101's.
     const behind = view([queued(101), queued(102)], { tickets }, "q102");
     expect(behind).toMatchObject({ reason: "order", cause: "analysis_failed", detail: other });
@@ -157,20 +157,20 @@ describe("the entries that start", () => {
     // A ticket with no prediction of its own, launched alone, is told the same.
     expect(view([queued(104)], { tickets, watches: [watch(101)] }, "q104").detail).toBe(other);
     // Without a recorded reason the sentence has no parenthesis.
-    expect(view([queued(103), queued(102)], { tickets }, "q102").detail).toBe("L'analyse de #103 a échoué : ce ticket passe après lui.");
+    expect(view([queued(103), queued(102)], { tickets }, "q102").detail).toBe("The analysis of #103 failed: this ticket runs after it.");
     // The ticket whose own analysis failed keeps the sentence about its batch, whatever the other ticket is.
-    expect(view([queued(102), queued(101)], { tickets }, "q101").detail).toBe("L'analyse du lot a échoué (fichier de sortie absent) : les tickets de ce dépôt passent un par un.");
-    expect(view([queued(101), queued(103)], { tickets }, "q103").detail).toBe("L'analyse du lot a échoué : les tickets de ce dépôt passent un par un.");
+    expect(view([queued(102), queued(101)], { tickets }, "q101").detail).toBe("The batch analysis failed (output file missing): the tickets of this repository run one at a time.");
+    expect(view([queued(101), queued(103)], { tickets }, "q103").detail).toBe("The batch analysis failed: the tickets of this repository run one at a time.");
   });
 
   it("should say whose prediction is vague, the waiting ticket's or the other one's", () => {
-    const tickets = [predicted(101), predicted(102, { confidence: "low", summary: "Rien à chercher dans ce ticket." }), predicted(103, { confidence: "low", summary: undefined })];
-    expect(view([queued(101), queued(102)], { tickets }, "q102").detail).toBe("Prédiction peu fiable pour ce ticket : il passe seul sur son dépôt. Rien à chercher dans ce ticket.");
-    expect(view([queued(102), queued(101)], { tickets }, "q101")).toMatchObject({ reason: "order", cause: "low_confidence", detail: "Prédiction peu fiable pour #102 : ce ticket passe après lui. #102 : Rien à chercher dans ce ticket." });
-    expect(view([queued(101)], { tickets, watches: [watch(103)] }, "q101").detail).toBe("Prédiction peu fiable pour #103 : ce ticket passe après lui.");
+    const tickets = [predicted(101), predicted(102, { confidence: "low", summary: "Nothing to search for in this ticket." }), predicted(103, { confidence: "low", summary: undefined })];
+    expect(view([queued(101), queued(102)], { tickets }, "q102").detail).toBe("Unreliable prediction for this ticket: it runs alone on its repository. Nothing to search for in this ticket.");
+    expect(view([queued(102), queued(101)], { tickets }, "q101")).toMatchObject({ reason: "order", cause: "low_confidence", detail: "Unreliable prediction for #102: this ticket runs after it. #102: Nothing to search for in this ticket." });
+    expect(view([queued(101)], { tickets, watches: [watch(103)] }, "q101").detail).toBe("Unreliable prediction for #103: this ticket runs after it.");
     // A failed analysis on either side is said before a vague prediction.
     const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]];
-    expect(view([queued(101), queued(102)], { tickets: mixed }, "q102")).toMatchObject({ cause: "analysis_failed", detail: "L'analyse de #101 a échoué : ce ticket passe après lui." });
+    expect(view([queued(101), queued(102)], { tickets: mixed }, "q102")).toMatchObject({ cause: "analysis_failed", detail: "The analysis of #101 failed: this ticket runs after it." });
   });
 
   it("should name the run on the same ticket before anything the schedule says", () => {

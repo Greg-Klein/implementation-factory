@@ -14,18 +14,18 @@ function DocumentModal({ worktreeName, kind, onClose }: ShownDocument & { onClos
     fetch(`/api/self-improvement/${kind}?worktree=${encodeURIComponent(worktreeName)}`)
       .then((r) => r.json() as Promise<{ diff?: string; report?: string; error?: string }>)
       .then((data) => { if (data.error) setError(data.error); else setText(data.diff ?? data.report ?? ""); })
-      .catch(() => setError(kind === "diff" ? "Impossible de récupérer le diff." : "Impossible de récupérer le rapport."));
+      .catch(() => setError(kind === "diff" ? "Could not fetch the diff." : "Could not fetch the report."));
   }, [worktreeName, kind]);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={kind === "diff" ? "Diff des améliorations proposées" : "Rapport de l’auto-amélioration"} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div role="dialog" aria-modal="true" aria-label={kind === "diff" ? "Diff of the proposed improvements" : "Self-improvement report"} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-4.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-30px_rgba(20,30,25,.55)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-3.5">
-          <div className="flex items-center gap-2 text-sm font-semibold">{kind === "diff" ? <CodeIcon size={15} /> : <FileTextIcon size={15} />} {kind === "diff" ? "Améliorations" : "Rapport"} · {worktreeName}</div>
+          <div className="flex items-center gap-2 text-sm font-semibold">{kind === "diff" ? <CodeIcon size={15} /> : <FileTextIcon size={15} />} {kind === "diff" ? "Improvements" : "Report"} · {worktreeName}</div>
           <button type="button" onClick={onClose} className="grid size-7 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"><XIcon size={15} /></button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {!text && !error && <p className="p-5 text-xs text-[var(--muted)]">{kind === "diff" ? "Chargement du diff…" : "Chargement du rapport…"}</p>}
+          {!text && !error && <p className="p-5 text-xs text-[var(--muted)]">{kind === "diff" ? "Loading the diff…" : "Loading the report…"}</p>}
           {error && <p className="p-5 text-xs text-red-700">{error}</p>}
           {text && (
             <pre className={`whitespace-pre-wrap ${kind === "diff" ? "break-all" : "break-words"} p-5 font-mono text-[11px] leading-5`}>
@@ -68,7 +68,7 @@ function AnalyzingRow({ review }: { review: PendingSelfImprovementReview }) {
     <Strip tone="muted">
       <p className="flex min-w-0 items-center gap-2 text-[11px]">
         <CircleNotchIcon size={12} className="shrink-0 animate-spin text-[var(--muted)]" />
-        <span className="font-semibold text-[var(--muted)]">Auto-amélioration en cours d’analyse</span>
+        <span className="font-semibold text-[var(--muted)]">Self-improvement being analyzed</span>
         <Name>{review.worktreeName}</Name>
       </p>
     </Strip>
@@ -79,12 +79,12 @@ function FinishedRow({ review, onClean, onViewReport }: { review: PendingSelfImp
   return (
     <Strip tone="muted">
       <p className="flex min-w-0 items-center gap-2 text-[11px]">
-        <span className="font-semibold text-[var(--muted)]">Auto-amélioration terminée sans commit</span>
-        <Name>{review.worktreeName} · rien à fusionner</Name>
+        <span className="font-semibold text-[var(--muted)]">Self-improvement finished without a commit</span>
+        <Name>{review.worktreeName} · nothing to merge</Name>
       </p>
       <div className="flex shrink-0 items-center gap-2">
-        <button type="button" onClick={onViewReport} className={ACTION}><FileTextIcon size={12} /> Voir le rapport</button>
-        <button type="button" onClick={onClean} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Nettoyer</button>
+        <button type="button" onClick={onViewReport} className={ACTION}><FileTextIcon size={12} /> View the report</button>
+        <button type="button" onClick={onClean} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Clean up</button>
       </div>
     </Strip>
   );
@@ -95,20 +95,20 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
     <Strip tone="accent">
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="font-semibold text-[var(--accent)]">Améliorations prêtes</span>
+          <span className="font-semibold text-[var(--accent)]">Improvements ready</span>
           <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
         </p>
         {review.mergesCleanly === false && (
           <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
             <WarningIcon size={12} className="mt-px shrink-0" />
-            Le rebase automatique sur le harnais n’a pas suffi : cette branche est en conflit réel. À reprendre à la main.
+            The automatic rebase on the harness was not enough: this branch has a real conflict. To be reworked by hand.
           </p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <button type="button" onClick={onViewDiff} className={ACTION}><CodeIcon size={12} /> Voir les changements</button>
-        <button type="button" onClick={onApprove} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px"><CheckIcon size={12} weight="bold" /> Fusionner</button>
-        <button type="button" onClick={onReject} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Ignorer</button>
+        <button type="button" onClick={onViewDiff} className={ACTION}><CodeIcon size={12} /> View changes</button>
+        <button type="button" onClick={onApprove} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--on-accent)] transition hover:opacity-90 active:translate-y-px"><CheckIcon size={12} weight="bold" /> Merge</button>
+        <button type="button" onClick={onReject} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Dismiss</button>
       </div>
     </Strip>
   );

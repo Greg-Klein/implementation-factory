@@ -80,7 +80,7 @@ describe("the worktree a run starts in", () => {
     const prepared = await lifecycle.prepareRunWorktree(repository, "run-start");
     expect(prepared.worktree).toMatchObject({ path: path.join(repository, ".claude", "worktrees", "run-start"), state: "active", dependencies: "clone" });
     expect(existsSync(path.join(prepared.worktree.path, "node_modules", "dep", "index.js"))).toBe(true);
-    expect(prepared.summary).toContain("1 dossier de dépendances cloné");
+    expect(prepared.summary).toContain("1 dependency directory cloned");
     expect(git(repository, "status", "--porcelain")).toBe("");
   });
 
@@ -95,17 +95,17 @@ describe("what becomes of the worktree when the session is gone", () => {
   it("should remove it once the run delivered, and keep the branch", async () => {
     const { session, worktree } = await finishedRun("run-delivered");
     await lifecycle.settleRunWorktree(session);
-    expect(session.state.worktree).toMatchObject({ state: "removed", detail: "Worktree supprimé" });
+    expect(session.state.worktree).toMatchObject({ state: "removed", detail: "Worktree removed" });
     expect(existsSync(worktree)).toBe(false);
     expect(git(repository, "rev-parse", "--verify", "feat/run-delivered")).toBeTruthy();
     expect(existsSync(path.join(repository, "node_modules", "dep", "index.js"))).toBe(true);
-    expect(session.state.activities[0].title).toBe("Worktree supprimé");
+    expect(session.state.activities[0].title).toBe("Worktree removed");
   });
 
   it("should keep it, with the reason, when the run opened no merge request", async () => {
     const { session, worktree } = await finishedRun("run-stopped", { status: "stopped", mergeRequestUrl: undefined, workflow: undefined });
     await lifecycle.settleRunWorktree(session);
-    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree conservé : aucune merge request" });
+    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree kept: no merge request" });
     expect(existsSync(worktree)).toBe(true);
   });
 
@@ -114,14 +114,14 @@ describe("what becomes of the worktree when the session is gone", () => {
     writeFileSync(path.join(worktree, "app.ts"), "export const answer = 44;\n");
     git(worktree, "commit", "-q", "-am", "fix: later");
     await lifecycle.settleRunWorktree(session);
-    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree conservé : changements non poussés" });
+    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree kept: unpushed changes" });
     expect(existsSync(worktree)).toBe(true);
   });
 
   it("should keep it until the archive of the evidence is confirmed", async () => {
     const { session } = await finishedRun("run-unsynced", { archiveSyncedAt: undefined });
     await lifecycle.settleRunWorktree(session);
-    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree conservé : archive des preuves non confirmée" });
+    expect(session.state.worktree).toMatchObject({ state: "kept", detail: "Worktree kept: evidence archive not confirmed" });
   });
 
   it("should touch nothing while the session is still open", async () => {
@@ -135,7 +135,7 @@ describe("what becomes of the worktree when the session is gone", () => {
     const { session } = await finishedRun("run-twice", { status: "stopped", mergeRequestUrl: undefined });
     await lifecycle.settleRunWorktree(session);
     await lifecycle.settleRunWorktree(session);
-    expect(session.state.activities.filter((entry) => entry.title === "Worktree conservé")).toHaveLength(1);
+    expect(session.state.activities.filter((entry) => entry.title === "Worktree kept")).toHaveLength(1);
   });
 });
 
@@ -151,10 +151,10 @@ describe("a removal the user asks for", () => {
 
   it("should ask for a confirmation when work is uncommitted, and remove nothing until it comes", async () => {
     const { session, worktree } = await finishedRun("run-dirty", { status: "failed", mergeRequestUrl: undefined });
-    writeFileSync(path.join(worktree, "draft.md"), "à reprendre\n");
+    writeFileSync(path.join(worktree, "draft.md"), "to pick up again\n");
     const asked = await lifecycle.removeWorktreeOnRequest(session, false);
-    expect(asked).toMatchObject({ outcome: "confirm", risks: ["changements non commités"] });
-    expect(asked.message).toContain("la branche et ses commits restent");
+    expect(asked).toMatchObject({ outcome: "confirm", risks: ["uncommitted changes"] });
+    expect(asked.message).toContain("the branch and its commits stay");
     expect(existsSync(path.join(worktree, "draft.md"))).toBe(true);
     await expect(lifecycle.removeWorktreeOnRequest(session, true)).resolves.toMatchObject({ outcome: "removed" });
     expect(existsSync(worktree)).toBe(false);
@@ -165,7 +165,7 @@ describe("a removal the user asks for", () => {
     const { session, worktree } = await finishedRun("run-local");
     writeFileSync(path.join(worktree, "app.ts"), "export const answer = 45;\n");
     git(worktree, "commit", "-q", "-am", "fix: local only");
-    await expect(lifecycle.removeWorktreeOnRequest(session, false)).resolves.toMatchObject({ outcome: "confirm", risks: ["changements non poussés"] });
+    await expect(lifecycle.removeWorktreeOnRequest(session, false)).resolves.toMatchObject({ outcome: "confirm", risks: ["unpushed changes"] });
     expect(existsSync(worktree)).toBe(true);
   });
 
@@ -212,7 +212,7 @@ describe("worktrees found at startup", () => {
     rmSync(worktree, { recursive: true, force: true });
     expect(git(repository, "worktree", "list")).toContain("run-vanished");
     await lifecycle.reconcileRunWorktrees(runsDirectory);
-    expect(readRun("run-vanished").worktree).toMatchObject({ state: "removed", detail: "Worktree introuvable sur le disque" });
+    expect(readRun("run-vanished").worktree).toMatchObject({ state: "removed", detail: "Worktree not found on disk" });
     expect(git(repository, "worktree", "list")).not.toContain("run-vanished");
   });
 
@@ -220,7 +220,7 @@ describe("worktrees found at startup", () => {
     const { session, worktree } = await finishedRun("run-left", { status: "failed", mergeRequestUrl: undefined });
     writeRun(session.archivedState());
     await lifecycle.reconcileRunWorktrees(runsDirectory);
-    expect(readRun("run-left").worktree).toMatchObject({ state: "kept", detail: "Worktree conservé : aucune merge request" });
+    expect(readRun("run-left").worktree).toMatchObject({ state: "kept", detail: "Worktree kept: no merge request" });
     expect(existsSync(worktree)).toBe(true);
     const archive = new RunArchive();
     await archive.load(runsDirectory);

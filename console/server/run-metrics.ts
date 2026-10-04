@@ -186,7 +186,7 @@ export function comparableRuns(run: RunMetrics, others: RunMetrics[]): { runs: R
   const delivered = others.filter((other) => other.runId !== run.runId && other.final && other.outcome.status === "completed");
   const tier = run.complexity.reviewTier;
   const sameTier = tier === undefined ? [] : delivered.filter((other) => other.complexity.reviewTier === tier);
-  return sameTier.length >= BASELINE_MINIMUM ? { runs: sameTier, scope: `palier de revue ${tier}` } : { runs: delivered, scope: "tous les runs livrés" };
+  return sameTier.length >= BASELINE_MINIMUM ? { runs: sameTier, scope: `review tier ${tier}` } : { runs: delivered, scope: "all delivered runs" };
 }
 
 export function metricsBaseline(run: RunMetrics, others: RunMetrics[]): MetricsBaseline {
@@ -218,13 +218,13 @@ export function metricsFindings(run: RunMetrics, others: RunMetrics[]): MetricsF
     const ratio = value / reference;
     if (ratio >= OUTLIER_RATIO) findings.push({ metric, value, median: reference, ratio: Math.round(ratio * 100) / 100, detail: describe(value, reference) });
   };
-  against("tokens", run.tokens?.total.total, baseline.tokens, (value, reference) => `${millions(value)} tokens, pour une médiane de ${millions(reference)} sur ${baseline.runs} runs (${baseline.scope}).`);
-  against("activeMs", run.time.activeMs, baseline.activeMs, (value, reference) => `${minutes(value)} hors attente, pour une médiane de ${minutes(reference)}.`);
-  against("pilotCalls", run.tokens?.pilot.calls, baseline.pilotCalls, (value, reference) => `${value} appels du pilote, pour une médiane de ${reference}.`);
+  against("tokens", run.tokens?.total.total, baseline.tokens, (value, reference) => `${millions(value)} tokens, against a median of ${millions(reference)} over ${baseline.runs} runs (${baseline.scope}).`);
+  against("activeMs", run.time.activeMs, baseline.activeMs, (value, reference) => `${minutes(value)} outside waits, against a median of ${minutes(reference)}.`);
+  against("pilotCalls", run.tokens?.pilot.calls, baseline.pilotCalls, (value, reference) => `${value} pilot calls, against a median of ${reference}.`);
   const rounds = Math.max(run.rework.launches["senior-reviewer"] ?? 0, run.rework.launches["qa-reviewer"] ?? 0);
   if (rounds > 1 || run.rework.reworkDevelopers > 0) {
-    findings.push({ metric: "rework", value: Math.max(rounds - 1, run.rework.reworkDevelopers), median: 0, ratio: 0, detail: `${rounds} passes de revue et ${run.rework.reworkDevelopers} developer(s) de correction.` });
+    findings.push({ metric: "rework", value: Math.max(rounds - 1, run.rework.reworkDevelopers), median: 0, ratio: 0, detail: `${rounds} review rounds and ${run.rework.reworkDevelopers} rework developer(s).` });
   }
-  if (run.time.incidentMs > 60_000) findings.push({ metric: "incidentMs", value: run.time.incidentMs, median: 0, ratio: 0, detail: `${minutes(run.time.incidentMs)} sous un incident ouvert, sans rien qui fasse avancer le run.` });
+  if (run.time.incidentMs > 60_000) findings.push({ metric: "incidentMs", value: run.time.incidentMs, median: 0, ratio: 0, detail: `${minutes(run.time.incidentMs)} under an open incident, with nothing moving the run forward.` });
   return findings;
 }

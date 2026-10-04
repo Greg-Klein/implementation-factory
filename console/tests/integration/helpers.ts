@@ -58,15 +58,15 @@ export async function startDemoRun(page: Page) {
  * whichever tab of the run is on screen, which the dialogue does not.
  */
 export async function expectDemoCompleted(page: Page) {
-  await expect(page).toHaveTitle("✓ Terminé · Implementation Harness");
+  await expect(page).toHaveTitle("✓ Completed · Implementation Harness");
 }
 
 export async function runDemoToCompletion(page: Page) {
   await page.goto("/?demo=1");
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByText("Decision required")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
-  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
-  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("button", { name: "Keep critical alerts" }).click();
+  await page.getByRole("button", { name: "Send to Claude" }).click();
   await expectDemoCompleted(page);
 }
 
@@ -75,7 +75,7 @@ type RunSummary = { id: string; status: string };
 /** The run the console is holding, for a test that drives a single one. */
 export async function currentRun(request: APIRequestContext): Promise<RunSummary> {
   const snapshot = await (await request.get("/api/runs")).json() as { runs: RunSummary[] };
-  expect(snapshot.runs.length, "exactement un run attendu").toBe(1);
+  expect(snapshot.runs.length, "exactly one run expected").toBe(1);
   return snapshot.runs[0];
 }
 
@@ -109,7 +109,7 @@ export async function startRun(page: Page, request: APIRequestContext, cwd: stri
   }), { cwd, issueUrl });
   const snapshot = await (await request.get("/api/runs")).json() as { runs: RunSummary[] };
   const started = snapshot.runs.find((run) => !before.has(run.id));
-  expect(started, "le run lancé doit apparaître").toBeDefined();
+  expect(started, "the started run must appear").toBeDefined();
   return started!.id;
 }
 

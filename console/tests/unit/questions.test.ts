@@ -37,7 +37,7 @@ describe("question handling", () => {
   });
 
   it("should format singular and plural pending answer labels", () => {
-    expect(pendingAnswerLabel(1)).toBe("Claude attend une réponse");
-    expect(pendingAnswerLabel(2)).toBe("Claude attend 2 réponses");
+    expect(pendingAnswerLabel(1)).toBe("Claude is waiting for an answer");
+    expect(pendingAnswerLabel(2)).toBe("Claude is waiting for 2 answers");
   });
 });

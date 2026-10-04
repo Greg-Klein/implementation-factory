@@ -1,5 +1,3 @@
-# Implementation Harness
-
 ![Implementation Harness](docs/cover.png)
 
 Implementation Harness is a local interface for driving Claude Code while it implements a GitLab ticket. You paste the ticket URL, the harness finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the harness queues them and holds back the ones that would touch the same code.

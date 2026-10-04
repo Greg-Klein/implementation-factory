@@ -166,6 +166,7 @@ describe("the headless scheduling session", () => {
     expect(tools.split(",")).toEqual([
       "Read", "Write", "Glob", "Grep", "Agent", "Skill",
       "Bash(glab issue view *)", "Bash(glab api *)",
+      "Bash(gh issue view *)", "Bash(gh api *)",
       "Bash(git log *)", "Bash(git show *)", "Bash(git grep *)", "Bash(git ls-files *)", "Bash(git rev-parse *)",
       "Bash(ls *)", "Bash(rm /data/schedule/call-1/*)",
     ]);

@@ -1,6 +1,6 @@
 # Ticket proposals file
 
-A watcher outside the console looks for tickets (on GitLab by label, assignee and status, or anywhere else) and writes what it found to one file. The console reads that file and shows the tickets as proposals. The file is all the two share: the watcher never calls the console, and the console never asks GitLab for tickets.
+A watcher outside the console looks for tickets (on GitLab or GitHub by label, assignee and status, or anywhere else) and writes what it found to one file. The console reads that file and shows the tickets as proposals. The file is all the two share: the watcher never calls the console, and the console never asks GitLab for tickets.
 
 The console works the same without the file. No file means no watcher and nothing proposed.
 
@@ -23,7 +23,7 @@ Every example below is invented. The file holds ticket titles: it stays in the d
 }
 ```
 
-- `tickets` is required. `url` is the address of a GitLab issue or work item; an entry without one is skipped.
+- `tickets` is required. `url` is the address of a GitLab issue or work item, or of a GitHub issue; an entry without one is skipped.
 - `title` and `source` are optional. `source` names what the watcher was looking at, a project or a group path.
 - `version` and `generatedAt` are for the reader of the file; the console ignores them.
 
@@ -35,7 +35,7 @@ Every example below is invented. The file holds ticket titles: it stays in the d
 
 ## What the console does with it
 
-- A ticket it already has (queued, held by a run, or behind an unmerged merge request) is not proposed.
+- A ticket it already has (queued, held by a run, or behind an unmerged merge request or pull request) is not proposed.
 - An accepted proposal is queued as a batch, exactly as pasted URLs are. A dismissed one is dropped. Either way the ticket is not proposed again while it stays in the file.
 - The decisions are kept in `<data directory>/ticket-proposals-handled.json`, and a decision is forgotten as soon as its ticket leaves the file.
 - Nothing starts on its own: a proposal opens no session and costs no tokens until the user launches it.

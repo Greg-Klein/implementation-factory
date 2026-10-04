@@ -63,6 +63,9 @@ describe("the hook guard", () => {
     expect(refusal("Bash", { command: "git commit -m \"fix: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>\"" })).toContain("Co-Authored-By");
     expect(refusal("Bash", { command: "git -C /repo commit -m 'fix: x' -m 'Claude-Session: https://claude.ai/code/session_01'" })).toBeDefined();
     expect(refusal("Bash", { command: "glab mr create --description 'https://claude.ai/code/session_01'" })).toBeDefined();
+    expect(refusal("Bash", { command: "gh pr create --title 'feat: x' --body 'https://claude.ai/code/session_01'" })).toBeDefined();
+    expect(refusal("Bash", { command: "gh pr comment 12 --body 'Co-Authored-By: Claude <noreply@anthropic.com>'" })).toBeDefined();
+    expect(refusal("Bash", { command: "gh pr create --title 'feat: x' --body-file .claude/tasks/mr-description.md" })).toBeUndefined();
     expect(refusal("Bash", { command: "git commit -m 'fix(cart): keep the total when a line is removed'" })).toBeUndefined();
     expect(refusal("Bash", { command: "git log --grep 'Co-Authored-By:'" })).toBeUndefined();
   });

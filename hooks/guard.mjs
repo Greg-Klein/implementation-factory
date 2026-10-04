@@ -4,7 +4,7 @@ import path from "node:path";
 const NAMESPACE = "implementation-harness";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
 const REVIEWERS = ["senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator"];
-const PUBLISHING = /\bgit\b[^|;&\n]*\bcommit\b|\bglab\s+(?:mr|issue)\s+(?:create|update|note)\b/;
+const PUBLISHING = /\bgit\b[^|;&\n]*\bcommit\b|\bglab\s+(?:mr|issue)\s+(?:create|update|note)\b|\bgh\s+(?:pr|issue)\s+(?:create|edit|comment)\b/;
 const SESSION_TRACE = /co-authored-by:|claude-session:|claude\.ai\/code\/session_|generated with \[claude code\]/i;
 
 /** The task directory of the workflow, from the session's directory or one of its parents. */

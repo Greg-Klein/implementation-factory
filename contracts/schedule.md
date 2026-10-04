@@ -101,7 +101,7 @@ One entry per ticket of the input `tickets`, in the same order, and no other.
 An edge links two tickets that must not run in parallel, or must run in a given order. `a` and `b` are `issue_url` values; at least one of them is a new ticket, the other is a new ticket or a `known` one.
 
 - `kind: "overlap"`: the two predictions share at least one file, or one narrow area. The two tickets can run in either order but not at the same time. No `order` field.
-- `kind: "depends_on"`: one ticket needs the result of the other, because GitLab links them with "blocks" / "is blocked by" or because the text of one says so. `order` is required: `[first, second]`, where `first` is implemented before `second`, and the two values are `a` and `b`.
+- `kind: "depends_on"`: one ticket needs the result of the other, because the forge links them (GitLab "blocks" / "is blocked by", GitHub "blocked by" / "blocking") or because the text of one says so. `order` is required: `[first, second]`, where `first` is implemented before `second`, and the two values are `a` and `b`.
 - `reason`: one short French sentence naming what is shared or what is needed. It never quotes the ticket at length.
 
 At most one edge per pair of tickets. When a pair both overlaps and depends, write the `depends_on` edge alone: it already keeps the two apart.
@@ -127,6 +127,6 @@ Before writing the file, validate:
 
 - every rule of the validation list above holds
 - every `overlap` edge can be justified by naming the shared file or directory from the two predictions
-- every `depends_on` edge points at a GitLab link or a sentence of the ticket, not at a guess about a sensible order
+- every `depends_on` edge points at a link of the forge or a sentence of the ticket, not at a guess about a sensible order
 - no `known` prediction was changed or repeated
 - each `low` is there because the ticket gives nothing to search for, and each `high` because the code was actually read

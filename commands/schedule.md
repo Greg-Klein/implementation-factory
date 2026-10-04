@@ -1,6 +1,6 @@
 ---
 name: schedule
-description: "Predict what each GitLab ticket of a batch would touch in the current repository and which tickets overlap or depend on each other, then write the result as JSON. Run headless by the console, one session per repository."
+description: "Predict what each GitLab or GitHub ticket of a batch would touch in the current repository and which tickets overlap or depend on each other, then write the result as JSON. Run headless by the console, one session per repository."
 disable-model-invocation: true
 argument-hint: <input-path> <output-path>
 model: sonnet
@@ -22,7 +22,7 @@ Read the input file. Stop with the failure line of step 4, and write nothing, wh
 - `tickets` is not an array;
 - the current directory is not a git repository.
 
-**When `tickets` is empty, write `{ "tickets": [], "edges": [] }` to the output path yourself and go to step 4.** No agent, no `glab`, no search.
+**When `tickets` is empty, write `{ "tickets": [], "edges": [] }` to the output path yourself and go to step 4.** No agent, no forge call, no search.
 
 ## 2. Predict
 

@@ -1,16 +1,25 @@
 ---
 name: implement
-description: "Implement a GitLab ticket end to end on a dedicated branch: read the ticket and its linked designs, plan, implement with developer agents, challenge with senior / QA / designer reviews, then open a merge request. Use when the user gives a GitLab issue URL to implement."
+description: "Implement a GitLab or GitHub ticket end to end on a dedicated branch: read the ticket and its linked designs, plan, implement with developer agents, challenge with senior / QA / designer reviews, then open a merge request or a pull request. Use when the user gives a GitLab or GitHub issue URL to implement."
 disable-model-invocation: true
-argument-hint: <gitlab-issue-url> [instructions for this run]
+argument-hint: <issue-url> [instructions for this run]
 model: opus
 ---
 
 Implement ticket: $ARGUMENTS
 
-**Parse the arguments first.** The first whitespace-separated token is the GitLab ticket URL. **Everything after it, if anything, is a free-form instruction for this run** (quotes optional, it may be a sentence or a paragraph). No second argument is the normal case: proceed as usual.
+**Parse the arguments first.** The first whitespace-separated token is the ticket URL, a GitLab or a GitHub one. **Everything after it, if anything, is a free-form instruction for this run** (quotes optional, it may be a sentence or a paragraph). No second argument is the normal case: proceed as usual.
 
 When there is one, write it verbatim at the top of `.claude/tasks/run-instruction.md`, and treat it as a first-class part of the specification for the whole run. It is not a hint, not a preference, and never optional. Typical shapes: a constraint ("do not touch the tracking layer"), a narrowing ("desktop only, mobile ships later"), a technical directive ("use the existing sheet component"), a pre-answer to a question you would have asked, or a warning about a trap.
+
+**The URL decides the forge, for the whole run.** Settle it now and never mix the two:
+
+| Ticket URL | Forge | CLI | Recipes | Delivers |
+|---|---|---|---|---|
+| `https://<host>/<group>/<project>/-/issues/<iid>` or `/-/work_items/<iid>` | GitLab | `glab` | `implementation-harness:glab-gitlab-api` | a merge request |
+| `https://<host>/<owner>/<repo>/issues/<number>`, no `/-/` | GitHub | `gh` | `implementation-harness:gh-github-api` | a pull request |
+
+This document is written with GitLab's words: "merge request", "MR", `<iid>`, and the `glab` commands it quotes. **On a GitHub ticket, read "pull request", "PR" and the issue number, and take every forge command from the `gh-github-api` skill, never from the `glab` lines here.** Each place where GitHub differs in more than its commands says so. Three things keep their name on both forges, because the console reads them by it: the files `mr-description.md` and `mr-review-comment.md`, and in `workflow-state.json` the values `merge_request`, `draft_merge_request` and the field `mergeRequestUrl`, which holds the address of the pull request.
 
 Read [engineering principles](${CLAUDE_PLUGIN_ROOT}/principles/engineering.md), [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) and [investigation handoff](${CLAUDE_PLUGIN_ROOT}/contracts/context-handoff.md). These are explicit plugin references, not target-repository files or automatically inherited CLAUDE.md content.
 
@@ -26,7 +35,7 @@ This run is **as autonomous as possible**. Step 2 is the only planned interrupti
 
 Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See the specification policy.
 
-**Waiting is never a shell `sleep`.** A foreground `sleep`, on its own or chained before the command you actually want, is blocked and costs you a turn for nothing. You wait a lot in this workflow: for a batch of developers, for a dev server to answer, for a `glab` call, for a reviewer to hand back its artifact. Three ways to do it, and no fourth:
+**Waiting is never a shell `sleep`.** A foreground `sleep`, on its own or chained before the command you actually want, is blocked and costs you a turn for nothing. You wait a lot in this workflow: for a batch of developers, for a dev server to answer, for a forge call, for a reviewer to hand back its artifact. Three ways to do it, and no fourth:
 
 - an agent you launched: its completion notification comes back to you on its own, so take the next useful action and read its report when it lands
 - a condition you can test: `Monitor` with an until-loop, which is also how you enforce the 15 minute cap of step 7 without staring at the clock
@@ -44,18 +53,20 @@ Read the run instruction, if there is one, **before** reading the ticket: it cha
 
 Resolve the local checkout for the ticket's project first (see "Repository resolution" below) and `cd` into it. In worktree mode (see "Run worktree" below) you are already in it: the run worktree is the checkout, so stay there and resolve nothing. Do not touch git yet, this step is read only.
 
-Always use `glab`, never WebFetch, for anything GitLab.
+Always use the forge's CLI, never WebFetch, for anything on the forge. On GitLab:
 
 ```bash
 glab issue view <iid> --repo <group>/<project> --comments
 ```
 
+On GitHub, load `implementation-harness:gh-github-api` and follow its "Reading a ticket": the issue with its comments, its sub-issues and parent, its dependencies and its attached images.
+
 Collect, from the description AND the comments:
 
 - **acceptance criteria, edge cases, out of scope**
 - **Figma links** (`figma.com/...`)
-- **image and file uploads** (`/uploads/...`)
-- **linked issues, epic, related MRs**
+- **image and file uploads** (`/uploads/...` on GitLab, `user-attachments` links on GitHub)
+- **linked issues, epic or parent issue, related MRs**
 - **any other document link** (Notion, Google Docs, Confluence, blog post, spec)
 
 How to read each kind of resource:
@@ -65,6 +76,7 @@ How to read each kind of resource:
 | Figma | See the design extraction reference in "Shared contracts and conditional methods" |
 | GitLab uploads | `glab api "projects/<url-encoded-project-path>/uploads/<secret>/<filename>" > .claude/tasks/assets/<name>` then `Read` the file to actually look at it. The secret and the filename are the two segments of the upload URL itself (`/uploads/<secret>/<filename>`), and the project path is URL encoded (`group%2Fproject`). Downloading needs no `curl`: `glab api` signs the request itself. The one call in this workflow that does need the token is the screenshot upload of step 9, and the token is read with `glab config get token --host <host>`. Never with `glab auth token`: it is not a subcommand, it prints its own help page on standard output and exits `0`, so the header carries help text instead of a credential and the failure looks like a network error. Name each file after what it shows and confirm it by reading the file, never by trusting the order of the downloads |
 | Epic / linked issues | `glab issue view`, `glab api groups/<group>/epics/<iid>` |
+| GitHub attachments, sub-issues, parent, dependencies | The `gh-github-api` skill, "Reading a ticket". None of the two GitLab rows above applies |
 | Anything with no API and no MCP (Notion, Docs, random web page) | **Playwright**: `browser_navigate` + `browser_snapshot` + `browser_take_screenshot`. This is the default fallback, never WebFetch |
 
 Read `.claude/tasks/runtime-recipe.md` when it exists: the console keeps it from earlier runs of this repository, under [the runtime recipe contract](${CLAUDE_PLUGIN_ROOT}/contracts/runtime-recipe.md). It says how the app is started, reached and driven. It is a starting point to check, and never ticket context.
@@ -145,9 +157,11 @@ git switch -c <branch> --no-track origin/<base>
 
 With `IMPL_BASE_BRANCH`, the same commands and the same rules apply with that branch as `<base>`: `origin/<base>` after the fetch, the local ref as fallback. The branch usually belongs to a run that is still open and is checked out in its worktree, which is one more reason never to check it out. Never commit on it, rebase it or push it: it is another ticket's branch. If it exists neither on the remote nor locally, stop and report. Never fall back to another base on your own: the ticket was queued behind that branch because it needs its code.
 
-Record the base branch. The merge request will target it, whatever it is. A stacked merge request targets the other ticket's branch, and GitLab retargets it to the branch that one was merged into, normally the default branch, once it is merged and its branch deleted.
+Record the base branch. The merge request will target it, whatever it is. A stacked merge request targets the other ticket's branch, and GitLab retargets it to the branch that one was merged into, normally the default branch, once it is merged and its branch deleted. GitHub does the same only when it deletes that branch itself: the `gh-github-api` delivery recipe has the condition.
 
-Then move the ticket to **In progress**, unless it already is. The branch exists and the work
+**On a GitHub ticket, move nothing and go to step 4**: an issue has no lifecycle status, at this step or at step 8. Say so once in the final report.
+
+On GitLab, move the ticket to **In progress**, unless it already is. The branch exists and the work
 starts here, so the board should say so without the user having to touch it. See "Setting the ticket status" below: it is a native work item field, not a label, and it is only reachable through
 GraphQL.
 
@@ -207,7 +221,7 @@ If a `developer` comes back with a specification question instead of a guess, it
 
 After each task, commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
 
-**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`) and no `Co-Authored-By` trailer, in a commit message, a merge request description or a comment. The engine appends both on its own, so this rule overrides it, here and for the `fix(...)` commits of step 7. A hook refuses a `git commit` or a `glab` publication that carries one; a description passed from a file is yours to check.
+**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`) and no `Co-Authored-By` trailer, in a commit message, a merge request description or a comment. The engine appends both on its own, so this rule overrides it, here and for the `fix(...)` commits of step 7. A hook refuses a `git commit`, or a `glab` or `gh` publication, that carries one; a description passed from a file is yours to check.
 
 ### Merge the developers' output, at the end of every batch
 
@@ -313,15 +327,15 @@ A design verdict `INCONCLUSIVE`, or a design review you decided to run and skipp
 
 ## Step 8 - Merge request
 
-Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use `implementation-harness:glab-gitlab-api` with [the delivery recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge.
+Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-harness:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-harness:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
 
-Then set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
+Then, on GitLab only, set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
 
 A commit made after the merge request exists is pushed too. In worktree mode the console keeps the run worktree as long as HEAD is not on the remote.
 
 ## Step 9 - Publish the consolidated review
 
-Use the same delivery recipe to write and publish one French review comment from the artifacts actually produced by this tier, with uploaded supporting captures. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
+Use the same delivery recipe to write and publish one French review comment from the artifacts actually produced by this tier, with uploaded supporting captures on GitLab. GitHub has no upload for them: the pull request recipe says how the comment names a capture that stays local. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
 
 ---
 
@@ -340,6 +354,7 @@ Print a short summary in chat:
 - how the run instruction was applied, and anything in it you could not honour, with the reason
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
+- on a GitHub ticket: that the issue status was left alone, that the captures stayed local, and the reviewer outcome
 
 Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
 
@@ -377,7 +392,7 @@ For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-r
 
 ## Repository resolution
 
-The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping GitLab project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket; `github.com/<owner>/<repo>/issues/<number>` on GitHub, where the path is `<owner>/<repo>`). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
 
 ---
 
@@ -401,6 +416,8 @@ In worktree mode:
 ---
 
 ## Setting the ticket status
+
+This section is GitLab's. On GitHub there is no status to set and nothing here applies.
 
 You choose the lifecycle transition at step 3 (`In progress`) and step 8 (`In progress - Merge request`). Use `implementation-harness:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
 
@@ -469,6 +486,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - The run instruction, when there is one, is binding from end to end: it reaches the planner, every developer and every reviewer, and nothing in the ticket, the design or your own judgement overrides it
 - Never invent what the ticket does not say: deduce the obvious, ask for the decisions, guess nothing
 - Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down
+- One ticket, one forge: the URL decides it, `glab` and its recipes never touch a GitHub ticket, `gh` and its recipes never a GitLab one
 - One ticket, one dedicated branch, always
 - In worktree mode the run stays in its worktree from the first step to the last: nothing is written, stashed or switched in the main checkout, and the run worktree and the ticket branch are left in place for the console
 - The MR always targets the base branch of step 2, asked or deduced as the only candidate, or `IMPL_BASE_BRANCH` when the console set it, in which case the base branch question is not asked
@@ -476,7 +494,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
 - Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2, when the diff touches test files. It is never the run worktree and never sits under `.claude/worktrees/`
-- The ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8
+- On GitLab the ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8. On GitHub it is never moved
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review

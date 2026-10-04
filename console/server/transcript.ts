@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { open } from "node:fs/promises";
 import chokidar from "chokidar";
 import { engine } from "./engine/index.js";
@@ -38,19 +39,58 @@ async function readNewMessages(session: RunSession, file: string) {
  * whichever spoke last.
  */
 export async function followTranscript(session: RunSession, transcriptPath: string) {
-  if (session.transcript.path === transcriptPath) return;
+  const follow = session.transcript;
+  if (follow.path === transcriptPath) {
+    // Every hook is a chance to find the file before the timer does.
+    if (!follow.onDisk && existsSync(transcriptPath)) watch(session, transcriptPath);
+    return;
+  }
   await closeTranscript(session);
-  session.transcript.path = transcriptPath;
+  follow.path = transcriptPath;
+  watch(session, transcriptPath);
+}
+
+/** How often a transcript that is not on disk yet is looked for. */
+const APPEARANCE_POLL_MS = 500;
+
+/**
+ * Watches the file once it exists. The first hook names a transcript that is
+ * not written yet, and neither is its directory when the run works in a fresh
+ * worktree: Claude Code keeps one directory per working directory. A watcher
+ * started that early misses the file, or reports it being created and then
+ * nothing it is appended to, and the dialogue stayed empty for the whole run.
+ * So nothing is watched before the file is there: it is looked for on a short
+ * timer, and on every hook, and the watcher starts on a file it can see.
+ */
+function watch(session: RunSession, transcriptPath: string) {
+  const follow = session.transcript;
+  stopWatching(session);
+  follow.onDisk = existsSync(transcriptPath);
+  if (!follow.onDisk) {
+    follow.pending = setInterval(() => { if (existsSync(transcriptPath)) watch(session, transcriptPath); }, APPEARANCE_POLL_MS);
+    follow.pending.unref();
+    return;
+  }
   const watcher = chokidar.watch(transcriptPath, { ignoreInitial: false });
-  session.transcript.watcher = watcher;
+  follow.watcher = watcher;
   watcher.on("add", () => void readNewMessages(session, transcriptPath));
   watcher.on("change", () => void readNewMessages(session, transcriptPath));
 }
 
+/** Lets go of the watcher and of the timer that waits for the file, keeping what was already read. */
+export function stopWatching(session: RunSession) {
+  const follow = session.transcript;
+  if (follow.pending) clearInterval(follow.pending);
+  follow.pending = null;
+  const previous = follow.watcher;
+  follow.watcher = null;
+  return previous?.close().catch(() => undefined);
+}
+
 export async function closeTranscript(session: RunSession) {
-  await session.transcript.watcher?.close().catch(() => undefined);
-  session.transcript.watcher = null;
+  await stopWatching(session);
   session.transcript.path = undefined;
+  session.transcript.onDisk = false;
   session.transcript.offset = 0;
   session.transcript.carry = "";
 }

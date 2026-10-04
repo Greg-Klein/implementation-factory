@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { expectDemoCompleted, resetRun, runDemoToCompletion, startDemoRun } from "./helpers";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createGitCheckout, hookToken } from "../fixtures";
+import { expectDemoCompleted, resetRun, runDemoToCompletion, startDemoRun, startRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -139,4 +143,32 @@ test("should offer a jump back to the last message after scrolling up", async ({
   await jump.click();
   await expect(jump).toBeHidden();
   expect(await conversation.evaluate((list) => list.scrollHeight - list.scrollTop - list.clientHeight)).toBeLessThan(80);
+});
+
+test("should read the dialogue from a transcript created after the first hook, in a directory that did not exist yet", async ({ page, request }) => {
+  // Claude Code keeps the transcripts of a working directory in a directory of
+  // its own, created with the first one. A run in a fresh worktree therefore
+  // names, in its first hook, a file whose directory is not there yet.
+  const root = path.join(os.tmpdir(), "implementation-harness-tests", "transcripts");
+  rmSync(root, { recursive: true, force: true });
+  mkdirSync(root, { recursive: true });
+  const transcript = path.join(root, "fresh-worktree", "session.jsonl");
+  const line = (uuid: string, text: string) => `${JSON.stringify({ type: "assistant", uuid, timestamp: new Date().toISOString(), isSidechain: false, message: { role: "assistant", content: [{ type: "text", text }] } })}\n`;
+  const hook = async (runId: string, hookId: string) => expect((await request.post(`/api/hooks?token=${hookToken}`, { data: { runId, hookId, payload: { hook_event_name: "PreToolUse", tool_name: "Read", tool_use_id: hookId, tool_input: { file_path: "app.ts" }, transcript_path: transcript } } })).ok()).toBe(true);
+  const messages = async (runId: string) => ((await (await request.get(`/api/runs/${encodeURIComponent(runId)}`)).json()) as { state: { messages: { text: string }[] } }).state.messages.map((message) => message.text);
+
+  const checkout = createGitCheckout("late-transcript");
+  await page.goto("/");
+  const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
+  await hook(runId, "late-1");
+
+  mkdirSync(path.dirname(transcript), { recursive: true });
+  writeFileSync(transcript, line("m1", "Ticket lu, je crée la branche."));
+  await expect.poll(() => messages(runId)).toEqual(["Ticket lu, je crée la branche."]);
+
+  // What is appended afterwards is what the early watcher never saw.
+  appendFileSync(transcript, line("m2", "Branche créée, je planifie."));
+  await expect.poll(() => messages(runId)).toEqual(["Ticket lu, je crée la branche.", "Branche créée, je planifie."]);
+  await page.getByRole("button", { name: /Ouvrir le run late-transcript/ }).click();
+  await expect(page.getByText("Branche créée, je planifie.")).toBeVisible();
 });

@@ -40,7 +40,7 @@ export class RunSession {
   engine: EngineSession | null = null;
   artifactWatcher: FSWatcher | null = null;
   /** Where the dialogue is read from, and how far it has been read. */
-  readonly transcript = { watcher: null as FSWatcher | null, path: undefined as string | undefined, offset: 0, carry: "" };
+  readonly transcript = { watcher: null as FSWatcher | null, path: undefined as string | undefined, onDisk: false, pending: null as NodeJS.Timeout | null, offset: 0, carry: "" };
   readonly demoTimers = new Set<ReturnType<typeof setTimeout>>();
   pendingQuestionInput: Record<string, unknown> | null = null;
   /** Resolved with whatever the active engine expects back, which only that engine knows. */
@@ -241,6 +241,8 @@ export class RunSession {
     this.engine = null;
     await this.artifactWatcher?.close().catch(() => undefined);
     this.artifactWatcher = null;
+    if (this.transcript.pending) clearInterval(this.transcript.pending);
+    this.transcript.pending = null;
     await this.transcript.watcher?.close().catch(() => undefined);
     this.transcript.watcher = null;
   }

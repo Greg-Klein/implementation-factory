@@ -50,7 +50,7 @@ export const schema = [
   {
     key: "IMPL_SEARCH_ROOTS",
     label: "Racines de recherche des dépôts",
-    comment: "Comma-separated directories scanned, up to two levels deep, for the checkout of a GitLab issue.",
+    comment: "Comma-separated directories scanned, up to two levels deep, for the checkout of a GitLab or GitHub issue.",
     help: "Répertoires parcourus, jusqu'à deux niveaux, pour retrouver le checkout d'un ticket. Séparés par des virgules.",
     fallback: "~/workspace",
     kind: "list",

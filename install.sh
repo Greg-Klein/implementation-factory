@@ -4,12 +4,20 @@ set -euo pipefail
 repo_root="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bin_dir="${IMPL_BIN_DIR:-$HOME/.local/bin}"
 
-for command_name in node npm claude glab; do
+for command_name in node npm claude; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     printf 'Prérequis manquant : %s\n' "$command_name" >&2
     exit 1
   fi
 done
+
+# Une forge suffit : glab pour les tickets GitLab, gh pour les tickets GitHub.
+if ! command -v glab >/dev/null 2>&1 && ! command -v gh >/dev/null 2>&1; then
+  printf 'Prérequis manquant : glab (tickets GitLab) ou gh (tickets GitHub), au moins un des deux.\n' >&2
+  exit 1
+fi
+command -v glab >/dev/null 2>&1 || printf 'glab absent : les tickets GitLab ne pourront pas être traités.\n'
+command -v gh >/dev/null 2>&1 || printf 'gh absent : les tickets GitHub ne pourront pas être traités.\n'
 
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 if (( node_major < 22 )); then

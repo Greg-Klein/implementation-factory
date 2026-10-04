@@ -106,7 +106,7 @@
   <header class="page">
     <p class="over">Implementation Harness</p>
     <h1>How the harness works</h1>
-    <p class="lead">A local console that starts the real <code>claude</code> binary on a GitLab ticket and shows what it does. No direct API call and no key: everything goes through the Claude Code session and its hooks. The console's interface is in French, and its labels are quoted as they appear.</p>
+    <p class="lead">A local console that starts the real <code>claude</code> binary on a GitLab or GitHub ticket and shows what it does. No direct API call and no key: everything goes through the Claude Code session and its hooks. The console's interface is in French, and its labels are quoted as they appear.</p>
   </header>
 
   <section>
@@ -116,7 +116,7 @@
       <svg viewBox="0 0 1140 720" role="img" aria-label="Path of a run between the interface, the server, the run worktree and the Claude Code session">
         <!-- ticket -->
         <rect class="box" x="30" y="24" width="220" height="56" rx="8"/>
-        <text class="t" x="46" y="48">GitLab ticket</text>
+        <text class="t" x="46" y="48">Ticket</text>
         <text class="s" x="46" y="66">a URL pasted in the console</text>
         <path class="a" d="M140 80V128"/>
         <text class="l" x="196" y="108">ticket URL</text>
@@ -428,12 +428,12 @@
 
         <rect class="box" x="510" y="200" width="180" height="90" rx="8"/>
         <text class="t" x="522" y="224">MR watch</text>
-        <text class="m" x="522" y="242">glab api, every minute</text>
+        <text class="m" x="522" y="242">glab / gh api, every minute</text>
         <text class="s" x="522" y="259">a call by the Node server,</text>
         <text class="s" x="522" y="274">no Claude session, no token</text>
 
         <rect class="box" x="240" y="200" width="200" height="90" rx="8"/>
-        <text class="t" x="252" y="224">GitLab</text>
+        <text class="t" x="252" y="224">Forge</text>
         <text class="s" x="252" y="242">state of the merge request</text>
         <text class="m" x="252" y="262">merged · closed · opened</text>
 
@@ -462,7 +462,7 @@
     </figure>
     <div class="chips">
       <div class="chip"><b>What the analysis costs</b>One Claude Code session on Sonnet per repository and per batch, 5 minutes at most by default. It takes none of the 3 slots.</div>
-      <div class="chip"><b>The watch uses no tokens</b>The server calls <span class="mono">glab api</span>, only while a ticket waits for an MR. If GitLab does not answer, the ticket stays held.</div>
+      <div class="chip"><b>The watch uses no tokens</b>The server calls <span class="mono">glab api</span> or <span class="mono">gh api</span>, only while a ticket waits for an MR or a PR. If the forge does not answer, the ticket stays held.</div>
       <div class="chip warn"><b>Failed or unreliable analysis</b>Missing or refused file, timeout exceeded, ticket too vague: the tickets of that repository run one at a time.</div>
       <div class="chip warn"><b>Override</b>From the base: the second MR will probably have to be reworked by hand. Stacked: the MR targets the other ticket's branch and is merged after it.</div>
       <div class="chip"><b>Limit</b>Tried once on a real GitLab project, with three tickets. The stacked start and the start from the base only ran against the stand-ins the tests use for <span class="mono">claude</span> and <span class="mono">glab</span>.</div>
@@ -471,7 +471,7 @@
 
   <section>
     <h2>6. Tickets proposed by a watcher</h2>
-    <p class="caption">The console does not ask GitLab which tickets to take. An outside tool does, and the two share one file.</p>
+    <p class="caption">The console does not ask the forge which tickets to take. An outside tool does, and the two share one file.</p>
     <div class="latercard">
       <h3>One file between the watcher and the console</h3>
       <ul>

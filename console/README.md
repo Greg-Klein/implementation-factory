@@ -8,7 +8,7 @@ The interface is in French. Labels and messages are quoted here as they appear o
 
 - Claude Code installed and logged in (`claude --version`)
 - Node.js 22.12 or later
-- `glab` installed and authenticated, to reach the GitLab tickets and merge requests
+- `glab` installed and authenticated to reach GitLab tickets and merge requests, `gh` to reach GitHub issues and pull requests (one is enough)
 - the MCP servers the workflow uses: Playwright for the developer's measurements, the design review and QA, Figma when a ticket provides frames
 
 `node-pty` is a native module. On a new machine, installing it may need the system's build tools, for example the Xcode Command Line Tools on macOS.
@@ -168,7 +168,7 @@ Each analysis has its `<id>/` directory under `scheduleRoot` (`server/config.ts`
 | `analysis` | "Analyse en cours" | the analysis session has not answered |
 | `conflict` | "En attente, conflit avec #217 en cours" | a run in progress conflicts |
 | `merge` | "Attend que la MR !12 soit mergée (#217)" | the merge request of a finished run is open |
-| `merge_unknown` | "État de la MR !12 inconnu (#217)" | GitLab could not be asked |
+| `merge_unknown` | "État de la MR !12 inconnu (#217)" | The forge could not be asked ("PR #12" on GitHub) |
 | `dependency` | "Dépend de #217, encore en file" | a `depends_on` edge to an entry ahead of it |
 | `order` | "Passe après #217" | another conflict with an entry ahead of it |
 | `slot` | "En attente, toutes les places sont prises" | nothing else holds it |
@@ -181,6 +181,7 @@ When a scheduled run ends with a merge request, the registry keeps a watch (`Mer
 
 ```bash
 glab api --hostname <host> projects/<project>/merge_requests/<iid>
+gh api --hostname <host> repos/<owner>/<repo>/pulls/<number>
 ```
 
 It is a call made by the Node server. **It opens no Claude session and uses no tokens.** It goes out every `IMPL_MERGE_POLL_MS` milliseconds (60,000 by default, an environment variable outside `impl config`), once per merge request and per interval, and only for the watches that hold a queue entry. With no ticket waiting, there is no timer and no call.
@@ -190,7 +191,7 @@ It is a call made by the Node server. **It opens no Claude session and uses no t
 | `merged` | the watch is lifted, the held tickets go, banner "Merge request mergée" |
 | `closed` | same release, banner "Merge request fermée sans être mergée" |
 | `opened`, `locked` | the ticket keeps waiting |
-| `glab` failure (network, token, missing binary) | unknown state, the ticket stays held and the row turns orange |
+| `glab` or `gh` failure (network, token, missing binary) | unknown state, the ticket stays held and the row turns orange |
 
 A run that ends without a merge request releases at once the tickets that were waiting for it. A watch nothing waits on any more is forgotten after a week.
 
@@ -211,7 +212,7 @@ A forced entry is still subject to the per-ticket lock and to the number of slot
 
 ### Limits
 
-The unit tests inject the answers, and the integration suite replaces `claude` and `glab` with the stand-ins of `tests/fake-claude/`. One real trial took place, on three tickets of a small test repository (see `docs/engineering-workflow.md`): the analysis, the `glab api` call of the watch and the release after a merge ran against a real GitLab. The stacked start and the forced start from the base only ran against the stand-ins, and no conflict has yet been found for real between two tickets both analysed without failure.
+The unit tests inject the answers, and the integration suite replaces `claude`, `glab` and `gh` with the stand-ins of `tests/fake-claude/`. One real trial took place, on three tickets of a small test repository (see `docs/engineering-workflow.md`): the analysis, the `glab api` call of the watch and the release after a merge ran against a real GitLab. The stacked start and the forced start from the base only ran against the stand-ins, and no conflict has yet been found for real between two tickets both analysed without failure.
 
 ## Server architecture
 
@@ -223,7 +224,7 @@ The unit tests inject the answers, and the integration suite replaces `claude` a
 | `server/ticket-proposals.ts` | tickets an outside watcher found, read from its file and kept until the user decides |
 | `server/schedule-analysis.ts` | one analysis session per repository, judged on its output file |
 | `server/merge-watch.ts` | timer that reads the state of the awaited merge requests, with no Claude session |
-| `server/ticket.ts` | `glab api` calls: title of a ticket, state of a merge request |
+| `server/ticket.ts` | `glab api` and `gh api` calls, by the forge of the address: title of a ticket, state of a merge request or pull request |
 | `server/run-worktrees.ts` | worktree of a run, from its creation to its removal, and reconciliation on start |
 | `server/worktree.ts` | git calls: run worktrees and self-improvement worktrees |
 | `server/engine/` | **the only part that knows which agent is driven** (see its README) |

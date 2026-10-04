@@ -33,6 +33,7 @@ The principles and contracts are read explicitly from the plugin path. The `CLAU
 | `figma-review` | Design review of a change visible in the interface, with or without Figma. | Inventory, measurements that cite their reference, coverage, observations for QA and unverified cells. |
 | `document-change` | Documentation made obsolete by an authorised change. | Update of the existing documentation and of the necessary decisions. |
 | `glab-gitlab-api` | A GitLab operation chosen and authorised by the caller. | Adapted recipe and check of the result. |
+| `gh-github-api` | A GitHub operation chosen and authorised by the caller, when the ticket is a GitHub issue. | Adapted recipe and check of the result. |
 | `unslop` | Any text read by a person: report, summary, question, MR description or comment, ticket, documentation, free field of a JSON artifact. | Sentences without AI tics, format and language of the contract unchanged. |
 
 `gitlab-tickets` keeps its Synapse conventions. These conventions do not become universal engineering principles.
@@ -128,7 +129,7 @@ Without `IMPL_RUN_WORKTREE`, that is when the plugin is used without the console
 The command runs with no terminal (`claude -p`, Sonnet), from the main checkout. It receives two absolute paths: an input file written by the console and the output file to write. The contract of both files and the validation rules are in `contracts/schedule.md`.
 
 - The input lists the tickets to predict (`tickets`): the new ones, and those of the repository whose earlier analysis failed. It also lists the predictions already made for the tickets queued, running or waiting for their merge (`known`). The known predictions are used for the comparison and are not computed again.
-- The `ticket-scheduler` agent (Sonnet) reads each new ticket with `glab`, looks in the repository for what the ticket would touch, then writes for each one files, areas, a confidence and a one-sentence summary.
+- The `ticket-scheduler` agent (Sonnet) reads each new ticket with `glab` or `gh`, looks in the repository for what the ticket would touch, then writes for each one files, areas, a confidence and a one-sentence summary.
 - It links with an edge two tickets that cannot run at the same time. `overlap` flags common files or a narrow common area. `depends_on` flags that one ticket needs the result of the other, from a GitLab "blocks" link or the text of the ticket, and gives the order. Two tickets of the same large module with no common file have no edge.
 - A `low` confidence means the ticket allows no prediction. The console then treats it as in conflict with every ticket of the repository.
 - The agent modifies nothing in the repository: no edit, no branch switch, no install. The output file is the only file written, outside the repository and outside the plugin: Claude Code refuses a session any write in the directory of the plugin it loaded. The console therefore puts both files in a directory of the system's temporary directory, private to the user, or under `schedule/` when the data directory is outside the plugin (`IMPL_DATA_DIR`). Ticket content goes into no tracked file.
@@ -147,7 +148,7 @@ The detail of the modules is in `console/README.md`, section "Batch of tickets a
 - For a `depends_on` edge, the first ticket of `order` goes ahead of the second in the queue.
 - A held ticket takes no slot. The tickets behind it that conflict with nothing start.
 
-Watching the merge requests uses neither this command nor any agent. The Node server calls `glab api` every 60 seconds (`IMPL_MERGE_POLL_MS`), only for the merge requests a queued ticket is waiting for. That call opens no Claude session and uses no tokens. A failed call gives an unknown state, which holds the ticket like an open merge request.
+Watching the merge requests uses neither this command nor any agent. The Node server calls `glab api`, or `gh api` for a pull request, every 60 seconds (`IMPL_MERGE_POLL_MS`), only for the merge requests a queued ticket is waiting for. That call opens no Claude session and uses no tokens. A failed call gives an unknown state, which holds the ticket like an open merge request.
 
 The user can override from the queue: a start from the base, which ignores the schedule, or a stacked start, described below. The user can also change the order of the queue or remove a ticket from it.
 
@@ -159,6 +160,7 @@ A ticket held by another one can start before the first one's merge request is m
 - Step 3 creates the ticket's branch from `origin/<base>` after the fetch, or from the local reference, with the rules of the run worktree. The pilot never checks out the base branch and does not write to it. If it exists neither on the remote nor locally, it stops and says so.
 - The merge request targets that branch. Its description says it is stacked and on which branch.
 - The description carries `Closes #<iid>` despite the target. When the first merge request is merged and its branch deleted, GitLab retargets the second to the branch the first was merged into. It closes the ticket only when the commits reach the default branch. Any other target that is not the default branch keeps `Related to`.
+- On GitHub the retargeting only happens when GitHub deletes the base branch itself, through "Delete branch" on the merged pull request or the repository setting that deletes head branches. A base branch deleted with `gh pr merge --delete-branch` or `git push --delete` closes the stacked pull request. Measured on a test repository on 2026-10-04.
 
 Without `IMPL_BASE_BRANCH`, nothing changes.
 
@@ -213,7 +215,7 @@ A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks
 
 - an agent of the workflow invoked under its bare name;
 - a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
-- a `git commit`, or a `glab` publication on a merge request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line;
+- a `git commit`, or a `glab` or `gh` publication on a merge request, a pull request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line;
 - a git command that destroys work: `git reset --hard`, `git clean -f` without a dry run, a checkout, restore or switch that discards the whole tree, a forced push without `--force-with-lease`, `git worktree prune`, the removal of a worktree under `.claude/worktrees/`. In a linked worktree, which is every run the console starts, it also refuses a stash other than `list` or `show`, and a branch deleted or overwritten (`branch -D`, `checkout -B`, `switch -C`, `--ignore-other-worktrees`).
 
 The git rules read the commands typed on the line, word by word. A forbidden command quoted in a commit message or passed to a script is not looked at.
@@ -274,7 +276,7 @@ A real trial of `/implementation-harness:schedule` with `claude -p` (Claude Code
 ```bash
 claude -p --plugin-dir <plugin> --add-dir <plugin> --add-dir <output directory> \
   --model sonnet --permission-mode dontAsk --permission-prompts none \
-  --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <output directory>/*)" \
+  --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(gh issue view *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <output directory>/*)" \
   --output-format json -- "/implementation-harness:schedule <input> <output>"
 ```
 

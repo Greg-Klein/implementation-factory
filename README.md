@@ -1,6 +1,6 @@
 ![Implementation Harness](docs/cover.png)
 
-Implementation Harness is a local interface for driving Claude Code while it implements a GitLab ticket. You paste the ticket URL, the harness finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the harness queues them and holds back the ones that would touch the same code.
+Implementation Harness is a local interface for driving Claude Code while it implements a GitLab ticket or a GitHub issue. You paste the ticket URL, the harness finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the harness queues them and holds back the ones that would touch the same code.
 
 The repository contains a Claude Code plugin whose `/implementation-harness:implement` command orchestrates the work: reading the ticket, clarification questions, planning, implementation, tests, specialised reviews and preparing the merge request. The harness is the visual layer of that command. It uses the Claude Code login already present on the machine and makes no direct call to the Anthropic API.
 
@@ -44,7 +44,7 @@ Requirements:
 - macOS or Linux;
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and logged in;
 - Node.js 22.12 or later;
-- `git`, and [`glab`](https://gitlab.com/gitlab-org/cli) installed and authenticated.
+- `git`, and the CLI of your forge installed and authenticated: [`glab`](https://gitlab.com/gitlab-org/cli) for GitLab tickets, [`gh`](https://cli.github.com) for GitHub issues. One is enough, both work side by side.
 
 Run:
 
@@ -72,7 +72,7 @@ Install Implementation Harness from https://github.com/Greg-Klein/implementation
 2. Check for Node.js 22.12 or later (`node --version`). If it is missing or older, install it with the version manager already on this machine (nvm, fnm, volta), otherwise with the package manager of this system (Homebrew on macOS).
 3. The console builds a native module (node-pty). Check for a C++ toolchain: the Xcode command line tools on macOS (`xcode-select -p`), `build-essential` and `python3` on Linux. Install what is missing.
 4. Check for Claude Code (`claude --version`). If it is missing, install it following https://docs.anthropic.com/en/docs/claude-code. Do not log in for me: tell me to run `claude` once and log in.
-5. Check for glab (`glab --version`). If it is missing, install it following https://gitlab.com/gitlab-org/cli. Run `glab auth status`. If glab is not logged in, do not log in for me: tell me to run `glab auth login`.
+5. Ask me whether my tickets are on GitLab, GitHub or both. For GitLab, check for glab (`glab --version`), install it following https://gitlab.com/gitlab-org/cli if it is missing, and run `glab auth status`. For GitHub, check for gh (`gh --version`), install it following https://cli.github.com if it is missing, and run `gh auth status`. If a CLI is not logged in, do not log in for me: tell me to run `glab auth login` or `gh auth login`.
 6. Run `curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash`.
 7. Check that `impl help` answers. If the command is not found, tell me how to add `~/.local/bin` to my PATH, without editing my shell files yourself.
 
@@ -131,7 +131,7 @@ The browser opens on <http://127.0.0.1:3210>.
 
 In the console:
 
-1. paste the URL of the GitLab ticket, or several URLs, one per line (see [Launch several tickets at once](#launch-several-tickets-at-once));
+1. paste the URL of the GitLab ticket or the GitHub issue, or several URLs, one per line (see [Launch several tickets at once](#launch-several-tickets-at-once));
 2. check the detected project or enter its path;
 3. add an instruction specific to this run if needed;
 4. start the workflow, then answer the decisions in the dedicated panel or talk freely in the terminal.
@@ -169,7 +169,7 @@ The harness runs Claude Code in the worktree of the run with the plugin of this 
 
 ### Launch several tickets at once
 
-The **Ticket GitLab** field accepts several URLs, one per line. URLs separated by spaces, commas or semicolons on one line are read too. Under the field, the form gives the number of tickets recognised, the duplicates ignored and the lines that are not a ticket URL. While a line is invalid, the batch does not start.
+The **Ticket** field accepts several URLs, one per line, GitLab and GitHub mixed. URLs separated by spaces, commas or semicolons on one line are read too. Under the field, the form gives the number of tickets recognised, the duplicates ignored and the lines that are not a ticket URL. While a line is invalid, the batch does not start.
 
 From two tickets on, the directory field disappears: the repository of each ticket is detected from its URL, in the roots of `IMPL_SEARCH_ROOTS`. The specific instruction applies to every ticket of the batch. The button becomes **Lancer les N tickets** (launch the N tickets).
 
@@ -177,7 +177,7 @@ The batch is accepted or refused as a whole. If a single ticket has no checkout,
 
 #### Batch analysis
 
-Before starting, the harness compares the tickets of one repository. To do so it opens a Claude Code session with no terminal (`claude -p`, Sonnet model) in the main checkout, on the `/implementation-harness:schedule` command. The `ticket-scheduler` agent reads each ticket with `glab`, looks in the repository for the files the ticket would touch and links the tickets that cannot run together: those that would modify the same files, and those where one needs the result of the other. This session modifies nothing in the repository.
+Before starting, the harness compares the tickets of one repository. To do so it opens a Claude Code session with no terminal (`claude -p`, Sonnet model) in the main checkout, on the `/implementation-harness:schedule` command. The `ticket-scheduler` agent reads each ticket with `glab` or `gh`, looks in the repository for the files the ticket would touch and links the tickets that cannot run together: those that would modify the same files, and those where one needs the result of the other. This session modifies nothing in the repository.
 
 - There is one session per repository and per batch. It does not count against `IMPL_MAX_CONCURRENT_RUNS`.
 - A ticket alone in its repository, with no other known ticket to compare with, starts without analysis.
@@ -195,7 +195,7 @@ The queue shows under the runs in progress, by batch ("Lot de 14:32 · 3 tickets
 | "Analyse en cours" | the answer of the analysis session |
 | "En attente, conflit avec #217 en cours" | #217 is running and touches the same code |
 | "Attend que la MR !12 soit mergée (#217)" | the run of #217 is over, its merge request is not merged yet |
-| "État de la MR !12 inconnu (#217)" | GitLab does not answer; the ticket stays held until the state is known |
+| "État de la MR !12 inconnu (#217)" | The forge does not answer; the ticket stays held until the state is known. A GitHub ticket reads "PR #12" |
 | "Dépend de #217, encore en file" | #217 has to go first, and has not started |
 | "Passe après #217" | the two tickets conflict, #217 is ahead in the queue |
 | "En attente, ticket déjà en cours" | a run already holds this ticket |
@@ -210,12 +210,12 @@ A ticket in conflict waits for the other ticket's merge request to be merged, no
 The disclosure offers two forced starts. A forced ticket still waits for a free slot, and does not start while a run holds the same ticket.
 
 - **Lancer depuis la base** (start from the base). The ticket starts from the base branch without waiting for the other one. Both tickets touch the same code, so the second merge request will probably have to be reworked by hand. Also offered during the analysis: nothing says yet whether the ticket conflicts.
-- **Empiler sur `<branche>`** (stack on a branch). The ticket starts from the other ticket's branch, and its merge request targets that branch. It can only be merged after the other one. When the other one is merged and its branch deleted, GitLab retargets the second. Offered only when the other ticket's branch already exists.
+- **Empiler sur `<branche>`** (stack on a branch). The ticket starts from the other ticket's branch, and its merge request targets that branch. It can only be merged after the other one. When the other one is merged and its branch deleted, GitLab retargets the second. GitHub does too, but only when it deletes the branch itself ("Delete branch" on the merged pull request, or the repository setting that deletes head branches): a branch deleted with `gh pr merge --delete-branch` or `git push --delete` closes the stacked pull request instead. Offered only when the other ticket's branch already exists.
 
 #### What it costs
 
 - **The analysis** is a Claude Code session on Sonnet, per repository and per batch. It uses the quota of the logged-in account, as a run does, and the analysis timeout bounds it.
-- **Watching the merge requests uses no tokens.** The Node server calls `glab api` to read the state of the merge request, without opening a Claude session. The call happens every 60 seconds, only for the merge requests a queued ticket is waiting for. When nothing waits any more, the server stops asking GitLab. `IMPL_MERGE_POLL_MS`, set in the launch environment, changes this interval.
+- **Watching the merge requests uses no tokens.** The Node server calls `glab api`, or `gh api` for a pull request, to read its state, without opening a Claude session. The call happens every 60 seconds, only for the merge requests a queued ticket is waiting for. When nothing waits any more, the server stops asking the forge. `IMPL_MERGE_POLL_MS`, set in the launch environment, changes this interval.
 
 #### Limits
 
@@ -327,7 +327,7 @@ A run starts with Remote Control on. The session shows its `claude.ai/code/sessi
 
 ### Project detection
 
-The harness walks the search roots two levels deep, reads the `.git/config` of each directory and derives the GitLab project from it. After a ticket is pasted, the detected path fills the project field if it is empty. The field stays editable and suggests the checkouts found while you type. For a repository located elsewhere, add its parent directory to `IMPL_SEARCH_ROOTS`.
+The harness walks the search roots two levels deep, reads the `.git/config` of each directory and derives the GitLab project or the GitHub repository from it. After a ticket is pasted, the detected path fills the project field if it is empty. The field stays editable and suggests the checkouts found while you type. For a repository located elsewhere, add its parent directory to `IMPL_SEARCH_ROOTS`.
 
 ## Self-improvement loop
 
@@ -381,7 +381,7 @@ The harness announces the merge only if it moved its branch. Git answers "Alread
 Claude Code remains the engine of the workflow. The harness adds:
 
 - a run registry (`console/server/registry.ts`) that starts, queues and releases the sessions, each isolated in its `RunSession` with its state, its terminal, its file watchers and its pending question;
-- batch scheduling: an analysis session per repository predicts what each ticket would touch, the server holds back the tickets in conflict and reads the state of the awaited merge requests with `glab`, with no Claude session (see `console/README.md`);
+- batch scheduling: an analysis session per repository predicts what each ticket would touch, the server holds back the tickets in conflict and reads the state of the awaited merge requests and pull requests with `glab` and `gh`, with no Claude session (see `console/README.md`);
 - an interactive pseudo-terminal per run, connected to the interface over WebSocket. Each page subscribes to the run it shows and receives only its terminal and its state, while the list of runs is sent to every page;
 - Claude Code hooks to follow the agents and the tools, then show and resolve the structured questions in the interface;
 - an evidence record per acceptance criterion: the pilot writes a register of identified criteria, each piece of evidence cites them with the version of the code it checked, and the server computes for each criterion whether it is verified, failed, blocked or unverified, in the Preuves tab as in the merge request summary. A QA break attempt that finds no defect is shown under its criterion without counting as a verification. The server flags a QA verdict of `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no QA observation on the current code (see `console/README.md`);

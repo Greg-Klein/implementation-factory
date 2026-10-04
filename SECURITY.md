@@ -1,6 +1,6 @@
 # Security and privacy
 
-The repository does not contain credentials. Authentication remains managed by the locally installed `claude`, `glab`, Git and MCP clients.
+The repository does not contain credentials. Authentication remains managed by the locally installed `claude`, `glab`, `gh`, Git and MCP clients.
 
 Runtime data is different. Ticket descriptions, terminal output, downloaded assets, test credentials and review reports can be copied into `console/data/`. That directory is ignored by Git and must not be committed or shared.
 

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
-import { parseTicketUrls } from "@/lib/ticket-urls";
+import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
 import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
@@ -16,8 +16,6 @@ import { RunRail } from "./run-rail";
 import { RunView } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
-
-const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 
 function batchNotice(accepted: number, duplicates: number): Notice {
   const left = duplicates > 0 ? ` ${duplicates} déjà en file, en cours ou en attente de fusion ${duplicates > 1 ? "ont été ignorés" : "a été ignoré"}.` : "";
@@ -221,7 +219,7 @@ export function Harness() {
 
   useEffect(() => {
     // A batch resolves each ticket to its own checkout on the server: nothing to detect here.
-    if (!singleTicket || !TICKET_URL.test(issueUrl) || cwdRef.current.trim()) {
+    if (!singleTicket || !parseTicketUrl(issueUrl) || cwdRef.current.trim()) {
       setDetectingProject(false);
       return;
     }

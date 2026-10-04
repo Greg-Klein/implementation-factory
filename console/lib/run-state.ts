@@ -1,4 +1,4 @@
-import { ticketReference } from "./ticket-urls";
+import { parseTicketUrl, ticketReference } from "./ticket-urls";
 import type { AcceptanceCounts, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
@@ -92,7 +92,7 @@ export function runLabel(run: { cwd: string; repository?: string; issueUrl: stri
 
 /** A proposed ticket has no checkout yet: it is named by the project of its address, `companion #247`. */
 export function proposalLabel(issueUrl: string) {
-  const project = issueUrl.split("/-/")[0].split("/").filter(Boolean).pop();
+  const project = (parseTicketUrl(issueUrl)?.project ?? issueUrl.split("/-/")[0]).split("/").filter(Boolean).pop();
   return [project, ticketReference(issueUrl)].filter(Boolean).join(" ");
 }
 

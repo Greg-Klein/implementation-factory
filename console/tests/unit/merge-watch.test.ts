@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { gitLabMergeRequestEndpoint, mergeRequestStatus, mergeWatchStep, type MergeRequestStatus } from "../../server/domain";
+import { deliveryEndpoint, deliveryStatus, mergeRequestStatus, mergeWatchStep, type MergeRequestStatus } from "../../server/domain";
 import { MergeWatcher } from "../../server/merge-watch";
 import type { MergeWatch } from "../../server/types";
 
@@ -11,13 +11,19 @@ const AT = "2026-10-01T10:05:00.000Z";
 
 describe("the merge request a watch asks about", () => {
   it("should be named by its API path, its host and its number", () => {
-    expect(gitLabMergeRequestEndpoint("https://gitlab.example.com/group/platform/repo/-/merge_requests/12#note_1")).toEqual({ hostname: "gitlab.example.com", path: "projects/group%2Fplatform%2Frepo/merge_requests/12", iid: "12" });
+    expect(deliveryEndpoint("https://gitlab.example.com/group/platform/repo/-/merge_requests/12#note_1")).toEqual({ forge: "gitlab", hostname: "gitlab.example.com", path: "projects/group%2Fplatform%2Frepo/merge_requests/12", number: "12" });
   });
 
-  it("should not be asked about when the address is not a GitLab merge request", () => {
-    expect(gitLabMergeRequestEndpoint("ticket-simule://acme-dashboard/-/merge_requests/128")).toBeUndefined();
-    expect(gitLabMergeRequestEndpoint("https://gitlab.com/acme/shop/-/issues/12")).toBeUndefined();
-    expect(gitLabMergeRequestEndpoint("pas une url")).toBeUndefined();
+  it("should be a pull request, asked to GitHub, when the address is one", () => {
+    expect(deliveryEndpoint("https://github.com/acme/shop/pull/12#issuecomment-1")).toEqual({ forge: "github", hostname: "github.com", path: "repos/acme/shop/pulls/12", number: "12" });
+    expect(deliveryEndpoint("https://github.example.com/acme/shop/pull/7/files")).toEqual({ forge: "github", hostname: "github.example.com", path: "repos/acme/shop/pulls/7", number: "7" });
+  });
+
+  it("should not be asked about when the address is neither a merge request nor a pull request", () => {
+    expect(deliveryEndpoint("ticket-simule://acme-dashboard/-/merge_requests/128")).toBeUndefined();
+    expect(deliveryEndpoint("https://gitlab.com/acme/shop/-/issues/12")).toBeUndefined();
+    expect(deliveryEndpoint("https://github.com/acme/shop/issues/12")).toBeUndefined();
+    expect(deliveryEndpoint("pas une url")).toBeUndefined();
   });
 
   it("should read the state GitLab gives", () => {
@@ -28,6 +34,16 @@ describe("the merge request a watch asks about", () => {
     expect(mergeRequestStatus("locked")).toBe("opened");
     expect(mergeRequestStatus(undefined)).toBe("unknown");
     expect(mergeRequestStatus("something new")).toBe("unknown");
+  });
+
+  it("should read the state GitHub gives, where a merge is a closing with `merged`", () => {
+    expect(deliveryStatus("github", { state: "open", merged: false })).toBe("opened");
+    expect(deliveryStatus("github", { state: "closed", merged: true })).toBe("merged");
+    expect(deliveryStatus("github", { state: "closed", merged: false })).toBe("closed");
+    // Closed with no word on the merge: holding is the safe reading.
+    expect(deliveryStatus("github", { state: "closed" })).toBe("unknown");
+    expect(deliveryStatus("github", {})).toBe("unknown");
+    expect(deliveryStatus("gitlab", { state: "merged" })).toBe("merged");
   });
 });
 

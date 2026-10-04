@@ -3,7 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { gitLabProjectPath, gitRemoteProjects } from "./domain.js";
+import { ticketProjectPath, gitRemoteProjects } from "./domain.js";
 import type { RepositoryOption } from "./types.js";
 
 /** A checkout nested one level below a search root, such as ~/workspace/client/app. */
@@ -71,7 +71,7 @@ export async function discoverRepositories({ fresh = false }: { fresh?: boolean 
 }
 
 export async function detectProjectDirectory(issueUrl: string, known?: RepositoryOption[]) {
-  const project = gitLabProjectPath(issueUrl);
+  const project = ticketProjectPath(issueUrl);
   if (!project) return undefined;
   const match = (known ?? await discoverRepositories()).find((repository) => repository.project === project);
   return match ? { ...match, source: "git" as const } : undefined;
@@ -83,8 +83,8 @@ export async function resolveProjectDirectory(input: string, issueUrl: string) {
     if (!existsSync(explicit)) throw new Error("Le répertoire du projet n'existe pas.");
     return explicit;
   }
-  const project = gitLabProjectPath(issueUrl);
-  if (!project) throw new Error("L'URL du ticket GitLab n'est pas reconnue.");
+  const project = ticketProjectPath(issueUrl);
+  if (!project) throw new Error("L'URL du ticket n'est pas reconnue : il faut une issue GitLab ou GitHub.");
   // A checkout cloned a moment ago is not in the cached scan yet: look again before refusing.
   const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;

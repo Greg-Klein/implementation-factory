@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../../lib/ticket-urls";
+import { normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../../lib/ticket-urls";
 import { admitBatch, runLockKey } from "../../server/domain";
 
 const ISSUE = "https://gitlab.com/acme/shop/-/issues/101";
@@ -16,7 +16,29 @@ describe("a pasted ticket URL", () => {
     expect(normalizeTicketUrl("http://gitlab.local/a/b/-/issues/7")).toBe("http://gitlab.local/a/b/-/issues/7");
   });
 
+  it("should accept a GitHub issue, on github.com or a host of its own", () => {
+    expect(normalizeTicketUrl("https://github.com/acme/shop/issues/101#issuecomment-9")).toBe("https://github.com/acme/shop/issues/101");
+    expect(normalizeTicketUrl("https://github.example.com/acme/shop/issues/7/")).toBe("https://github.example.com/acme/shop/issues/7");
+  });
+
+  it("should tell the forge from the shape of the address", () => {
+    expect(parseTicketUrl(ISSUE)).toEqual({ forge: "gitlab", hostname: "gitlab.com", project: "acme/shop", number: "101" });
+    expect(parseTicketUrl("https://gitlab.example.com/group/platform/repo/-/work_items/42")).toEqual({ forge: "gitlab", hostname: "gitlab.example.com", project: "group/platform/repo", number: "42" });
+    expect(parseTicketUrl("https://github.com/acme/shop/issues/101")).toEqual({ forge: "github", hostname: "github.com", project: "acme/shop", number: "101" });
+    // A GitLab project may itself be called `issues`: `/-/` still decides.
+    expect(parseTicketUrl("https://gitlab.com/acme/issues/-/issues/3")?.forge).toBe("gitlab");
+    expect(parseDeliveryUrl("https://github.com/acme/shop/pull/12")).toEqual({ forge: "github", hostname: "github.com", project: "acme/shop", number: "12" });
+    expect(parseDeliveryUrl("https://gitlab.com/acme/shop/-/merge_requests/12")).toEqual({ forge: "gitlab", hostname: "gitlab.com", project: "acme/shop", number: "12" });
+  });
+
   it("should refuse what is not a ticket", () => {
+    expect(normalizeTicketUrl("https://github.com/acme/shop/pull/12")).toBeUndefined();
+    expect(normalizeTicketUrl("https://github.com/acme/shop/issues")).toBeUndefined();
+    expect(normalizeTicketUrl("https://github.com/acme/issues/12")).toBeUndefined();
+    expect(normalizeTicketUrl("https://github.com/acme/shop/issues/12/extra")).toBeUndefined();
+    // The old GitLab address without `/-/` is not a GitHub issue.
+    expect(normalizeTicketUrl("https://gitlab.com/acme/shop/issues/12")).toBeUndefined();
+    expect(normalizeTicketUrl("ftp://github.com/acme/shop/issues/12")).toBeUndefined();
     expect(normalizeTicketUrl("https://gitlab.com/acme/shop/-/merge_requests/12")).toBeUndefined();
     expect(normalizeTicketUrl("https://gitlab.com/acme/shop/-/issues/")).toBeUndefined();
     expect(normalizeTicketUrl("acme/shop#101")).toBeUndefined();
@@ -33,6 +55,13 @@ describe("a pasted list of tickets", () => {
   it("should read one URL per line, in the order pasted, skipping blank lines", () => {
     const parsed = parseTicketUrls(`${ISSUE}\n\n  https://gitlab.com/acme/shop/-/issues/102  \r\nhttps://gitlab.com/acme/api/-/work_items/7\n`);
     expect(parsed.tickets).toEqual([ISSUE, "https://gitlab.com/acme/shop/-/issues/102", "https://gitlab.com/acme/api/-/work_items/7"]);
+    expect(parsed.invalid).toEqual([]);
+  });
+
+  it("should take GitLab and GitHub tickets in the same paste", () => {
+    const parsed = parseTicketUrls(`${ISSUE}\nhttps://github.com/acme/shop/issues/101\nhttps://github.com/acme/shop/issues/101?x=1`);
+    expect(parsed.tickets).toEqual([ISSUE, "https://github.com/acme/shop/issues/101"]);
+    expect(parsed.duplicates).toEqual(["https://github.com/acme/shop/issues/101"]);
     expect(parsed.invalid).toEqual([]);
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { gitLabIssueEndpoint, gitLabProjectPath, gitRemoteProjects, listSetting, permissionMode, positiveDuration } from "../../server/domain";
+import { issueEndpoint, ticketProjectPath, gitRemoteProjects, listSetting, permissionMode, positiveDuration } from "../../server/domain";
 
 describe("harness configuration", () => {
   it("should use positive durations and reject invalid overrides", () => {
@@ -23,16 +23,25 @@ describe("harness configuration", () => {
   });
 
   it("should extract nested GitLab project paths from issue URLs", () => {
-    expect(gitLabProjectPath("https://gitlab.com/group/platform/repo/-/issues/42")).toBe("group/platform/repo");
-    expect(gitLabProjectPath("https://gitlab.com/group/platform/repo/-/work_items/42")).toBe("group/platform/repo");
-    expect(gitLabProjectPath("https://gitlab.com/group/repo/-/merge_requests/42")).toBeUndefined();
-    expect(gitLabProjectPath("not-a-url")).toBeUndefined();
+    expect(ticketProjectPath("https://gitlab.com/group/platform/repo/-/issues/42")).toBe("group/platform/repo");
+    expect(ticketProjectPath("https://gitlab.com/group/platform/repo/-/work_items/42")).toBe("group/platform/repo");
+    expect(ticketProjectPath("https://gitlab.com/group/repo/-/merge_requests/42")).toBeUndefined();
+    expect(ticketProjectPath("not-a-url")).toBeUndefined();
+  });
+
+  it("should extract the owner and repository from a GitHub issue URL", () => {
+    expect(ticketProjectPath("https://github.com/acme/shop/issues/42")).toBe("acme/shop");
+    expect(ticketProjectPath("https://github.com/acme/shop/pull/42")).toBeUndefined();
   });
 
   it("should build the GitLab API path of the issue a ticket URL points at", () => {
-    expect(gitLabIssueEndpoint("https://gitlab.example.com/group/platform/repo/-/issues/42#note_1")).toEqual({ hostname: "gitlab.example.com", path: "projects/group%2Fplatform%2Frepo/issues/42" });
-    expect(gitLabIssueEndpoint("https://gitlab.com/group/repo/-/work_items/7")).toEqual({ hostname: "gitlab.com", path: "projects/group%2Frepo/issues/7" });
-    expect(gitLabIssueEndpoint("ticket-simule://IH-42")).toBeUndefined();
+    expect(issueEndpoint("https://gitlab.example.com/group/platform/repo/-/issues/42#note_1")).toEqual({ forge: "gitlab", hostname: "gitlab.example.com", path: "projects/group%2Fplatform%2Frepo/issues/42" });
+    expect(issueEndpoint("https://gitlab.com/group/repo/-/work_items/7")).toEqual({ forge: "gitlab", hostname: "gitlab.com", path: "projects/group%2Frepo/issues/7" });
+    expect(issueEndpoint("ticket-simule://IH-42")).toBeUndefined();
+  });
+
+  it("should build the GitHub API path of the issue a ticket URL points at", () => {
+    expect(issueEndpoint("https://github.com/acme/shop/issues/42#issuecomment-1")).toEqual({ forge: "github", hostname: "github.com", path: "repos/acme/shop/issues/42" });
   });
 
   it("should read project paths from every remote form", () => {

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference } from "../lib/ticket-urls.js";
+import { normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
-export { normalizeTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
+export { normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
+export type { Forge, ForgeAddress };
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -177,24 +178,20 @@ export function withoutBundlerVariables<T extends Record<string, string | undefi
   return cleaned;
 }
 
-export function gitLabProjectPath(issueUrl: string) {
-  try {
-    const url = new URL(issueUrl);
-    return url.pathname.match(/^\/(.+?)\/-\/(?:issues|work_items)\/\d+/)?.[1];
-  } catch {
-    return undefined;
-  }
+/** The project a ticket belongs to, as its remote names it: `group/platform/repo` on GitLab, `owner/repo` on GitHub. */
+export function ticketProjectPath(issueUrl: string) {
+  return parseTicketUrl(issueUrl)?.project;
 }
 
-/** The GitLab API path of the issue a ticket URL points at, with the host it lives on. */
-export function gitLabIssueEndpoint(issueUrl: string) {
-  try {
-    const url = new URL(issueUrl);
-    const match = url.pathname.match(/^\/(.+?)\/-\/(?:issues|work_items)\/(\d+)/);
-    return match ? { hostname: url.hostname, path: `projects/${encodeURIComponent(match[1])}/issues/${match[2]}` } : undefined;
-  } catch {
-    return undefined;
-  }
+/** What the CLI of a forge is asked: which one, on which host, at which API path. */
+export type ForgeEndpoint = { forge: Forge; hostname: string; path: string };
+
+/** The API path of the issue a ticket URL points at, with the forge and the host it lives on. */
+export function issueEndpoint(issueUrl: string): ForgeEndpoint | undefined {
+  const ticket = parseTicketUrl(issueUrl);
+  if (!ticket) return undefined;
+  const path = ticket.forge === "github" ? `repos/${ticket.project}/issues/${ticket.number}` : `projects/${encodeURIComponent(ticket.project)}/issues/${ticket.number}`;
+  return { forge: ticket.forge, hostname: ticket.hostname, path };
 }
 
 /**
@@ -743,15 +740,12 @@ export function concurrencyLimit(value: string | undefined, fallback: number) {
 
 export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"] as const;
 
-/** The GitLab API path of the merge request a URL points at, with the host it lives on and its number. */
-export function gitLabMergeRequestEndpoint(mergeRequestUrl: string) {
-  try {
-    const url = new URL(mergeRequestUrl);
-    const match = url.pathname.match(/^\/(.+?)\/-\/merge_requests\/(\d+)/);
-    return match && /^https?:$/.test(url.protocol) ? { hostname: url.hostname, path: `projects/${encodeURIComponent(match[1])}/merge_requests/${match[2]}`, iid: match[2] } : undefined;
-  } catch {
-    return undefined;
-  }
+/** The API path of the merge request or pull request a URL points at, with the forge, the host and its number. */
+export function deliveryEndpoint(mergeRequestUrl: string): (ForgeEndpoint & { number: string }) | undefined {
+  const delivery = parseDeliveryUrl(mergeRequestUrl);
+  if (!delivery) return undefined;
+  const path = delivery.forge === "github" ? `repos/${delivery.project}/pulls/${delivery.number}` : `projects/${encodeURIComponent(delivery.project)}/merge_requests/${delivery.number}`;
+  return { forge: delivery.forge, hostname: delivery.hostname, path, number: delivery.number };
 }
 
 /**
@@ -1049,6 +1043,18 @@ export type MergeRequestStatus = "opened" | "merged" | "closed" | "unknown";
 export function mergeRequestStatus(state: unknown): MergeRequestStatus {
   if (state === "merged" || state === "closed") return state;
   return state === "opened" || state === "locked" ? "opened" : "unknown";
+}
+
+/** What GitHub says of a pull request: `state` is only `open` or `closed`, and `merged` tells a merge from a plain closing. */
+export function pullRequestStatus(pullRequest: { state?: unknown; merged?: unknown }): MergeRequestStatus {
+  if (pullRequest.merged === true) return "merged";
+  if (pullRequest.state === "closed") return pullRequest.merged === false ? "closed" : "unknown";
+  return pullRequest.state === "open" ? "opened" : "unknown";
+}
+
+/** The answer of a forge about a merge request or a pull request, read the way that forge writes it. */
+export function deliveryStatus(forge: Forge, response: { state?: unknown; merged?: unknown }): MergeRequestStatus {
+  return forge === "github" ? pullRequestStatus(response) : mergeRequestStatus(response.state);
 }
 
 /**

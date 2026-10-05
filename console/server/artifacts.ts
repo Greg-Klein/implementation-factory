@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
-import { artifactWatchRoot, belongsToRun, declaredPhase, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, RUNTIME_RECIPE_FILE, watchedForArtifacts } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, declaredPhase, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -11,6 +11,7 @@ import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
 import { trackReopening } from "./run-metrics.js";
+import { keepReviewFindings } from "./review-findings.js";
 import { keepRuntimeRecipe } from "./runtime-recipe.js";
 import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
@@ -107,6 +108,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   if (acceptanceInputKind(relative)) await ingestAcceptanceInput(session, relative);
   if (relative === SYNC_REQUEST_FILE) await confirmArchiveSync(session, source);
   if (relative === RUNTIME_RECIPE_FILE && !session.demo) await keepRuntimeRecipe(session, source);
+  if (relative === SENIOR_FINDINGS_FILE && !session.demo) await keepReviewFindings(session, source);
   if (relative === WORKFLOW_STATE_FILE) readWorkflowState(session, await readFile(source, "utf8").catch(() => ""));
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);

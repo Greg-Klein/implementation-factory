@@ -81,6 +81,8 @@ How to read each kind of resource:
 
 Read `.claude/tasks/runtime-recipe.md` when it exists: the console keeps it from earlier runs of this repository, under [the runtime recipe contract](${CLAUDE_PLUGIN_ROOT}/contracts/runtime-recipe.md). It says how the app is started, reached and driven. It is a starting point to check, and never ticket context.
 
+The console may also have left `.claude/tasks/recurring-findings.md`: the kinds of defect the senior reviews of earlier runs found on at least two tickets of this repository ([review findings](${CLAUDE_PLUGIN_ROOT}/contracts/review-findings.md)). Like the recipe, it is no ticket context, and it adds no requirement. Pass its path to every `developer` and to no reviewer.
+
 Write a consolidated `.claude/tasks/ticket-context.md` containing: what and why, acceptance criteria, edge cases, out of scope, Figma node URLs, local paths of downloaded assets, open questions. Store binaries under `.claude/tasks/assets/`.
 
 When two sources say different things, resolve the conflict with the shared specification policy and record the arbitration in the context file. Never carry a contradiction forward untouched.
@@ -208,6 +210,7 @@ Each `developer` invocation must receive:
 - **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - browser ownership and scheduling: no runtime measurement while any peer edits; schedule a measurement-only continuation after the batch freezes
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
+- the path of `.claude/tasks/recurring-findings.md` when the console left one, as kinds of defect to check its change against, which add no requirement
 - the Figma node URLs when the task is UI, and the path to the Figma extraction reference below
 - the requirement to self-check observable behavior on frozen code and return the report, evidence and scoped recipe specified by its output contract
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement

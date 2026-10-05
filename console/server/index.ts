@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./context.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
+import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
 import { answerQuestion } from "./hooks.js";
 import { answerSessionPrompt } from "./session-prompt.js";
@@ -166,6 +167,11 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "worktree.result", runId: message.runId, ...result });
     return;
   }
+  if (message.type === "findings.forget") {
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
+    send(socket, { type: "findings.result", repository: message.repository, forgotten: await forgetReviewFindings(message.repository) });
+    return;
+  }
   if (message.type === "recipe.forget") {
     if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
     send(socket, { type: "recipe.result", repository: message.repository, forgotten: await forgetRuntimeRecipe(message.repository) });
@@ -248,6 +254,12 @@ const server = createServer(async (request, response) => {
     if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Invalid repository path." }); return; }
     // The store is named after a digest of the path, so whatever is asked only ever reads a recipe the console wrote.
     respond(response, 200, { repository, recipe: await readRuntimeRecipe(repository) ?? null });
+    return;
+  }
+  if (request.method === "GET" && requestPath === "/api/repositories/findings") {
+    const repository = new URL(request.url ?? "", `http://${hostname}:${port}`).searchParams.get("repository") ?? "";
+    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Invalid repository path." }); return; }
+    respond(response, 200, { repository, findings: await readReviewFindingsSummary(repository) });
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }

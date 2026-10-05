@@ -38,4 +38,6 @@ Write to `.claude/tasks/senior-review.md`:
 PASS | PASS_WITH_CHANGES | FAIL
 ```
 
+Also write `.claude/tasks/senior-findings.json` under [the review findings contract](review-findings.md): one entry per line of `## Problèmes constatés`, each filed under one category of its fixed list.
+
 Include your independently derived expectations and counterexample search in `## Problèmes constatés`, before describing any corrections. Distinguish diagnosis on the input code from validation after your edits. No finding is a valid result.

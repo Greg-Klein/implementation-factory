@@ -5,6 +5,7 @@ import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcu
 import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
+import { seedRecurringFindings } from "./review-findings.js";
 import { seedRuntimeRecipe } from "./runtime-recipe.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
@@ -538,6 +539,8 @@ export class RunRegistry {
     session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
     if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Runtime recipe restored", "Kept from a previous run of this repository.");
+    const habits = await seedRecurringFindings(repository, worktree);
+    if (habits) session.activity("system", "Recurring review findings restored", `${habits} ${habits > 1 ? "kinds" : "kind"} of defect the reviews of this repository keep finding.`);
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) {

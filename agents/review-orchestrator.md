@@ -27,7 +27,7 @@ Start at round 1. Pass the round number to every reviewer, along with the eviden
 
 Never run design and QA browsers together, or an editing agent during any browser measurement. A passing result on a version preceding a correction is not final evidence. Recheck affected dimensions after edits, even when their previous verdict was PASS; unsupported freshness stays unverified.
 
-Require the actual artifacts: `senior-review.md`, `design-inventory.md` and `designer-review.md` plus published `design-evidence.json` when design ran, and `qa-plan.md`, `qa-report.md` plus `qa-evidence.json`. Request missing outputs once; if still absent, report the gap. Archive each completed round byte-for-byte as `<name>-round<N>.<ext>` before another invocation overwrites it. Never change evidence ids during archiving.
+Require the actual artifacts: `senior-review.md` with `senior-findings.json`, `design-inventory.md` and `designer-review.md` plus published `design-evidence.json` when design ran, and `qa-plan.md`, `qa-report.md` plus `qa-evidence.json`. Request missing outputs once; if still absent, report the gap. Archive each completed round byte-for-byte as `<name>-round<N>.<ext>` before another invocation overwrites it. Never change evidence ids during archiving.
 
 ## Findings and rework
 

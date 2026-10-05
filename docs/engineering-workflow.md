@@ -220,6 +220,18 @@ The report contains a coverage matrix, with one row per screen, viewport and req
 
 A design verdict of `INCONCLUSIVE`, or a review triggered but not started because the application was unreachable, does not block READY. The review summary writes it under `## Design not verified` with the reason. The pilot carries the words "design not verified" into the merge request description, the review comment and the final report.
 
+## What a repository's reviews teach its next runs
+
+When developers make the same kind of mistake on several tickets of a repository, the senior reviewer finds it and corrects it on each ticket, and each correction costs a review round. The console keeps the findings per repository and tells the next developer about the kinds that came back, before it writes code.
+
+1. The senior reviewer writes its findings as data in `.claude/tasks/senior-findings.json`, beside `senior-review.md`, under `contracts/review-findings.md`. Each finding is filed under one key of a fixed list (`consumer-left-behind`, `ui-state`, `test-gap` and sixteen others). Two reviews word the same defect differently, so free labels could not be counted across runs.
+2. The console adds them to `data/repositories/<checkout>-<digest>/review-findings.json`, beside the runtime recipe, with the run and its ticket.
+3. At the next launch on that repository, a kind found on at least two tickets in the last 90 days goes into `.claude/tasks/recurring-findings.md`, with its three latest examples, five kinds at most. The pilot passes the path to every developer.
+
+A ticket counts once, however many rework rounds or runs it took. `other` never counts. The file adds no requirement and widens no scope: a developer checks its own change against the kinds listed. Reviewers do not receive it, because they form their expectations from the specification and the code, and a list of earlier findings would steer them.
+
+The "Runtime recipe" window of a repository shows, under the recipe, how many findings are kept, from how many tickets, and each kind that recurs with its examples. "Forget the findings" deletes them all, and the next run then receives no file. A finding is deleted after 180 days.
+
 ## Rules enforced by a mechanism
 
 A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses four kinds of call and gives the agent the reason:

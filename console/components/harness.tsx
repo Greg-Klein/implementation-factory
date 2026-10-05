@@ -158,7 +158,7 @@ export function Harness() {
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
-        if (message.type === "recipe.result") setRecipeRevision((revision) => revision + 1);
+        if (message.type === "recipe.result" || message.type === "findings.result") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
       socket.onclose = () => {
@@ -454,7 +454,7 @@ export function Harness() {
           )}
         </div>
       </div>
-      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => send({ type: "recipe.forget", repository: recipeRepository })} onClose={() => setRecipeRepository(undefined)} />}
+      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => send({ type: "recipe.forget", repository: recipeRepository })} onForgetFindings={() => send({ type: "findings.forget", repository: recipeRepository })} onClose={() => setRecipeRepository(undefined)} />}
     </main>
   );
 }

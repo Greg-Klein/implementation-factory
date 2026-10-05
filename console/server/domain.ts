@@ -476,6 +476,132 @@ export function runtimeRecipeStore(storageRoot: string, repository: string) {
   return path.join(storageRoot, "repositories", `${name}-${digest}`, RUNTIME_RECIPE_FILE);
 }
 
+/** What the senior reviewer writes beside its report: its findings as data, one category each. */
+export const SENIOR_FINDINGS_FILE = "senior-findings.json";
+
+/** What a new run is handed: the kinds of defect the reviews of this repository keep finding. */
+export const RECURRING_FINDINGS_FILE = "recurring-findings.md";
+
+/**
+ * The kinds a finding is filed under, mirrored in `contracts/review-findings.md`.
+ * A fixed list is what lets the same habit be counted from one run to the next:
+ * two reviewers never word a defect the same way twice. `other` is counted nowhere.
+ */
+export const FINDING_CATEGORIES: Record<string, string> = {
+  "requirement-missed": "An acceptance criterion or the run instruction left unimplemented",
+  "consumer-left-behind": "A caller or consumer of a changed contract left as it was",
+  "edge-case": "A boundary value or an empty case mishandled",
+  "error-handling": "An error swallowed, left unhandled or shown raw",
+  "async-state": "A race, a missing cancellation, a stale or half-updated state",
+  "ui-state": "A loading, empty or error state missing",
+  "boundary-validation": "Outside data trusted without validation",
+  authorization: "A permission or ownership check missing",
+  "data-integrity": "A write that can lose or corrupt data",
+  "type-escape": "A type silenced: any, unsafe cast, non-null assertion",
+  "test-cannot-fail": "A test that cannot fail for the defect it covers",
+  "test-gap": "A changed behaviour left without a test",
+  "repository-convention": "A convention or an existing pattern of the repository not followed",
+  duplication: "An existing helper or component written again",
+  accessibility: "A control without semantics, label or keyboard access",
+  performance: "Needless work on a changed path",
+  "dead-code": "Dead code, leftover debug output or TODO",
+  "stale-documentation": "Documentation the change made false",
+  other: "Anything else",
+};
+
+export type ReviewFinding = { id: string; category: string; severity: "P0" | "P1" | "P2"; summary: string; file?: string; fixed: boolean };
+export type KeptFinding = ReviewFinding & { runId: string; ticket: string; at: string };
+export type RecurringFinding = { category: string; label: string; tickets: number; findings: number; examples: KeptFinding[] };
+
+const FINDINGS_KEPT_DAYS = 180;
+const FINDINGS_RECENT_DAYS = 90;
+const FINDINGS_KEPT_MOST = 1000;
+const DAY_MS = 86_400_000;
+
+/** Where the console keeps the findings of one repository, beside its runtime recipe. */
+export function reviewFindingsStore(storageRoot: string, repository: string) {
+  return path.join(path.dirname(runtimeRecipeStore(storageRoot, repository)), "review-findings.json");
+}
+
+/**
+ * The findings of a `senior-findings.json`, or undefined when the file is not
+ * one. An entry that cannot be counted (no id, no summary) is dropped, and a
+ * category outside the list is filed under `other` rather than refused: a
+ * reviewer that invents a word still leaves its report readable.
+ */
+export function readReviewFindings(text: string): ReviewFinding[] | undefined {
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return undefined; }
+  const entries = (parsed as { findings?: unknown } | null)?.findings;
+  if (!Array.isArray(entries)) return undefined;
+  const findings: ReviewFinding[] = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const { id, category, severity, summary, file, fixed } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || !id.trim() || typeof summary !== "string" || !summary.trim()) continue;
+    if (findings.some((finding) => finding.id === id.trim())) continue;
+    findings.push({
+      id: id.trim(),
+      category: typeof category === "string" && category in FINDING_CATEGORIES ? category : "other",
+      severity: severity === "P0" || severity === "P1" ? severity : "P2",
+      summary: summary.trim().replace(/\s+/g, " ").slice(0, 300),
+      ...(typeof file === "string" && file.trim() ? { file: file.trim().slice(0, 200) } : {}),
+      fixed: fixed === true,
+    });
+  }
+  return findings;
+}
+
+/**
+ * What is kept once a run wrote its findings again. A later round rewrites the
+ * file with that round's findings only, so an id already kept for the run is
+ * replaced and the others stay. Old findings leave: a habit nobody has shown
+ * for six months is not one any more.
+ */
+export function mergeReviewFindings(kept: KeptFinding[], incoming: ReviewFinding[], run: { runId: string; ticket: string }, now: number): KeptFinding[] {
+  const at = new Date(now).toISOString();
+  const rewritten = new Set(incoming.map((finding) => finding.id));
+  const others = kept.filter((finding) => !(finding.runId === run.runId && rewritten.has(finding.id)));
+  const merged = [...others, ...incoming.map((finding) => ({ ...finding, runId: run.runId, ticket: run.ticket.split(/[?#]/)[0], at }))];
+  return merged.filter((finding) => now - Date.parse(finding.at) < FINDINGS_KEPT_DAYS * DAY_MS).slice(-FINDINGS_KEPT_MOST);
+}
+
+/**
+ * The kinds of defect found on at least two tickets in the last three months,
+ * the most widespread first. One ticket repeating itself, through rework rounds
+ * or a second run, is that ticket and not a habit of the repository.
+ */
+export function recurringFindings(kept: KeptFinding[], now: number): RecurringFinding[] {
+  const recent = kept.filter((finding) => finding.category !== "other" && now - Date.parse(finding.at) < FINDINGS_RECENT_DAYS * DAY_MS);
+  const groups = new Map<string, KeptFinding[]>();
+  for (const finding of recent) groups.set(finding.category, [...(groups.get(finding.category) ?? []), finding]);
+  return [...groups]
+    .map(([category, findings]) => ({
+      category, label: FINDING_CATEGORIES[category], tickets: new Set(findings.map((finding) => finding.ticket)).size, findings: findings.length,
+      examples: [...findings].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 3),
+    }))
+    .filter((group) => group.tickets >= 2)
+    .sort((a, b) => b.tickets - a.tickets || b.findings - a.findings)
+    .slice(0, 5);
+}
+
+/** The file a developer reads before it writes code. */
+export function renderRecurringFindings(recurring: RecurringFinding[]) {
+  const sections = recurring.map((group) => [
+    `## ${group.label} (\`${group.category}\`): ${group.findings} findings on ${group.tickets} tickets`,
+    "",
+    ...group.examples.map((finding) => `- ${finding.severity}${finding.file ? ` \`${finding.file}\`` : ""}: ${finding.summary}`),
+  ].join("\n"));
+  return [
+    "# Recurring review findings",
+    "",
+    `Kept by the console from the senior reviews of earlier runs on this repository. Each section is a kind of defect a reviewer found on at least two tickets in the last ${FINDINGS_RECENT_DAYS} days, with its latest examples. They are habits to check a change against before handing it over. They are not requirements, and nothing here widens the scope of a task.`,
+    "",
+    sections.join("\n\n"),
+    "",
+  ].join("\n");
+}
+
 /** The directory the artifact watcher attaches to, one level above the documents. */
 export function artifactWatchRoot(taskRoot: string) {
   return path.dirname(taskRoot);

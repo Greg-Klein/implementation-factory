@@ -111,6 +111,7 @@ export type ServerMessage =
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   | ({ type: "worktree.result" } & WorktreeResult)
   | { type: "recipe.result"; repository: string; forgotten: boolean }
+  | { type: "findings.result"; repository: string; forgotten: boolean }
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
@@ -119,6 +120,10 @@ export type RepositoryResponse = {
   detected: (RepositoryOption & { source: "git" }) | null;
 };
 /** The runtime recipe the console keeps for a repository, `null` when it has none. */
+/** A kind of defect the reviews of a repository found on several tickets, with its latest examples. */
+export type RecurringFindingView = { category: string; label: string; tickets: number; findings: number; examples: { severity: string; file?: string; summary: string }[] };
+/** The review findings the console keeps for a repository: how many, over how many tickets, and the kinds its next run is told about. */
+export type FindingsResponse = { repository: string; findings?: { kept: number; tickets: number; recurring: RecurringFindingView[] }; error?: string };
 export type RecipeResponse = { repository: string; recipe: { content: string; updatedAt: string } | null; error?: string };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";

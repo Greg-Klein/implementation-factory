@@ -35,6 +35,16 @@ describe("run archive persistence", () => {
     expect(new RunSession("run-worktree", restored).summary()).toMatchObject({ repository: "/work/repo", worktree });
   });
 
+  it("should keep what the figures of a run are measured from", async () => {
+    const { normalizeArchivedRun } = await import("../../server/run-incidents");
+    const measured = {
+      userWaits: [{ reason: "question", from: "2026-10-05T10:02:00.000Z", to: "2026-10-05T10:04:00.000Z" }], phaseArrivals: { 1: "2026-10-05T10:00:00.000Z" },
+      reopenings: [{ from: "2026-10-05T11:00:00.000Z" }], reviewTier: 1, harness: { version: "0.10.0", commit: "c89a860" }, baseCommit: "a50714c",
+      baseBranch: "feat-1", ticketBaseBranch: "develop", transcriptPath: "/home/.claude/projects/p/s.jsonl",
+    };
+    expect(normalizeArchivedRun({ status: "running", cwd: "/w", ...measured }, "r")).toMatchObject(measured);
+  });
+
   it("should read the checkout of a run archived before worktrees from its cwd", async () => {
     const { RunSession } = await import("../../server/run-session");
     const { normalizeArchivedRun } = await import("../../server/run-incidents");

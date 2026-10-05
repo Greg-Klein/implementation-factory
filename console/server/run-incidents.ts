@@ -188,6 +188,12 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     ...(state.worktree && typeof state.worktree.path === "string" && typeof state.worktree.state === "string" ? { worktree: state.worktree } : {}),
     ...(state.archiveSyncedAt ? { archiveSyncedAt: state.archiveSyncedAt } : {}),
     ...(state.artifactArrivals ? { artifactArrivals: state.artifactArrivals } : {}), ...(Array.isArray(state.reviewNotes) ? { reviewNotes: state.reviewNotes } : {}),
+    // What the run's figures are measured from: a restart rewrites the archive from this state.
+    ...(Array.isArray(state.userWaits) ? { userWaits: state.userWaits } : {}), ...(state.phaseArrivals ? { phaseArrivals: state.phaseArrivals } : {}),
+    ...(Array.isArray(state.reopenings) ? { reopenings: state.reopenings } : {}), ...(state.reviewTier !== undefined ? { reviewTier: state.reviewTier } : {}),
+    ...(state.harness ? { harness: state.harness } : {}), ...(state.baseCommit ? { baseCommit: state.baseCommit } : {}),
+    ...(state.baseBranch ? { baseBranch: state.baseBranch } : {}), ...(state.ticketBaseBranch ? { ticketBaseBranch: state.ticketBaseBranch } : {}),
+    ...(state.transcriptPath ? { transcriptPath: state.transcriptPath } : {}),
     // A question whose session is gone cannot be answered: its text stays, in the incident, as context.
     pendingQuestion: undefined,
     sessionActive: false,

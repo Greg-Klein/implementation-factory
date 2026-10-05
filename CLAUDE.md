@@ -29,9 +29,11 @@ npm run build                # next build --webpack
 npm run verify               # typecheck, unit, build, integration: the CI sequence in one command
 ```
 
-CI (`.github/workflows/ci.yml`) runs typecheck, unit, build, integration. Before calling work done, and before any commit:
+CI (`.github/workflows/ci.yml`) runs typecheck, unit, build, integration. `npm run verify` takes about five and a half minutes, nearly all of it in the integration suite, so it is run once per push and not once per commit:
 
-- Run `npm run verify` yourself and report its real output, including when a subagent already said the work passes.
+- While working, and before a commit: `npm run typecheck` and the unit tests the change concerns, the whole unit suite (30 s) when in doubt.
+- Before a push: `npm run verify` once, on the tree that is pushed. When the diff only touches documentation, prompts (`agents/`, `commands/`, `skills/`, `contracts/`, `principles/`) or `hooks/`, the unit suite is enough: it is what reads them, and the integration suite does not.
+- Run these yourself and report their real output, including when a subagent already said the work passes.
 - After a change under `console/` or `bin/`, run `impl restart`, otherwise the running console still serves the old build.
 - After `git push` on `main`, run `gh run watch --exit-status` in the background and report the result. Do not end the turn on a red or unknown CI.
 

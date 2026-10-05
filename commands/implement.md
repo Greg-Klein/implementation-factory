@@ -337,7 +337,7 @@ A commit made after the merge request exists is pushed too. In worktree mode the
 
 ## Step 9 - Publish the consolidated review
 
-Use the same delivery recipe to write and publish one review comment, in the workflow language, from the artifacts actually produced by this tier, with uploaded supporting captures on GitLab. GitHub has no upload for them: the pull request recipe says how the comment names a capture that stays local. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
+Use the same delivery recipe to write and publish one review comment, in the workflow language, from the artifacts actually produced by this tier, with uploaded supporting captures. On GitHub they are attached when the installed `gh` has `--attach` (2.99.0 or later); the pull request recipe gives the command, and how the comment names a capture that stays local otherwise. Preserve observed failures, confirmation provenance, missing checks and explicit decisions. At tiers 0/1 consolidate the individual reports yourself; only tier 2 produces `review-summary.md`. Do not claim that all review dimensions ran when some were skipped.
 
 ---
 
@@ -356,7 +356,7 @@ Print a short summary in chat:
 - how the run instruction was applied, and anything in it you could not honour, with the reason
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
-- on a GitHub ticket: that the issue status was left alone, that the captures stayed local, and the reviewer outcome
+- on a GitHub ticket: that the issue status was left alone, whether the captures were attached or stayed local and why, and the reviewer outcome
 
 Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". In English the same holds for "shipped" or "delivered": see the workflow language contract. The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
 

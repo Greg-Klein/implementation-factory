@@ -76,16 +76,48 @@ Once the caller supplies the final verdict and review artifacts, publish the con
 
 Build it as the GitLab recipe says, from the sources step 7 named for your tier, write it to `.claude/tasks/mr-review-comment.md` with the template and the rules of that recipe, then post it:
 
+**Captures are attached with `--attach`, when the installed `gh` has it.** The flag came with `gh` 2.99.0 (1 September 2026). It uploads local images and videos and, where the body names the same local path, puts the uploaded address in its place. Never commit captures to the repository to link them, since that puts run evidence in the target project's history.
+
+Check the version first:
+
+```bash
+gh --version   # "gh version 2.99.0" or later has --attach
+```
+
+**With `--attach`**, write each capture under `### Captures` as the GitLab recipe says, with its path relative to the checkout as the link, then pass the same path, spelled the same way, once per capture:
+
+```md
+![la liste triée par date, viewport 1280](./.claude/tasks/assets/T2-list-sorted.png)
+```
+
+```bash
+gh pr comment <number> --body-file .claude/tasks/mr-review-comment.md \
+  --attach ./.claude/tasks/assets/T2-list-sorted.png \
+  --attach ./.claude/tasks/assets/T3-empty-state.png
+```
+
+- Run it from the checkout the paths are relative to, the run worktree when there is one. `gh` matches a link of the body against the path it was given, so a path written two ways is uploaded and appended at the end, and its link in the body stays local.
+- Attach only the captures the comment cites as evidence. The `assets/` directory also holds the ticket's own downloads and the Figma exports, which are never attached.
+- Images (`png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, 10 MB at most) and videos (`mp4`, `mov`, `webm`, 100 MB at most), fifty files per command. Anything else, or heavier, is named in `### Validation` as not attached.
+- **A capture is published the moment it is attached, and its address keeps answering after the comment is deleted.** Attach nothing that shows a secret, a token or real personal data; name such a capture in `### Validation` as kept local, with the reason.
+- **Read the comment back**, since an upload that did not happen leaves a link nobody can open:
+
+  ```bash
+  gh pr view <number> --json comments --jq '.comments[-1].body' | grep -n '\.claude/tasks/'
+  ```
+
+  No line is the expected answer. A local path left in the comment is reported in the final report with the capture it names; do not post a second comment to repair it.
+
+**Without `--attach`** (an older `gh`, or the flag refused, which GitHub Enterprise Server does), nothing is uploaded and the comment is posted without the flag:
+
 ```bash
 gh pr comment <number> --body-file .claude/tasks/mr-review-comment.md
 ```
 
-**Screenshots stay on this machine.** GitHub has no API to attach a file to a pull request or a comment, and committing captures to the repository to link them would put run evidence in the target project's history. So nothing is uploaded:
-
 - omit the `### Captures` section;
 - in `### Critères d'acceptation` and wherever a capture backs a claim, write "capture restée locale" with the name of what it shows, never a local path and never an image link;
-- say once, in `### Validation`, that the captures of this run are kept in the console's archive and are not attached, because the forge offers no upload.
+- say once, in `### Validation`, that the captures of this run are kept in the console's archive and are not attached, and why: `gh` older than 2.99.0, with the version read, or the refusal as `gh` printed it.
 
-A claim whose only proof is a capture is still reported with the measurement it rests on (the value read, the request seen, the state observed), so the reader has more than a sentence to go on.
+Never upgrade `gh` yourself. On either path, a claim whose only proof is a capture is still reported with the measurement it rests on (the value read, the request seen, the state observed), so the reader has more than a sentence to go on.
 
 If `gh pr comment` fails, report the failure and the path of the comment file in the final report. Do not fall back to passing the text on the command line.

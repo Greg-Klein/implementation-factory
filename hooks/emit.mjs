@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { request } from "node:http";
 import process from "node:process";
+import { gateObserve, gateStop } from "./gate.mjs";
 import { denial, guardDecision } from "./guard.mjs";
 
 let input = "";
@@ -17,6 +18,20 @@ try {
   }
 } catch {
   // A guard that cannot read the call lets it through.
+}
+
+// Judged here for the same reason: an agent sent back to work has not stopped,
+// and the harness would otherwise close an agent that is still editing.
+try {
+  const payload = JSON.parse(input || "{}");
+  gateObserve(payload);
+  const sentBack = gateStop(payload);
+  if (sentBack) {
+    process.stdout.write(JSON.stringify({ decision: "block", reason: sentBack }));
+    process.exit(0);
+  }
+} catch {
+  // A gate that cannot run lets the agent go.
 }
 
 const endpoint = process.env.IMPL_HARNESS_HOOK_URL;

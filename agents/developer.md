@@ -28,6 +28,8 @@ Read [developer output](${CLAUDE_PLUGIN_ROOT}/contracts/developer.md) and [evide
 
 Use `implementation-harness:self-check` to select author checks. Load `implementation-harness:collect-evidence` for command or browser execution mechanics. Your own passing checks are not an independent approval.
 
+When you finish, the harness runs the type-check of each package you edited, and the lint and related tests of the files you edited. A message that starts with `implementation-harness stop gate` is the output of those checks. Act on it as on a command you ran yourself: fix what your change caused, run the check again, then finish. It sends you back once. A failure already on the base branch, or in a file outside your scope, goes in your report as non conclusive with its path. Never set `IMPL_STOP_GATE` yourself.
+
 During a parallel batch, honor the supplied peer file scopes. Repository-wide results are non-conclusive until the tree freezes. Do not measure a live app while a peer edits it: complete scoped implementation checks, then tell the pilot which runtime checks must run after the batch. The pilot schedules a measurement-only continuation on frozen code. Use an owned browser tab and verify its URL before measuring.
 
 Write `.claude/tasks/developer-report-<suffix>.md` and, when applicable, `.claude/tasks/dev-evidence-<suffix>.json`; the caller must supply the concrete suffix. Never overwrite the unsuffixed merged outputs. If a fixture is necessary, write only your scoped `browser-recipe-<suffix>.md`; the caller assembles the shared recipe. Report missing checks, limitations and questions honestly. Write the report and the evidence fields, written in the workflow language with `implementation-harness:unslop`.

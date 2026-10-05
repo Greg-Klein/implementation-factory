@@ -8,7 +8,7 @@ const PUBLISHING = /\bgit\b[^|;&\n]*\bcommit\b|\bglab\s+(?:mr|issue)\s+(?:create
 const SESSION_TRACE = /co-authored-by:|claude-session:|claude\.ai\/code\/session_|generated with \[claude code\]/i;
 
 /** The task directory of the workflow, from the session's directory or one of its parents. */
-function taskDirectory(cwd) {
+export function taskDirectory(cwd) {
   let directory = path.resolve(cwd || ".");
   for (let depth = 0; depth < 6; depth += 1) {
     const candidate = path.join(directory, ".claude", "tasks");
@@ -25,7 +25,7 @@ function taskDirectory(cwd) {
  * every session that loads it, and an agent named `developer` or a commit trailer
  * is nobody's business there.
  */
-function inWorkflow(env, tasks) {
+export function inWorkflow(env, tasks) {
   return Boolean(env.IMPL_RUN_ID) || Boolean(tasks && existsSync(path.join(tasks, "workflow-state.json")));
 }
 

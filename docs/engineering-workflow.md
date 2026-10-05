@@ -16,6 +16,7 @@ The console's interface is in English. The language of what the workflow writes 
 | `principles/engineering.md` | Evidence, proportionality, simplicity, constraints and handling of unknowns. |
 | `principles/test-quality.md` | The shapes of a test that cannot fail for a defect. Read by the author and by the code reviewer, only when the diff touches test files. |
 | `hooks/guard.mjs` | Rules a tool call's input or a file listing decides, refused before the call runs. |
+| `hooks/gate.mjs` | The checks an editing agent's own files call for, run again when it stops. |
 | `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
 The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the harness; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
@@ -231,6 +232,38 @@ A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks
 The git rules read the commands typed on the line, word by word. A forbidden command quoted in a commit message or passed to a script is not looked at.
 
 A refused call is not forwarded to the console. A guard that cannot read what it checks lets the call through. `commands/improve.md` asks for a mechanism before a new sentence whenever one can carry the rule.
+
+## The stop gate
+
+A developer report says its checks pass, and nothing verified that sentence. When `developer` or `senior-reviewer` stops during a run of the workflow, `hooks/gate.mjs`, called by `hooks/emit.mjs`, runs the checks its edits call for and writes each verdict to `.claude/tasks/gate-log.jsonl`. The pilot and the review orchestrator take the verdict from that file.
+
+The files an agent edited are noted from its `Edit` and `Write` calls, per agent. For each package they belong to (the nearest `package.json` that is more than repository tooling):
+
+| Check | Covers | Command |
+| --- | --- | --- |
+| type-check | the package | its `typecheck` or `type-check` script, otherwise `tsc --noEmit` (`tsc -b` for a solution-style `tsconfig.json`) |
+| lint | the edited files | the local `eslint`, when the package or the repository has a configuration |
+| related tests | the edited files | `vitest related`, `jest --findRelatedTests` or the `react-scripts` equivalent |
+
+Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry` and a `result`:
+
+| Result | Meaning |
+| --- | --- |
+| `pass` | the check ran and passed |
+| `fail` | the check ran and failed. With `retry: false` the agent was sent back with the output; with `retry: true` it was let go with the failure still there |
+| `inconclusive` | every type error is outside the agent's files, and another gated agent was editing. The errors come from the half-written code of a parallel batch. The pilot's repository-wide gates settle them once the batch is over |
+| `skipped` | the check could not run: tool missing, ten minutes exceeded, or the twenty minutes of the whole gate spent |
+| `none` | nothing to run: no edit recorded for this agent, no package above its files, or a package with no check |
+
+Choices worth knowing before changing it:
+
+- **It blocks once.** The second stop is always let through and recorded as it stands, so no agent loops on it. The gate keeps its own note of having sent an agent back, because Claude Code documents `stop_hook_active` only for the stop of the session.
+- **It fails open.** An error in the gate, a check that cannot run and a session outside a run all let the agent go. `IMPL_STOP_GATE=off` in the console's environment turns it off.
+- **It runs the tests related to the edited files.** A legacy suite is often red on the base branch, and an agent blocked on a failure it did not cause learns to ignore the gate. The pilot runs the whole suite, on a tree nobody is editing.
+- **A blocked stop is not forwarded to the console**, like a call the guard refuses, because the agent is still working.
+- **The message gives results.** The agent definitions say a `stop gate` message is the output of the agent's own checks. An agent that was not told so treats a hook reason as text from outside and declines to act on it.
+
+The gate has three limits. It does not record an edit made through the shell (`sed`, a code generator). It checks Node packages only. While a gate runs for more than `IMPL_STALL_MINUTES`, the console shows a doubt on the run.
 
 ## Runtime recipe of a repository
 

@@ -456,7 +456,7 @@ The frontend uses Next.js, React, TypeScript, Tailwind CSS and xterm.js. The loc
 ```text
 agents/       Claude Code subagents
 commands/     the commands /implementation-harness:implement, /implementation-harness:review, /implementation-harness:improve, /implementation-harness:rebase and /implementation-harness:schedule
-hooks/        events sent to the local harness, and the guard that refuses a few tool calls during a run
+hooks/        events sent to the local harness, the guard that refuses a few tool calls during a run, and the stop gate that checks an agent's edits when it hands back
 bin/          the impl launcher and the impl config command
 console/      Next.js interface and PTY server
 console/server/engine/  the layer that isolates the driven agent, one implementation: claude-code

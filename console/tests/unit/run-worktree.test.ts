@@ -167,6 +167,37 @@ describe("what the worktree takes from the main checkout", () => {
   });
 });
 
+describe("the git hooks a worktree runs", () => {
+  beforeEach(async () => {
+    // The husky layout: a tracked hook sources a helper that `husky install` writes and ignores.
+    write(repository, ".husky/pre-commit", '#!/bin/sh\n. "$(dirname -- "$0")/_/husky.sh"\n');
+    execFileSync("chmod", ["+x", path.join(repository, ".husky/pre-commit")]);
+    git(repository, "add", ".husky/pre-commit");
+    git(repository, "commit", "-q", "-m", "hooks");
+    git(repository, "config", "core.hooksPath", ".husky");
+    write(repository, ".husky/_/.gitignore", "*\n");
+    write(repository, ".husky/_/husky.sh", "true\n");
+    await createRunWorktree(repository, worktree);
+  });
+
+  it("should copy the ignored helper of the hooks path, so the first commit of the run passes its hook", async () => {
+    const provisioned = await provisionWorktree(repository, worktree, defaults);
+    expect(provisioned.hooks).toEqual([".husky/_"]);
+    expect(readFileSync(path.join(worktree, ".husky/_/husky.sh"), "utf8")).toBe("true\n");
+    await expect(worktreeIsClean({ path: worktree })).resolves.toBe(true);
+    write(worktree, "app.ts", "export const answer = 1;\n");
+    git(worktree, "commit", "-q", "-am", "change");
+    expect(git(worktree, "log", "-1", "--format=%s")).toBe("change");
+  });
+
+  it("should copy nothing for the hooks when the repository sets no hooks path", async () => {
+    git(repository, "config", "--unset", "core.hooksPath");
+    const provisioned = await provisionWorktree(repository, worktree, defaults);
+    expect(provisioned.hooks).toEqual([]);
+    expect(existsSync(path.join(worktree, ".husky/_"))).toBe(false);
+  });
+});
+
 describe("whether a worktree holds work that would be lost", () => {
   let remote: string;
 

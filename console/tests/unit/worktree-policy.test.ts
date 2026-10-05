@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { excludeLine, isRunWorktreePath, listSetting, runWorktreePath, withExcludeLines, worktreeKeptDetail, worktreeProvisioning, worktreeRemoval } from "../../server/domain";
+import { excludeLine, isRunWorktreePath, listSetting, relativeHooksPath, runWorktreePath, withExcludeLines, worktreeKeptDetail, worktreeProvisioning, worktreeRemoval } from "../../server/domain";
 import type { RunState, WorkflowState } from "../../server/types";
 
 type Run = Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt">;
@@ -81,7 +81,7 @@ describe("what a worktree takes from the ignored files of the checkout", () => {
   const ignored = ["node_modules/", "packages/api/node_modules/", ".env", "apps/web/.env.local", "dist/", ".next/", "coverage/lcov.info", ".claude/worktrees/", "notes.env.bak"];
 
   it("should take dependency directories by name at any depth, and files by name pattern", () => {
-    expect(worktreeProvisioning(ignored, ["node_modules"], [".env*"])).toEqual({ directories: ["node_modules", "packages/api/node_modules"], files: [".env", "apps/web/.env.local"], paths: [] });
+    expect(worktreeProvisioning(ignored, ["node_modules"], [".env*"])).toEqual({ directories: ["node_modules", "packages/api/node_modules"], files: [".env", "apps/web/.env.local"], paths: [], hooks: [] });
   });
 
   it("should never take a build output nobody listed", () => {
@@ -97,11 +97,27 @@ describe("what a worktree takes from the ignored files of the checkout", () => {
 
   it("should never take anything from the worktrees of other runs", () => {
     const plan = worktreeProvisioning([".claude/worktrees/run-1/node_modules/", ".claude/worktrees/run-1/.env", ".claude/", ".claude/worktrees/"], ["node_modules", ".claude", "worktrees"], [".env*"]);
-    expect(plan).toEqual({ directories: [], files: [], paths: [] });
+    expect(plan).toEqual({ directories: [], files: [], paths: [], hooks: [] });
+  });
+
+  it("should take the ignored entries at or under the hooks path, and nothing else for them", () => {
+    const withHooks = [...ignored, ".husky/_/", "tools/hooks/local.sh", "huskyish/"];
+    expect(worktreeProvisioning(withHooks, ["node_modules"], [".env*"], "./.husky/").hooks).toEqual([".husky/_"]);
+    expect(worktreeProvisioning(withHooks, ["node_modules"], [".env*"], ".husky/_").hooks).toEqual([".husky/_"]);
+    expect(worktreeProvisioning(withHooks, ["node_modules"], [".env*"], "tools/hooks").hooks).toEqual(["tools/hooks/local.sh"]);
+    expect(worktreeProvisioning(withHooks, ["node_modules"], [".env*"]).hooks).toEqual([]);
+  });
+
+  it("should read no hooks path that is absolute, empty or outside the repository", () => {
+    expect(relativeHooksPath("/usr/share/git-hooks")).toBeUndefined();
+    expect(relativeHooksPath("~/.githooks")).toBeUndefined();
+    expect(relativeHooksPath("../shared/hooks")).toBeUndefined();
+    expect(relativeHooksPath(" ./ ")).toBeUndefined();
+    expect(relativeHooksPath(".husky/")).toBe(".husky");
   });
 
   it("should not take a file for a directory, nor a directory for a file", () => {
-    expect(worktreeProvisioning(["node_modules", ".env/"], ["node_modules"], [".env*"])).toEqual({ directories: [], files: [], paths: [] });
+    expect(worktreeProvisioning(["node_modules", ".env/"], ["node_modules"], [".env*"])).toEqual({ directories: [], files: [], paths: [], hooks: [] });
   });
 });
 

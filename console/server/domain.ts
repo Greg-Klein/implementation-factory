@@ -741,22 +741,35 @@ function nameMatches(pattern: string, name: string) {
  * `directories` are dependency directories matched by name at any depth;
  * `files` are ignored files matched by name. A copy pattern holding a slash is
  * a path from the root, returned in `paths` and taken whether git ignores it or
- * not. Nothing under the worktrees directory is ever taken.
+ * not. `hooks` are the ignored entries at or under the repository's hooks path
+ * (`core.hooksPath`, relative), such as the `.husky/_` helper a hook sources:
+ * git does not create them in a worktree, and the first commit fails without
+ * them. Nothing under the worktrees directory is ever taken.
  */
-export function worktreeProvisioning(ignoredEntries: string[], linkNames: string[], copyPatterns: string[]) {
+export function worktreeProvisioning(ignoredEntries: string[], linkNames: string[], copyPatterns: string[], hooksPath?: string) {
   const namePatterns = copyPatterns.filter((pattern) => !pattern.includes("/"));
+  const hooksRoot = hooksPath === undefined ? undefined : relativeHooksPath(hooksPath);
   const directories: string[] = [];
   const files: string[] = [];
+  const hooks: string[] = [];
   for (const entry of ignoredEntries) {
     if (!entry || entry === `${RUN_WORKTREES_DIRECTORY}/` || entry.startsWith(`${RUN_WORKTREES_DIRECTORY}/`) || `${RUN_WORKTREES_DIRECTORY}/`.startsWith(entry)) continue;
     const directory = entry.endsWith("/");
     const relative = directory ? entry.slice(0, -1) : entry;
     const name = relative.split("/").pop() ?? "";
-    if (directory) { if (linkNames.some((pattern) => nameMatches(pattern, name))) directories.push(relative); }
+    if (hooksRoot && (relative === hooksRoot || relative.startsWith(`${hooksRoot}/`))) hooks.push(relative);
+    else if (directory) { if (linkNames.some((pattern) => nameMatches(pattern, name))) directories.push(relative); }
     else if (namePatterns.some((pattern) => nameMatches(pattern, name))) files.push(relative);
   }
   const paths = copyPatterns.filter((pattern) => pattern.includes("/")).map((pattern) => pattern.replace(/^\/+/, "")).filter((pattern) => !pattern.split("/").includes(".."));
-  return { directories, files, paths };
+  return { directories, files, paths, hooks };
+}
+
+/** `core.hooksPath` as a path inside the repository, or undefined when it is absolute, empty or leaves the repository. */
+export function relativeHooksPath(value: string) {
+  const trimmed = value.trim().replace(/^(\.\/)+/, "").replace(/\/+$/, "");
+  if (!trimmed || trimmed === "." || path.isAbsolute(trimmed) || trimmed.startsWith("~") || trimmed.split("/").includes("..")) return undefined;
+  return trimmed;
 }
 
 /** A path written as a line of `.git/info/exclude`: anchored at the root, its glob characters taken literally. */

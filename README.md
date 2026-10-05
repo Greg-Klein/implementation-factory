@@ -244,7 +244,8 @@ Before opening the session, the harness creates a git worktree of the project in
 What the worktree takes from the main checkout:
 
 - the dependency directories Git ignores, at any depth (`node_modules` by default, setting `IMPL_WORKTREE_DEPENDENCY_DIRS`). They are copied, copy-on-write when the filesystem allows it: the copy then takes no disk space until one side changes, and an install in the worktree stays there. If the copy fails, the directory is linked with a symbolic link;
-- the `.env*` files Git ignores and the `.claude/settings.local.json` file (setting `IMPL_WORKTREE_COPY_FILES`), copied.
+- the `.env*` files Git ignores and the `.claude/settings.local.json` file (setting `IMPL_WORKTREE_COPY_FILES`), copied;
+- when the repository sets `core.hooksPath` to a directory inside it, what Git ignores there, copied. That is the `.husky/_` helper husky writes at install, without which the first commit of the run fails in its hook.
 
 The `.claude/worktrees/` directory and the links are written to the repository's `.git/info/exclude`. They do not show in `git status` and enter no commit, and the tracked `.gitignore` is not modified. Build outputs (`.next`, `dist`) are not provided, so the first build of a run is a full one. When a ticket changes the dependencies and `node_modules` is a link, the workflow first replaces it with a real install in the worktree, so it modifies neither the main checkout nor the other runs.
 

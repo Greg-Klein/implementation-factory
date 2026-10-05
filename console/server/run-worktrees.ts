@@ -34,6 +34,7 @@ export async function prepareRunWorktree(repository: string, runId: string): Pro
       provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dependency ${provisioned.cloned.length > 1 ? "directories" : "directory"} cloned` : "",
       provisioned.linked.length > 0 ? `${provisioned.linked.length} linked by symlink` : "",
       provisioned.copied.length > 0 ? `${provisioned.copied.length} configuration file${provisioned.copied.length > 1 ? "s" : ""} copied` : "",
+      provisioned.hooks.length > 0 ? `git hooks copied (${provisioned.hooks.join(", ")})` : "",
     ].filter(Boolean);
     return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", ") };
   } catch (error) {

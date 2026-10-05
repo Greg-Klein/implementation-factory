@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
+import { deliveredCodeSettled, deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
 import type { SessionUsage } from "../../server/engine/types";
 import { buildRunMetrics, comparableRuns, diffFromNumstat, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
 import type { RunMetrics, RunState } from "../../server/types";
@@ -193,6 +193,15 @@ describe("a change asked after the final report", () => {
   it("should measure a reopening still going up to now", () => {
     const metrics = buildRunMetrics({ state: run({ status: "completed", sessionActive: true, endedAt: at(20), reopenings: [{ from: at(40) }] }), usage: [], at: at(45) });
     expect(metrics.time).toMatchObject({ endedAt: at(45), elapsedMs: 25 * 60_000, reopened: { count: 1, ms: 5 * 60_000 } });
+  });
+
+  it("should settle the delivered code once the archive is synced, and again only after a reopening's own sync", () => {
+    expect(deliveredCodeSettled({ status: "running", archiveSyncedAt: at(10) })).toBe(false);
+    expect(deliveredCodeSettled({ status: "completed" })).toBe(false);
+    expect(deliveredCodeSettled({ status: "completed", archiveSyncedAt: at(10) })).toBe(true);
+    expect(deliveredCodeSettled({ status: "completed", archiveSyncedAt: at(10), reopenings: [{ from: at(30) }] })).toBe(false);
+    expect(deliveredCodeSettled({ status: "completed", archiveSyncedAt: at(10), reopenings: [{ from: at(30), to: at(45) }] })).toBe(false);
+    expect(deliveredCodeSettled({ status: "completed", archiveSyncedAt: at(46), reopenings: [{ from: at(30), to: at(45) }] })).toBe(true);
   });
 
   it("should report no reopening on a run that was never reopened", () => {

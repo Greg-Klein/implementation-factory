@@ -3,6 +3,7 @@ import path from "node:path";
 import { acceptanceCountsKey, renderAcceptanceSummary } from "./acceptance.js";
 import { readSnapshotLog, takeCodeSnapshot } from "./code-snapshot.js";
 import { dataRoot, workflowLanguage } from "./config.js";
+import { deliveredCodeSettled } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { acceptanceInputKind, atomicWrite, SUMMARY_FILES, SYNC_ACK_FILE } from "./evidence-archive.js";
 import type { RunSession } from "./run-session.js";
@@ -31,6 +32,8 @@ async function identifyCode(session: RunSession, force: boolean) {
   // A worktree that is gone has no code left to identify: the last snapshot taken in it stands.
   if (session.demo || session.state.worktree?.state === "removed") return;
   for (const entry of await readSnapshotLog(snapshotLogPath(session.id))) archive.rememberSnapshot(entry.id, entry.capturedAt);
+  // The archive sync closes the workflow on the code it delivered: a rebase or an edit made after it, outside a reopening, does not make that coverage stale.
+  if (deliveredCodeSettled(session.state)) return;
   if (!force && Date.now() - archive.snapshotTakenAt < SNAPSHOT_INTERVAL_MS) return;
   archive.snapshotTakenAt = Date.now();
   const snapshot = await takeCodeSnapshot(session.state.cwd, snapshotExclusions(session.state.cwd));

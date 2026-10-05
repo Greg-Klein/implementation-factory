@@ -286,6 +286,13 @@ export function runInProgress(status: RunStatus) {
   return status === "starting" || status === "running" || status === "attention";
 }
 
+/** The workflow ended and archived its evidence since the last change asked after the final report. */
+export function deliveredCodeSettled(state: Pick<RunState, "status" | "archiveSyncedAt" | "reopenings">) {
+  if (!state.archiveSyncedAt || runInProgress(state.status)) return false;
+  const last = state.reopenings?.at(-1);
+  return !last || (last.to !== undefined && state.archiveSyncedAt >= last.to);
+}
+
 export function phaseForAgent(agentName: string) {
   const name = agentName.slice(agentName.lastIndexOf(":") + 1);
   if (name === "ticket-planner") return 4;

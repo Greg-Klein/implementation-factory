@@ -43,7 +43,7 @@ Two things, and only two, override that autonomy: a git state you do not underst
 
 Chaining shorter sleeps to get around the block does not work either. This has already cost a blocked turn in several runs.
 
-**Say where you stand in `.claude/tasks/workflow-state.json`, at every transition.** The console watches for runs where you handed control back and nothing is going to wake you up, and only this file tells it that you are legitimately waiting. Follow [workflow state](${CLAUDE_PLUGIN_ROOT}/contracts/workflow-state.md): write it when you start a step, right before you end a turn while an agent, a background command or a `Monitor` is still working for you, and once at the very end. Never end a turn mid-workflow without an agent running, a declared wait, or a question asked with `AskUserQuestion`: a hand-back with none of the three is reported to the user as a run with no next action.
+**Say where you stand in `.claude/tasks/workflow-state.json`, at every transition.** The console watches for runs where you handed control back and nothing is going to wake you up, and only this file tells it that you are legitimately waiting. Follow [workflow state](${CLAUDE_PLUGIN_ROOT}/contracts/workflow-state.md): write it when you start a step, right before you end a turn while an agent, a background command or a `Monitor` is still working for you, and once at the very end, each time in the same message as the tool calls it announces, never as a turn of its own. Never end a turn mid-workflow without an agent running, a declared wait, or a question asked with `AskUserQuestion`: a hand-back with none of the three is reported to the user as a run with no next action.
 
 ---
 

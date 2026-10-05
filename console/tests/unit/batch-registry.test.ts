@@ -84,7 +84,11 @@ function harness() {
     if (mergeRequest) session.state.mergeRequestUrl = `https://gitlab.com/acme/shop/-/merge_requests/${mergeRequest}`;
     session.publish();
   };
-  const merge = (status: "merged" | "closed" | "unknown" | "opened") => internals.applyMergeStatus(internals.watches[0], status);
+  // The watcher asks the stand-in glab as soon as a watch is held: its late "unknown" would land over the status set here.
+  const merge = async (status: "merged" | "closed" | "unknown" | "opened") => {
+    await registry.mergeWatcher.tick();
+    await internals.applyMergeStatus(internals.watches[0], status);
+  };
   return { registry, internals, started, numbers, queued, waiting, finish, merge };
 }
 

@@ -70,6 +70,37 @@ describe("the hook guard", () => {
     expect(refusal("Bash", { command: "git log --grep 'Co-Authored-By:'" })).toBeUndefined();
   });
 
+  it("should refuse a publication whose text or file shows a credential, and name it without quoting it", () => {
+    const token = `ghp_${"a1B2".repeat(9)}`;
+    const typed = refusal("Bash", { command: `gh pr comment 12 --body 'curl -H "Authorization: token ${token}"'` });
+    expect(typed).toContain("a GitHub token");
+    expect(typed).not.toContain(token);
+
+    const jwt = `eyJ${"hbGciOiJIUzI1NiJ9"}.eyJ${"zdWIiOiIxMjM0NTY3ODkwIn0"}.${"SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV"}`;
+    writeFileSync(path.join(tasks, "mr-description.md"), `# Fix\n\nSee ![capture](https://private-user-images.githubusercontent.com/1/2.png?jwt=${jwt})\n`);
+    for (const command of [
+      "gh pr create --base main --head feat-1 --title 'feat: x' --body-file .claude/tasks/mr-description.md",
+      "glab api --method POST \"projects/:fullpath/merge_requests\" --field \"description=@.claude/tasks/mr-description.md\"",
+      "glab mr note 12 --message \"$(cat .claude/tasks/mr-description.md)\"",
+    ]) expect(refusal("Bash", { command })).toMatch(/a signed token \(JWT\), in mr-description\.md line 3/);
+
+    writeFileSync(path.join(tasks, "mr-review-comment.md"), "## Revue\n\n-----BEGIN RSA PRIVATE KEY-----\n");
+    expect(refusal("Bash", { command: "glab api --method POST projects/1/merge_requests/2/notes --field \"body=@.claude/tasks/mr-review-comment.md\"" })).toContain("a private key");
+  });
+
+  it("should let through a publication that only talks about credentials, and a read of a file that holds one", () => {
+    writeFileSync(path.join(tasks, "mr-description.md"), "# Fix\n\nThe client now sends `Authorization: Bearer <token>` and reads `GITHUB_TOKEN` (ghp_...) from the environment. The password field is masked.\n");
+    expect(refusal("Bash", { command: "gh pr create --title 'feat: x' --body-file .claude/tasks/mr-description.md" })).toBeUndefined();
+    writeFileSync(path.join(tasks, "notes.md"), `token: glpat-${"x".repeat(24)}\n`);
+    expect(refusal("Bash", { command: "cat .claude/tasks/notes.md" })).toBeUndefined();
+    // Named in a title, the file is not what the command sends.
+    expect(refusal("Bash", { command: "gh pr create --title 'docs: update .claude/tasks/notes.md' --body-file .claude/tasks/mr-description.md" })).toBeUndefined();
+    expect(refusal("Bash", { command: "git commit -m 'docs: update .claude/tasks/notes.md'" })).toBeUndefined();
+    expect(refusal("Bash", { command: "gh pr comment 12 -F .claude/tasks/notes.md" })).toContain("a GitLab token");
+    expect(refusal("Bash", { command: "glab api projects/1/merge_requests/2 # .claude/tasks/notes.md" })).toBeUndefined();
+    expect(refusal("Bash", { command: "glab api --method POST projects/1/merge_requests/2/notes --field \"body=@.claude/tasks/notes.md\"" })).toContain("a GitLab token");
+  });
+
   it("should refuse the git commands that destroy work, wherever they sit on the line", () => {
     for (const command of [
       "git reset --hard",

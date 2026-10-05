@@ -226,7 +226,7 @@ If a `developer` comes back with a specification question instead of a guess, it
 
 After each task, commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
 
-**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`) and no `Co-Authored-By` trailer, in a commit message, a merge request description or a comment. The engine appends both on its own, so this rule overrides it, here and for the `fix(...)` commits of step 7. A hook refuses a `git commit`, or a `glab` or `gh` publication, that carries one; a description passed from a file is yours to check.
+**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`) and no `Co-Authored-By` trailer, in a commit message, a merge request description or a comment. The engine appends both on its own, so this rule overrides it, here and for the `fix(...)` commits of step 7. A hook refuses a `git commit`, or a `glab` or `gh` publication, that carries one; a description passed from a file is yours to check. The same hook refuses a publication whose command or file shows a credential (a token, a JWT, a private key, a signed address): redact it in the file and run the command again. It does not read images, so a capture that shows a secret stays yours to keep out.
 
 ### Merge the developers' output, at the end of every batch
 

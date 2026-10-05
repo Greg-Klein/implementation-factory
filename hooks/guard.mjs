@@ -5,6 +5,26 @@ const NAMESPACE = "implementation-harness";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
 const REVIEWERS = ["senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator"];
 const PUBLISHING = /\bgit\b[^|;&\n]*\bcommit\b|\bglab\s+(?:mr|issue)\s+(?:create|update|note)\b|\bgh\s+(?:pr|issue)\s+(?:create|edit|comment)\b/;
+/** A call that writes on the forge through its API: how a merge request and its review comment are published on GitLab. */
+const API_WRITE = /\b(?:glab|gh)\s+api\b[^|;&\n]*(?:--method|-X)[\s=]*(?:POST|PUT|PATCH)\b/i;
+/**
+ * What a credential looks like, by the shape its issuer gives it. Shapes only,
+ * and long ones: a word such as "password" or a short example in a sentence
+ * would refuse descriptions that publish nothing secret.
+ */
+const SECRETS = [
+  ["a GitHub token", /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})/],
+  ["a GitLab token", /\bgl(?:pat|ptt|dt|rt|cbt)-[A-Za-z0-9_-]{20,}/],
+  ["a Slack token", /\bxox[abprs]-[A-Za-z0-9-]{10,}/],
+  ["an AWS access key", /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
+  ["an API key", /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}/],
+  ["a signed token (JWT)", /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+  ["a private key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+  ["a bearer token", /\bBearer\s+[A-Za-z0-9._~+/-]{24,}/],
+];
+/** A file whose content the command sends: `key=@file`, `--body-file file`, `-F file`, `$(cat file)`. A file it only mentions is not read. */
+const PUBLISHED_FILE = /(?:@|(?:--body-file|--file|-F|\bcat)[\s=]+["']?)((?:\.{0,2}\/)?[\w.@/-]+)/g;
+const MAX_PUBLISHED_BYTES = 1_000_000;
 const SESSION_TRACE = /co-authored-by:|claude-session:|claude\.ai\/code\/session_|generated with \[claude code\]/i;
 
 /** The task directory of the workflow, from the session's directory or one of its parents. */
@@ -147,6 +167,37 @@ function gitRefusal({ subcommand, args }, { cwd, env, linked }) {
   return undefined;
 }
 
+/** The first credential a text shows, as its kind and its line, never the value. */
+function secretIn(text) {
+  for (const [kind, shape] of SECRETS) {
+    const found = shape.exec(text);
+    if (found) return { kind, line: text.slice(0, found.index).split("\n").length };
+  }
+  return undefined;
+}
+
+/**
+ * Why a publication is refused for a credential it would make public: one typed
+ * in the command, or one in a text file the command names, which is how a
+ * description and a review comment reach the forge.
+ */
+function publishedSecret(command, cwd) {
+  const typed = secretIn(command);
+  if (typed) return `This publication carries what looks like ${typed.kind}, typed in the command. Replace it with \`<redacted>\` and run the command again.`;
+  const files = new Set([...command.matchAll(PUBLISHED_FILE)].map((match) => path.resolve(cwd || ".", match[1])));
+  for (const file of files) {
+    let text;
+    try {
+      const stats = statSync(file);
+      if (!stats.isFile() || stats.size > MAX_PUBLISHED_BYTES) continue;
+      text = readFileSync(file, "utf8");
+    } catch { continue; }
+    const found = secretIn(text);
+    if (found) return `This publication carries what looks like ${found.kind}, in ${path.basename(file)} line ${found.line}. Replace it with \`<redacted>\` in that file and run the command again. A signed address counts: it lets anyone who reads the page open what it points to.`;
+  }
+  return undefined;
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
@@ -173,6 +224,10 @@ export function guardDecision(payload, env = process.env) {
     const command = typeof input.command === "string" ? input.command : "";
     if (PUBLISHING.test(command) && SESSION_TRACE.test(command)) {
       return "Nothing this run publishes carries a trace of the session: remove the Co-Authored-By or Claude-Session trailer, the claude.ai/code/session_ link and the \"Generated with\" line, then run the command again.";
+    }
+    if (PUBLISHING.test(command) || API_WRITE.test(command)) {
+      const secret = publishedSecret(command, payload.cwd);
+      if (secret) return secret;
     }
     const context = { cwd: payload.cwd, env, linked: inLinkedWorktree(payload.cwd, env) };
     for (const words of shellCommands(command)) {

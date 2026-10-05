@@ -234,11 +234,12 @@ The "Runtime recipe" window of a repository shows, under the recipe, how many fi
 
 ## Rules enforced by a mechanism
 
-A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses four kinds of call and gives the agent the reason:
+A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses five kinds of call and gives the agent the reason:
 
 - an agent of the workflow invoked under its bare name;
 - a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
 - a `git commit`, or a `glab` or `gh` publication on a merge request, a pull request or an issue, whose command carries a `Co-Authored-By` or `Claude-Session` trailer, a session link or a "Generated with" line;
+- a publication that shows a credential: a `git commit`, a `glab` or `gh` publication, or a `glab api` or `gh api` call that writes (`POST`, `PUT`, `PATCH`), when its command or a file it sends (`key=@file`, `--body-file`, `-F`, `$(cat file)`) holds a GitHub, GitLab, Slack or AWS token, an API key, a JWT, a private key or a bearer token. The refusal names the kind, the file and the line, and never quotes the value. A signed address counts, since anyone who reads the page can open what it points to. The check reads shapes of 20 characters or more, so a sentence about a password or a placeholder such as `<token>` passes. Images and videos are not read;
 - a git command that destroys work: `git reset --hard`, `git clean -f` without a dry run, a checkout, restore or switch that discards the whole tree, a forced push without `--force-with-lease`, `git worktree prune`, the removal of a worktree under `.claude/worktrees/`. In a linked worktree, which is every run the console starts, it also refuses a stash other than `list` or `show`, and a branch deleted or overwritten (`branch -D`, `checkout -B`, `switch -C`, `--ignore-other-worktrees`).
 
 The git rules read the commands typed on the line, word by word. A forbidden command quoted in a commit message or passed to a script is not looked at.

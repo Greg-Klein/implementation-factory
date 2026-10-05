@@ -106,6 +106,7 @@ The console passes these variables to the session:
 | --- | --- |
 | Ignored dependency directories (`node_modules` by default, setting `IMPL_WORKTREE_DEPENDENCY_DIRS`) | A copy of those of the main checkout, copy-on-write when the filesystem allows it: an install there stays in the worktree. A symbolic link only if the copy fails. |
 | Ignored files `.env*` and `.claude/settings.local.json` (setting `IMPL_WORKTREE_COPY_FILES`) | Copied from the main checkout. |
+| Ignored entries of a hooks path inside the repository (`core.hooksPath`, such as husky's `.husky/_`) | Copied from the main checkout, so the hooks the commits run find their helper. |
 | Build outputs (`.next`, `dist`) | Nothing is provided. The first build happens in the worktree. |
 | `.claude/tasks/` | Specific to the run, in the worktree. |
 

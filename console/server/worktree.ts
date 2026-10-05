@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { copyFile, lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -218,11 +218,13 @@ export type ProvisionOptions = {
  * to the main checkout. A gitignore pattern such as `node_modules/` does not
  * match a symlink, so each link is excluded by its own path, or the worktree
  * would look dirty and the link could be committed. Configuration files are
- * plain copies. A path the worktree already has is left alone.
+ * plain copies, and so are the ignored entries of the hooks path. A path the
+ * worktree already has is left alone.
  */
 export async function provisionWorktree(repository: string, worktreePath: string, options: ProvisionOptions) {
   const { stdout } = await exec("git", ["-C", repository, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"], { maxBuffer: 64 * 1024 * 1024 });
-  const plan = worktreeProvisioning(stdout.split("\0").filter(Boolean), options.dependencyDirectories, options.copyFiles);
+  const hooksPath = await exec("git", ["-C", repository, "config", "--get", "core.hooksPath"]).then(({ stdout: value }) => value.trim() || undefined, () => undefined);
+  const plan = worktreeProvisioning(stdout.split("\0").filter(Boolean), options.dependencyDirectories, options.copyFiles, hooksPath);
   const clone = options.clone ?? cloneDirectory;
   const cloned: string[] = [];
   const linked: string[] = [];
@@ -254,9 +256,17 @@ export async function provisionWorktree(repository: string, worktreePath: string
     // A path named outright is copied whether git ignores it or not, and must not dirty the worktree.
     if (plan.paths.includes(relative)) excluded.push(excludeLine(relative));
   }
+  const hooks: string[] = [];
+  for (const relative of plan.hooks) {
+    const target = path.join(worktreePath, relative);
+    if (!(await missing(target))) continue;
+    await mkdir(path.dirname(target), { recursive: true });
+    await cp(path.join(repository, relative), target, { recursive: true });
+    hooks.push(relative);
+  }
   await ensureExcluded(repository, excluded);
   const dependencies = linked.length > 0 ? "symlink" as const : cloned.length > 0 ? "clone" as const : undefined;
-  return { cloned, linked, copied, dependencies };
+  return { cloned, linked, copied, hooks, dependencies };
 }
 
 /** Whether the commit a worktree is on already sits on a remote-tracking branch. Read from local refs, no network. */

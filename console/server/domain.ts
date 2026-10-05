@@ -642,14 +642,19 @@ export function emptyState(): RunState {
 }
 
 /**
- * Whether a run still holds its slot and its ticket. The workflow reaching its
- * last phase does not release them: the session stays open at its prompt, the
- * user keeps talking to it and it keeps writing to its worktree. Only a session
- * that is gone frees them, which is what the queue waits on, and what
- * sessionsToReleaseForQueue takes back when someone is waiting.
+ * Whether a run still holds its ticket. The workflow reaching its last phase
+ * does not release it: the session stays open at its prompt, the user keeps
+ * talking to it and it keeps writing to its worktree on that ticket's branch.
+ * Only a session that is gone frees it, or sessionsToReleaseForQueue when a
+ * launch on the same ticket is waiting.
  */
 export function runHoldsRepository(state: Pick<RunState, "status" | "sessionActive">) {
   return runInProgress(state.status) || state.sessionActive;
+}
+
+/** Whether a run takes one of the concurrent slots: only while its workflow works. A finished run idling at its prompt costs nothing. */
+export function runTakesSlot(state: Pick<RunState, "status">) {
+  return runInProgress(state.status);
 }
 
 /** The checkout a run was launched on. A run archived before worktrees ran in that checkout itself. */
@@ -667,35 +672,20 @@ export function runLockKey(run: { repository?: string; cwd: string; issueUrl: st
   return `${sourceRepository(run).replace(/\/+$/, "")}\n${ticketIdentity(run.issueUrl)}`;
 }
 
-/** A run as the release decision reads it: what it holds, and since when it has nothing left to do. */
-type HeldRun = { id: string; cwd: string; repository?: string; issueUrl: string; status: RunStatus; sessionActive: boolean; endedAt: string | null };
+/** A run as the release decision reads it: what it holds, and whether it still works. */
+type HeldRun = { id: string; cwd: string; repository?: string; issueUrl: string; status: RunStatus; sessionActive: boolean };
 type Launch = { cwd: string; repository?: string; issueUrl: string };
 
 /**
  * The finished runs whose session has to go for the queue to move. Their
- * workflow is over but their session sits at its prompt, holding a ticket and
- * a slot: harmless while nobody is waiting, which is why the session is kept,
- * and unacceptable the moment a queued launch needs exactly what it holds. So a
- * run with nothing left to do yields to one that has work, rather than waiting
- * for the user to notice and free the place by hand.
+ * workflow is over but their session sits at its prompt, holding its ticket:
+ * harmless while nobody is waiting, which is why the session is kept, and
+ * unacceptable the moment a queued launch needs that very ticket. A slot never
+ * calls for it, since a finished run takes none.
  */
-export function sessionsToReleaseForQueue(runs: HeldRun[], queue: Launch[], maxConcurrentRuns: number) {
-  if (queue.length === 0) return [];
-  const idle = runs
-    .filter((run) => runHoldsRepository(run) && !runInProgress(run.status))
-    .sort((left, right) => (left.endedAt ?? "").localeCompare(right.endedAt ?? ""));
+export function sessionsToReleaseForQueue(runs: HeldRun[], queue: Launch[]) {
   const awaited = new Set(queue.map(runLockKey));
-  const released = new Set(idle.filter((run) => awaited.has(runLockKey(run))).map((run) => run.id));
-  const held = runs.filter((run) => runHoldsRepository(run) && !released.has(run.id));
-  // Whoever is still waiting with its ticket free is waiting on a slot alone,
-  // and the run that finished first is the one that has held one the longest.
-  const heldKeys = new Set(held.map(runLockKey));
-  const waitsOnSlot = queue.some((entry) => !heldKeys.has(runLockKey(entry)));
-  if (waitsOnSlot && held.length >= maxConcurrentRuns) {
-    const oldest = idle.find((run) => !released.has(run.id));
-    if (oldest) released.add(oldest.id);
-  }
-  return [...released];
+  return runs.filter((run) => runHoldsRepository(run) && !runTakesSlot(run) && awaited.has(runLockKey(run))).map((run) => run.id);
 }
 
 /** Where the worktrees of the runs live inside a repository, ignored through `.git/info/exclude`. */
@@ -830,6 +820,7 @@ export function summarizeRun(state: RunState): RunSummary {
     evidenceUpdatedAt: state.evidenceUpdatedAt,
     ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
     holdsRepository: runHoldsRepository(state),
+    takesSlot: runTakesSlot(state),
     ...(state.health ? { health: state.health.health } : {}),
     ...(state.usage ? { tokens: state.usage.total } : {}),
     ...(openIncidentSummary(state)),

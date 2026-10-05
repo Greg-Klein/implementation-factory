@@ -185,7 +185,7 @@ status_report() {
       let raw = ""; process.stdin.on("data", (chunk) => { raw += chunk; });
       process.stdin.on("end", () => {
         const { runs = [], queued = [], maxConcurrentRuns = 0 } = JSON.parse(raw);
-        const holding = runs.filter((run) => run.holdsRepository).length;
+        const holding = runs.filter((run) => run.takesSlot).length;
         console.log(`Runs      : ${holding}/${maxConcurrentRuns} slots taken, ${runs.length} shown, ${queued.length} queued`);
       });' 2>/dev/null || true
   fi

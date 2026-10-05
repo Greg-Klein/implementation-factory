@@ -203,11 +203,11 @@ describe("what waits behind a ticket", () => {
   });
 
   it("should not close a finished session for an entry the schedule holds", () => {
-    const idle = [1, 2, 3].map((iid) => ({ id: `run-${iid}`, cwd: SHOP, repository: SHOP, issueUrl: url(iid), status: "completed" as const, sessionActive: true, endedAt: `2026-10-01T10:0${iid}:00.000Z` }));
+    const idle = [1, 2, 3].map((iid) => ({ id: `run-${iid}`, cwd: SHOP, repository: SHOP, issueUrl: url(iid), status: "completed" as const, sessionActive: true }));
     const context = { edges: [overlap(1, 101)], watches: [watch(1)] };
-    const waiting = describeQueue([queued(101)], new Map(idle.map((run) => [runLockKey(run), run.id])), context).filter((entry) => entry.reason === "slot" || entry.reason === "ticket");
-    expect(sessionsToReleaseForQueue(idle, waiting, 3)).toEqual([]);
-    expect(sessionsToReleaseForQueue(idle, [queued(102)], 3)).toEqual(["run-1"]);
+    const waiting = describeQueue([queued(101)], new Map(idle.map((run) => [runLockKey(run), run.id])), context).filter((entry) => entry.reason === "ticket");
+    expect(sessionsToReleaseForQueue(idle, waiting)).toEqual([]);
+    expect(sessionsToReleaseForQueue(idle, [queued(2)])).toEqual(["run-2"]);
   });
 });
 

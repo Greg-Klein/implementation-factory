@@ -170,7 +170,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
   queueActions: QueueActions;
   proposalActions: ProposalActions;
 }) {
-  const holding = runs.filter((run) => run.holdsRepository).length;
+  const holding = runs.filter((run) => run.takesSlot).length;
   // An incident is a diagnosis to read; a worktree left on disk is housekeeping. Two groups, so neither hides the other.
   const interrupted = archived.filter((run) => run.incident);
   const leftovers = archived.filter((run) => !run.incident);
@@ -181,7 +181,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
       <div className="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3.5">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5 text-[11px] font-semibold"><StackIcon size={13} weight="bold" />Runs</h2>
-          <p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]" title={`${holding} active session${holding > 1 ? "s" : ""} of ${maxConcurrentRuns} slots`}>
+          <p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]" title={`${holding} working run${holding > 1 ? "s" : ""} of ${maxConcurrentRuns} slots`}>
             <span className={full ? "text-amber-700" : "text-[var(--accent)]"}>{holding}</span>/{maxConcurrentRuns} slots
           </p>
         </div>

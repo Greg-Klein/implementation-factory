@@ -6,7 +6,7 @@ function run(overrides: Partial<RunSummary> = {}): RunSummary {
   return {
     id: "run-1", status: "running", phase: 5, cwd: "/tmp/repo", issueUrl: "",
     startedAt: "2026-09-07T10:00:00.000Z", endedAt: null,
-    sessionActive: true, pendingQuestionCount: 0, runningAgents: 0, holdsRepository: true,
+    sessionActive: true, pendingQuestionCount: 0, runningAgents: 0, holdsRepository: true, takesSlot: true,
     ...overrides,
   };
 }

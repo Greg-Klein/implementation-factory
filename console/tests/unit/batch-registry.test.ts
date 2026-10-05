@@ -19,6 +19,7 @@ process.env.IMPL_DATA_DIR = path.join(storage, "data");
 process.env.IMPL_ENV_FILE = path.join(storage, "absent.env");
 process.env.IMPL_SCHEDULE_TIMEOUT_MS = "1500";
 process.env.IMPL_MAX_CONCURRENT_RUNS = "3";
+process.env.IMPL_LANGUAGE = "en";
 process.env.FAKE_CLAUDE_SCHEDULE = fixtureFile;
 process.env.FAKE_CLAUDE_INPUT_DIR = storage;
 // Where the stand-in `glab` reads the state of a merge request. Empty, it answers nothing.

@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, now } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRuntimeRecipe } from "./runtime-recipe.js";
@@ -137,7 +137,7 @@ export class RunRegistry {
   }
 
   private occupiedSlots() {
-    return [...this.sessions.values()].filter((session) => session.holdsRepository).length;
+    return [...this.sessions.values()].filter((session) => runTakesSlot(session.state)).length;
   }
 
   /** What the queue is scheduled against, beside the ticket locks and the slots. */
@@ -848,10 +848,10 @@ export class RunRegistry {
    * session, which drains the queue again.
    */
   private releaseFinishedSessions() {
-    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, repository: session.state.repository, issueUrl: session.state.issueUrl, status: session.state.status, sessionActive: session.state.sessionActive, endedAt: session.state.endedAt }));
+    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, repository: session.state.repository, issueUrl: session.state.issueUrl, status: session.state.status, sessionActive: session.state.sessionActive }));
     // An entry the schedule holds waits for a merge, not for a session: no session is closed for it.
-    const waiting = this.describe().filter((view) => view.reason === "slot" || view.reason === "ticket");
-    for (const runId of sessionsToReleaseForQueue(runs, waiting, maxConcurrentRuns)) {
+    const waiting = this.describe().filter((view) => view.reason === "ticket");
+    for (const runId of sessionsToReleaseForQueue(runs, waiting)) {
       const session = this.sessions.get(runId);
       if (!session?.engine) continue;
       session.stoppedBy = "queue";

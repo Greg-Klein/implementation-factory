@@ -303,8 +303,10 @@ export type RunSummary = {
   evidenceUpdatedAt?: string;
   /** Acceptance figures only, and only once the run wrote a criteria registry. */
   acceptance?: AcceptanceCounts;
-  /** Whether this run still holds its slot and its ticket, which is what the queue waits on. */
+  /** Whether this run still holds its ticket, which is what a launch on the same ticket waits on. */
   holdsRepository: boolean;
+  /** Whether this run takes one of the concurrent slots: only while its workflow works. */
+  takesSlot: boolean;
   health?: RunHealth;
   /** Tokens consumed so far, cache included. */
   tokens?: number;

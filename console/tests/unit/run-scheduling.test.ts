@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, runLockKey, sessionsToReleaseForQueue, sourceRepository, summarizeRun } from "../../server/domain";
+import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, summarizeRun } from "../../server/domain";
 import type { QueuedRun, RunState } from "../../server/types";
 
 const TICKET = "https://gitlab.com/acme/app/-/issues/266";
@@ -158,39 +158,36 @@ describe("why a queued launch is still waiting", () => {
 });
 
 /** A run as the release decision reads it, finished and still holding its session unless said otherwise. */
-function held(overrides: Partial<{ id: string; cwd: string; issueUrl: string; status: RunState["status"]; sessionActive: boolean; endedAt: string | null }> = {}) {
+function held(overrides: Partial<{ id: string; cwd: string; issueUrl: string; status: RunState["status"]; sessionActive: boolean }> = {}) {
   const repository = overrides.cwd ?? "/work/repo-a";
-  return { id: "run-1", issueUrl: TICKET, status: "completed" as const, sessionActive: true, endedAt: "2026-09-18T11:00:00.000Z", ...overrides, repository, cwd: `${repository}/.claude/worktrees/${overrides.id ?? "run-1"}` };
+  return { id: "run-1", issueUrl: TICKET, status: "completed" as const, sessionActive: true, ...overrides, repository, cwd: `${repository}/.claude/worktrees/${overrides.id ?? "run-1"}` };
 }
 
 describe("the finished sessions the queue takes back", () => {
   it("should take none while nothing is waiting, however long the session has been idle", () => {
-    expect(sessionsToReleaseForQueue([held()], [], 3)).toEqual([]);
+    expect(sessionsToReleaseForQueue([held()], [])).toEqual([]);
   });
 
   it("should take the session of the finished run a launch is waiting on", () => {
-    expect(sessionsToReleaseForQueue([held()], [queued()], 3)).toEqual(["run-1"]);
+    expect(sessionsToReleaseForQueue([held()], [queued()])).toEqual(["run-1"]);
   });
 
   it("should leave the finished run of another ticket of the same repository, which blocks nobody", () => {
-    expect(sessionsToReleaseForQueue([held({ issueUrl: OTHER_TICKET })], [queued()], 3)).toEqual([]);
+    expect(sessionsToReleaseForQueue([held({ issueUrl: OTHER_TICKET })], [queued()])).toEqual([]);
   });
 
   it("should leave a run that is still working, whoever is waiting for its ticket", () => {
-    expect(sessionsToReleaseForQueue([held({ status: "running" })], [queued()], 3)).toEqual([]);
-    expect(sessionsToReleaseForQueue([held({ status: "attention" })], [queued()], 3)).toEqual([]);
+    expect(sessionsToReleaseForQueue([held({ status: "running" })], [queued()])).toEqual([]);
+    expect(sessionsToReleaseForQueue([held({ status: "attention" })], [queued()])).toEqual([]);
   });
 
   it("should leave a finished run whose session is already gone, since it holds nothing", () => {
-    expect(sessionsToReleaseForQueue([held({ sessionActive: false })], [queued()], 3)).toEqual([]);
+    expect(sessionsToReleaseForQueue([held({ sessionActive: false })], [queued()])).toEqual([]);
   });
 
-  it("should take the oldest finished session when the queue is short of a slot rather than of that ticket", () => {
-    const runs = [
-      held({ id: "run-1", cwd: "/work/repo-a", endedAt: "2026-09-18T11:00:00.000Z" }),
-      held({ id: "run-2", cwd: "/work/repo-b", endedAt: "2026-09-18T10:00:00.000Z" }),
-    ];
-    expect(sessionsToReleaseForQueue(runs, [queued({ cwd: "/work/repo-c" })], 2)).toEqual(["run-2"]);
+  it("should leave every finished session when the queue waits only for a slot, since a finished run takes none", () => {
+    const runs = [held({ id: "run-1", cwd: "/work/repo-a" }), held({ id: "run-2", cwd: "/work/repo-b" })];
+    expect(sessionsToReleaseForQueue(runs, [queued({ cwd: "/work/repo-c" })])).toEqual([]);
   });
 
   it("should take every finished session a launch waits on, plus nothing else", () => {
@@ -200,12 +197,23 @@ describe("the finished sessions the queue takes back", () => {
       held({ id: "run-3", cwd: "/work/repo-c" }),
     ];
     const queue = [queued({ id: "q1", cwd: "/work/repo-a" }), queued({ id: "q2", cwd: "/work/repo-c" })];
-    expect(sessionsToReleaseForQueue(runs, queue, 3).sort()).toEqual(["run-1", "run-3"]);
+    expect(sessionsToReleaseForQueue(runs, queue).sort()).toEqual(["run-1", "run-3"]);
   });
 
-  it("should keep the room it already has when a working run is what fills it", () => {
-    const runs = [held({ id: "run-1", cwd: "/work/repo-a", status: "running" })];
-    expect(sessionsToReleaseForQueue(runs, [queued({ cwd: "/work/repo-b" })], 1)).toEqual([]);
+});
+
+describe("the runs that take a slot", () => {
+  it("should count a run while its workflow works, a call for attention included", () => {
+    expect(["starting", "running", "attention"].map((status) => runTakesSlot({ status: status as RunState["status"] }))).toEqual([true, true, true]);
+  });
+
+  it("should free the slot of a finished run whose session is still open, while it keeps its ticket", () => {
+    const finished = { status: "completed" as const, sessionActive: true };
+    expect([runTakesSlot(finished), runHoldsRepository(finished)]).toEqual([false, true]);
+  });
+
+  it("should free the slot of a stopped or failed run", () => {
+    expect([runTakesSlot({ status: "stopped" }), runTakesSlot({ status: "failed" })]).toEqual([false, false]);
   });
 });
 

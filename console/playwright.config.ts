@@ -43,6 +43,8 @@ export default defineConfig({
       IMPL_HOOK_TOKEN: hookToken,
       // Runs the suite starts for real land here, not in the developer's own history.
       IMPL_DATA_DIR: dataDirectory,
+      // Same inheritance: a session the console started would read the developer's own proposals.
+      IMPL_TICKET_PROPOSALS_FILE: path.join(dataDirectory, "ticket-proposals.json"),
       // Short health graces, so an incident shows within seconds rather than a minute.
       IMPL_HEALTH_TICK_MS: "400",
       IMPL_HEALTH_TURN_GRACE_MS: "1500",

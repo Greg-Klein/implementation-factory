@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -28,6 +28,7 @@ const ESLINT_CONFIGS = [
 ];
 const LEDGER = "gate-log.jsonl";
 const TAIL_LINES = 60;
+const MAX_OUTPUT = 2_000_000;
 /** How long an agent may stay silent and still count as editing beside this one. */
 const PEER_QUIET_MS = 15 * 60_000;
 
@@ -181,16 +182,35 @@ export function gateSteps(root, top, files) {
   return steps;
 }
 
+/**
+ * Runs one check in a process group of its own. A script started through a
+ * package manager leaves the compiler or the test runner as a grandchild, which
+ * outlives a kill of the manager and keeps its output open: the group is what
+ * has to be killed for a check out of time to really end.
+ */
 function run(command, cwd, timeout) {
-  const result = spawnSync(command[0], command.slice(1), {
-    cwd, timeout, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, killSignal: "SIGKILL",
-    env: { ...process.env, CI: "true", FORCE_COLOR: "0", NO_COLOR: "1" },
+  return new Promise((resolve) => {
+    let output = "";
+    let settled = false;
+    const settle = (result) => { if (!settled) { settled = true; clearTimeout(timer); resolve(result); } };
+    const child = spawn(command[0], command.slice(1), { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "true", FORCE_COLOR: "0", NO_COLOR: "1" } });
+    const timer = setTimeout(() => {
+      try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+      child.stdout.destroy();
+      child.stderr.destroy();
+      settle({ ran: false, output: `timed out after ${Math.round(timeout / 1000)} s` });
+    }, timeout);
+    const collect = (chunk) => { output = (output + chunk).slice(-MAX_OUTPUT); };
+    child.stdout.setEncoding("utf8").on("data", collect);
+    child.stderr.setEncoding("utf8").on("data", collect);
+    // A check that could not run, tool missing or out of time, is not the agent's to fix.
+    child.on("error", (error) => settle({ ran: false, output: String(error.message) }));
+    child.on("close", (status) => {
+      // eslint-disable-next-line no-control-regex
+      const text = output.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
+      settle(status === null ? { ran: false, output: "killed" } : { ran: true, passed: status === 0, output: text });
+    });
   });
-  // eslint-disable-next-line no-control-regex
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
-  // A check that could not run, tool missing or out of time, is not the agent's to fix.
-  if (result.error || result.status === null) return { ran: false, output: result.error?.code === "ETIMEDOUT" ? `timed out after ${Math.round(timeout / 1000)} s` : String(result.error?.message ?? "killed") };
-  return { ran: true, passed: result.status === 0, output };
 }
 
 function tail(text) {
@@ -212,7 +232,7 @@ function shown(command) {
  * Judges a stop. Returns the text that sends the agent back, or undefined when
  * it may go. Only a gated agent of a workflow session is looked at.
  */
-export function gateStop(payload, env = process.env, now = Date.now()) {
+export async function gateStop(payload, env = process.env, now = Date.now()) {
   if (payload?.hook_event_name !== "SubagentStop" || !GATED.includes(payload.agent_type) || !payload.agent_id) return undefined;
   const tasks = taskDirectory(payload.cwd);
   if (!inWorkflow(env, tasks)) return undefined;
@@ -261,7 +281,7 @@ export function gateStop(payload, env = process.env, now = Date.now()) {
     for (const { step, command } of steps) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) { record({ root: where, step, command: shown(command), result: "skipped", detail: "the gate ran out of time" }); continue; }
-      const outcome = run(command, root, Math.min(stepTimeout, remaining));
+      const outcome = await run(command, root, Math.min(stepTimeout, remaining));
       if (!outcome.ran) { record({ root: where, step, command: shown(command), result: "skipped", detail: outcome.output }); continue; }
       if (outcome.passed) { record({ root: where, step, command: shown(command), result: "pass" }); continue; }
       const elsewhere = step === "type-check" && peers ? typeErrorFiles(outcome.output, root)?.every((file) => !touched.includes(file)) : false;

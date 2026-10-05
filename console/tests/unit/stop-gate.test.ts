@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -53,6 +53,9 @@ beforeEach(() => {
   for (const name of ["tsc", "eslint", "jest"]) binary(name);
 });
 afterEach(() => { rmSync(cwd, { recursive: true, force: true }); rmSync(state, { recursive: true, force: true }); });
+
+// Every hook is a Node process of its own, and a test fires up to a dozen.
+jest.setTimeout(30_000);
 
 describe("the stop gate", () => {
   it("should let a developer go and record each check when everything passes", () => {
@@ -140,8 +143,11 @@ describe("the stop gate", () => {
   it("should record a check that cannot run as skipped and a package with no check as none, without holding the agent", () => {
     start("a1");
     edit("a1", "src/cart.ts");
-    writeFileSync(path.join(cwd, "node_modules", ".bin", "tsc"), "#!/bin/sh\nsleep 5\n");
+    // The compiler is a grandchild here, as it is behind `npm run typecheck`: killing the script alone would leave the gate waiting for it.
+    writeFileSync(path.join(cwd, "node_modules", ".bin", "tsc"), "#!/bin/sh\nsleep 30\necho done\n");
+    const before = Date.now();
     expect(stop("a1", {}, { IMPL_RUN_ID: "run", IMPL_GATE_STEP_TIMEOUT_MS: "200" })).toBeUndefined();
+    expect(Date.now() - before).toBeLessThan(10_000);
     expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["type-check: skipped", "lint: pass", "related tests: pass"]);
 
     rmSync(path.join(cwd, "node_modules"), { recursive: true });

@@ -25,7 +25,7 @@ try {
 try {
   const payload = JSON.parse(input || "{}");
   gateObserve(payload);
-  const sentBack = gateStop(payload);
+  const sentBack = await gateStop(payload);
   if (sentBack) {
     process.stdout.write(JSON.stringify({ decision: "block", reason: sentBack }));
     process.exit(0);

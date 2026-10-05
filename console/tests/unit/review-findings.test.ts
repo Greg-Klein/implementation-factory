@@ -128,9 +128,14 @@ describe("handing the habits of a repository to its next run", () => {
     expect(existsSync(path.join(second, ".claude", "tasks", "recurring-findings.md"))).toBe(false);
 
     await review("run-h2", repository, "https://github.com/acme/shop/issues/2", [{ id: "SR-R1-1", category: "consumer-left-behind", severity: "P1", summary: "The export still sends the old column.", fixed: false }]);
+    // Found a while ago, as the findings of an earlier run are.
+    const stored = reviewFindingsStore(storage, repository);
+    const earlier = new Date(Date.now() - 3_600_000).toISOString();
+    const aged = (JSON.parse(readFileSync(stored, "utf8")) as { findings: KeptFinding[] }).findings.map((finding) => ({ ...finding, at: earlier }));
+    writeFileSync(stored, JSON.stringify({ version: 1, findings: aged }));
     const third = checkout("run-h3-start");
     const startedAt = new Date().toISOString();
-    await expect(findings.seedRecurringFindings(repository, third, Date.now() + 5)).resolves.toBe(1);
+    await expect(findings.seedRecurringFindings(repository, third)).resolves.toBe(1);
     const seeded = path.join(third, ".claude", "tasks", "recurring-findings.md");
     expect(readFileSync(seeded, "utf8")).toContain("The export still sends the old column.");
     expect(readFileSync(seeded, "utf8")).toContain("`src/badge.ts`: The badge still reads the old total.");

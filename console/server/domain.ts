@@ -1165,6 +1165,23 @@ export function deliveryStatus(forge: Forge, response: { state?: unknown; merged
   return forge === "github" ? pullRequestStatus(response) : mergeRequestStatus(response.state);
 }
 
+/** The branch a merge request (`target_branch`) or a pull request (`base.ref`) merges into, as its forge answered. */
+export function deliveryTargetBranch(forge: Forge, response: unknown): string | undefined {
+  const answer = response as { target_branch?: unknown; base?: { ref?: unknown } } | null | undefined;
+  const branch = forge === "github" ? answer?.base?.ref : answer?.target_branch;
+  return typeof branch === "string" && branch.trim() ? branch.trim() : undefined;
+}
+
+/**
+ * The refs a run's diff may be measured from, best first. The branch its merge
+ * request targets comes first: the pilot cuts the work from the base it chose,
+ * which is not the commit the checkout stood at when the run was launched.
+ */
+export function diffBases(state: Pick<RunState, "baseBranch" | "baseCommit">, targetBranch?: string): string[] {
+  const bases = [...(targetBranch ? [`origin/${targetBranch}`, targetBranch] : []), state.baseBranch, state.baseCommit];
+  return bases.filter((base): base is string => Boolean(base));
+}
+
 /**
  * What a watch becomes once GitLab answered. Merged, or closed without a
  * merge: the watch is over and whatever it held is released. An answer that

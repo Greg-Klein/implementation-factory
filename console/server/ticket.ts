@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { deliveryEndpoint, deliveryStatus, issueEndpoint, issueLinkEndpoints, readIssueLinks, type ForgeEndpoint, type IssueLinks, type MergeRequestStatus } from "./domain.js";
+import { deliveryEndpoint, deliveryStatus, deliveryTargetBranch, issueEndpoint, issueLinkEndpoints, readIssueLinks, type ForgeEndpoint, type IssueLinks, type MergeRequestStatus } from "./domain.js";
 
 const exec = promisify(execFile);
 
@@ -60,5 +60,16 @@ export async function fetchMergeRequestStatus(mergeRequestUrl: string, cwd: stri
     return deliveryStatus(endpoint.forge, (await askForge(endpoint, cwd)) as { state?: unknown; merged?: unknown });
   } catch {
     return "unknown";
+  }
+}
+
+/** The branch a merge request or a pull request targets, or `undefined` when the forge could not be asked. */
+export async function fetchMergeRequestTarget(mergeRequestUrl: string, cwd: string): Promise<string | undefined> {
+  const endpoint = deliveryEndpoint(mergeRequestUrl);
+  if (!endpoint) return undefined;
+  try {
+    return deliveryTargetBranch(endpoint.forge, await askForge(endpoint, cwd));
+  } catch {
+    return undefined;
   }
 }

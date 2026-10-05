@@ -1,15 +1,16 @@
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { now } from "./context.js";
 import { dataRoot, pluginRoot } from "./config.js";
 import { demoSessionUsage } from "./demo-data.js";
-import { isRunWorktreePath, sourceRepository } from "./domain.js";
+import { diffBases, isRunWorktreePath, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { normalizeArchivedRun } from "./run-incidents.js";
 import { buildRunMetrics, diffFromNumstat } from "./run-metrics.js";
 import type { RunSession } from "./run-session.js";
+import { fetchMergeRequestTarget } from "./ticket.js";
 import type { HarnessVersion, RunDiff, RunMetrics, RunState } from "./types.js";
 
 const exec = promisify(execFile);
@@ -29,14 +30,18 @@ function usageOf(state: RunState) {
   return engine.sessionUsage({ transcriptPath: state.transcriptPath, cwd: state.cwd, isolated: isRunWorktreePath(sourceRepository(state), state.cwd) });
 }
 
-/** What the run changed since the commit it was cut at, committed or not. Undefined once the worktree is gone or when the base is unknown. */
+/** What the run changed since the branch it was cut from, committed or not. Undefined once the worktree is gone or when no base can be read. */
 async function runDiff(state: RunState): Promise<RunDiff | undefined> {
-  const base = state.baseBranch ?? state.baseCommit;
-  if (!base || !state.cwd) return undefined;
-  try {
-    const mergeBase = (await exec("git", ["-C", state.cwd, "merge-base", base, "HEAD"])).stdout.trim();
-    return diffFromNumstat((await exec("git", ["-C", state.cwd, "diff", "--numstat", mergeBase])).stdout);
-  } catch { return undefined; }
+  const cwd = state.cwd;
+  if (!cwd || !await access(cwd).then(() => true, () => false)) return undefined;
+  const target = state.mergeRequestUrl ? await fetchMergeRequestTarget(state.mergeRequestUrl, cwd) : undefined;
+  for (const base of diffBases(state, target)) {
+    try {
+      const mergeBase = (await exec("git", ["-C", cwd, "merge-base", base, "HEAD"])).stdout.trim();
+      return diffFromNumstat((await exec("git", ["-C", cwd, "diff", "--numstat", mergeBase])).stdout);
+    } catch { /* this base is not known here: the next one is tried */ }
+  }
+  return undefined;
 }
 
 async function compute(state: RunState, demo: boolean, previous: RunMetrics | undefined, qaStatus?: string): Promise<RunMetrics> {

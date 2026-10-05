@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { emptyState } from "../../server/domain";
+import { deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
 import type { SessionUsage } from "../../server/engine/types";
 import { buildRunMetrics, comparableRuns, diffFromNumstat, metricsBaseline, metricsFindings, trackTimeline, userWaitReason } from "../../server/run-metrics";
 import type { RunMetrics, RunState } from "../../server/types";
@@ -128,6 +128,24 @@ describe("the size of a change", () => {
 
   it("should report an empty change for no output", () => {
     expect(diffFromNumstat("")).toEqual({ files: 0, insertions: 0, deletions: 0 });
+  });
+
+  it("should measure from the branch the merge request targets before the commit the run was launched at", () => {
+    expect(diffBases({ baseCommit: "a50714c" }, "umbrella-178")).toEqual(["origin/umbrella-178", "umbrella-178", "a50714c"]);
+    expect(diffBases({ baseBranch: "feat-101", baseCommit: "a50714c" }, "feat-101")).toEqual(["origin/feat-101", "feat-101", "feat-101", "a50714c"]);
+  });
+
+  it("should fall back on the stacked branch, then the launch commit, while no target is known", () => {
+    expect(diffBases({ baseBranch: "feat-101", baseCommit: "a50714c" })).toEqual(["feat-101", "a50714c"]);
+    expect(diffBases({})).toEqual([]);
+  });
+
+  it("should read the target branch of a merge request and of a pull request", () => {
+    expect(deliveryTargetBranch("gitlab", { iid: 209, target_branch: "umbrella-178" })).toBe("umbrella-178");
+    expect(deliveryTargetBranch("github", { number: 12, base: { ref: "main" } })).toBe("main");
+    expect(deliveryTargetBranch("gitlab", { base: { ref: "main" } })).toBeUndefined();
+    expect(deliveryTargetBranch("github", { target_branch: " " })).toBeUndefined();
+    expect(deliveryTargetBranch("gitlab", null)).toBeUndefined();
   });
 });
 

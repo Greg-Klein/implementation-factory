@@ -1,16 +1,21 @@
 #!/usr/bin/env node
-// Stands in for `glab` in the integration suite, which must never reach a real
-// GitLab. It answers one question, the state of a merge request, from a file a
-// test writes: `FAKE_GLAB_DIR/merge-request-<iid>` holding `opened`, `merged`
-// or `closed`. Anything else fails, the way `glab` does without a network.
+// Stands in for `glab` in the test suites, which must never reach a real
+// GitLab. It answers two questions from files a test writes in FAKE_GLAB_DIR:
+// the state of a merge request, `merge-request-<iid>` holding `opened`,
+// `merged` or `closed`, and the links of an issue, `issue-links-<iid>` holding
+// the JSON list GitLab would answer. Anything else fails, the way `glab` does
+// without a network.
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const endpoint = process.argv.slice(2).find((argument) => argument.startsWith("projects/")) ?? "";
 const mergeRequest = endpoint.match(/\/merge_requests\/(\d+)$/)?.[1];
-const file = mergeRequest && process.env.FAKE_GLAB_DIR ? path.join(process.env.FAKE_GLAB_DIR, `merge-request-${mergeRequest}`) : undefined;
+const linkedIssue = endpoint.match(/\/issues\/(\d+)\/links$/)?.[1];
+const name = mergeRequest ? `merge-request-${mergeRequest}` : linkedIssue ? `issue-links-${linkedIssue}` : undefined;
+const file = name && process.env.FAKE_GLAB_DIR ? path.join(process.env.FAKE_GLAB_DIR, name) : undefined;
 if (!file || !existsSync(file)) {
   process.stderr.write("fake glab: nothing to answer\n");
   process.exit(1);
 }
-process.stdout.write(JSON.stringify({ iid: Number(mergeRequest), state: readFileSync(file, "utf8").trim() }));
+const content = readFileSync(file, "utf8").trim();
+process.stdout.write(mergeRequest ? JSON.stringify({ iid: Number(mergeRequest), state: content }) : content);

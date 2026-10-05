@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, CaretRightIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
-import { heldBySchedule, queueGroups, queueMoveTarget, queueStatus, runLabel, scheduleMark } from "@/lib/run-state";
+import { ArrowDownIcon, ArrowUpIcon, CaretRightIcon, DotsSixVerticalIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { useState, type DragEvent } from "react";
+import { heldBySchedule, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueStatus, runLabel, scheduleMark } from "@/lib/run-state";
 import { forgeOf, forgeWords, ticketReference } from "@/lib/ticket-urls";
 import type { QueuedRunView } from "@/lib/types";
 
@@ -62,19 +63,62 @@ function Justification({ entry, label, actions }: { entry: QueuedRunView; label:
   );
 }
 
-/** `label` names the ticket to a screen reader; `title` is what the row shows, shorter under a repository heading. */
-function QueuedRow({ entry, label, title, index, queued, siblings, actions }: { entry: QueuedRunView; label: string; title: string; index: number; queued: QueuedRunView[]; siblings: QueuedRunView[]; actions: QueueActions }) {
+/** The row being dragged, and the half of the row it is held over. */
+type Drag = { id: string; scope: string; over?: { id: string; half: "before" | "after" } };
+type Dragging = { drag: Drag | null; setDrag: (drag: Drag | null) => void };
+
+/**
+ * `label` names the ticket to a screen reader; `title` is what the row shows, shorter under a repository heading.
+ * A row is dragged among the rows of its scope (`queueDragScope`) when there are several; the arrows do the same from the keyboard.
+ */
+function QueuedRow({ entry, label, title, index, queued, siblings, draggable, dragging, actions }: { entry: QueuedRunView; label: string; title: string; index: number; queued: QueuedRunView[]; siblings: QueuedRunView[]; draggable: boolean; dragging: Dragging; actions: QueueActions }) {
+  const { drag, setDrag } = dragging;
+  const scope = queueDragScope(entry);
+  const accepts = drag !== null && drag.id !== entry.id && drag.scope === scope;
+  const half = (event: DragEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return event.clientY < box.top + box.height / 2 ? "before" as const : "after" as const;
+  };
+  const over = drag?.over?.id === entry.id ? drag.over.half : undefined;
+  const dragProps = !draggable ? {} : {
+    draggable: true,
+    onDragStart: (event: DragEvent<HTMLDivElement>) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", label);
+      setDrag({ id: entry.id, scope });
+    },
+    onDragEnd: () => setDrag(null),
+    onDragOver: (event: DragEvent<HTMLDivElement>) => {
+      if (!accepts) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const side = half(event);
+      if (over !== side) setDrag({ ...drag, over: { id: entry.id, half: side } });
+    },
+    onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+      if (over && drag && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDrag({ id: drag.id, scope: drag.scope });
+    },
+    onDrop: (event: DragEvent<HTMLDivElement>) => {
+      if (!accepts) return;
+      event.preventDefault();
+      const before = queueDropTarget(queued, drag.id, entry.id, half(event));
+      setDrag(null);
+      if (before !== undefined) actions.move(drag.id, before);
+    },
+  };
+  const dropMark = over === "before" ? "shadow-[inset_0_2px_0_var(--ink)]" : over === "after" ? "shadow-[inset_0_-2px_0_var(--ink)]" : "";
   const mark = scheduleMark(entry);
   const up = queueMoveTarget(queued, siblings, entry.id, "up");
   const down = queueMoveTarget(queued, siblings, entry.id, "down");
   const held = heldBySchedule(entry);
   const tone = entry.reason === "merge_unknown" ? "text-amber-800" : "text-[var(--muted)]";
   return (
-    <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className="reveal flex items-start gap-2.5 px-3.5 py-2">
+    <div {...dragProps} style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal flex items-start gap-2.5 px-3.5 py-2 ${draggable ? "cursor-grab active:cursor-grabbing" : ""} ${drag?.id === entry.id ? "opacity-40" : ""} ${dropMark}`}>
       <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full border border-[var(--muted)] ${entry.reason === "analysis" ? "status-breathe bg-[var(--muted)]" : ""}`} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1">
           <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--ink)]" title={label}>{title}</p>
+          {draggable && <span title="Drag to reorder" className="grid size-5 shrink-0 place-items-center text-[var(--muted)]"><DotsSixVerticalIcon size={11} weight="bold" aria-hidden /></span>}
           {siblings.length > 1 && <>
             <button type="button" disabled={up === undefined} onClick={() => up !== undefined && actions.move(entry.id, up)} aria-label={`Move ${label} up in the queue`} className={iconButton}><ArrowUpIcon size={10} /></button>
             <button type="button" disabled={down === undefined} onClick={() => down !== undefined && actions.move(entry.id, down)} aria-label={`Move ${label} down in the queue`} className={iconButton}><ArrowDownIcon size={10} /></button>
@@ -98,8 +142,11 @@ function QueuedRow({ entry, label, title, index, queued, siblings, actions }: { 
  * against. A launch made alone keeps the single row it always had.
  */
 export function QueueList({ queued, actions }: { queued: QueuedRunView[]; actions: QueueActions }) {
+  const [drag, setDrag] = useState<Drag | null>(null);
   if (queued.length === 0) return null;
   let index = 0;
+  const scopes = queued.map(queueDragScope);
+  const draggable = (entry: QueuedRunView) => scopes.filter((scope) => scope === queueDragScope(entry)).length > 1;
   return (
     <div role="group" aria-label="Queued runs" className="border-t border-[var(--line)] bg-[var(--sunken)]">
       <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">Queued · {queued.length}</p>
@@ -110,7 +157,7 @@ export function QueueList({ queued, actions }: { queued: QueuedRunView[]; action
             {group.repositories.map((bucket) => (
               <div key={bucket.repository}>
                 {group.batchId && <p className="truncate px-3.5 pt-1.5 font-mono text-[9px] text-[var(--muted)]" title={bucket.repository}>{bucket.name}</p>}
-                {bucket.entries.map((entry) => <QueuedRow key={entry.id} entry={entry} label={runLabel(entry)} title={group.batchId ? ticketReference(entry.issueUrl) : runLabel(entry)} index={index++} queued={queued} siblings={bucket.entries} actions={actions} />)}
+                {bucket.entries.map((entry) => <QueuedRow key={entry.id} entry={entry} label={runLabel(entry)} title={group.batchId ? ticketReference(entry.issueUrl) : runLabel(entry)} index={index++} queued={queued} siblings={bucket.entries} draggable={draggable(entry)} dragging={{ drag, setDrag }} actions={actions} />)}
               </div>
             ))}
           </div>

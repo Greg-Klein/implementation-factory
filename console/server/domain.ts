@@ -194,6 +194,73 @@ export function issueEndpoint(issueUrl: string): ForgeEndpoint | undefined {
   return { forge: ticket.forge, hostname: ticket.hostname, path };
 }
 
+/** What a forge says holds an issue back, and what the issue holds back, as ticket addresses. */
+export type IssueLinks = { blockedBy: string[]; blocks: string[] };
+export type IssueLinkEndpoint = ForgeEndpoint & { lists: "links" | "blocked_by" | "blocking" };
+
+/**
+ * The API paths that give the blocking links of an issue. GitLab answers both
+ * directions in one list, each link with its `link_type`; GitHub has one list
+ * per direction.
+ */
+export function issueLinkEndpoints(issueUrl: string): IssueLinkEndpoint[] {
+  const issue = issueEndpoint(issueUrl);
+  if (!issue) return [];
+  if (issue.forge === "gitlab") return [{ ...issue, path: `${issue.path}/links`, lists: "links" }];
+  return (["blocked_by", "blocking"] as const).map((lists) => ({ ...issue, path: `${issue.path}/dependencies/${lists}?per_page=100`, lists }));
+}
+
+/**
+ * The blocking links out of one answer of `issueLinkEndpoints`. A GitLab
+ * `relates_to` link is not a dependency and is left out. An entry without an
+ * address is skipped.
+ */
+export function readIssueLinks(lists: IssueLinkEndpoint["lists"], response: unknown): IssueLinks {
+  const links: IssueLinks = { blockedBy: [], blocks: [] };
+  for (const entry of Array.isArray(response) ? response.filter(isRecord) : []) {
+    const address = lists === "links" ? entry.web_url : entry.html_url;
+    if (typeof address !== "string") continue;
+    if (lists === "blocked_by" || entry.link_type === "is_blocked_by") links.blockedBy.push(address);
+    else if (lists === "blocking" || entry.link_type === "blocks") links.blocks.push(address);
+  }
+  return links;
+}
+
+/** One ticket whatever its address is written like: GitLab serves the same issue under `/-/issues/` and `/-/work_items/`. */
+function forgeTicket(issueUrl: string) {
+  const ticket = parseTicketUrl(issueUrl);
+  return ticket ? `${ticket.hostname}/${ticket.project}#${ticket.number}`.toLowerCase() : undefined;
+}
+
+/**
+ * The dependencies the forge states between a ticket and the other tickets of
+ * its repository the console has. A blocking link is a fact of the forge, not
+ * a prediction: the blocking ticket is implemented first. Each edge carries
+ * the addresses the console knows the tickets by, which is what the schedule
+ * joins on. A link to a ticket the console does not have gives nothing.
+ */
+export function linkEdges(repository: string, issueUrl: string, links: IssueLinks, others: string[]): ScheduleEdge[] {
+  const own = forgeTicket(issueUrl);
+  const blockedBy = new Set(links.blockedBy.map(forgeTicket));
+  const blocks = new Set(links.blocks.map(forgeTicket));
+  const forge = forgeWords(forgeOf(issueUrl)).name;
+  const edges: ScheduleEdge[] = [];
+  for (const other of others) {
+    const key = forgeTicket(other);
+    if (!key || key === own || edges.some((edge) => forgeTicket(edge.b) === key)) continue;
+    const order: [string, string] | undefined = blockedBy.has(key) ? [other, issueUrl] : blocks.has(key) ? [issueUrl, other] : undefined;
+    if (order) edges.push({ repository, a: issueUrl, b: other, kind: "depends_on", order, reason: `${forge} marks ${ticketReference(order[1])} as blocked by ${ticketReference(order[0])}.` });
+  }
+  return edges;
+}
+
+/** Edges put over others: where both name the same pair of tickets, the edge of `over` is the one kept. */
+export function overlayEdges(edges: ScheduleEdge[], over: ScheduleEdge[]): ScheduleEdge[] {
+  const kept = new Map<string, ScheduleEdge>();
+  for (const edge of [...edges, ...over]) kept.set(pairKey(edge.repository, edge.a, edge.b), edge);
+  return [...kept.values()];
+}
+
 /**
  * The agents a finished run leaves behind. A stop event can never arrive for an
  * agent whose session is gone, so one that was still running keeps reading as

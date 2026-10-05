@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 import { attachmentPaths } from "../../server/acceptance";
 
@@ -280,5 +280,33 @@ describe("the queue as it is shown", () => {
     expect(queueMoveTarget(queued, siblings, "a1", "down")).toBe("b2");
     expect(queueMoveTarget(queued, siblings, "a2", "down")).toBeNull();
     expect(queueMoveTarget(queued, siblings, "a3", "down")).toBeUndefined();
+  });
+
+  it("should put a dropped row before or after the row it is dropped on", () => {
+    const queued = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+    expect(queueDropTarget(queued, "d", "b", "before")).toBe("b");
+    expect(queueDropTarget(queued, "a", "c", "after")).toBe("d");
+    expect(queueDropTarget(queued, "a", "d", "after")).toBeNull();
+    // After the row just behind the dragged one: whatever follows that row, never the dragged row itself.
+    expect(queueDropTarget(queued, "b", "c", "after")).toBe("d");
+  });
+
+  it("should say nothing when a drop leaves the row where it is, or names a row that left the queue", () => {
+    const queued = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    expect(queueDropTarget(queued, "b", "b", "before")).toBeUndefined();
+    expect(queueDropTarget(queued, "b", "c", "before")).toBeUndefined();
+    expect(queueDropTarget(queued, "b", "a", "after")).toBeUndefined();
+    expect(queueDropTarget(queued, "c", "b", "after")).toBeUndefined();
+    expect(queueDropTarget(queued, "gone", "a", "before")).toBeUndefined();
+    expect(queueDropTarget(queued, "a", "gone", "before")).toBeUndefined();
+  });
+
+  it("should drag a batch ticket among those of its repository, and a lone launch among the lone ones", () => {
+    const scope = (batchId: string | undefined, cwd: string) => queueDragScope({ cwd, ...(batchId ? { batchId } : {}) });
+    expect(scope("b1", "/work/shop")).toBe(scope("b1", "/work/shop"));
+    expect(scope("b1", "/work/shop")).not.toBe(scope("b1", "/work/api"));
+    expect(scope("b1", "/work/shop")).not.toBe(scope("b2", "/work/shop"));
+    expect(scope(undefined, "/work/shop")).toBe(scope(undefined, "/work/api"));
+    expect(scope(undefined, "/work/shop")).not.toBe(scope("b1", "/work/shop"));
   });
 });

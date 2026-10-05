@@ -121,6 +121,8 @@ The console rejects the whole file when one of these fails:
 - two edges link the same pair of tickets, whatever their kind and whichever is `a` (duplicate edge);
 - a `reason` or a `summary` is empty.
 
+The console reads the blocking links of the forge itself as well. Where it finds one between two tickets it has, its own `depends_on` edge replaces the edge of the output for that pair.
+
 ## Quality self-check (MANDATORY)
 
 Before writing the file, validate:

@@ -130,6 +130,47 @@ describe("a batch of tickets", () => {
     expect(calls()).toEqual([]);
   });
 
+  it("should hold a single ticket behind the running one the forge says blocks it, without a session", async () => {
+    const shop = repository("shop");
+    const { registry, numbers, queued, waiting } = harness();
+    await registry.enqueueBatch(tickets(shop, 101));
+    // GitLab names the blocking ticket by its work item address, the console by the issue one.
+    mkdirSync(glabDirectory, { recursive: true });
+    writeFileSync(path.join(glabDirectory, "issue-links-102"), JSON.stringify([
+      { iid: 101, link_type: "is_blocked_by", web_url: "https://gitlab.com/acme/shop/-/work_items/101" },
+      { iid: 90, link_type: "relates_to", web_url: url(90) },
+    ]));
+    await registry.enqueueBatch(tickets(shop, 102));
+    await until(analysed(queued), "the links to be read");
+    expect(numbers()).toEqual([101]);
+    expect(waiting(102)).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "GitLab marks #102 as blocked by #101." });
+    expect(calls()).toEqual([]);
+  });
+
+  it("should start a single ticket beside a running one when the forge links them by nothing, or does not answer", async () => {
+    const shop = repository("shop");
+    const { registry, numbers } = harness();
+    await registry.enqueueBatch(tickets(shop, 101));
+    mkdirSync(glabDirectory, { recursive: true });
+    writeFileSync(path.join(glabDirectory, "issue-links-102"), "[]");
+    await registry.enqueueBatch(tickets(shop, 102));
+    await registry.enqueueBatch(tickets(shop, 103));
+    await until(() => numbers().length === 3, "both tickets to start");
+    expect(calls()).toEqual([]);
+  });
+
+  it("should put a blocking link of the forge over what the session said of the same two tickets", async () => {
+    fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
+    mkdirSync(glabDirectory, { recursive: true });
+    writeFileSync(path.join(glabDirectory, "issue-links-102"), JSON.stringify([{ iid: 101, link_type: "blocks", web_url: url(101) }]));
+    const { registry, numbers, waiting } = harness();
+    await registry.enqueueBatch(tickets(repository("shop"), 101, 102));
+    await until(() => numbers().length === 1, "the blocking ticket to start");
+    // The order asked was 101 then 102: the link turns it around.
+    expect(numbers()).toEqual([102]);
+    expect(waiting(101)).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "GitLab marks #101 as blocked by #102." });
+  });
+
   it("should analyse each repository on its own, and never hold a ticket for another repository", async () => {
     // The same numbers in both repositories, and an edge the fixture gives to each.
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
@@ -291,8 +332,10 @@ describe("a batch of tickets", () => {
 
   it("should not open an analysis for a single ticket beside a failed one, and blame the failed ticket for the wait", async () => {
     const shop = repository("shop");
-    const { registry, numbers, waiting } = await failedAndAwaitingMerge(shop);
+    const { registry, numbers, waiting, queued } = await failedAndAwaitingMerge(shop);
     await registry.enqueueBatch(tickets(shop, 104));
+    // Its blocking links are read, by the server: that is not a session.
+    await until(analysed(queued), "the links to be read");
     expect(calls()).toHaveLength(1);
     expect(numbers()).toEqual([101]);
     expect(waiting(104)).toMatchObject({ reason: "merge", cause: "analysis_failed", detail: "The analysis of #101 failed (output file missing): this ticket runs after it." });

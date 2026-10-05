@@ -192,7 +192,7 @@ The queue shows under the runs in progress, by batch ("Batch of 14:32 · 3 ticke
 
 | Row | What the ticket is waiting for |
 |---|---|
-| "Analysis in progress" | the answer of the analysis session |
+| "Analysis in progress" | the answer of the analysis session, or the blocking links of the ticket being read from the forge |
 | "Waiting, conflict with #217 running" | #217 is running and touches the same code |
 | "Waits for MR !12 to be merged (#217)" | the run of #217 is over, its merge request is not merged yet |
 | "State of MR !12 unknown (#217)" | The forge does not answer; the ticket stays held until the state is known. A GitHub ticket reads "PR #12" |
@@ -201,7 +201,7 @@ The queue shows under the runs in progress, by batch ("Batch of 14:32 · 3 ticke
 | "Waiting, ticket already running" | a run already holds this ticket |
 | "Waiting, every slot is taken" | a slot |
 
-A ticket held by the schedule takes no slot, and the tickets behind it that conflict with nothing go ahead. The **Why it waits** disclosure gives the reason the agent wrote and the summary of the ticket. The arrows change the order of the tickets of one repository, the cross removes a ticket from the queue. A ticket another one depends on stays ahead of it, whatever order is chosen.
+A ticket held by the schedule takes no slot, and the tickets behind it that conflict with nothing go ahead. The **Why it waits** disclosure gives the reason the agent wrote and the summary of the ticket. A "blocks" or "blocked by" link of the forge between two tickets of the queue orders them whatever the agent said, and reads "GitLab marks #218 as blocked by #217." Dragging a ticket, or its arrows, changes the order of the tickets of one repository; lone launches are dragged among themselves. The cross removes a ticket from the queue. A ticket another one depends on stays ahead of it, whatever order is chosen.
 
 A ticket in conflict waits for the other ticket's merge request to be merged, not only for its run to end: it then starts from the updated base. If that merge request is closed without being merged, or if the run ends without opening one, the ticket is released and the banner says so.
 

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fetchMergeRequestStatus } from "../../server/ticket";
+import { fetchIssueLinks, fetchMergeRequestStatus } from "../../server/ticket";
 
 /**
  * The one call the server makes to a forge on its own, through the stand-in
@@ -55,5 +55,33 @@ describe("the state of what delivers a ticket, asked to its forge", () => {
   it("should answer unknown when the forge says nothing", async () => {
     expect(await fetchMergeRequestStatus(pullRequest(404), storage)).toBe("unknown");
     expect(await fetchMergeRequestStatus(mergeRequest(404), storage)).toBe("unknown");
+  });
+});
+
+describe("the blocking links of a ticket, asked to its forge", () => {
+  it("should read both directions out of the one list GitLab answers, and leave a plain relation out", async () => {
+    writeFileSync(path.join(glabDirectory, "issue-links-7"), JSON.stringify([
+      { iid: 5, link_type: "is_blocked_by", web_url: "https://gitlab.com/acme/shop/-/issues/5" },
+      { iid: 8, link_type: "blocks", web_url: "https://gitlab.com/acme/shop/-/issues/8" },
+      { iid: 9, link_type: "relates_to", web_url: "https://gitlab.com/acme/shop/-/issues/9" },
+    ]));
+    expect(await fetchIssueLinks("https://gitlab.com/acme/shop/-/work_items/7", storage)).toEqual({
+      blockedBy: ["https://gitlab.com/acme/shop/-/issues/5"], blocks: ["https://gitlab.com/acme/shop/-/issues/8"],
+    });
+  });
+
+  it("should ask GitHub for each direction", async () => {
+    writeFileSync(path.join(ghDirectory, "issue-7-blocked_by"), JSON.stringify([{ number: 5, html_url: "https://github.com/acme/shop/issues/5" }]));
+    writeFileSync(path.join(ghDirectory, "issue-7-blocking"), JSON.stringify([{ number: 8, html_url: "https://github.com/acme/shop/issues/8" }]));
+    expect(await fetchIssueLinks("https://github.com/acme/shop/issues/7", storage)).toEqual({
+      blockedBy: ["https://github.com/acme/shop/issues/5"], blocks: ["https://github.com/acme/shop/issues/8"],
+    });
+  });
+
+  it("should answer nothing rather than no link when the forge cannot be read", async () => {
+    expect(await fetchIssueLinks("https://gitlab.com/acme/shop/-/issues/404", storage)).toBeUndefined();
+    // One direction answered is not the whole answer.
+    writeFileSync(path.join(ghDirectory, "issue-12-blocked_by"), "[]");
+    expect(await fetchIssueLinks("https://github.com/acme/shop/issues/12", storage)).toBeUndefined();
   });
 });

@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { createGitCheckout, fakeClaudeInputDirectory, hookToken, mergeRequestState, pullRequestState, scheduleFixture } from "../fixtures";
-import { resetRun } from "./helpers";
+import { createGitCheckout, fakeClaudeInputDirectory, hookToken, issueLinks, mergeRequestState, pullRequestState, scheduleFixture } from "../fixtures";
+import { resetRun, startRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => { scheduleFixture(); await resetRun(page); });
 test.afterEach(() => scheduleFixture());
@@ -114,6 +114,27 @@ test("should take several tickets at once, start those that conflict with nothin
   await expect(progression.getByText("feat/1-promo", { exact: true })).toBeVisible();
 });
 
+test("should hold a ticket started alone behind the running ticket GitLab says blocks it, with no analysis session", async ({ page, request }) => {
+  const { url, directory } = batch("batch-blocked");
+  const callsBefore = scheduleCalls().length;
+  await page.goto("/");
+  await startRun(page, request, directory, url(1));
+  // GitLab writes the blocking ticket as a work item, the console knows it as an issue.
+  issueLinks(2, [{ link_type: "is_blocked_by", web_url: url(1).replace("/-/issues/", "/-/work_items/") }]);
+  try {
+    await page.evaluate(({ cwd, issueUrl }) => new Promise<void>((resolve) => {
+      const socket = new WebSocket(`ws://${window.location.host}/ws`);
+      socket.addEventListener("open", () => { socket.send(JSON.stringify({ type: "run.start", cwd, issueUrl })); resolve(); });
+    }), { cwd: directory, issueUrl: url(2) });
+    await expect.poll(() => standing(request)).toEqual({ running: [1], waiting: [2] });
+    expect((await snapshot(request)).queued[0]).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "GitLab marks #2 as blocked by #1." });
+    await expect(queue(page).getByText("Waiting, conflict with #1, which is running")).toBeVisible();
+    expect(scheduleCalls()).toHaveLength(callsBefore);
+  } finally {
+    issueLinks(2);
+  }
+});
+
 test("should start a held ticket from the base when asked, and remove another from the queue", async ({ page, request }) => {
   const { url } = batch("batch-force");
   scheduleFixture({ edges: [{ a: 1, b: 2, kind: "overlap", reason: "Same file." }, { a: 1, b: 3, kind: "overlap", reason: "Same file." }] });
@@ -124,6 +145,9 @@ test("should start a held ticket from the base when asked, and remove another fr
   // Moving #3 up puts it first among the waiting tickets.
   await queue(page).getByRole("button", { name: "Move batch-force #3 up in the queue" }).click();
   await expect.poll(async () => (await snapshot(request)).queued.map((entry) => number(entry.issueUrl))).toEqual([3, 2]);
+  // Dropped on the upper half of #3, #2 goes back in front of it.
+  await queue(page).getByTitle("batch-force #2").dragTo(queue(page).getByTitle("batch-force #3"));
+  await expect.poll(async () => (await snapshot(request)).queued.map((entry) => number(entry.issueUrl))).toEqual([2, 3]);
   await queue(page).getByRole("button", { name: "Remove batch-force #3 from the queue" }).click();
   await expect.poll(() => standing(request)).toEqual({ running: [1], waiting: [2] });
 

@@ -82,6 +82,13 @@ export function mergeRequestState(iid: number, state?: "opened" | "merged" | "cl
   else rmSync(file, { force: true });
 }
 
+/** The links GitLab lists for an issue, or nothing at all with `undefined`, as when it cannot be reached. */
+export function issueLinks(iid: number, links?: { link_type: "blocks" | "is_blocked_by" | "relates_to"; web_url: string }[]) {
+  const file = path.join(fakeGlabDirectory, `issue-links-${iid}`);
+  if (links) writeFileSync(file, JSON.stringify(links));
+  else rmSync(file, { force: true });
+}
+
 /** Where the stand-in `gh` reads the state of a pull request from. See tests/fake-claude/gh. */
 export const fakeGhDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "gh");
 /** What GitHub says of a pull request, or nothing at all with `undefined`, as when it cannot be reached. */

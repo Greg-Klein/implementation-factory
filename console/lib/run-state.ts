@@ -214,6 +214,30 @@ export function queueMoveTarget(queued: { id: string }[], siblings: { id: string
   return others[others.findIndex((entry) => entry.id === next.id) + 1]?.id ?? null;
 }
 
+/**
+ * Where a row goes when it is dropped on the upper or the lower half of
+ * another, as the `before` of a `queue.move`. Undefined when the drop changes
+ * nothing: on itself, or where it already is.
+ */
+export function queueDropTarget(queued: { id: string }[], id: string, target: string, half: "before" | "after"): string | null | undefined {
+  const from = queued.findIndex((entry) => entry.id === id);
+  const others = queued.filter((entry) => entry.id !== id);
+  const position = others.findIndex((entry) => entry.id === target);
+  if (from < 0 || position < 0) return undefined;
+  const before = half === "before" ? target : others[position + 1]?.id ?? null;
+  return before === (queued[from + 1]?.id ?? null) ? undefined : before;
+}
+
+/**
+ * The rows a queued row can be dragged among: the tickets of its repository
+ * within its batch, the same ones the arrows move it through, or the other
+ * lone launches. Moving it past another group would not show, the queue being
+ * drawn by batch.
+ */
+export function queueDragScope(entry: { cwd: string; repository?: string; batchId?: string }) {
+  return entry.batchId ? `${entry.batchId}\n${sourceRepository(entry)}` : "lone";
+}
+
 /** Whether a run is finished and no longer holds its session: the only state it can be closed from. */
 export function isClosable(run: { status: Status; sessionActive?: boolean }) {
   return !runInProgress(run.status) && run.sessionActive !== true;

@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, now } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRuntimeRecipe } from "./runtime-recipe.js";
@@ -12,7 +12,7 @@ import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
 import { acknowledgeDemoInstruction, DEMO_BATCH, DEMO_CWD, demoBatchLaunchState, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
-import { fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
+import { fetchIssueLinks, fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
 import { analyseTickets, clearScheduleFiles, type AnalysisResult } from "./schedule-analysis.js";
 import { MergeWatcher } from "./merge-watch.js";
 import { TicketProposals } from "./ticket-proposals.js";
@@ -158,6 +158,26 @@ export class RunRegistry {
     ];
   }
 
+  /** The tickets of a repository the console has, queued, held by a run or behind an unmerged merge request: what a blocking link can point at. */
+  private repositoryTickets(repository: string) {
+    const held = [...this.sessions.values()].filter((session) => session.holdsRepository || runInProgress(session.state.status)).map((session) => session.state);
+    const awaited = this.watches.map((watch) => ({ cwd: watch.repository, issueUrl: watch.issueUrl }));
+    return [...this.queue, ...held, ...awaited].filter((ticket) => sourceRepository(ticket) === repository).map((ticket) => ticket.issueUrl);
+  }
+
+  /**
+   * The dependencies the forge states between these tickets and the others of
+   * the repository, read from the blocking links of each. A ticket whose links
+   * cannot be read gives none.
+   */
+  private async forgeEdges(repository: string, urls: string[]) {
+    const edges = await Promise.all(urls.map(async (issueUrl) => {
+      const links = await fetchIssueLinks(issueUrl, repository);
+      return links ? linkEdges(repository, issueUrl, links, this.repositoryTickets(repository)) : [];
+    }));
+    return overlayEdges([], edges.flat());
+  }
+
   /** Where each ticket the console still has stands, by lock key: running, behind an unmerged merge request, or queued. */
   private ticketStates() {
     const queued = new Set(this.queue.map(runLockKey));
@@ -228,6 +248,12 @@ export class RunRegistry {
     const repository = await mainCheckout(await resolveProjectDirectory(request.cwd, request.issueUrl));
     if (this.shuttingDown) throw new Error("The application is shutting down.");
     const entry = this.entry({ repository, issueUrl: request.issueUrl }, request.instruction);
+    // Beside tickets that have no prediction, no session compares it. Its blocking links are read
+    // here, before it may start, so the page still opens the run it asked for.
+    if (!this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length === 0 && this.repositoryTickets(repository).length > 0) {
+      this.edges = overlayEdges(this.edges, await this.forgeEdges(repository, [entry.issueUrl]));
+      if (this.shuttingDown) throw new Error("The application is shutting down.");
+    }
     // A ticket added beside others already predicted is compared against them before it may start.
     const analysed = !this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length > 0;
     if (!analysed && startableEntries([...this.queue, entry], this.holders(), this.context(), maxConcurrentRuns - this.occupiedSlots()).includes(entry)) {
@@ -237,7 +263,7 @@ export class RunRegistry {
     }
     if (analysed) entry.analysing = true;
     this.queue = [...this.queue, entry];
-    if (analysed) this.scheduleAnalysis(repository, [entry]);
+    if (analysed) this.scheduleAnalysis(repository, [entry], true);
     const queued = this.describe().find((view) => view.id === entry.id)!;
     // What blocks it may be a run that has already finished, and draining is
     // where that is noticed and its session given up.
@@ -250,7 +276,8 @@ export class RunRegistry {
    * has, queued, running or behind an unmerged merge request, is left out. The
    * new ones are queued at once and analysed per repository, except where
    * there is nothing to compare: a single new ticket in a repository with no
-   * known prediction starts as a lone launch would.
+   * known prediction gets no session, only its blocking links read when the
+   * console has another ticket of that repository.
    */
   async enqueueBatch(tickets: ResolvedTicket[], options: { instruction?: string } = {}): Promise<BatchOutcome> {
     if (this.shuttingDown) throw new Error("The application is shutting down.");
@@ -267,22 +294,23 @@ export class RunRegistry {
     if (accepted.length === 0) throw new Error(tickets.length > 1 ? "These tickets are already queued, running or waiting for a merge." : "This ticket is already queued, running or waiting for a merge.");
     const batchId = `batch-${crypto.randomUUID().slice(0, 8)}`;
     const entries = accepted.map((ticket) => this.entry(ticket, instruction, { batchId, ...extra }));
-    const analyses: [string, QueuedRun[]][] = [];
+    const analyses: [string, QueuedRun[], boolean][] = [];
     for (const repository of new Set(entries.map((entry) => entry.repository))) {
       const group = entries.filter((entry) => entry.repository === repository);
-      if (group.length < 2 && this.knownTickets(repository).length === 0) continue;
+      const predicted = group.length > 1 || this.knownTickets(repository).length > 0;
+      if (!predicted && this.repositoryTickets(repository).length === 0) continue;
       for (const entry of group) entry.analysing = true;
-      analyses.push([repository, group]);
+      analyses.push([repository, group, predicted]);
     }
     this.queue = [...this.queue, ...entries];
-    for (const [repository, group] of analyses) this.scheduleAnalysis(repository, group);
+    for (const [repository, group, predicted] of analyses) this.scheduleAnalysis(repository, group, predicted);
     this.publishSnapshot();
     return { batchId, entries, duplicates: duplicates.map((ticket) => ticket.issueUrl) };
   }
 
-  /** Queues the analysis of one repository's new tickets behind whatever analysis of that repository is still running. */
-  private scheduleAnalysis(repository: string, entries: QueuedRun[]) {
-    const next = (this.analysisChains.get(repository) ?? Promise.resolve()).then(() => this.analyse(repository, entries)).catch(() => undefined);
+  /** Queues the analysis of one repository's new tickets behind whatever analysis of that repository is still running. `predicted`: false to read the blocking links alone. */
+  private scheduleAnalysis(repository: string, entries: QueuedRun[], predicted: boolean) {
+    const next = (this.analysisChains.get(repository) ?? Promise.resolve()).then(() => this.analyse(repository, entries, predicted)).catch(() => undefined);
     this.analysisChains.set(repository, next);
     void next.then(() => { if (this.analysisChains.get(repository) === next) this.analysisChains.delete(repository); });
   }
@@ -290,9 +318,12 @@ export class RunRegistry {
   /**
    * Runs the scheduling session and takes its answer. A failure, whatever it
    * is, never frees the tickets to run together: each is recorded as failed,
-   * which keeps it apart from every other ticket of its repository.
+   * which keeps it apart from every other ticket of its repository. The
+   * blocking links of the forge are read beside it, by the server: what they
+   * state wins over what the session said of the same two tickets, and holds
+   * when the session failed or was not needed (`predicted` false).
    */
-  private async analyse(repository: string, entries: QueuedRun[]) {
+  private async analyse(repository: string, entries: QueuedRun[], predicted: boolean) {
     if (this.shuttingDown) return;
     // A ticket cancelled meanwhile is not worth a prediction; one started by force still is.
     const running = new Set([...this.sessions.values()].filter((session) => session.holdsRepository).map((session) => runLockKey(session.state)));
@@ -300,7 +331,7 @@ export class RunRegistry {
     if (pending.length === 0) return;
     const keys = new Set(pending.map(runLockKey));
     // An analysis that failed earlier is tried again here, with the new tickets: never on its own.
-    const retried = this.failedTickets(repository, keys);
+    const retried = predicted ? this.failedTickets(repository, keys) : [];
     const urls = [...pending, ...retried].map((ticket) => ticket.issueUrl);
     let inFlight: ScheduleSession | null = null;
     const track = (session: ScheduleSession | null) => {
@@ -308,23 +339,26 @@ export class RunRegistry {
       if (session) this.analysisSessions.add(session);
       inFlight = session;
     };
-    const result = pending.every((entry) => entry.demo)
+    const links = this.forgeEdges(repository, urls);
+    const result = !predicted ? undefined : pending.every((entry) => entry.demo)
       ? await this.demoAnalysis(urls)
       : await analyseTickets(repository, urls, this.knownTickets(repository, keys), track);
+    const stated = await links;
     // Left as `analysing` on disk: the next start reads it back as a failed analysis.
     if (this.shuttingDown) return;
     // A second failure leaves the retried tickets as they were: failed, with the reason they had.
-    const answered = result.ok ? new Set([...keys, ...retried.map((ticket) => runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl }))]) : keys;
-    this.tickets = this.tickets.filter((ticket) => !answered.has(runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
-    if (result.ok) {
+    const answered = result?.ok ? new Set([...keys, ...retried.map((ticket) => runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl }))]) : keys;
+    if (result) this.tickets = this.tickets.filter((ticket) => !answered.has(runLockKey({ cwd: ticket.repository, issueUrl: ticket.issueUrl })));
+    if (result?.ok) {
       this.tickets = [...this.tickets, ...result.schedule.tickets.map((prediction) => ({ ...prediction, repository, analysis: "done" as const }))];
       const pair = (edge: { a: string; b: string }) => [ticketIdentity(edge.a), ticketIdentity(edge.b)].sort().join("\n");
       const replaced = new Set(result.schedule.edges.map(pair));
       this.edges = [...this.edges.filter((edge) => edge.repository !== repository || !replaced.has(pair(edge))), ...result.schedule.edges.map((edge) => ({ ...edge, repository }))];
-    } else {
+    } else if (result) {
       this.tickets = [...this.tickets, ...pending.map((entry) => ({ issueUrl: entry.issueUrl, repository, analysis: "failed" as const, areas: [], files: [], failure: result.failure }))];
       broadcast({ type: "notice", level: "attention", at: now(), title: "Batch analysis failed", detail: `${path.basename(repository)}: ${result.failure}. ${pending.length > 1 ? `Its ${pending.length} tickets run` : "Its ticket runs"} one at a time, after the other tickets of the repository.` });
     }
+    this.edges = overlayEdges(this.edges, stated);
     const analysed = new Set(pending.map((entry) => entry.id));
     this.queue = this.queue.map((entry) => { if (!analysed.has(entry.id)) return entry; const { analysing: _analysing, ...rest } = entry; return rest; });
     await this.drain();

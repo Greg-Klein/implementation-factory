@@ -10,6 +10,19 @@ describe("run deliverable", () => {
     expect(branchFromCommand('git checkout -b "feat/258" && npm test')).toBe("feat/258");
   });
 
+  it("should read the branch name a shell variable assigned in the same command holds", () => {
+    expect(branchFromCommand("B=feat-6005-banner; U=6050-umbrella\ngit show-ref refs/heads/$B\ngit switch -c $B --no-track origin/$U")).toBe("feat-6005-banner");
+    expect(branchFromCommand('B="feat/258"; git checkout -b "${B}" && git status')).toBe("feat/258");
+    expect(branchFromCommand("B=old; B=new; git switch -c $B")).toBe("new");
+  });
+
+  it("should read no branch when the name stays a shell expansion", () => {
+    expect(branchFromCommand("git switch -c $B --no-track origin/develop")).toBeUndefined();
+    expect(branchFromCommand('git checkout -b "feat-$ID"')).toBeUndefined();
+    expect(branchFromCommand("git switch -c $(cat branch.txt)")).toBeUndefined();
+    expect(branchFromCommand("B=$(cat branch.txt); git switch -c $B")).toBeUndefined();
+  });
+
   it("should read no branch from a command that creates none", () => {
     expect(branchFromCommand("git checkout develop")).toBeUndefined();
     expect(branchFromCommand("glab issue view 258 | grep -b 3 branche")).toBeUndefined();

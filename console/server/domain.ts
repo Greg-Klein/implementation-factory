@@ -321,10 +321,25 @@ export function createsBranch(command: string | undefined) {
 
 const BRANCH_NAME = /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))\s+(?:--\s+)?("[^"]+"|'[^']+'|[^\s;&|]+)/;
 
-/** The branch the workflow works on, read from the command that creates it. */
+/**
+ * The branch the workflow works on, read from the command that creates it.
+ * The pilot often names it once in a variable (`B=feat-12; ...; git switch -c $B`),
+ * so a bare `$B` is resolved against the last assignment written before it. A name
+ * still holding an expansion is no branch name, and recording it would hand `$B`
+ * to a stacked start as its base.
+ */
 export function branchFromCommand(command: string | undefined) {
-  const name = command?.match(BRANCH_NAME)?.[1];
-  return name ? name.replace(/^["']|["']$/g, "") : undefined;
+  const match = command?.match(BRANCH_NAME);
+  if (!command || !match) return undefined;
+  const name = match[1].replace(/^["']|["']$/g, "");
+  const variable = /^\$\{?(\w+)\}?$/.exec(name)?.[1];
+  const resolved = variable ? lastAssignment(command.slice(0, match.index), variable) : name;
+  return resolved && !/[$`]/.test(resolved) ? resolved : undefined;
+}
+
+function lastAssignment(command: string, variable: string) {
+  const assignments = [...command.matchAll(new RegExp(`(?:^|[\\s;&|])${variable}=("[^"]*"|'[^']*'|[^\\s;&|]+)`, "g"))];
+  return assignments.at(-1)?.[1].replace(/^["']|["']$/g, "");
 }
 
 /**

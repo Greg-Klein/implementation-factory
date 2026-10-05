@@ -215,14 +215,24 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   return undefined;
 }
 
+/**
+ * The pilot's command line. The user's settings stay in, since they hold the
+ * permissions, the MCP servers and plugins the reviews use, but not their output
+ * style: an explanatory style adds prose to every turn of the pilot, which the
+ * run then rereads on every call.
+ */
+export function sessionArguments({ pluginDir, sessionName, command }: { pluginDir: string; sessionName: string; command: string }) {
+  // --remote-control takes an optional name, so leaving it empty would let the
+  // parser swallow the prompt that follows as that name.
+  const remote = remoteControl ? ["--remote-control", sessionName] : [];
+  return ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--settings", JSON.stringify({ outputStyle: "Concise" }), "--name", sessionName, ...remote, command];
+}
+
 function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code was not found in PATH.");
   const sessionName = `implementation-harness ${sessionLabel}`;
-  // --remote-control takes an optional name, so leaving it empty would let the
-  // parser swallow the prompt that follows as that name.
-  const remote = remoteControl ? ["--remote-control", sessionName] : [];
-  const terminal = pty.spawn(executable, ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--name", sessionName, ...remote, command], {
+  const terminal = pty.spawn(executable, sessionArguments({ pluginDir, sessionName, command }), {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
     env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
   });

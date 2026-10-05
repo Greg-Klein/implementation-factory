@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment } from "../../server/engine/claude-code";
+import { claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
 import { engine } from "../../server/engine/index";
 
 describe("engine contract", () => {
@@ -139,6 +139,21 @@ describe("signals the health monitor reads from Claude Code", () => {
     expect(new Set(post)).toEqual(END_REPORTED_TOOLS);
     const pre = hooks.hooks.PreToolUse.map((entry) => entry.matcher ?? "").join("|").split("|");
     expect(pre).toEqual(expect.arrayContaining(["Bash", "Monitor", "Agent"]));
+  });
+});
+
+describe("the pilot's session", () => {
+  const args = sessionArguments({ pluginDir: "/opt/harness", sessionName: "implementation-harness run-1", command: "/implementation-harness:implement https://gitlab.com/g/p/-/issues/1" });
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1];
+
+  it("should load the plugin on Opus and end with the command", () => {
+    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(valueOf("--model")).toBe("opus");
+    expect(args.at(-1)).toBe("/implementation-harness:implement https://gitlab.com/g/p/-/issues/1");
+  });
+
+  it("should replace the user's output style with the concise one", () => {
+    expect(JSON.parse(valueOf("--settings"))).toEqual({ outputStyle: "Concise" });
   });
 });
 

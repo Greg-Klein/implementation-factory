@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import { deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
 import type { SessionUsage } from "../../server/engine/types";
-import { buildRunMetrics, comparableRuns, diffFromNumstat, metricsBaseline, metricsFindings, trackTimeline, userWaitReason } from "../../server/run-metrics";
+import { buildRunMetrics, comparableRuns, diffFromNumstat, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
 import type { RunMetrics, RunState } from "../../server/types";
 import { parseWorkflowState } from "../../server/workflow-state";
 
@@ -146,6 +146,57 @@ describe("the size of a change", () => {
     expect(deliveryTargetBranch("gitlab", { base: { ref: "main" } })).toBeUndefined();
     expect(deliveryTargetBranch("github", { target_branch: " " })).toBeUndefined();
     expect(deliveryTargetBranch("gitlab", null)).toBeUndefined();
+  });
+});
+
+describe("a change asked after the final report", () => {
+  const declared = (revision: number, state: string, extra: object = {}) => {
+    const reading = parseWorkflowState(JSON.stringify({ schemaVersion: 1, revision, state, ...extra }), at(0));
+    if (!("state" in reading)) throw new Error(reading.error);
+    return reading.state;
+  };
+  const delivered = (revision: number) => declared(revision, "completed", { result: { delivery: "merge_request", mergeRequestUrl: "https://gitlab.com/g/p/-/merge_requests/1" } });
+
+  it("should open a reopening when the ended workflow goes back to work, and close it on the next holding end", () => {
+    const state = run({ status: "completed", endedAt: at(10) });
+    expect(trackReopening(state, delivered(8), declared(9, "working", { step: "5" }), at(30))).toBe(true);
+    expect(trackReopening(state, declared(9, "working"), declared(10, "waiting"), at(32))).toBe(false);
+    expect(trackReopening(state, declared(10, "waiting"), delivered(11), at(45))).toBe(true);
+    expect(state.reopenings).toEqual([{ from: at(30), to: at(45) }]);
+  });
+
+  it("should open nothing while the run has not ended, nor when the end was never declared", () => {
+    expect(trackReopening(run(), delivered(8), declared(9, "working"), at(5))).toBe(false);
+    const closedOnPhase = run({ status: "completed", endedAt: at(10) });
+    expect(trackReopening(closedOnPhase, declared(3, "working"), declared(4, "working"), at(12))).toBe(false);
+    expect(closedOnPhase.reopenings).toBeUndefined();
+  });
+
+  it("should keep a reopening open on an end that does not hold", () => {
+    const state = run({ status: "completed", endedAt: at(10), reopenings: [{ from: at(30) }] });
+    expect(trackReopening(state, declared(9, "working"), declared(10, "completed"), at(40))).toBe(false);
+    expect(state.reopenings).toEqual([{ from: at(30) }]);
+  });
+
+  it("should time the first pass and the reopening, never the idle session between them", () => {
+    const metrics = buildRunMetrics({
+      state: run({
+        status: "completed", phase: 10, endedAt: at(20), phaseArrivals: { 1: at(0), 10: at(20) }, reopenings: [{ from: at(40), to: at(50) }],
+        userWaits: [{ reason: "terminal", from: at(25), to: at(40) }, { reason: "question", from: at(42), to: at(44) }],
+      }),
+      usage: [], at: at(59),
+    });
+    expect(metrics.time).toMatchObject({ endedAt: at(50), elapsedMs: 30 * 60_000, reopened: { count: 1, ms: 10 * 60_000 }, userWaitMs: 2 * 60_000, activeMs: 28 * 60_000 });
+    expect(metrics.time.phases).toEqual([{ phase: 1, enteredAt: at(0), ms: 20 * 60_000 }, { phase: 10, enteredAt: at(20), ms: 0 }]);
+  });
+
+  it("should measure a reopening still going up to now", () => {
+    const metrics = buildRunMetrics({ state: run({ status: "completed", sessionActive: true, endedAt: at(20), reopenings: [{ from: at(40) }] }), usage: [], at: at(45) });
+    expect(metrics.time).toMatchObject({ endedAt: at(45), elapsedMs: 25 * 60_000, reopened: { count: 1, ms: 5 * 60_000 } });
+  });
+
+  it("should report no reopening on a run that was never reopened", () => {
+    expect(buildRunMetrics({ state: run({ status: "completed", endedAt: at(20) }), usage: [], at: at(30) }).time.reopened).toBeUndefined();
   });
 });
 

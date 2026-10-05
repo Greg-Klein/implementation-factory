@@ -10,6 +10,7 @@ import { attachmentPaths } from "./acceptance.js";
 import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
+import { trackReopening } from "./run-metrics.js";
 import { keepRuntimeRecipe } from "./runtime-recipe.js";
 import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
@@ -132,6 +133,7 @@ function readWorkflowState(session: RunSession, content: string) {
   const previous = session.state.workflow;
   if (previous && reading.state.revision < previous.revision) return;
   session.state.workflow = reading.state;
+  if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", session.state.reopenings?.at(-1)?.to ? "Change after the final report delivered" : "Change asked after the final report");
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
   // The step the workflow declares is the phase. It never goes back: a request after the final report reopens an earlier step.

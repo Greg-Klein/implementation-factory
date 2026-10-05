@@ -64,6 +64,7 @@ function Detail({ run }: { run: RunMetrics }) {
           <dl className="mt-2 space-y-1 text-[11px]">
             <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">From start to end</dt><dd className="font-mono text-[10px]">{formatDuration(run.time.elapsedMs)}</dd></div>
             {run.time.waits.map((wait) => <div key={wait.reason} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{waitLabel(wait.reason)} · {wait.count}</dt><dd className="font-mono text-[10px]">{formatDuration(wait.ms)}</dd></div>)}
+            {run.time.reopened && <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Changes after the report · {run.time.reopened.count}</dt><dd className="font-mono text-[10px]">{formatDuration(run.time.reopened.ms)}</dd></div>}
             {run.time.incidentMs > 0 && <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Under incident</dt><dd className="font-mono text-[10px]">{formatDuration(run.time.incidentMs)}</dd></div>}
             {run.time.phases.filter((phase) => phase.ms >= 1_000 && phase.phase <= phaseNames(run.ticket.issueUrl).length).map((phase) => <div key={phase.phase} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{phase.phase}. {phaseNames(run.ticket.issueUrl)[phase.phase - 1]}</dt><dd className="font-mono text-[10px]">{formatDuration(phase.ms)}</dd></div>)}
           </dl>

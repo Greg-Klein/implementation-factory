@@ -1,6 +1,7 @@
 import { runInProgress, sourceRepository } from "./domain.js";
 import type { SessionUsage } from "./engine/index.js";
-import type { AgentMetrics, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait } from "./types.js";
+import type { AgentMetrics, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
+import { declaredCompletion } from "./workflow-state.js";
 
 /**
  * What a run cost and what it delivered, in figures. Pure: the run state, the
@@ -49,6 +50,28 @@ export function trackTimeline(state: RunState, at: string) {
   return changed;
 }
 
+/**
+ * Records a change asked after the final report. The workflow then goes from
+ * `completed` back to work, and declares `completed` again once the change is
+ * reviewed and pushed (see "A request after the final report" in
+ * commands/implement.md). The console keeps the run as ended, but its figures
+ * must run to that second end, or the work it took would count in the tokens
+ * and in no duration. Returns whether anything moved.
+ */
+export function trackReopening(state: RunState, previous: WorkflowState | undefined, next: WorkflowState, at: string) {
+  const reopenings = state.reopenings ?? [];
+  const open = reopenings.at(-1)?.to === undefined ? reopenings.at(-1) : undefined;
+  if (!open && state.endedAt && previous?.state === "completed" && next.state !== "completed") {
+    state.reopenings = [...reopenings, { from: at }];
+    return true;
+  }
+  if (open && declaredCompletion(next, state.mergeRequestUrl).complete) {
+    state.reopenings = reopenings.map((reopening) => (reopening === open ? { ...reopening, to: at } : reopening));
+    return true;
+  }
+  return false;
+}
+
 function tokens(input: number, output: number, cacheRead: number, cacheWrite: number): TokenUsage {
   return { input, output, cacheRead, cacheWrite, total: input + output + cacheRead + cacheWrite };
 }
@@ -93,18 +116,27 @@ function tokenMetrics(state: RunState, usage: SessionUsage[]): RunMetrics["token
 function timeMetrics(state: RunState, at: number): RunMetrics["time"] {
   const started = time(state.startedAt);
   const ended = Number.isFinite(time(state.endedAt)) ? time(state.endedAt) : at;
-  const elapsedMs = span(started, ended);
-  // A wait still open, or one the idle session raised after the workflow ended, stops at the end of the run.
-  const spans = (state.userWaits ?? []).map((wait) => ({ reason: wait.reason, ms: span(time(wait.from), Math.min(wait.to ? time(wait.to) : ended, ended)) }));
+  const reopenings = (state.reopenings ?? []).map((reopening) => ({ from: time(reopening.from), to: reopening.to ? time(reopening.to) : at }));
+  // The session idles between the end and a change asked later, sometimes for hours: only the work on either side counts.
+  const windows = [{ from: started, to: ended }, ...reopenings];
+  const within = (from: number, to: number) => windows.reduce((sum, window) => sum + span(Math.max(from, window.from), Math.min(to, window.to)), 0);
+  const reopenedMs = reopenings.reduce((sum, reopening) => sum + span(reopening.from, reopening.to), 0);
+  const elapsedMs = span(started, ended) + reopenedMs;
+  const lastEnd = reopenings.reduce((last, reopening) => Math.max(last, reopening.to), ended);
+  const spans = (state.userWaits ?? []).map((wait) => ({ reason: wait.reason, ms: within(time(wait.from), wait.to ? time(wait.to) : lastEnd) }));
   const waits = (["question", "session_prompt", "terminal"] as const).flatMap((reason) => {
     const matching = spans.filter((entry) => entry.reason === reason);
     return matching.length > 0 ? [{ reason, count: matching.length, ms: matching.reduce((sum, entry) => sum + entry.ms, 0) }] : [];
   });
   const userWaitMs = Math.min(elapsedMs, waits.reduce((sum, wait) => sum + wait.ms, 0));
-  const incidentMs = (state.incidents ?? []).reduce((sum, incident) => sum + span(time(incident.detectedAt), Math.min(incident.resolution ? time(incident.resolution.at) : ended, ended)), 0);
+  const incidentMs = (state.incidents ?? []).reduce((sum, incident) => sum + within(time(incident.detectedAt), incident.resolution ? time(incident.resolution.at) : lastEnd), 0);
   const arrivals = Object.entries(state.phaseArrivals ?? {}).map(([phase, enteredAt]) => ({ phase: Number(phase), enteredAt })).sort((left, right) => left.phase - right.phase);
   const phases = arrivals.map((arrival, index) => ({ ...arrival, ms: span(time(arrival.enteredAt), index + 1 < arrivals.length ? time(arrivals[index + 1].enteredAt) : ended) }));
-  return { startedAt: state.startedAt, endedAt: state.endedAt, elapsedMs, userWaitMs, waits, activeMs: elapsedMs - userWaitMs, incidentMs, phases };
+  const endedAt = state.endedAt && lastEnd > ended ? new Date(lastEnd).toISOString() : state.endedAt;
+  return {
+    startedAt: state.startedAt, endedAt, elapsedMs, userWaitMs, waits, activeMs: elapsedMs - userWaitMs, incidentMs, phases,
+    ...(reopenings.length > 0 ? { reopened: { count: reopenings.length, ms: reopenedMs } } : {}),
+  };
 }
 
 const REWORK_REPORT = /developer-report-rework[^/]*\.md$/;

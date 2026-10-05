@@ -200,6 +200,7 @@ export type WorkflowState = {
 export type ReviewTier = 0 | 1 | 2;
 /** A stretch of the run spent waiting on the user: a decision to take, the agent's own prompt, or the terminal. Open while `to` is absent. */
 export type UserWait = { reason: "question" | "session_prompt" | "terminal"; from: string; to?: string };
+export type Reopening = { from: string; to?: string };
 /** The harness a run was driven by: the plugin's version and the commit of its checkout when the run started. */
 /** `total` counts every token read or written, cache included; `pilotCalls` is how many times the pilot's context was read again. */
 export type RunUsage = { total: number; output: number; pilot: number; pilotCalls: number; agents: number };
@@ -263,6 +264,8 @@ export type RunState = {
   userWaits?: UserWait[];
   /** When each phase was first reached, by phase number. */
   phaseArrivals?: Record<string, string>;
+  /** Every time the workflow went back to work after it had declared its end: a change asked after the final report. See trackReopening. */
+  reopenings?: Reopening[];
   /** The review tier the workflow declared, kept once a later state omits it. */
   reviewTier?: ReviewTier;
   harness?: HarnessVersion;
@@ -508,9 +511,12 @@ export type RunMetrics = {
   };
   time: {
     startedAt: string | null;
+    /** The last end the workflow declared: a run reopened after its final report ends when it completes again. */
     endedAt: string | null;
     /** From the start to the end of the workflow, or to now while it runs. */
     elapsedMs: number;
+    /** Spent on changes asked after the final report, inside `elapsedMs`. Absent when the run was never reopened. */
+    reopened?: { count: number; ms: number };
     /** Spent waiting on the user, by reason. */
     userWaitMs: number;
     waits: { reason: UserWait["reason"]; count: number; ms: number }[];
@@ -518,6 +524,7 @@ export type RunMetrics = {
     activeMs: number;
     /** Spent under an open incident, with nothing moving the run forward. */
     incidentMs: number;
+    /** Up to the first end: the time of a reopening is in `reopened`. */
     phases: { phase: number; enteredAt: string; ms: number }[];
   };
   complexity: {

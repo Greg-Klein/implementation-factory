@@ -491,6 +491,17 @@ describe("break attempts", () => {
     expect(criterion(view, "AC1").reasons).toEqual([]);
   });
 
+  it("should give in the summary the reason of the check that holds the criterion, ahead of the attempt note", () => {
+    const view = coverage({ reports: [report("qa-evidence.json", qa([
+      { id: "D1", label: "Reproduction", verdict: "fail", checkIds: ["AC1-C1"], codeSnapshotId: OLD, codeSnapshotAtEnd: OLD },
+      { id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] },
+      attempt("A1", "pass"),
+    ]))] });
+    expect(criterion(view, "AC1").status).toBe("unverified");
+    expect(renderAcceptanceSummary(view).markdown).toContain("**AC1** unverified: Le filtre garde sa valeur au retour (An earlier failure was not explicitly replaced: D1.)");
+    expect(renderAcceptanceSummary(view).json.criteria[0].reasons.at(-1)).toBe("A break attempt that finds nothing does not verify the criterion.");
+  });
+
   it("should not show a passing attempt on a multi-check criterion as uncounted evidence", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([attempt("A1", "pass", { criterionIds: ["AC2"], checkIds: undefined })]))] });
     expect(criterion(view, "AC2").unassigned).toEqual([]);

@@ -6,7 +6,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 
 ## Language
 
-`summary` and `reason` are written in the workflow language ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `IMPL_LANGUAGE`, `fr` for French, English otherwise), with `implementation-harness:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
+`summary` and `reason` are written in the workflow language the input's `language` gives ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `fr` for French, English otherwise), with `implementation-harness:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
 
 ---
 
@@ -15,6 +15,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 ```json
 {
   "repository": "/abs/path/to/checkout",
+  "language": "en",
   "tickets": [
     { "issue_url": "https://gitlab.com/acme/shop/-/issues/101" },
     { "issue_url": "https://gitlab.com/acme/shop/-/issues/102" },
@@ -32,6 +33,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 ```
 
 - `repository`: absolute path of the main checkout, the directory the session runs in.
+- `language`: the workflow language, `fr` or `en`, read by the console from `IMPL_LANGUAGE`. The session never reads the environment for it.
 - `tickets`: the tickets to predict: the new ones, and those of the repository whose earlier analysis failed. An empty array is valid and gives an output with two empty arrays.
 - `known`: earlier predictions for tickets of the same repository that are `queued`, `running` or `awaiting_merge`. They are compared against, never recomputed and never repeated in the output `tickets`. May be empty or absent.
 

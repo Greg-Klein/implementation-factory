@@ -12,9 +12,10 @@ const error = (value: unknown) => {
 };
 
 describe("the input file of a scheduling session", () => {
-  it("should list the new tickets and the known predictions with their state", () => {
-    expect(scheduleInput("/work/shop", [url(101)], [{ state: "running", ticket: { issueUrl: url(98), repository: "/work/shop", analysis: "done", areas: ["src/checkout"], files: ["src/checkout/cart.tsx"], confidence: "high", summary: "Récapitulatif du panier." } }])).toEqual({
+  it("should list the language, the new tickets and the known predictions with their state", () => {
+    expect(scheduleInput("/work/shop", "fr", [url(101)], [{ state: "running", ticket: { issueUrl: url(98), repository: "/work/shop", analysis: "done", areas: ["src/checkout"], files: ["src/checkout/cart.tsx"], confidence: "high", summary: "Récapitulatif du panier." } }])).toEqual({
       repository: "/work/shop",
+      language: "fr",
       tickets: [{ issue_url: url(101) }],
       known: [{ issue_url: url(98), areas: ["src/checkout"], files: ["src/checkout/cart.tsx"], state: "running" }],
     });

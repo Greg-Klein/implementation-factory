@@ -25,6 +25,8 @@ export type RunState = {
   repository?: string;
   /** The branch a stacked run was started on. */
   baseBranch?: string;
+  /** The base the watcher named for this ticket. */
+  ticketBaseBranch?: string;
   worktree?: RunWorktree;
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. Absent on states built before this field existed. */
@@ -93,7 +95,7 @@ export type QueuedRunView = QueuedRun & {
   summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
 };
 /** Mirrors TicketProposal in server/types.ts: a ticket a watcher found, waiting for the user's decision. */
-export type TicketProposal = { issueUrl: string; title?: string; source?: string };
+export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; refusal?: string };
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
 export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */

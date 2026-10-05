@@ -78,6 +78,12 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
               <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.baseBranch}>{run.baseBranch}</dd>
             </div>
           )}
+          {!run.baseBranch && run.ticketBaseBranch && (
+            <div>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">Base branch</dt>
+              <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.ticketBaseBranch}>{run.ticketBaseBranch}</dd>
+            </div>
+          )}
           {worktree && run.worktree && (
             <div>
               <dt className="text-[10px] font-semibold text-[var(--muted)]">Worktree</dt>

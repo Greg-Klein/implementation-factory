@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pluginRoot, scheduleRoot, scheduleTimeoutMs } from "./config.js";
+import { pluginRoot, scheduleRoot, scheduleTimeoutMs, workflowLanguage } from "./config.js";
 import { scheduleInput, validateSchedule, type KnownTicket, type ScheduleOutput } from "./domain.js";
 import { engine } from "./engine/index.js";
 import type { ScheduleSession } from "./engine/types.js";
@@ -30,7 +30,7 @@ export async function analyseTickets(repository: string, tickets: string[], know
   };
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    await writeFile(inputPath, JSON.stringify(scheduleInput(repository, tickets, known), null, 2));
+    await writeFile(inputPath, JSON.stringify(scheduleInput(repository, workflowLanguage, tickets, known), null, 2));
   } catch {
     return { ok: false, failure: "input file could not be written" };
   }

@@ -230,6 +230,8 @@ export type RunState = {
   issueUrl: string; instruction: string;
   /** The branch a stacked run was started on, handed to the workflow as `IMPL_BASE_BRANCH`. */
   baseBranch?: string;
+  /** The base the watcher named for this ticket, handed to the workflow as `IMPL_TICKET_BASE_BRANCH`. */
+  ticketBaseBranch?: string;
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
   sessionActive: boolean;
@@ -347,7 +349,7 @@ export type QueueForce = { mode: "base" } | { mode: "stacked"; baseBranch: strin
  * `repository`: the checkout the run will take a worktree of. `cwd` is the same path until it starts, kept for queues written before worktrees.
  * `batchId`: the paste it came with. `analysing`: its scheduling session has not answered yet. `demo`: a simulated ticket, never written to disk.
  */
-export type QueuedRun = { id: string; cwd: string; repository: string; issueUrl: string; instruction: string; queuedAt: string; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
+export type QueuedRun = { id: string; cwd: string; repository: string; issueUrl: string; instruction: string; queuedAt: string; baseBranch?: string; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
 /**
  * What a queued launch waits for. `slot`: a free place. `ticket`: the run
  * already on the same ticket. `analysis`: its scheduling session. `conflict`:
@@ -373,14 +375,16 @@ export type QueuedRunView = QueuedRun & {
   summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
 };
 /** A ticket whose checkout is known. Whatever found the tickets, a paste today, hands the registry a list of these. */
-export type ResolvedTicket = { repository: string; issueUrl: string };
+/** `baseBranch`: the branch the ticket's source says the work starts from and the merge request targets. */
+export type ResolvedTicket = { repository: string; issueUrl: string; baseBranch?: string };
 
 /**
  * A ticket an outside watcher found and the user has not decided on yet. It is
  * only an address: nothing is resolved, queued or analysed until it is accepted.
  * `source`: what the watcher was looking at, a project or a group path.
  */
-export type TicketProposal = { issueUrl: string; title?: string; source?: string };
+/** `refusal`: why the console could not launch it; it is not tried again while it stays in the watcher's file. */
+export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; refusal?: string };
 
 /** Everything every open page is told about, whichever run it has opened. */
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
@@ -415,9 +419,7 @@ export type ClientMessage =
   | { type: "queue.force"; queuedId: string; mode: "base" | "stacked"; onto?: string }
   /** Moves a waiting launch right before another one, or to the end of the queue with `before: null`. */
   | { type: "queue.move"; queuedId: string; before: string | null }
-  /** Queues proposed tickets as one batch, as if their URLs had been pasted. A failure is answered with `error` and leaves them proposed. */
-  | { type: "proposal.accept"; issueUrls: string[] }
-  /** Drops proposed tickets without starting them. They are not proposed again while they stay in the watcher's file. */
+  /** Drops tickets the console could not launch. They are not listed again while they stay in the watcher's file. */
   | { type: "proposal.dismiss"; issueUrls: string[] }
   /**
    * Removes the worktree of a run whose session is gone, live or archived. Without

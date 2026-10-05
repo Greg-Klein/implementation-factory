@@ -1,12 +1,11 @@
 import { parseTicketUrls } from "./domain.js";
 import { resolveProjectDirectory } from "./repository.js";
 import { mainCheckout } from "./worktree.js";
-import type { ResolvedTicket } from "./types.js";
+import type { ResolvedTicket, TicketProposal } from "./types.js";
 
 /**
- * Where a batch comes from. Today the only source is a list of URLs pasted in
- * the launch form; tickets pulled from GitLab by label or assignee would be a
- * second function of this file. Either way the registry is handed
+ * Where a batch comes from: a list of URLs pasted in the launch form, or the
+ * tickets an outside watcher found. Either way the registry is handed
  * `ResolvedTicket[]` and never learns how the list was made.
  *
  * Every ticket is resolved to its checkout before anything is queued: one
@@ -21,12 +20,34 @@ export async function resolvePastedTickets(issueUrls: string[]): Promise<Resolve
   const failures: string[] = [];
   for (const issueUrl of parsed.tickets) {
     try {
-      // A path inside a linked worktree names the same repository as its main checkout.
-      resolved.push({ issueUrl, repository: await mainCheckout(await resolveProjectDirectory("", issueUrl)) });
+      resolved.push(await resolveTicket(issueUrl));
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error));
     }
   }
   if (failures.length > 0) throw new Error([...new Set(failures)].join(" "));
   return resolved;
+}
+
+async function resolveTicket(issueUrl: string): Promise<ResolvedTicket> {
+  // A path inside a linked worktree names the same repository as its main checkout.
+  return { issueUrl, repository: await mainCheckout(await resolveProjectDirectory("", issueUrl)) };
+}
+
+/**
+ * The tickets a watcher found, each resolved on its own: unlike a paste,
+ * nobody is in front of a form, so one ticket without a checkout keeps only
+ * itself out. Each carries the base its watcher named.
+ */
+export async function resolveProposedTickets(proposals: TicketProposal[]) {
+  const resolved: ResolvedTicket[] = [];
+  const refused: { issueUrl: string; reason: string }[] = [];
+  for (const proposal of proposals) {
+    try {
+      resolved.push({ ...(await resolveTicket(proposal.issueUrl)), ...(proposal.baseBranch ? { baseBranch: proposal.baseBranch } : {}) });
+    } catch (error) {
+      refused.push({ issueUrl: proposal.issueUrl, reason: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { resolved, refused };
 }

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
+import type { WorkflowLanguage } from "./acceptance-text.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
 export { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
@@ -881,9 +882,10 @@ export type ScheduleOutput = { tickets: SchedulePrediction[]; edges: ScheduleOut
 export type KnownTicket = { ticket: ScheduledTicket; state: "queued" | "running" | "awaiting_merge" };
 
 /** The input file of a scheduling session, as contracts/schedule.md defines it. */
-export function scheduleInput(repository: string, tickets: string[], known: KnownTicket[]) {
+export function scheduleInput(repository: string, language: WorkflowLanguage, tickets: string[], known: KnownTicket[]) {
   return {
     repository,
+    language,
     tickets: tickets.map((issueUrl) => ({ issue_url: issueUrl })),
     known: known.map(({ ticket, state }) => ({ issue_url: ticket.issueUrl, areas: ticket.areas, files: ticket.files, state })),
   };
@@ -968,6 +970,19 @@ export function admitBatch(tickets: ResolvedTicket[], taken: Iterable<string>) {
  * empty one: the caller keeps what it read last. An entry that is not a ticket
  * URL is skipped, a ticket named twice is kept once.
  */
+/**
+ * A branch name read from a file the console does not own, or `undefined`. It
+ * reaches the session's environment and the workflow's git commands, so only
+ * the plain shape of a git branch passes: no option, no range, no ref syntax.
+ */
+export function branchName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const name = value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name) || name.length > 200) return undefined;
+  if (name.includes("..") || name.includes("//") || /[./]$/.test(name) || name.endsWith(".lock") || name.split("/").some((part) => part.startsWith("."))) return undefined;
+  return name;
+}
+
 export function readProposalSnapshot(content: unknown): TicketProposal[] | undefined {
   if (!isRecord(content) || !Array.isArray(content.tickets)) return undefined;
   const proposals = new Map<string, TicketProposal>();
@@ -975,7 +990,8 @@ export function readProposalSnapshot(content: unknown): TicketProposal[] | undef
     const issueUrl = typeof entry.url === "string" ? normalizeTicketUrl(entry.url) : undefined;
     if (!issueUrl || proposals.has(issueUrl)) continue;
     const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
-    proposals.set(issueUrl, { issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}) });
+    const baseBranch = branchName(entry.baseBranch);
+    proposals.set(issueUrl, { issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}), ...(baseBranch ? { baseBranch } : {}) });
   }
   return [...proposals.values()];
 }
@@ -1177,8 +1193,8 @@ export function deliveryTargetBranch(forge: Forge, response: unknown): string | 
  * request targets comes first: the pilot cuts the work from the base it chose,
  * which is not the commit the checkout stood at when the run was launched.
  */
-export function diffBases(state: Pick<RunState, "baseBranch" | "baseCommit">, targetBranch?: string): string[] {
-  const bases = [...(targetBranch ? [`origin/${targetBranch}`, targetBranch] : []), state.baseBranch, state.baseCommit];
+export function diffBases(state: Pick<RunState, "baseBranch" | "ticketBaseBranch" | "baseCommit">, targetBranch?: string): string[] {
+  const bases = [...(targetBranch ? [`origin/${targetBranch}`, targetBranch] : []), state.baseBranch, state.ticketBaseBranch, state.baseCommit];
   return bases.filter((base): base is string => Boolean(base));
 }
 

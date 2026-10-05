@@ -221,18 +221,19 @@ The disclosure offers two forced starts. A forced ticket still waits for a free 
 
 - The scheduling ran once on a real GitLab project: three tickets of a small test repository, with the real Claude Code. The analysis took about 30 seconds, the tickets held behind a merge request were released within seconds of the merge, and the ticket started after it contained the merged code. One trial does not measure the quality of the predictions. Never tried for real: the stacked start, the forced start from the base, and a conflict found between two tickets that were both analysed without failure. The automated tests replace `claude` and `glab` with stand-ins.
 - A prediction is an estimate made before the code is written. Two tickets judged independent can still conflict at merge time.
-- The harness does not pull tickets from GitLab by label or assignee itself: you paste the URLs, or an outside watcher proposes them (next section).
+- The harness does not pull tickets from GitLab by label or assignee itself: you paste the URLs, or an outside watcher finds them (next section).
 
-### Tickets proposed by a watcher
+### Tickets found by a watcher
 
 The harness can show tickets found by an outside tool, for example a script that asks GitLab for a label, an assignee and a status. That tool writes the list of tickets it found to `console/data/ticket-proposals.json`, and the harness reads the file again every five seconds. The two share nothing else: either can be stopped without affecting the other, and without the file the harness works as before.
 
-The tickets appear in the left list, under **Proposed**. Nothing starts on its own:
+Every new ticket of the file is queued as soon as the harness reads it, without a click. The tickets read together form one batch, so the tickets of one repository are compared before they start, and the queue holds them like pasted URLs: the slots of `IMPL_MAX_CONCURRENT_RUNS`, the conflicts and the merges still decide when each one runs. Each run costs tokens, so the watcher's filter is what decides how much the harness spends.
 
-- **Start** queues the ticket like a pasted URL. **Start all** sends them as one batch, so the tickets of one repository are compared before they start.
-- **Dismiss** removes the ticket from the list.
+The watcher can name the branch a ticket starts from with `baseBranch`, typically the feature branch of its epic. The run then cuts its branch from it and its merge request targets it, without asking. Without it, the run asks for the base when there is more than one candidate.
 
-A ticket launched or dismissed is not proposed again while it stays in the file. If it leaves the file and comes back, it is proposed again. A ticket already queued, running or waiting for its merge is not proposed.
+A ticket the harness cannot launch, for example because it has no checkout under `IMPL_SEARCH_ROOTS`, stays in the left list under **From the watcher** with the reason. It is not tried again until it leaves the file or the console restarts. **Dismiss** removes it from the list.
+
+A ticket queued or dismissed is not queued again while it stays in the file. If it leaves the file and comes back, it is queued again. A ticket already queued, running or waiting for its merge is left alone. A ticket cancelled in the queue is not queued again while it stays in the file.
 
 The `IMPL_TICKET_PROPOSALS_FILE` setting names another file by its absolute path. The expected format is described in [contracts/ticket-proposals.md](contracts/ticket-proposals.md).
 

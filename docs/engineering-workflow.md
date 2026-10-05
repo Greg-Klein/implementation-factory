@@ -165,6 +165,14 @@ A ticket held by another one can start before the first one's merge request is m
 
 Without `IMPL_BASE_BRANCH`, nothing changes.
 
+### Base named by the watcher
+
+A watcher can name the base of a ticket it found (`baseBranch` in `contracts/ticket-proposals.md`), usually the feature branch of its epic. The console passes it as `IMPL_TICKET_BASE_BRANCH`, unless the ticket is stacked.
+
+- When the branch exists on the remote or locally, step 2 does not ask the base branch question and step 3 cuts the ticket's branch from it, with the same rules as any base.
+- When it exists nowhere, step 2 asks the question and says so. The pilot never picks another base by itself.
+- The merge request targets that branch like any base chosen at step 2: `Related to` when it is not the default branch, no stacked line.
+
 ## QA method
 
 The contract is `contracts/qa.md`, the method `skills/review-change/references/behavioral-qa.md`. `qa-reviewer` declares its tools (`Bash`, `Read`, `Glob`, `Grep`, `Write`, `Skill` and Playwright) and has no `Edit`.

@@ -117,7 +117,7 @@ describe("a batch of tickets", () => {
     // One session, in the checkout, reporting to no run.
     expect(calls()).toHaveLength(1);
     expect(calls()[0]).toMatchObject({ cwd: expect.stringContaining(path.basename(shop)), runId: null, hookUrl: null });
-    expect(calls()[0].input).toEqual({ repository: shop, tickets: [101, 102, 103].map((iid) => ({ issue_url: url(iid) })), known: [] });
+    expect(calls()[0].input).toEqual({ repository: shop, language: "en", tickets: [101, 102, 103].map((iid) => ({ issue_url: url(iid) })), known: [] });
     // The answer was read: its directory is gone, ticket content with it.
     expect(readdirSync(path.join(storage, "data", "schedule"))).toEqual([]);
   });

@@ -74,7 +74,7 @@ if (inputDirectory && process.env.IMPL_RUN_ID) {
   try {
     writeFileSync(path.join(inputDirectory, `${process.env.IMPL_RUN_ID}.session.json`), JSON.stringify({
       cwd: process.cwd(), worktree: process.env.IMPL_RUN_WORKTREE, repository: process.env.IMPL_SOURCE_REPOSITORY,
-      branch: process.env.IMPL_SOURCE_BRANCH, dependencies: process.env.IMPL_WORKTREE_DEPENDENCIES, baseBranch: process.env.IMPL_BASE_BRANCH, argv,
+      branch: process.env.IMPL_SOURCE_BRANCH, dependencies: process.env.IMPL_WORKTREE_DEPENDENCIES, baseBranch: process.env.IMPL_BASE_BRANCH, ticketBaseBranch: process.env.IMPL_TICKET_BASE_BRANCH, argv,
     }));
   } catch { /* the test reads what it can */ }
   process.stdin.on("data", (chunk) => { try { appendFileSync(log, chunk); } catch { /* the test reads what it can */ } });

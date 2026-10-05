@@ -382,7 +382,6 @@ export function Harness() {
             move: (queuedId, before) => send({ type: "queue.move", queuedId, before }),
           }}
           proposalActions={{
-            accept: (issueUrls) => send({ type: "proposal.accept", issueUrls }),
             dismiss: (issueUrls) => send({ type: "proposal.dismiss", issueUrls }),
           }}
         />

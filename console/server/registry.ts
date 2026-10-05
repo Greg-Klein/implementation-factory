@@ -15,7 +15,8 @@ import { resolveProjectDirectory } from "./repository.js";
 import { fetchIssueLinks, fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
 import { analyseTickets, clearScheduleFiles, type AnalysisResult } from "./schedule-analysis.js";
 import { MergeWatcher } from "./merge-watch.js";
-import { TicketProposals } from "./ticket-proposals.js";
+import { TicketProposals, type ProposalLaunch } from "./ticket-proposals.js";
+import { resolveProposedTickets } from "./ticket-source.js";
 import type { ScheduleSession } from "./engine/types.js";
 import { engine } from "./engine/index.js";
 import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
@@ -29,7 +30,7 @@ import { declaredCompletion } from "./workflow-state.js";
 import { discardRunWorktree, prepareRunWorktree, removeWorktreeOnRequest, settleRunWorktree, type WorktreeRemovalResult } from "./run-worktrees.js";
 import { currentBranch, headCommit, mainCheckout } from "./worktree.js";
 import { harnessVersion, recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
-import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, RunMetrics, ScheduledTicket, ScheduleEdge } from "./types.js";
+import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, RunMetrics, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 
 export type IncidentActionRequest = { runId: string; incidentId: string; expectedRevision: number; requestId: string; action: IncidentAction; reason?: string };
 export type IncidentActionResult = { outcome: "done" | "refused" | "duplicate"; message: string };
@@ -100,7 +101,7 @@ export class RunRegistry {
     apply: (watch, status) => this.applyMergeStatus(watch, status),
     intervalMs: mergePollMs,
   });
-  /** The tickets a watcher found, waiting for the user to accept or dismiss them. */
+  /** The tickets a watcher found: each one is queued as soon as it is read. */
   readonly proposals = new TicketProposals({
     file: proposalsFile,
     handledFile: proposalsHandledFile,
@@ -108,6 +109,7 @@ export class RunRegistry {
     // By address: a proposal has no checkout until it is accepted.
     taken: () => [...this.queue.map((entry) => entry.issueUrl), ...[...this.sessions.values()].filter((session) => session.holdsRepository).map((session) => session.state.issueUrl), ...this.watches.map((watch) => watch.issueUrl)],
     changed: () => this.publishSnapshot(),
+    launch: (proposals) => this.launchProposals(proposals),
   });
   /** Watches every run this registry holds, and only those. */
   readonly monitor = new RunMonitor(() => this.all(), healthPolicy);
@@ -211,7 +213,7 @@ export class RunRegistry {
   }
 
   private entry(ticket: ResolvedTicket, instruction: string | undefined, extra: Partial<QueuedRun> = {}): QueuedRun {
-    return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...extra };
+    return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...(ticket.baseBranch ? { baseBranch: ticket.baseBranch } : {}), ...extra };
   }
 
   /** The figures of every run measured, newest first: those on disk, and the runs held here as they stand now. */
@@ -287,6 +289,23 @@ export class RunRegistry {
     await this.drain();
     const keys = new Set(outcome.entries.map(runLockKey));
     return { ...outcome, started: this.all().filter((session) => !before.has(session.id) && keys.has(runLockKey(session.state))) };
+  }
+
+  /** Tickets a watcher found, queued as one batch. While shutting down nothing is launched nor refused: they are tried again at the next boot. */
+  private async launchProposals(proposals: TicketProposal[]): Promise<ProposalLaunch> {
+    if (this.shuttingDown) return { started: [], refused: [] };
+    const { resolved, refused } = await resolveProposedTickets(proposals);
+    if (resolved.length === 0 || this.shuttingDown) return { started: [], refused };
+    try {
+      const outcome = await this.enqueueBatch(resolved);
+      const queued = [...outcome.entries.map((entry) => entry.issueUrl), ...outcome.duplicates];
+      if (outcome.entries.length > 0) broadcast({ type: "notice", level: "info", title: "Tickets queued from the watcher", detail: outcome.entries.map((entry) => ticketReference(entry.issueUrl)).join(", "), at: now() });
+      return { started: queued, refused };
+    } catch (error) {
+      if (this.shuttingDown) return { started: [], refused };
+      const reason = error instanceof Error ? error.message : String(error);
+      return { started: [], refused: [...refused, ...resolved.map((ticket) => ({ issueUrl: ticket.issueUrl, reason }))] };
+    }
   }
 
   private admit(tickets: ResolvedTicket[], instruction: string | undefined, extra: Partial<QueuedRun> = {}) {
@@ -481,11 +500,12 @@ export class RunRegistry {
     // repository until the worktree is there: nothing may run in a path that is not.
     const session = this.register(new RunSession(id, {
       status: "starting", phase: 1, cwd: repository, repository, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(),
-      ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : {}),
+      ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : entry.baseBranch ? { ticketBaseBranch: entry.baseBranch } : {}),
     }));
     session.activity("system", "Session created", path.basename(repository));
     if (entry.forced?.mode === "stacked") session.activity("attention", "Stacked start", `On ${entry.forced.baseBranch}, the branch of ${ticketReference(entry.forced.onto)}: the ${forgeWords(forgeOf(entry.issueUrl)).delivery} will target this branch.`);
     else if (entry.forced) session.activity("attention", "Forced start from the base", "The batch schedule is ignored for this ticket.");
+    if (entry.forced?.mode !== "stacked" && entry.baseBranch) session.activity("system", "Base named by the watcher", `The work starts from ${entry.baseBranch} and the ${forgeWords(forgeOf(entry.issueUrl)).delivery} targets it.`);
     session.publish();
     const abandon = async (message: string) => {
       await session.dispose().catch(() => undefined);
@@ -543,6 +563,8 @@ export class RunRegistry {
         ...(prepared.worktree.dependencies ? { IMPL_WORKTREE_DEPENDENCIES: prepared.worktree.dependencies } : {}),
         // A stacked start: the workflow cuts its branch from this one and targets it, always from the run's own worktree.
         ...(entry.forced?.mode === "stacked" ? { IMPL_BASE_BRANCH: entry.forced.baseBranch } : {}),
+        // The base the ticket's source named, typically its feature branch. A stacked start, on a branch already cut from it, wins.
+        ...(entry.forced?.mode !== "stacked" && entry.baseBranch ? { IMPL_TICKET_BASE_BRANCH: entry.baseBranch } : {}),
       },
       onData: (data) => {
         session.appendTerminal(data);

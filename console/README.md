@@ -132,7 +132,7 @@ As soon as the ticket field holds two URLs, the form sends `batch.submit` (`issu
 
 The registry receives a list of resolved tickets (`enqueueBatch`). It drops the ones it already has, on the key repository and ticket, the others enter the queue under one `batchId`, and the page receives `batch.result` (`accepted`, `duplicates`).
 
-Tickets an outside watcher found take the same path once the user accepts them: `server/ticket-proposals.ts` reads the watcher's file, `proposal.accept` resolves the URLs and calls `enqueueBatch` (format in `contracts/ticket-proposals.md`).
+Tickets an outside watcher found take the same path as soon as they are read: `server/ticket-proposals.ts` reads the watcher's file, `registry.launchProposals` resolves each ticket on its own (`resolveProposedTickets`) and calls `enqueueBatch` (format in `contracts/ticket-proposals.md`).
 
 ### Analysis
 
@@ -221,7 +221,7 @@ The unit tests inject the answers, and the integration suite replaces `claude`, 
 | `server/index.ts` | HTTP and WebSocket server, lifecycle of the run |
 | `server/registry.ts` | runs held, queue, per-ticket lock and number of sessions, state of the schedule |
 | `server/ticket-source.ts` | where a batch comes from: today pasted URLs, resolved to their checkout |
-| `server/ticket-proposals.ts` | tickets an outside watcher found, read from its file and kept until the user decides |
+| `server/ticket-proposals.ts` | tickets an outside watcher found, read from its file and queued as soon as they are read; the refused ones are kept with their reason |
 | `server/schedule-analysis.ts` | one analysis session per repository, judged on its output file |
 | `server/merge-watch.ts` | timer that reads the state of the awaited merge requests, with no Claude session |
 | `server/ticket.ts` | `glab api` and `gh api` calls, by the forge of the address: title of a ticket, state of a merge request or pull request |

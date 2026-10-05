@@ -227,7 +227,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         {/* Right under the live runs: what waits is about to become one of them, the archives below are not. */}
         <QueueList queued={queued} actions={queueActions} />
 
-        {/* Below the queue: a proposal is one decision further from running than a queued ticket. */}
+        {/* Below the queue: what the watcher found and the console could not queue. */}
         <ProposalList proposals={proposals} actions={proposalActions} />
 
         {interrupted.length > 0 && (

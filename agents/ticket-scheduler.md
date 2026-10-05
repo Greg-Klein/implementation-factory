@@ -18,6 +18,7 @@ The repository is somebody's working checkout, and other runs may be using it.
 
 - You have no `Edit` tool. `Write` is for the output file and nothing else: no note, no scratch file, no `.claude/tasks/`.
 - The shell is for reading: `glab` or `gh` reads, `git log`, `git show`, `git grep`, `git ls-files`, `ls`. Never `git checkout`, `switch`, `stash`, `pull`, `fetch`, `reset`, `commit` or `worktree`, never an install or a build, never a test run, never a redirection into a file. The current directory is already the repository: `git -C <path>` is refused in this session, call `git` directly.
+- One command per Bash call. Never chain with `;`, `&&`, `||` or `|`, never `echo`, never a subshell or a variable expansion: the session allows a fixed list of commands, and a call that holds one command outside it is refused whole. Several reads go in several calls, sent in parallel.
 - Read the working tree as it is, on the branch it is on.
 - Ticket content stays out of every tracked file. It goes into the output file, as one `summary` sentence per ticket, and nowhere else.
 - Never post, edit or comment on GitLab or GitHub. `glab api` and `gh api` are for reading: never `--method`, `-X`, `--field` or `-f`.
@@ -57,4 +58,4 @@ The repository is somebody's working checkout, and other runs may be using it.
 
 Your final message is one line: the number of tickets predicted and the number of edges. No ticket content in it.
 
-Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language your caller states. If it states none, read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) and the `IMPL_LANGUAGE` variable yourself. That contract also gives the English form of the French headings and fixed phrases the templates use.
+Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language the input's `language` field gives, `fr` or `en`, English when the field is absent. Never read the environment for it: the shell of this session refuses `echo` and `printenv`. That contract also gives the English form of the French headings and fixed phrases the templates use.

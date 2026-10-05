@@ -714,6 +714,16 @@ export type AcceptanceSummary = {
  * `language` is the workflow language, and `view` must have been derived in
  * that same language: its reasons are quoted as they are.
  */
+/**
+ * The reasons of the checks that decide the criterion's status come first: the summary shows only the first
+ * reason, and a criterion's own reasons (no task, an idle attempt) are notes that never hold it.
+ */
+function summaryReasons(criterion: AcceptanceCriterionView): string[] {
+  const deciding = criterion.checks.filter((check) => check.status === criterion.status);
+  const others = criterion.checks.filter((check) => check.status !== criterion.status);
+  return [...new Set([...deciding.flatMap((check) => check.reasons), ...others.flatMap((check) => check.reasons), ...criterion.reasons])];
+}
+
 export function renderAcceptanceSummary(view: AcceptanceView, language: WorkflowLanguage = "en"): AcceptanceSummary {
   const t = acceptanceText(language);
   const sentence = t.sentence(view.counts);
@@ -723,8 +733,7 @@ export function renderAcceptanceSummary(view: AcceptanceView, language: Workflow
     const evidence = [...criterion.checks.flatMap((check) => check.evidence), ...criterion.unassigned];
     const attachments = [...new Set(evidence.flatMap((entry) => entry.attachments.map((attachment) => attachment.source)))];
     for (const attachment of attachments) localAttachments.add(attachment);
-    const reasons = [...criterion.reasons, ...criterion.checks.flatMap((check) => check.reasons)];
-    return { id: criterion.id, text: criterion.text, status: criterion.status, reasons: [...new Set(reasons)], attachments };
+    return { id: criterion.id, text: criterion.text, status: criterion.status, reasons: summaryReasons(criterion), attachments };
   });
 
   lines.push(t.descriptionHeading, "");
@@ -746,8 +755,7 @@ export function renderAcceptanceSummary(view: AcceptanceView, language: Workflow
     lines.push(t.tableHeader, "| --- | --- | --- |");
     for (const criterion of view.criteria) {
       const evidence = [...criterion.checks.flatMap((check) => check.evidence), ...criterion.unassigned].map((entry) => evidenceLine(entry, language));
-      const reasons = [...criterion.reasons, ...criterion.checks.flatMap((check) => check.reasons)];
-      const proof = evidence.length ? evidence.join(t.evidenceSeparator) : reasons[0] ?? t.noProof;
+      const proof = evidence.length ? evidence.join(t.evidenceSeparator) : summaryReasons(criterion)[0] ?? t.noProof;
       lines.push(`| ${cell(`${criterion.id} · ${criterion.text}`)} | ${t.status[criterion.status]} | ${cell(proof)} |`);
     }
     lines.push("");

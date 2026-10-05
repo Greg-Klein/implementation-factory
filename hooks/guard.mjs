@@ -211,6 +211,9 @@ export function guardDecision(payload, env = process.env) {
       return `Invoke \`${NAMESPACE}:${type}\`, not the bare name \`${type}\`: an agent of the same name installed beside this plugin wins the dispatch and the run gets another output contract.`;
     }
     const agent = type.startsWith(`${NAMESPACE}:`) ? type.slice(NAMESPACE.length + 1) : "";
+    if (agent === "developer" && typeof input.model === "string" && input.model && input.model !== "opus") {
+      return `Invoke \`${NAMESPACE}:developer\` without a model override: the developer runs on Opus, the model its definition declares, whatever the size of the task.`;
+    }
     if (tasks && REVIEWERS.includes(agent)) {
       const missing = unreportedTasks(tasks);
       if (missing.length) {

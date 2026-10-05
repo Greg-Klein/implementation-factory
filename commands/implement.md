@@ -194,7 +194,7 @@ Revise the plan when concrete evidence from a developer or reviewer disproves it
 
 ## Step 5 - Implement, one task at a time
 
-One `developer` agent per task, in dependency order. **Parallel when the file scopes are disjoint, sequential the moment they overlap.**
+One `developer` agent per task, in dependency order, with no model override: a hook refuses one that is not Opus. **Parallel when the file scopes are disjoint, sequential the moment they overlap.**
 
 Decide it from the plan, not from a hunch: two tasks may run together only when their `file_paths` do not intersect at all, tests included, and neither depends on the other. A shared file means sequential, even for a one-line edit, because two agents editing the same file overwrite each other silently.
 

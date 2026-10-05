@@ -33,6 +33,15 @@ describe("the hook guard", () => {
     expect(refusal("Agent", { subagent_type: "Explore" })).toBeUndefined();
   });
 
+  it("should refuse a developer moved off Opus and let its declared model through", () => {
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" })).toContain("without a model override");
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" })).toContain("Opus");
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "opus" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-harness:qa-reviewer", model: "sonnet" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" }, {})).toBeUndefined();
+  });
+
   it("should refuse a reviewer while a planned task has no report, naming the task", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }] }));
     writeFileSync(path.join(tasks, "developer-report-T1.md"), "# Rapport");

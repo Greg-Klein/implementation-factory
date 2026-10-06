@@ -17,7 +17,6 @@ The console's interface is in English. The language of what the workflow writes 
 | `principles/test-quality.md` | The shapes of a test that cannot fail for a defect. Read by the author and by the code reviewer, only when the diff touches test files. |
 | `hooks/guard.mjs` | Rules a tool call's input or a file listing decides, refused before the call runs. |
 | `hooks/gate.mjs` | The checks an editing agent's own files call for, run again when it stops. |
-| `hooks/plan-batches.mjs`, `merge-outputs.mjs`, `roll-call.mjs` | The steps of the pilot a rule decides, run as scripts it calls and reads the answer of: the plan checked against the criteria and split into batches, the developers' outputs merged, the plan called against the reports and the gate's ledger. |
 | `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
 The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the harness; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.

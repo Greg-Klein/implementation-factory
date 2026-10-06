@@ -1,8 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { mentions, outsideSections, taskDirectory } from "./task-files.mjs";
-
-export { taskDirectory };
 
 const NAMESPACE = "implementation-harness";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
@@ -31,6 +28,19 @@ const PUBLISHED_FILE = /(?:@|(?:--body-file|--file|-F|\bcat)[\s=]+["']?)((?:\.{0
 const MAX_PUBLISHED_BYTES = 1_000_000;
 const SESSION_TRACE = /co-authored-by:|claude-session:|claude\.ai\/code\/session_|generated with \[claude code\]/i;
 
+/** The task directory of the workflow, from the session's directory or one of its parents. */
+export function taskDirectory(cwd) {
+  let directory = path.resolve(cwd || ".");
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = path.join(directory, ".claude", "tasks");
+    if (existsSync(candidate)) return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return undefined;
+}
+
 /**
  * The guard only speaks inside a run of the workflow: the plugin's hooks fire in
  * every session that loads it, and an agent named `developer` or a commit trailer
@@ -40,19 +50,17 @@ export function inWorkflow(env, tasks) {
   return Boolean(env.IMPL_RUN_ID) || Boolean(tasks && existsSync(path.join(tasks, "workflow-state.json")));
 }
 
-/**
- * Plan tasks no developer reported on and the merged report does not name.
- * A section a developer's report brought into the merged file names nothing:
- * one task's report citing another is not that other task accounted for.
- */
-export function unreportedTasks(tasks) {
+/** Plan tasks no developer reported on and the merged report does not name. */
+function unreportedTasks(tasks) {
   let plan;
   try { plan = JSON.parse(readFileSync(path.join(tasks, "planner-output.json"), "utf8")); } catch { return []; }
   const ids = Array.isArray(plan?.tasks) ? plan.tasks.map((task) => task?.id).filter((id) => typeof id === "string" && id) : [];
   let merged = "";
   try { merged = readFileSync(path.join(tasks, "developer-report.md"), "utf8"); } catch { /* no merged report yet */ }
-  const written = outsideSections(merged);
-  return ids.filter((id) => !existsSync(path.join(tasks, `developer-report-${id}.md`)) && !mentions(id, written));
+  return ids.filter((id) => {
+    if (existsSync(path.join(tasks, `developer-report-${id}.md`))) return false;
+    return !new RegExp(`(^|[^\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`).test(merged);
+  });
 }
 
 /** Whether the session works in a linked git worktree: every run the console starts, and a session opened in one by hand. */

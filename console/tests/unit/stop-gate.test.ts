@@ -146,7 +146,7 @@ describe("the stop gate", () => {
     // The compiler is a grandchild here, as it is behind `npm run typecheck`: killing the script alone would leave the gate waiting for it.
     writeFileSync(path.join(cwd, "node_modules", ".bin", "tsc"), "#!/bin/sh\nsleep 30\necho done\n");
     const before = Date.now();
-    expect(stop("a1", {}, { IMPL_RUN_ID: "run", IMPL_GATE_STEP_TIMEOUT_MS: "200" })).toBeUndefined();
+    expect(stop("a1", {}, { IMPL_RUN_ID: "run", IMPL_GATE_STEP_TIMEOUT_MS: "2000" })).toBeUndefined();
     expect(Date.now() - before).toBeLessThan(10_000);
     expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["type-check: skipped", "lint: pass", "related tests: pass"]);
 

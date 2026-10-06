@@ -1,0 +1,100 @@
+{
+  "swallowed-rejection": {
+    "console/components/evidence-panel.tsx": 1,
+    "console/components/harness.tsx": 3,
+    "console/scripts/postinstall.mjs": 1,
+    "console/server/acceptance-runtime.ts": 5,
+    "console/server/artifacts.ts": 1,
+    "console/server/context.ts": 1,
+    "console/server/engine/usage.ts": 2,
+    "console/server/evidence-archive.ts": 5,
+    "console/server/hook-bridge.ts": 1,
+    "console/server/hooks.ts": 1,
+    "console/server/index.ts": 3,
+    "console/server/registry.ts": 9,
+    "console/server/review-findings.ts": 1,
+    "console/server/run-metrics-runtime.ts": 3,
+    "console/server/run-session.ts": 3,
+    "console/server/run-worktrees.ts": 6,
+    "console/server/runtime-recipe.ts": 1,
+    "console/server/schedule-analysis.ts": 3,
+    "console/server/self-improvement.ts": 3,
+    "console/server/ticket-proposals.ts": 1,
+    "console/server/transcript.ts": 2,
+    "console/server/worktree.ts": 4
+  },
+  "empty-catch": {
+    "console/lib/theme.ts": 1,
+    "console/server/domain.ts": 1,
+    "console/server/registry.ts": 1,
+    "console/server/run-archive.ts": 1,
+    "console/server/run-metrics-runtime.ts": 2,
+    "console/server/run-worktrees.ts": 1,
+    "console/server/ticket-proposals.ts": 1,
+    "hooks/code-snapshot.mjs": 1,
+    "hooks/gate.mjs": 1,
+    "hooks/guard.mjs": 2
+  },
+  "floating-promise": {
+    "console/components/harness.tsx": 2,
+    "console/components/metrics-panel.tsx": 1,
+    "console/lib/sound.ts": 2,
+    "console/server/artifacts.ts": 2,
+    "console/server/demo.ts": 2,
+    "console/server/hook-bridge.ts": 1,
+    "console/server/hooks.ts": 1,
+    "console/server/index.ts": 5,
+    "console/server/merge-watch.ts": 2,
+    "console/server/registry.ts": 14,
+    "console/server/run-metrics-runtime.ts": 1,
+    "console/server/run-monitor.ts": 2,
+    "console/server/run-session.ts": 1,
+    "console/server/self-improvement.ts": 2,
+    "console/server/ticket-proposals.ts": 1,
+    "console/server/transcript.ts": 2
+  },
+  "cast-parsed-json": {
+    "console/components/document-viewer.tsx": 1,
+    "console/components/evidence-panel.tsx": 3,
+    "console/components/harness.tsx": 4,
+    "console/components/metrics-panel.tsx": 1,
+    "console/components/recipe-dialog.tsx": 2,
+    "console/components/self-improvement-review-panel.tsx": 1,
+    "console/server/acceptance-runtime.ts": 1,
+    "console/server/code-snapshot.ts": 2,
+    "console/server/context.ts": 1,
+    "console/server/engine/claude-code.ts": 1,
+    "console/server/engine/usage.ts": 2,
+    "console/server/evidence-archive.ts": 1,
+    "console/server/index.ts": 2,
+    "console/server/review-findings.ts": 1,
+    "console/server/run-metrics-runtime.ts": 3,
+    "console/server/run-worktrees.ts": 1
+  },
+  "env-nullish-default": {
+    "bin/config.mjs": 3,
+    "console/server/config.ts": 5,
+    "console/server/repository.ts": 1
+  },
+  "fixed-wait": {
+    "console/tests/integration/incidents.spec.ts": 2,
+    "console/tests/integration/proposals.spec.ts": 1
+  },
+  "existence-only-assertion": {
+    "console/tests/integration/helpers.ts": 1,
+    "console/tests/integration/incidents.spec.ts": 1,
+    "console/tests/integration/worktrees.spec.ts": 1,
+    "console/tests/unit/evidence-archive.test.ts": 1,
+    "console/tests/unit/hook-guard.test.ts": 8,
+    "console/tests/unit/hooks.test.ts": 1,
+    "console/tests/unit/parallel-runs.test.ts": 1,
+    "console/tests/unit/run-health.test.ts": 1,
+    "console/tests/unit/run-worktree-lifecycle.test.ts": 3,
+    "console/tests/unit/run-worktree.test.ts": 1,
+    "console/tests/unit/schedule-validation.test.ts": 2,
+    "console/tests/unit/session-prompt.test.ts": 1
+  },
+  "skipped-test": {
+    "console/tests/unit/launcher.test.ts": 3
+  }
+}

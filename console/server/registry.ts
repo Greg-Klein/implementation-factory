@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, now } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRecurringFindings } from "./review-findings.js";
@@ -12,12 +12,12 @@ import { clearPendingQuestion } from "./hooks.js";
 import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
 import { acknowledgeDemoInstruction, DEMO_BATCH, DEMO_CWD, demoBatchLaunchState, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
-import { resolveProjectDirectory } from "./repository.js";
+import { checkoutProject, resolveProjectDirectory } from "./repository.js";
 import { fetchIssueLinks, fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
 import { analyseTickets, clearScheduleFiles, type AnalysisResult } from "./schedule-analysis.js";
 import { MergeWatcher } from "./merge-watch.js";
 import { TicketProposals, type ProposalLaunch } from "./ticket-proposals.js";
-import { resolveProposedTickets } from "./ticket-source.js";
+import { resolveProposedTickets, resolveTargets } from "./ticket-source.js";
 import type { ScheduleSession } from "./engine/types.js";
 import { engine } from "./engine/index.js";
 import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
@@ -214,7 +214,7 @@ export class RunRegistry {
   }
 
   private entry(ticket: ResolvedTicket, instruction: string | undefined, extra: Partial<QueuedRun> = {}): QueuedRun {
-    return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...(ticket.baseBranch ? { baseBranch: ticket.baseBranch } : {}), ...extra };
+    return { id: `queued-${crypto.randomUUID().slice(0, 8)}`, cwd: ticket.repository, repository: ticket.repository, issueUrl: ticket.issueUrl.trim(), instruction: instruction?.trim() ?? "", queuedAt: now(), ...(ticket.baseBranch ? { baseBranch: ticket.baseBranch } : {}), ...(ticket.deliveries ? { deliveries: ticket.deliveries } : {}), ...extra };
   }
 
   /** The figures of every run measured, newest first: those on disk, and the runs held here as they stand now. */
@@ -250,7 +250,9 @@ export class RunRegistry {
     // A path inside a linked worktree, or below the root, names the same repository as its main checkout.
     const repository = await mainCheckout(await resolveProjectDirectory(request.cwd, request.issueUrl));
     if (this.shuttingDown) throw new Error("The application is shutting down.");
-    const entry = this.entry({ repository, issueUrl: request.issueUrl }, request.instruction);
+    // A checkout typed by hand may belong to another project than the ticket's: the workflow is told so.
+    const deliveries = deliveryProjects(request.issueUrl, [await checkoutProject(repository)]);
+    const entry = this.entry({ repository, issueUrl: request.issueUrl, ...(deliveries ? { deliveries } : {}) }, request.instruction);
     // Beside tickets that have no prediction, no session compares it. Its blocking links are read
     // here, before it may start, so the page still opens the run it asked for.
     if (!this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length === 0 && this.repositoryTickets(repository).length > 0) {
@@ -307,6 +309,21 @@ export class RunRegistry {
       const reason = error instanceof Error ? error.message : String(error);
       return { started: [], refused: [...refused, ...resolved.map((ticket) => ({ issueUrl: ticket.issueUrl, reason }))] };
     }
+  }
+
+  /**
+   * A ticket of the watcher the console could not launch, sent by the user to
+   * the checkouts they chose: one run per repository, with the base the watcher
+   * named. It is then handled like any accepted proposal.
+   */
+  async launchProposal(issueUrl: string, paths: string[]): Promise<BatchOutcome> {
+    const [listed] = this.proposals.proposed([issueUrl]);
+    const proposal = this.proposals.open().find((candidate) => candidate.issueUrl === listed);
+    if (!proposal) throw new Error("This ticket is no longer listed.");
+    if (paths.length === 0) throw new Error("Choose at least one repository.");
+    const outcome = await this.enqueueBatch(await resolveTargets(proposal.issueUrl, paths, proposal.baseBranch));
+    await this.proposals.handle([proposal.issueUrl]);
+    return outcome;
   }
 
   private admit(tickets: ResolvedTicket[], instruction: string | undefined, extra: Partial<QueuedRun> = {}) {
@@ -506,6 +523,7 @@ export class RunRegistry {
     session.activity("system", "Session created", path.basename(repository));
     if (entry.forced?.mode === "stacked") session.activity("attention", "Stacked start", `On ${entry.forced.baseBranch}, the branch of ${ticketReference(entry.forced.onto)}: the ${forgeWords(forgeOf(entry.issueUrl)).delivery} will target this branch.`);
     else if (entry.forced) session.activity("attention", "Forced start from the base", "The batch schedule is ignored for this ticket.");
+    if (entry.deliveries) session.activity("system", entry.deliveries.length > 1 ? "Ticket delivered in several repositories" : "Ticket delivered in another project", entry.deliveries.length > 1 ? `One ${forgeWords(forgeOf(entry.issueUrl)).delivery} in each of ${entry.deliveries.join(", ")}, one run each. None of them closes the ticket.` : `The ${forgeWords(forgeOf(entry.issueUrl)).delivery} goes to ${entry.deliveries[0]} and names the ticket by its full reference.`);
     if (entry.forced?.mode !== "stacked" && entry.baseBranch) session.activity("system", "Base named by the watcher", `The work starts from ${entry.baseBranch} and the ${forgeWords(forgeOf(entry.issueUrl)).delivery} targets it.`);
     session.publish();
     const abandon = async (message: string) => {
@@ -568,6 +586,8 @@ export class RunRegistry {
         ...(entry.forced?.mode === "stacked" ? { IMPL_BASE_BRANCH: entry.forced.baseBranch } : {}),
         // The base the ticket's source named, typically its feature branch. A stacked start, on a branch already cut from it, wins.
         ...(entry.forced?.mode !== "stacked" && entry.baseBranch ? { IMPL_TICKET_BASE_BRANCH: entry.baseBranch } : {}),
+        // The projects that get a merge request for this ticket when it is not only its own: the reference and the closing keyword depend on it.
+        ...(entry.deliveries ? { IMPL_DELIVERY_PROJECTS: entry.deliveries.join(",") } : {}),
       },
       onData: (data) => {
         session.appendTerminal(data);

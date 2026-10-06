@@ -354,7 +354,7 @@ export type QueueForce = { mode: "base" } | { mode: "stacked"; baseBranch: strin
  * `repository`: the checkout the run will take a worktree of. `cwd` is the same path until it starts, kept for queues written before worktrees.
  * `batchId`: the paste it came with. `analysing`: its scheduling session has not answered yet. `demo`: a simulated ticket, never written to disk.
  */
-export type QueuedRun = { id: string; cwd: string; repository: string; issueUrl: string; instruction: string; queuedAt: string; baseBranch?: string; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
+export type QueuedRun = { id: string; cwd: string; repository: string; issueUrl: string; instruction: string; queuedAt: string; baseBranch?: string; deliveries?: string[]; batchId?: string; analysing?: boolean; forced?: QueueForce; demo?: boolean };
 /**
  * What a queued launch waits for. `slot`: a free place. `ticket`: the run
  * already on the same ticket. `analysis`: its scheduling session. `conflict`:
@@ -379,17 +379,26 @@ export type QueuedRunView = QueuedRun & {
   reason: QueueReason; blockedBy?: string; blocking?: QueueBlocker; cause?: QueueCause; detail?: string;
   summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
 };
+/** A ticket no checkout was found for. `project`: the path its URL names. */
+export type UnresolvedTicket = { issueUrl: string; project?: string };
 /** A ticket whose checkout is known. Whatever found the tickets, a paste today, hands the registry a list of these. */
-/** `baseBranch`: the branch the ticket's source says the work starts from and the merge request targets. */
-export type ResolvedTicket = { repository: string; issueUrl: string; baseBranch?: string };
+/**
+ * `baseBranch`: the branch the ticket's source says the work starts from and the merge request targets.
+ * `deliveries`: the projects that get a merge request for this ticket, one run each, when the ticket
+ * lives in none of them or there are several (`deliveryProjects`). Handed to the workflow as `IMPL_DELIVERY_PROJECTS`.
+ */
+export type ResolvedTicket = { repository: string; issueUrl: string; baseBranch?: string; deliveries?: string[] };
 
 /**
  * A ticket an outside watcher found and the user has not decided on yet. It is
  * only an address: nothing is resolved, queued or analysed until it is accepted.
  * `source`: what the watcher was looking at, a project or a group path.
  */
-/** `refusal`: why the console could not launch it; it is not tried again while it stays in the watcher's file. */
-export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; refusal?: string };
+/**
+ * `refusal`: why the console could not launch it; it is not tried again while it stays in the watcher's file.
+ * `repositories`: the projects the watcher says the merge requests go to, instead of the ticket's own.
+ */
+export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; repositories?: string[]; refusal?: string };
 
 /** Everything every open page is told about, whichever run it has opened. */
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
@@ -416,7 +425,7 @@ export type ClientMessage =
    * Several tickets at once, each resolved to its checkout from its URL. The
    * instruction applies to every ticket of the batch. Answered with `batch.result`.
    */
-  | { type: "batch.submit"; issueUrls: string[]; instruction?: string }
+  | { type: "batch.submit"; issueUrls: string[]; instruction?: string; targets?: Record<string, string[]> }
   /**
    * Starts a held ticket anyway, as soon as a place is free. `base`: from the
    * base branch, ignoring the schedule. `stacked`: on the branch of the ticket `onto` names.
@@ -426,6 +435,8 @@ export type ClientMessage =
   | { type: "queue.move"; queuedId: string; before: string | null }
   /** Drops tickets the console could not launch. They are not listed again while they stay in the watcher's file. */
   | { type: "proposal.dismiss"; issueUrls: string[] }
+  /** Queues a ticket of the watcher the console could not launch, one run per checkout the user chose. */
+  | { type: "proposal.launch"; issueUrl: string; repositories: string[] }
   /**
    * Removes the worktree of a run whose session is gone, live or archived. Without
    * `force` the server answers `confirm` when work would be lost, and removes nothing.
@@ -466,6 +477,8 @@ export type ServerMessage =
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   /** What became of a batch, answered to the page that pasted it. `duplicates`: tickets already queued, running or waiting for their merge, left out. */
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
+  /** A batch queued nothing because these tickets have no checkout: the page asks where their merge requests go, then sends it again with `targets`. */
+  | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
   | { type: "error"; message: string; runId?: string }
   /** What became of a worktree removal, answered to the page that asked. `risks`: what a forced removal would lose. */

@@ -28,6 +28,8 @@ export async function resetRun(page: Page) {
       }
     });
   }));
+  // While the runs were closed one by one, the page opened the last one left on its own: start again from the form.
+  await page.goto("/");
 }
 
 /**

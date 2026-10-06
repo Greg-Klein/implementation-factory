@@ -3,7 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { ticketProjectPath, gitRemoteProjects } from "./domain.js";
+import { ticketProjectPath, gitRemoteProjects, originProject } from "./domain.js";
 import type { RepositoryOption } from "./types.js";
 
 /** A checkout nested one level below a search root, such as ~/workspace/client/app. */
@@ -89,4 +89,21 @@ export async function resolveProjectDirectory(input: string, issueUrl: string) {
   const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;
   throw new Error(`No checkout found for ${project}. Give its path or add its root to IMPL_SEARCH_ROOTS.`);
+}
+
+/** The project a checkout pushes to, read from its `origin` remote. */
+export async function checkoutProject(directory: string) {
+  try {
+    return originProject(await readFile(path.join(directory, ".git", "config"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** The checkout of a project path, as a watcher names the repositories of a ticket. */
+export async function checkoutOfProject(project: string) {
+  const find = (repositories: RepositoryOption[]) => repositories.find((repository) => repository.project.toLowerCase() === project.toLowerCase());
+  const found = find(await discoverRepositories()) ?? find(await discoverRepositories({ fresh: true }));
+  if (!found) throw new Error(`No checkout found for ${project}. Add its root to IMPL_SEARCH_ROOTS.`);
+  return found.resolvedPath;
 }

@@ -4,7 +4,7 @@ import { ArchiveIcon, ChartBarIcon, FolderDashedIcon, CheckCircleIcon, ClockCoun
 import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { formatTokens } from "@/lib/metrics";
 import { statusColor } from "@/lib/notifications";
-import type { QueuedRunView, RunSummary, TicketProposal } from "@/lib/types";
+import type { QueuedRunView, RepositoryOption, RunSummary, TicketProposal } from "@/lib/types";
 import { ProposalList, type ProposalActions } from "./proposal-list";
 import { QueueList, type QueueActions } from "./queue-list";
 
@@ -155,10 +155,12 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
  * column as that run's progression, the two headings competed and the list read
  * as the top half of the progression rather than as the navigation it is.
  */
-export function RunRail({ runs, queued, archived = [], proposals = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions, proposalActions }: {
+export function RunRail({ runs, queued, archived = [], proposals = [], repositories = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions, proposalActions }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
   archived?: RunSummary[];
+  /** The checkouts a ticket of the watcher can be sent to when it has none of its own. */
+  repositories?: RepositoryOption[];
   proposals?: TicketProposal[];
   maxConcurrentRuns: number;
   selectedRunId: string | null;
@@ -228,7 +230,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], maxConcur
         <QueueList queued={queued} actions={queueActions} />
 
         {/* Below the queue: what the watcher found and the console could not queue. */}
-        <ProposalList proposals={proposals} actions={proposalActions} />
+        <ProposalList proposals={proposals} repositories={repositories} actions={proposalActions} />
 
         {interrupted.length > 0 && (
           <div role="group" aria-label="Interrupted runs" className="border-t border-[var(--line)]">

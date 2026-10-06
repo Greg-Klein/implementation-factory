@@ -97,6 +97,12 @@ function respond(response: ServerResponse, status: number, body: object) {
   response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(body));
 }
 
+/** The checkouts chosen per ticket, as a page sent them: anything that is not a list of paths is dropped. */
+function targetPaths(targets: unknown): Record<string, string[]> {
+  if (!targets || typeof targets !== "object" || Array.isArray(targets)) return {};
+  return Object.fromEntries(Object.entries(targets).map(([issueUrl, paths]) => [issueUrl, Array.isArray(paths) ? paths.filter((target): target is string => typeof target === "string" && Boolean(target.trim())) : []]));
+}
+
 async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "run.subscribe") {
     const subscription = clients.get(socket);
@@ -134,8 +140,12 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   }
   if (message.type === "batch.submit") {
     // The source of the tickets ends here: past this line a batch is a list of resolved tickets.
-    const tickets = await resolvePastedTickets(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
-    const outcome = await registry.enqueueBatch(tickets, { instruction: message.instruction });
+    const { resolved, unresolved } = await resolvePastedTickets(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : [], targetPaths(message.targets));
+    if (unresolved.length > 0) {
+      send(socket, { type: "batch.unresolved", tickets: unresolved });
+      return;
+    }
+    const outcome = await registry.enqueueBatch(resolved, { instruction: message.instruction });
     send(socket, { type: "batch.result", batchId: outcome.batchId, accepted: outcome.entries.length, duplicates: outcome.duplicates });
     return;
   }
@@ -144,6 +154,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     const issueUrls = registry.proposals.proposed(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
     if (issueUrls.length === 0) throw new Error("This ticket is no longer listed.");
     await registry.proposals.handle(issueUrls);
+    return;
+  }
+  if (message.type === "proposal.launch") {
+    const repositories = Array.isArray(message.repositories) ? message.repositories.filter((target) => typeof target === "string" && target.trim()) : [];
+    const outcome = await registry.launchProposal(String(message.issueUrl), repositories);
+    // Not a `batch.result`: that one clears the launch form, which this panel is not.
+    send(socket, { type: "notice", level: "info", at: now(), title: "Ticket queued", detail: outcome.entries.map((entry) => path.basename(entry.repository)).join(", ") });
     return;
   }
   if (message.type === "demo.start" && message.scenario === "batch") { registry.startDemoBatch(); return; }
@@ -377,7 +394,7 @@ wss.on("connection", (socket) => {
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined });
-      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
+      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
     }
   });
   socket.on("close", () => clients.delete(socket));

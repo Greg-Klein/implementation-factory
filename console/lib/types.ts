@@ -97,7 +97,9 @@ export type QueuedRunView = QueuedRun & {
   summary?: string; confidence?: ScheduleConfidence; analysisFailure?: string;
 };
 /** Mirrors TicketProposal in server/types.ts: a ticket a watcher found, waiting for the user's decision. */
-export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; refusal?: string };
+export type TicketProposal = { issueUrl: string; title?: string; source?: string; baseBranch?: string; repositories?: string[]; refusal?: string };
+/** Mirrors UnresolvedTicket in server/types.ts: a ticket of a batch no checkout was found for. */
+export type UnresolvedTicket = { issueUrl: string; project?: string };
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
 export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
@@ -109,6 +111,7 @@ export type ServerMessage =
   | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   | { type: "error"; message: string; runId?: string }
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
+  | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
   | ({ type: "worktree.result" } & WorktreeResult)
   | { type: "recipe.result"; repository: string; forgotten: boolean }
   | { type: "findings.result"; repository: string; forgotten: boolean }

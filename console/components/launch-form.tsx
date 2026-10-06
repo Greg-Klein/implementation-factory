@@ -2,8 +2,10 @@
 
 import { ArrowRightIcon, CheckIcon, FileTextIcon, FolderOpenIcon, GitBranchIcon, PlayIcon, RobotIcon } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
+import { proposalLabel } from "@/lib/run-state";
 import type { ParsedTickets } from "@/lib/ticket-urls";
-import type { RepositoryOption } from "@/lib/types";
+import type { RepositoryOption, UnresolvedTicket } from "@/lib/types";
+import { TargetPicker } from "./target-picker";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
@@ -118,16 +120,23 @@ function TicketCount({ parsed }: { parsed: ParsedTickets }) {
   );
 }
 
-export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart, onOpenRecipe }: {
+export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruction, setInstruction, repositories, detectedProject, detectingProject, missedProject, unresolved, targets, chooseTargets, canStart, onStart, onOpenRecipe }: {
   cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
   /** The ticket field as read by parseTicketUrls: two tickets or more make a batch. */
   parsed: ParsedTickets;
   instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
   detectingProject: boolean; canStart: boolean; onStart: () => void;
+  /** The single ticket's project when no checkout of it was found. */
+  missedProject?: string;
+  /** The tickets of the batch the server found no checkout for. */
+  unresolved: UnresolvedTicket[];
+  targets: Record<string, string[]>;
+  chooseTargets: (issueUrl: string, paths: string[]) => void;
   /** Opens what the console keeps about starting the app of a repository. */
   onOpenRecipe: (repository: string) => void;
 }) {
   const batch = parsed.tickets.length > 1;
+  const singleTargets = !batch && missedProject && parsed.tickets[0] ? targets[parsed.tickets[0]] ?? [] : [];
   const lines = issueUrl.split("\n").length;
   return (
     <section className="scrollbar-thin grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(340px,.8fr)]">
@@ -166,10 +175,20 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
           <TicketCount parsed={parsed} />
           {batch
             ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">The repository of each ticket is detected from its URL. Tickets of the same repository are compared before they start: those that touch the same code run one after the other.</p>
-            : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} onOpenRecipe={onOpenRecipe} />}
+            : missedProject && !cwd.trim()
+              ? <TargetPicker label="Merge request repositories" hint={`No checkout of ${missedProject}. Choose where the change goes: each repository gets its own run and merge request.`} selected={singleTargets} onChange={(paths) => chooseTargets(parsed.tickets[0], paths)} repositories={repositories} />
+              : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} onOpenRecipe={onOpenRecipe} />}
+          {batch && unresolved.length > 0 && (
+            <div role="group" aria-label="Tickets without a checkout" className="mb-5 space-y-4 rounded-[11px] border border-amber-300/70 bg-[var(--raised)] p-3.5">
+              <p className="text-[11px] leading-4 text-amber-800">No checkout was found for {unresolved.length > 1 ? "these tickets" : "this ticket"}. Choose where the merge requests go, then start again.</p>
+              {unresolved.map((ticket) => (
+                <TargetPicker key={ticket.issueUrl} compact label={proposalLabel(ticket.issueUrl)} hint={ticket.project ? `Ticket of ${ticket.project}` : undefined} selected={targets[ticket.issueUrl] ?? []} onChange={(paths) => chooseTargets(ticket.issueUrl, paths)} repositories={repositories} />
+              ))}
+            </div>
+          )}
           <label className="block"><span className="mb-2 block text-xs font-medium">Special instruction <span className="font-normal text-[var(--muted)]">· {batch ? "optional, applied to every ticket of the batch" : "optional"}</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop only, do not touch tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
-            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Start ${parsed.tickets.length} tickets` : "Start implementation"}</span><ArrowRightIcon size={16} />
+            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> {batch ? `Start ${parsed.tickets.length} tickets` : singleTargets.length > 1 ? `Start in ${singleTargets.length} repositories` : "Start implementation"}</span><ArrowRightIcon size={16} />
           </button>
         </form>
       </div>

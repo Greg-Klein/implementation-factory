@@ -7,7 +7,7 @@ import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
-import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, WorktreeResult } from "@/lib/types";
+import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
@@ -45,6 +45,14 @@ export function Harness() {
   const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
+  /** The project of the single ticket in the field when no checkout of it was found: the user then chooses where its merge requests go. */
+  const [missedProject, setMissedProject] = useState<string>();
+  /** The checkouts chosen per ticket URL, for the tickets that have none of their own. */
+  const [targets, setTargets] = useState<Record<string, string[]>>({});
+  /** The tickets of the last batch the server could not place, as long as they are still in the field. */
+  const [unresolved, setUnresolved] = useState<UnresolvedTicket[]>([]);
+  const pendingUnresolved = useMemo(() => unresolved.filter((ticket) => parsedTickets.tickets.includes(ticket.issueUrl)), [unresolved, parsedTickets]);
+  const chooseTargets = useCallback((ticketUrl: string, paths: string[]) => setTargets((current) => ({ ...current, [ticketUrl]: paths })), []);
   const [notice, setNotice] = useState<Notice>();
   const [error, setError] = useState<string>();
   /** What became of the last incident action this page sent: a refusal is said next to the incident, not in a banner. */
@@ -113,6 +121,8 @@ export function Harness() {
     setDetectedProject(undefined);
     setIssueUrl("");
     setInstruction("");
+    setTargets({});
+    setUnresolved([]);
   }, []);
   const clearLaunchFormRef = useRef(clearLaunchForm);
 
@@ -157,6 +167,7 @@ export function Harness() {
         if (message.type === "error") setError(message.message);
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
+        if (message.type === "batch.unresolved") setUnresolved(message.tickets);
         if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
         if (message.type === "recipe.result" || message.type === "findings.result") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
@@ -218,6 +229,7 @@ export function Harness() {
   }, []);
 
   useEffect(() => {
+    setMissedProject(undefined);
     // A batch resolves each ticket to its own checkout on the server: nothing to detect here.
     if (!singleTicket || !parseTicketUrl(issueUrl) || cwdRef.current.trim()) {
       setDetectingProject(false);
@@ -235,6 +247,7 @@ export function Harness() {
             setCwd(result.detected.path);
             setDetectedProject(result.detected.project);
           }
+          if (!result.detected && !cwdRef.current.trim()) setMissedProject(parseTicketUrl(issueUrl)?.project);
         })
         .catch(() => undefined)
         .finally(() => { if (!controller.signal.aborted) setDetectingProject(false); });
@@ -345,7 +358,16 @@ export function Harness() {
       setComposingRun(true);
       unlockSound();
       if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
-      send({ type: "batch.submit", issueUrls: parsedTickets.tickets, instruction });
+      send({ type: "batch.submit", issueUrls: parsedTickets.tickets, instruction, targets: Object.fromEntries(pendingUnresolved.map((ticket) => [ticket.issueUrl, targets[ticket.issueUrl] ?? []])) });
+      return;
+    }
+    const ticketUrl = parsedTickets.tickets[0];
+    const chosen = missedProject && ticketUrl ? targets[ticketUrl] ?? [] : [];
+    if (chosen.length > 1) {
+      // One run per repository: like a batch, the list shows them and the form stays.
+      setComposingRun(true);
+      unlockSound();
+      send({ type: "batch.submit", issueUrls: [ticketUrl], instruction, targets: { [ticketUrl]: chosen } });
       return;
     }
     setComposingRun(false);
@@ -353,11 +375,14 @@ export function Harness() {
     clearTerminal();
     unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
-    send({ type: "run.start", cwd, issueUrl: issueUrl.trim(), instruction });
+    send({ type: "run.start", cwd: chosen[0] ?? cwd, issueUrl: issueUrl.trim(), instruction });
   };
 
   // One line is sent as it is, and the server says what is wrong with it; a batch goes only when every line is a ticket.
-  const canStart = connected && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0);
+  const targetsMissing = singleTicket
+    ? Boolean(missedProject) && !cwd.trim() && (targets[parsedTickets.tickets[0]] ?? []).length === 0
+    : pendingUnresolved.some((ticket) => (targets[ticket.issueUrl] ?? []).length === 0);
+  const canStart = connected && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0) && !targetsMissing;
   const runId = run?.id ?? "";
 
   return (
@@ -369,6 +394,7 @@ export function Harness() {
           queued={snapshot.queued}
           archived={snapshot.archived}
           proposals={snapshot.proposals}
+          repositories={repositories}
           maxConcurrentRuns={snapshot.maxConcurrentRuns}
           selectedRunId={openRunId}
           onOpen={openRun}
@@ -383,6 +409,7 @@ export function Harness() {
           }}
           proposalActions={{
             dismiss: (issueUrls) => send({ type: "proposal.dismiss", issueUrls }),
+            launch: (proposalUrl, paths) => send({ type: "proposal.launch", issueUrl: proposalUrl, repositories: paths }),
           }}
         />
 
@@ -450,7 +477,7 @@ export function Harness() {
               worktreeResult={worktreeResult}
             />
           ) : (
-            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} onOpenRecipe={setRecipeRepository} />
+            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} missedProject={missedProject} unresolved={pendingUnresolved} targets={targets} chooseTargets={chooseTargets} canStart={canStart} onStart={start} onOpenRecipe={setRecipeRepository} />
           )}
         </div>
       </div>

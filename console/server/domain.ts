@@ -456,6 +456,32 @@ export function gitRemoteProjects(config: string): string[] {
   return [...projects];
 }
 
+/** The project the `origin` remote of a checkout points at, else the one of its first remote. */
+export function originProject(config: string): string | undefined {
+  let section = "";
+  const origin: string[] = [];
+  for (const line of config.split("\n")) {
+    const header = line.match(/^\s*\[(.+)\]\s*$/);
+    if (header) section = header[1].trim();
+    else if (section === 'remote "origin"') origin.push(line);
+  }
+  return gitRemoteProjects(origin.join("\n"))[0] ?? gitRemoteProjects(config)[0];
+}
+
+/**
+ * The projects that get a merge request for a ticket, when the workflow has
+ * to be told: the ticket lives in none of them, or there are several. Then the
+ * merge request names the ticket by its full reference, and with several
+ * projects it closes nothing, since the ticket is done only when all are merged.
+ * `undefined` for the usual case, one merge request in the ticket's own project.
+ */
+export function deliveryProjects(issueUrl: string, projects: (string | undefined)[]): string[] | undefined {
+  const own = ticketProjectPath(issueUrl)?.toLowerCase();
+  const known = [...new Set(projects.filter((project): project is string => Boolean(project)))];
+  if (known.length === 0) return undefined;
+  return known.length > 1 || known[0].toLowerCase() !== own ? known : undefined;
+}
+
 /** A previous run leaves its documents in the project, and only this run's own count. */
 export function belongsToRun(writtenAt: number, startedAt: string | null) {
   return startedAt !== null && writtenAt >= new Date(startedAt).getTime();
@@ -1135,6 +1161,13 @@ export function branchName(value: unknown): string | undefined {
   return name;
 }
 
+/** A project path read from a file the console does not own (`group/sub/project`, `owner/repo`), or `undefined`. */
+export function projectPath(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const project = value.trim().replace(/^\/+|\/+$/g, "");
+  return /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)+$/.test(project) && !project.split("/").some((part) => part === "." || part === "..") ? project : undefined;
+}
+
 export function readProposalSnapshot(content: unknown): TicketProposal[] | undefined {
   if (!isRecord(content) || !Array.isArray(content.tickets)) return undefined;
   const proposals = new Map<string, TicketProposal>();
@@ -1143,7 +1176,11 @@ export function readProposalSnapshot(content: unknown): TicketProposal[] | undef
     if (!issueUrl || proposals.has(issueUrl)) continue;
     const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
     const baseBranch = branchName(entry.baseBranch);
-    proposals.set(issueUrl, { issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}), ...(baseBranch ? { baseBranch } : {}) });
+    const repositories = Array.isArray(entry.repositories) ? [...new Set(entry.repositories.map(projectPath).filter((project): project is string => Boolean(project)))] : [];
+    proposals.set(issueUrl, {
+      issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}), ...(baseBranch ? { baseBranch } : {}),
+      ...(repositories.length > 0 ? { repositories } : {}),
+    });
   }
   return [...proposals.values()];
 }

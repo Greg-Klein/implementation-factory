@@ -51,6 +51,8 @@ Both are required, and both go into the description file before the pull request
 - the full ticket URL on the first line of the description;
 - the keyword: `Closes #<number>` when the base is the repository's default branch, `Related to #<number>` otherwise. GitHub only closes the issue when the commits reach the default branch, so `Closes` towards a feature branch would be a lie.
 
+**A ticket filed in another repository** (the caller gives the delivery projects, `IMPL_DELIVERY_PROJECTS`): `#<number>` would name an issue of the pull request's own repository, so write `<owner>/<repo>#<number>`. When the caller lists several projects, every pull request of the ticket writes `Related to <owner>/<repo>#<number>` whatever its base, and adds the line "Livraison partagée avec `<other projects>` : le ticket se ferme à la main une fois toutes les pull requests mergées." A `Closes` would close the issue at the first merge. With a single project listed, the keyword follows the rules above and below.
+
 **The stacked pull request** is the one exception: when the caller says the base came from `IMPL_BASE_BRANCH`, write `Closes #<number>` although the base is another ticket's branch, and add this line under the keyword:
 
 "Empilée sur `<base branch>` (#<number of its pull request> when known) : à merger après elle. GitHub la recible vers la branche où l'autre a été mergée, à condition que la branche de base soit supprimée par GitHub lui-même."

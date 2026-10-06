@@ -6,7 +6,8 @@ export type AgentStatus = "running" | "completed" | "failed" | "abandoned";
 /** `nickname`: a first name given in start order within the run, so two agents of one type can be told apart; `avatar`: the picture bound to that name; `role`: the label of its type. */
 export type AgentState = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
-export type PendingQuestion = { id: string; questions: Question[] };
+/** `askedAt`: when the question reached the console, which is what its wait is dated from. Absent from a run archived before it was kept. */
+export type PendingQuestion = { id: string; questions: Question[]; askedAt?: string };
 /**
  * A prompt the agent raised before its session started, waiting for the user:
  * `folder_trust` asks whether `directory` may be trusted. Not a workflow

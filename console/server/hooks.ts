@@ -1,5 +1,5 @@
 import { actionLabel, agentIdentity, forgeOf, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, delegatedTasks, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
-import { now } from "./context.js";
+import { now, reportFailure } from "./context.js";
 import { continueDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { engine } from "./engine/index.js";
@@ -31,7 +31,7 @@ export function closeWorkflowIfDone(session: RunSession) {
   session.markProgress();
   session.activity("attention", "Workflow completed");
   // The figures of the run as delivered; the session's exit writes them once more, final.
-  void recordRunMetrics(session).catch(() => undefined);
+  recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id));
   scheduleAutonomousReview(session);
   return true;
 }
@@ -68,7 +68,7 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
 function waitForQuestionAnswer(session: RunSession, event: Extract<EngineEvent, { kind: "question" }>) {
   if (session.resolvePendingQuestion) return undefined;
   session.pendingQuestionInput = event.input;
-  session.state.pendingQuestion = { id: event.id ?? crypto.randomUUID(), questions: event.questions };
+  session.state.pendingQuestion = { id: event.id ?? crypto.randomUUID(), questions: event.questions, askedAt: now() };
   // A finished run keeps its outcome: putting it back in progress would have
   // the next turn end close it again, a second time, with a second self-audit.
   if (runInProgress(session.state.status)) session.state.status = "attention";

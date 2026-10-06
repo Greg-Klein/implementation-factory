@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { branchName, handledStillFound, openProposals, readProposalSnapshot } from "../../server/domain";
@@ -170,6 +170,28 @@ describe("the proposals the console reads", () => {
     write([1]);
     await source.read();
     expect(source.proposed([`${url(1)}?x=1`, url(7)])).toEqual([url(1)]);
+  });
+
+  it("should queue none of the tickets listed when the decisions of the last process cannot be read, and keep that file aside", async () => {
+    launch = async (found) => ({ started: found.map((proposal) => proposal.issueUrl), refused: [] });
+    const logged = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    writeFileSync(handledFile, '["https://gitlab.com/acme/shop/-/work_it');
+    write([1, 2]);
+    const source = proposals();
+    await source.start();
+    source.stop();
+    logged.mockRestore();
+    expect(launched).toEqual([]);
+    expect(source.open()).toEqual([]);
+    expect(JSON.parse(readFileSync(handledFile, "utf8"))).toEqual(["https://gitlab.com/acme/shop/-/issues/1", "https://gitlab.com/acme/shop/-/issues/2"]);
+    const aside = readdirSync(directory).filter((name) => name.startsWith("handled.json.unreadable-"));
+    expect(aside).toHaveLength(1);
+    expect(readFileSync(path.join(directory, aside[0]), "utf8")).toBe('["https://gitlab.com/acme/shop/-/work_it');
+
+    // A ticket the watcher finds afterwards is new, and queued as usual.
+    write([1, 2, 3]);
+    await source.read();
+    expect(launched.map((batch) => batch.map((proposal) => proposal.issueUrl))).toEqual([[url(3)]]);
   });
 
   it("should launch the new tickets of a reading together, with the base the watcher named, and not again once queued", async () => {

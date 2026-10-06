@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fetchIssueLinks, fetchMergeRequestStatus } from "../../server/ticket";
@@ -83,5 +83,26 @@ describe("the blocking links of a ticket, asked to its forge", () => {
     // One direction answered is not the whole answer.
     writeFileSync(path.join(ghDirectory, "issue-12-blocked_by"), "[]");
     expect(await fetchIssueLinks("https://github.com/acme/shop/issues/12", storage)).toBeUndefined();
+  });
+});
+
+describe("the call the console makes to a forge", () => {
+  const calls = (directory: string) => readFileSync(path.join(directory, "calls.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[]);
+
+  it("should name the host of the address and the one endpoint, and nothing else", async () => {
+    writeFileSync(path.join(glabDirectory, "merge-request-41"), "merged");
+    expect(await fetchMergeRequestStatus("https://gitlab.example.com/group/platform/repo/-/merge_requests/41", storage)).toBe("merged");
+    expect(calls(glabDirectory).at(-1)).toEqual(["api", "--hostname", "gitlab.example.com", "projects/group%2Fplatform%2Frepo/merge_requests/41"]);
+
+    writeFileSync(path.join(ghDirectory, "pull-request-41"), "open");
+    expect(await fetchMergeRequestStatus("https://github.example.com/acme/shop/pull/41", storage)).toBe("opened");
+    expect(calls(ghDirectory).at(-1)).toEqual(["api", "--hostname", "github.example.com", "repos/acme/shop/pulls/41"]);
+  });
+
+  it("should not let an address put an option in front of the endpoint", async () => {
+    writeFileSync(path.join(glabDirectory, "merge-request-42"), "opened");
+    // Whatever the project is called, it stays one argument: the endpoint.
+    expect(await fetchMergeRequestStatus("https://gitlab.com/--method/DELETE/-/merge_requests/42", storage)).toBe("opened");
+    expect(calls(glabDirectory).at(-1)).toEqual(["api", "--hostname", "gitlab.com", "projects/--method%2FDELETE/merge_requests/42"]);
   });
 });

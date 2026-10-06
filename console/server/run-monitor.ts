@@ -26,6 +26,7 @@ export function healthInput(session: RunSession): HealthInput {
     sessionActive: state.sessionActive || (session.demo && runInProgress(state.status)),
     stoppedBy: session.stoppedBy,
     pendingQuestion: Boolean(state.pendingQuestion),
+    ...(state.pendingQuestion?.askedAt ? { waitingSince: Date.parse(state.pendingQuestion.askedAt) } : state.sessionPrompt ? { waitingSince: Date.parse(state.sessionPrompt.since) } : {}),
     sessionPrompt: Boolean(state.sessionPrompt),
     agents: state.agents,
     artifacts: state.artifacts,

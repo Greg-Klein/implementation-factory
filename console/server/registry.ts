@@ -219,7 +219,7 @@ export class RunRegistry {
 
   /** The figures of every run measured, newest first: those on disk, and the runs held here as they stand now. */
   async metrics(): Promise<RunMetrics[]> {
-    const live = (await Promise.all([...this.sessions.values()].filter((session) => session.state.startedAt).map((session) => recordRunMetrics(session).catch(() => undefined)))).flatMap((metrics) => metrics ?? []);
+    const live = (await Promise.all([...this.sessions.values()].filter((session) => session.state.startedAt).map((session) => recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id))))).flatMap((metrics) => metrics ?? []);
     const held = new Set(live.map((metrics) => metrics.runId));
     return [...live, ...(await storedMetrics()).filter((metrics) => !held.has(metrics.runId))].sort((left, right) => (right.time.startedAt ?? "").localeCompare(left.time.startedAt ?? ""));
   }
@@ -235,8 +235,20 @@ export class RunRegistry {
     };
   }
 
+  /** The list of runs as every page last received it. */
+  private publishedSnapshot = "";
+
+  /**
+   * Sent to every page, and only when it says something new: every event of
+   * every run asks for it, and most of them change nothing a list of runs shows.
+   * A page that connects is sent the list on its own, whatever was published.
+   */
   publishSnapshot() {
-    broadcast({ type: "harness", snapshot: this.snapshot() });
+    const snapshot = this.snapshot();
+    const serialized = JSON.stringify(snapshot);
+    if (serialized === this.publishedSnapshot) return;
+    this.publishedSnapshot = serialized;
+    broadcast({ type: "harness", snapshot });
   }
 
   /**
@@ -347,7 +359,7 @@ export class RunRegistry {
 
   /** Queues the analysis of one repository's new tickets behind whatever analysis of that repository is still running. `predicted`: false to read the blocking links alone. */
   private scheduleAnalysis(repository: string, entries: QueuedRun[], predicted: boolean) {
-    const next = (this.analysisChains.get(repository) ?? Promise.resolve()).then(() => this.analyse(repository, entries, predicted)).catch(() => undefined);
+    const next = (this.analysisChains.get(repository) ?? Promise.resolve()).then(() => this.analyse(repository, entries, predicted)).catch(reportFailure("Batch analysis not run", repository));
     this.analysisChains.set(repository, next);
     void next.then(() => { if (this.analysisChains.get(repository) === next) this.analysisChains.delete(repository); });
   }
@@ -527,7 +539,7 @@ export class RunRegistry {
     if (entry.forced?.mode !== "stacked" && entry.baseBranch) session.activity("system", "Base named by the watcher", `The work starts from ${entry.baseBranch} and the ${forgeWords(forgeOf(entry.issueUrl)).delivery} targets it.`);
     session.publish();
     const abandon = async (message: string) => {
-      await session.dispose().catch(() => undefined);
+      await session.dispose().catch(reportFailure("Run not disposed", session.id));
       this.sessions.delete(id);
       this.publishSnapshot();
       return new Error(message);
@@ -566,6 +578,7 @@ export class RunRegistry {
       throw await abandon("The application is shutting down.");
     }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
+    let terminalLogFailed = false;
     session.engine = engine.start({
       cwd: worktree, sessionLabel: path.basename(repository), runId: id, command, pluginDir: pluginRoot,
       hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
@@ -591,7 +604,12 @@ export class RunRegistry {
       },
       onData: (data) => {
         session.appendTerminal(data);
-        void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);
+        // Given up at the first failure: a disk that is full would otherwise take one line of log per fragment.
+        if (terminalLogFailed) return;
+        appendFile(path.join(dataRoot, id, "terminal.log"), data).catch((error: unknown) => {
+          if (!terminalLogFailed) reportFailure("Terminal log not written", id)(error);
+          terminalLogFailed = true;
+        });
       },
       onExit: (exitCode) => this.handleExit(session, exitCode),
       onEvent: (event) => applySessionEvent(session, event),
@@ -630,9 +648,9 @@ export class RunRegistry {
     // Diagnosed before the self-audit reads the run, so a lost session reaches it as an incident.
     void this.monitor.evaluate(session).then(() => { if (!this.shuttingDown) scheduleAutonomousReview(session); });
     // Nothing works in the worktree any more: it goes if the run delivered, and is kept with its reason otherwise.
-    if (this.shuttingDown) { this.keepWorktreeForRestart(session); void recordRunMetrics(session).catch(() => undefined); }
+    if (this.shuttingDown) { this.keepWorktreeForRestart(session); void recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id)); }
     // Measured first: the size of the change is read in the worktree, which a delivered run then loses.
-    else void session.serializeHealth(async () => { await recordRunMetrics(session).catch(() => undefined); await settleRunWorktree(session); });
+    else void session.serializeHealth(async () => { await recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id)); await settleRunWorktree(session); });
     // The ticket and the slot are free now, which is what the queue waits on.
     void this.drain();
   }
@@ -945,7 +963,7 @@ export class RunRegistry {
       this.keepWorktreeForRestart(session);
       clearPendingQuestion(session);
       closeAgentsLeftBehind(session);
-      await session.dispose().catch(() => undefined);
+      await session.dispose().catch(reportFailure("Run not disposed", session.id));
       await session.persist();
     }
     this.sessions.clear();

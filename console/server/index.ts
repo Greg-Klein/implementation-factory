@@ -469,6 +469,9 @@ if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening o
 // A rejection nothing handles is a defect: it is logged with what it says and
 // shown once, instead of resting on whatever handler a dependency happens to install.
 process.on("unhandledRejection", (reason) => reportFailure("Unhandled failure in the console")(reason));
+// Same for an exception nothing caught: the sessions in progress are worth more than a clean stop,
+// so the console says it and stays up, by its own decision and not by a dependency's.
+process.on("uncaughtException", (error) => reportFailure("Unhandled exception in the console")(error));
 // Launches accepted before the last shutdown start now that the server is up.
 registry.drain().catch(reportFailure("Queue not drained"));
 // Hooks a session spooled while nothing else arrived, and runs with nothing

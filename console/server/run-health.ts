@@ -188,6 +188,8 @@ export type HealthInput = {
   sessionActive: boolean;
   stoppedBy: "user" | "queue" | null;
   pendingQuestion: boolean;
+  /** When the question or the prompt the run waits on was raised. The wait is dated from it: dated from the evaluation, it moved at every tick and the run was published again each time, for nothing. */
+  waitingSince?: number;
   /** The session waits on a prompt of its own, the folder trust dialog, answered from the console. */
   sessionPrompt?: boolean;
   agents: Pick<AgentState, "id" | "name" | "status" | "startedAt" | "endedAt">[];
@@ -277,8 +279,9 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   }
   if (input.status === "starting" || !input.sessionActive) return { health: "healthy" };
 
-  if (input.sessionPrompt) return waiting("user_question", now, "Waiting for a decision", "Claude Code asks to trust the folder before starting.", "you", "your answer");
-  if (input.pendingQuestion) return waiting("user_question", now, "Waiting for a decision", "The workflow is waiting for your answer to continue.", "you", "your answer");
+  const waitingSince = Number.isFinite(input.waitingSince) ? input.waitingSince! : now;
+  if (input.sessionPrompt) return waiting("user_question", waitingSince, "Waiting for a decision", "Claude Code asks to trust the folder before starting.", "you", "your answer");
+  if (input.pendingQuestion) return waiting("user_question", waitingSince, "Waiting for a decision", "The workflow is waiting for your answer to continue.", "you", "your answer");
   if (signals.permission) return waiting("permission", signals.permission.since, "Waiting for permission", signals.permission.message ?? "Claude Code is waiting for your approval in the terminal.", "you", "your approval in the terminal");
   if (signals.terminalInteraction) return waiting("terminal_interaction", signals.terminalInteraction.since, "Waiting for input in the terminal", signals.terminalInteraction.message ?? "Claude Code is waiting for an answer only the terminal can receive.", "you", "your input in the terminal");
   if (signals.unexplainedAttention) return waiting("unknown", signals.unexplainedAttention.since, "Claude Code asks for your attention", signals.unexplainedAttention.message ?? "The signal does not say why: look at the terminal.", "you");

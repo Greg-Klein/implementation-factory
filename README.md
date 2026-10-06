@@ -321,6 +321,23 @@ IMPL_PORT=4321 impl
 IMPL_NO_OPEN=1 impl
 ```
 
+A few variables are read from the environment only and are not in `impl config`. They are for tests and unusual setups:
+
+| Variable | Role | Default |
+|---|---|---|
+| `IMPL_HEALTH_TICK_MS` | how often the health of each run is evaluated | `15000` |
+| `IMPL_HEALTH_TURN_GRACE_MS` | time a pilot may sit idle after a turn before the run is reported with no next action | `60000` |
+| `IMPL_HEALTH_ARTIFACT_GRACE_MS` | time an agent's expected file has to arrive after the agent ends | `30000` |
+| `IMPL_SCHEDULE_TIMEOUT_MS` | the batch analysis time limit in milliseconds; wins over `IMPL_SCHEDULE_TIMEOUT_MINUTES` | unset |
+| `IMPL_MERGE_POLL_MS` | how often a watched merge request is checked | `60000` |
+| `IMPL_PROPOSALS_POLL_MS` | how often the watcher's file is read | `5000` |
+| `IMPL_GATE_STEP_TIMEOUT_MS` | time one check of the stop gate may take | `600000` |
+| `IMPL_GATE_BUDGET_MS` | time all the checks of one stop may take together | `1200000` |
+| `IMPL_STOP_GATE` | `off` disables the stop gate | on |
+| `IMPL_HOOK_TOKEN` | fixes the secret the hooks present, which is otherwise drawn at each start; meant for the test suite | drawn |
+
+The installers read three more: `IMPL_BIN_DIR` (where `install.sh` links `impl`, `~/.local/bin` by default), and for `install-remote.sh`, `IMPL_INSTALL_DIR` (where the checkout goes, `~/.local/share/implementation-harness`) and `IMPL_REPOSITORY` (the repository to clone).
+
 The runs, the queue and the feedback are kept in `console/data/`. `IMPL_ENV_FILE` and `IMPL_DATA_DIR`, set in the launch environment, choose other absolute paths, and `IMPL_PLUGIN_ROOT` names a checkout of the harness other than the one serving the console.
 
 ### Session permissions
@@ -426,7 +443,7 @@ npm run test:integration
 
 The unit tests use Jest. They are split by responsibility in `tests/unit/` and follow the convention `describe(...)` then `it("should ...")`.
 
-The integration tests are split by journey in `tests/integration/`. They use Playwright with Google Chrome and start an isolated server on port `3211`. To watch them run:
+The integration tests are split by journey in `tests/integration/`. They use Playwright, with Google Chrome on a workstation and the Chromium it bundles in CI, and start an isolated server on port `3211`. To watch them run:
 
 ```bash
 npm run test:integration:headed

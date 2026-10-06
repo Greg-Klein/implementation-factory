@@ -3,6 +3,7 @@ import path from "node:path";
 import { normalizeArchivedRun, openIncident } from "./run-incidents.js";
 import { RunSession } from "./run-session.js";
 import type { AcceptanceView, RunState, RunSummary } from "./types.js";
+import { isMissingFile, reportFailure } from "./context.js";
 
 /** What keeps a run of an earlier session in the list: an incident nobody closed, or a worktree still on disk. */
 function worthShowing(state: RunState) {
@@ -32,7 +33,10 @@ export class RunArchive {
         await session.evidence.restore().catch(() => false);
         session.acceptanceView = session.evidence.hasInputs ? session.evidence.view() : null;
         this.runs.set(runId, session);
-      } catch { /* an unreadable archive stays on disk, out of the list */ }
+      } catch (error) {
+        // An unreadable archive stays on disk, out of the list. A directory without a run is not one.
+        if (!isMissingFile(error)) reportFailure("Archived run unreadable", runId)(error);
+      }
     }));
   }
 

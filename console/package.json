@@ -18,7 +18,7 @@
     "prebuild": "node -e \"require('node:fs').rmSync('.next/dev', { recursive: true, force: true })\""
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -48,5 +48,5 @@
     "jest": "^30.5.1",
     "yaml": "^2.8.1"
   },
-  "description": "Application locale pour piloter les workflows Claude Code"
+  "description": "Local console that drives Claude Code workflows"
 }

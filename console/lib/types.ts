@@ -3,7 +3,7 @@ export type Status = "idle" | "starting" | "running" | "attention" | "completed"
 export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };
-export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
+export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[]; askedAt?: string };
 /** Mirrors SessionPrompt in server/types.ts: the folder trust dialog of the agent, waiting for the user. */
 export type SessionPrompt = { id: string; kind: "folder_trust"; directory: string; since: string };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */

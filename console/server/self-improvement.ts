@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { broadcast, now } from "./context.js";
+import { broadcast, now, reportFailure } from "./context.js";
 import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
 import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
@@ -132,7 +132,7 @@ export async function saveFeedback(session: RunSession, body: string) {
 async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
   const id = `self-audit-${session.id}`;
   // What the run cost, and how that compares to the runs before it: figures, never ticket content.
-  const metrics = await recordRunMetrics(session).catch(() => undefined);
+  const metrics = await recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id));
   const others = metrics ? await storedMetrics().catch(() => []) : [];
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
@@ -212,7 +212,7 @@ async function drainAudits() {
   if (auditing) return;
   auditing = true;
   try {
-    while (auditQueue.length > 0) await auditQueue.shift()?.().catch(() => undefined);
+    while (auditQueue.length > 0) await auditQueue.shift()?.().catch(reportFailure("Self-audit not run"));
   } finally {
     auditing = false;
   }

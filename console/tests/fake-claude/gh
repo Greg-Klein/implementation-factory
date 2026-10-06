@@ -5,10 +5,22 @@
 // `closed`, and the dependencies of an issue, `issue-<number>-blocked_by` and
 // `issue-<number>-blocking` holding the JSON list GitHub would answer.
 // Anything else fails, the way `gh` does without a network.
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-const endpoint = process.argv.slice(2).find((argument) => argument.startsWith("repos/")) ?? "";
+// Only the call the console makes is answered: `api --hostname <host> <endpoint>`, nothing before,
+// between or after. A forgotten host or an argument slipped in beside the endpoint fails here, where
+// reading the endpoint alone let both through. Every call is kept in `calls.jsonl` for a test to read.
+const argv = process.argv.slice(2);
+if (process.env.FAKE_GH_DIR && existsSync(process.env.FAKE_GH_DIR)) {
+  try { appendFileSync(path.join(process.env.FAKE_GH_DIR, "calls.jsonl"), `${JSON.stringify(argv)}\n`); } catch { /* the test reads what it can */ }
+}
+const expected = argv.length === 4 && argv[0] === "api" && argv[1] === "--hostname" && /^[a-z0-9.-]+(:\d+)?$/i.test(argv[2]) && argv[3].startsWith("repos/");
+if (!expected) {
+  process.stderr.write(`fake gh: unexpected arguments ${JSON.stringify(argv)}\n`);
+  process.exit(2);
+}
+const endpoint = argv[3];
 const pullRequest = endpoint.match(/\/pulls\/(\d+)$/)?.[1];
 const dependency = endpoint.match(/\/issues\/(\d+)\/dependencies\/(blocked_by|blocking)(?:\?|$)/);
 const name = pullRequest ? `pull-request-${pullRequest}` : dependency ? `issue-${dependency[1]}-${dependency[2]}` : undefined;

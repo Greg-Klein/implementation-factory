@@ -11,7 +11,10 @@ import { RUN_SCHEMA_VERSION } from "./run-incidents.js";
 import { trackTimeline } from "./run-metrics.js";
 import { refreshUsage } from "./run-metrics-runtime.js";
 import type { AcceptanceView, Activity, ConversationMessage, RunMetrics, RunState } from "./types.js";
-import { appendTerminalOutput } from "../lib/terminal-output.js";
+import { appendTerminalOutput, TERMINAL_BUFFER_LIMIT } from "../lib/terminal-output.js";
+
+/** How far the terminal buffer may run past its limit before it is cut back: cutting copies the whole buffer, which is not worth doing on every fragment. */
+const TERMINAL_BUFFER_SLACK = 150_000;
 
 /**
  * Every event pushes the whole state to the pages showing this run, so the feed
@@ -83,7 +86,9 @@ export class RunSession {
   usageTimer: ReturnType<typeof setTimeout> | null = null;
   usageReadAt = 0;
   /** Writes of run.json one after another: two publications in the same tick must not race on the file. */
-  private persistence: Promise<void> = Promise.resolve();
+  /** The write of `run.json` in progress, if any, and whether the state moved since it took its copy. */
+  private persistence: Promise<void> | null = null;
+  private unsaved = false;
   private archive: Activity[] = [];
   /**
    * Set by the registry. A row of the side list is drawn from a summary, so every
@@ -205,7 +210,7 @@ export class RunSession {
 
   appendTerminal(data: string) {
     this.signals.lastOutputAt = Date.now();
-    this.terminalBuffer = appendTerminalOutput(this.terminalBuffer, data);
+    this.terminalBuffer = appendTerminalOutput(this.terminalBuffer, data, TERMINAL_BUFFER_LIMIT, TERMINAL_BUFFER_SLACK);
     broadcastToViewers(this.id, { type: "terminal.output", runId: this.id, data });
   }
 
@@ -220,21 +225,40 @@ export class RunSession {
   }
 
   /**
-   * Written whole and renamed into place, one write after the other: a reader
-   * never sees half a file, and the last state published is the one that stays.
+   * Written whole and renamed into place: a reader never sees half a file, and
+   * the last state published is the one that stays. One write at a time, and
+   * whatever changed while it ran is one more write of the state as it then
+   * stands, not one write and one serialized copy per event waiting in line.
+   * The promise holds until nothing is left to write, so the state a caller
+   * awaited is on disk when it resolves.
    */
   persist() {
     if (this.demo) return Promise.resolve();
-    const snapshot = JSON.stringify(this.archivedState(), null, 2);
-    this.persistence = this.persistence.then(async () => {
-      const runDirectory = path.join(dataRoot, this.id);
-      const target = path.join(runDirectory, "run.json");
-      const temporary = `${target}.tmp`;
-      await mkdir(runDirectory, { recursive: true });
-      await writeFile(temporary, snapshot);
-      await rename(temporary, target);
-    }).catch(reportFailure("Run not saved", this.id));
+    this.unsaved = true;
+    this.persistence ??= this.writeUntilSaved();
     return this.persistence;
+  }
+
+  private async writeUntilSaved() {
+    const runDirectory = path.join(dataRoot, this.id);
+    const target = path.join(runDirectory, "run.json");
+    const temporary = `${target}.tmp`;
+    try {
+      while (this.unsaved) {
+        this.unsaved = false;
+        const snapshot = JSON.stringify(this.archivedState(), null, 2);
+        await mkdir(runDirectory, { recursive: true });
+        await writeFile(temporary, snapshot);
+        await rename(temporary, target);
+      }
+    } catch (error) {
+      // Not tried again in a loop on a disk that refuses: the next change of the state is the next attempt.
+      this.unsaved = false;
+      reportFailure("Run not saved", this.id)(error);
+    } finally {
+      // In the same turn as the last check, so a change that follows starts a write of its own.
+      this.persistence = null;
+    }
   }
 
   clearDemoTimers() {

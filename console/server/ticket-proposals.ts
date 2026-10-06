@@ -48,7 +48,16 @@ export class TicketProposals {
     try {
       const stored = JSON.parse(await readFile(this.options.handledFile, "utf8")) as unknown;
       if (Array.isArray(stored)) this.handled = stored.filter((entry): entry is string => typeof entry === "string");
-    } catch { /* nothing was decided yet */ }
+    } catch (error) {
+      // Only a missing file means nothing was decided yet. One that cannot be read is kept aside, and the
+      // tickets the watcher lists at the first reading are taken as handled: which of them already ran is
+      // no longer known, and queueing them all again with no click costs more than leaving a new one to the user.
+      if (!isMissingFile(error)) {
+        await rename(this.options.handledFile, `${this.options.handledFile}.unreadable-${Date.now()}`).catch(reportFailure("Unreadable handled tickets not kept aside", this.options.handledFile));
+        reportFailure("Handled tickets unreadable: the tickets listed now are not queued", this.options.handledFile)(error);
+        this.decisionsLost = true;
+      }
+    }
     await this.read();
     if (this.timer) return;
     this.timer = setInterval(() => void this.read(), this.options.intervalMs);
@@ -76,6 +85,9 @@ export class TicketProposals {
     this.options.changed();
   }
 
+  /** The decisions of the last process could not be read: see `start`. */
+  private decisionsLost = false;
+
   /** One reading of the file. Readings never overlap. */
   read(): Promise<void> {
     this.reading ??= this.readOnce().finally(() => { this.reading = null; });
@@ -96,6 +108,11 @@ export class TicketProposals {
     if (!found) return;
     const before = JSON.stringify(this.found);
     this.found = found;
+    if (this.decisionsLost && !missing) {
+      this.decisionsLost = false;
+      this.handled = [...new Set([...this.handled, ...found.map((proposal) => ticketIdentity(proposal.issueUrl))])];
+      await this.persist();
+    }
     const present = new Set(found.map((proposal) => ticketIdentity(proposal.issueUrl)));
     for (const issueUrl of this.refused.keys()) if (!present.has(issueUrl)) this.refused.delete(issueUrl);
     // Only a snapshot says a ticket left the filter, an empty one included: a missing file says nothing about the decisions taken.

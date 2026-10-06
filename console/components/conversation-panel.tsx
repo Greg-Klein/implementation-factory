@@ -1,18 +1,19 @@
 "use client";
 
 import { ArrowDownIcon, ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { messageBlocks } from "@/lib/conversation";
 import type { ConversationMessage, PendingQuestion, SessionPrompt } from "@/lib/types";
 import { InlineText } from "./inline-text";
 import { QuestionPanel } from "./question-panel";
 import { SessionPromptPanel } from "./session-prompt-panel";
 
-function MessageBody({ text }: { text: string }) {
+/** Memoised on its text: the run's state arrives whole at every event, and a message already drawn is not parsed again for it. */
+const MessageBody = memo(function MessageBody({ text }: { text: string }) {
   return <>{messageBlocks(text).map((block, index) => block.kind === "code"
     ? <pre key={index} className="scrollbar-thin mt-2 overflow-x-auto rounded-2.5 border border-[var(--line)] bg-[var(--sunken)] p-3 font-mono text-[10px] leading-4 first:mt-0">{block.content}</pre>
     : <p key={index} className="mt-2 whitespace-pre-wrap text-[12.5px] leading-5 first:mt-0"><InlineText text={block.content} /></p>)}</>;
-}
+});
 
 /** Claude Code only writes a message to its transcript once the action that followed it has returned, so the panel says it is waiting rather than looking finished, and names the action it is waiting on. */
 function WritingHint({ action }: { action?: string }) {

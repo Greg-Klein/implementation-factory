@@ -19,9 +19,9 @@ fi
 command -v glab >/dev/null 2>&1 || printf 'glab is missing: GitLab tickets cannot be handled.\n'
 command -v gh >/dev/null 2>&1 || printf 'gh is missing: GitHub tickets cannot be handled.\n'
 
-node_major="$(node -p 'process.versions.node.split(".")[0]')"
-if (( node_major < 22 )); then
-  printf 'Node.js 22 or newer is required. Detected version: %s\n' "$(node --version)" >&2
+# 22.12 is the floor the documentation gives: the major alone let 22.0 to 22.11 through.
+if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1)'; then
+  printf 'Node.js 22.12 or newer is required. Detected version: %s\n' "$(node --version)" >&2
   exit 1
 fi
 

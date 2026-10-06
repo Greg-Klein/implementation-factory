@@ -26,7 +26,15 @@ engine/types.ts        the contract
 engine/claude-code.ts  the only implementation
 ```
 
-Nothing above imports `node-pty`, knows the `.claude/tasks` path, reads `hook_event_name` or builds a `hookSpecificOutput`.
+Nothing above imports `node-pty`, reads `hook_event_name` or builds a `hookSpecificOutput`.
+
+The boundary has known leaks, to count in when a second engine is written:
+
+- the shape of a hook answer is typed outside the engine (`HookOutput` in `server/types.ts`);
+- `domain.ts` tests the tool name `Bash` and spells the `.claude/worktrees` directory;
+- the default of `IMPL_WORKTREE_COPY_FILES` in `config.ts` names `.claude/settings.local.json`;
+- the evidence archive strips the `.claude/tasks/` prefix the prompts write (`evidence-archive.ts`);
+- several messages of `run-health.ts` and `run-incidents.ts` write "Claude Code" where `engine.label` exists.
 
 ## The contract
 
@@ -44,6 +52,7 @@ Nothing above imports `node-pty`, knows the `.claude/tasks` path, reads `hook_ev
 | `sessionUsage(source)` | the tokens used by the pilot and each subagent | `usage` field of the transcript, one file per subagent |
 | `event(payload)` | translates a raw event into an `EngineEvent` | the whole hook vocabulary |
 | `questionAnswer(input, answers)` | what the agent expects back from a question | `updatedInput` for Claude Code |
+| `startSchedule(options)` | starts the headless session that compares the tickets of a batch, returns `{ finished, kill }` | arguments, allowed tools, environment |
 | `startSelfImprovement(options)` | starts the detached self-improvement loop | worktree and permission flags |
 | `startConflictResolution(options)` | replays an improvement branch git alone could not rebase | worktree and permission flags |
 

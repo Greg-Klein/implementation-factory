@@ -32,9 +32,10 @@ export function broadcast(message: ServerMessage) {
 const reportedFailures = new Map<string, number>();
 const FAILURE_NOTICE_INTERVAL_MS = 10 * 60_000;
 
-/** Whether a read failed because nothing is there, the one failure that means "absent". */
+/** Whether a read failed because nothing is there, the one failure that means "absent": no such file, or a path that goes through a plain file (a `.DS_Store` beside the run directories). */
 export function isMissingFile(error: unknown) {
-  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT";
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return code === "ENOENT" || code === "ENOTDIR";
 }
 
 /**
@@ -47,9 +48,10 @@ export function isMissingFile(error: unknown) {
  * as the truth.
  */
 export function reportFailure(what: string, subject?: string) {
-  return (error: unknown) => {
+  return (error: unknown): undefined => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[implementation-harness] ${what}${subject ? ` (${subject})` : ""}: ${message}`);
+    // With where it was thrown, when it says: a message alone names a failure without locating it.
+    console.error(`[implementation-harness] ${what}${subject ? ` (${subject})` : ""}: ${message}`, ...(error instanceof Error && error.stack ? [`\n${error.stack}`] : []));
     const shownAt = reportedFailures.get(what);
     if (clients.size === 0 || (shownAt !== undefined && Date.now() - shownAt < FAILURE_NOTICE_INTERVAL_MS)) return;
     reportedFailures.set(what, Date.now());
@@ -90,6 +92,6 @@ export async function reconcileInterruptedRuns(runsDirectory: string) {
     const closingEntry: Activity = { id: crypto.randomUUID(), at: now(), kind: "system", title: "Run interrupted by a server restart" };
     interrupted.activities = [closingEntry, ...interrupted.activities].slice(0, ARCHIVED_ACTIVITIES);
     const temporary = `${runFile}.reconcile.tmp`;
-    await writeFile(temporary, JSON.stringify(interrupted, null, 2)).then(() => rename(temporary, runFile)).catch(() => undefined);
+    await writeFile(temporary, JSON.stringify(interrupted, null, 2)).then(() => rename(temporary, runFile)).catch(reportFailure("Interrupted run not saved", runId));
   }));
 }

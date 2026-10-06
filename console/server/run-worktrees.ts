@@ -1,6 +1,6 @@
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ARCHIVED_ACTIVITIES, now } from "./context.js";
+import { ARCHIVED_ACTIVITIES, isMissingFile, now, reportFailure } from "./context.js";
 import { worktreeCopyFiles, worktreeDependencyDirectories } from "./config.js";
 import { isRunWorktreePath, runHoldsRepository, runWorktreePath, sourceRepository, worktreeKeptDetail, worktreeRemoval } from "./domain.js";
 import { normalizeArchivedRun } from "./run-incidents.js";
@@ -44,7 +44,7 @@ export async function prepareRunWorktree(repository: string, runId: string): Pro
 
 /** Undoes a worktree whose run never started. Nothing was written in it yet. */
 export async function discardRunWorktree(repository: string, worktreePath: string) {
-  await removeRunWorktree(repository, worktreePath, { force: true }).catch(() => undefined);
+  await removeRunWorktree(repository, worktreePath, { force: true }).catch(reportFailure("Unused run worktree not removed", worktreePath));
 }
 
 /**
@@ -77,7 +77,7 @@ async function settle(state: RunState): Promise<RunWorktree | undefined> {
  */
 export async function settleRunWorktree(session: RunSession) {
   const before = session.state.worktree;
-  const settled = await settle(session.state).catch(() => undefined);
+  const settled = await settle(session.state).catch(reportFailure("Run worktree not settled", session.id));
   if (!settled || session.state.worktree !== before) return;
   if (settled.state === before?.state && settled.detail === before.detail) return;
   if (settled.state === "removed") await session.artifactWatcher?.close().catch(() => undefined);
@@ -147,6 +147,9 @@ export async function reconcileRunWorktrees(runsDirectory: string) {
       const temporary = `${runFile}.worktree.tmp`;
       await writeFile(temporary, JSON.stringify({ ...raw, worktree: settled, activities }, null, 2));
       await rename(temporary, runFile);
-    } catch { /* one unreadable archive must not keep the others from being reconciled */ }
+    } catch (error) {
+      // One unreadable archive must not keep the others from being reconciled. A directory without a run is not one.
+      if (!isMissingFile(error)) reportFailure("Run worktree not reconciled", runId)(error);
+    }
   }
 }

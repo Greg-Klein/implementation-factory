@@ -268,4 +268,4 @@ Each run is kept in `console/data/runs/<run-id>/`:
 
 The `data/` directory is ignored by Git.
 
-On start, the server closes every run left on a non-terminal status (`starting`, `running`, `attention`). `ctx.state` starts empty at each launch, so a run the previous process could not close itself (a hard stop, `impl restart`) would otherwise stay marked `running`. The server reclassifies it `failed` with a message that explains it, distinct from a failure of the agent.
+On start, the server closes every run left on a non-terminal status (`starting`, `running`, `attention`). The registry starts empty at each launch, so a run the previous process could not close itself (a hard stop, `impl restart`) would otherwise stay marked `running`. The server reclassifies it `failed` with a message that explains it, distinct from a failure of the agent.

@@ -36,7 +36,7 @@ export async function analyseTickets(repository: string, tickets: string[], know
     return { ok: false, failure: "input file could not be written" };
   }
   const session = engine.startSchedule({ repository, pluginDir: pluginRoot, inputPath, outputPath, timeoutMs: scheduleTimeoutMs });
-  if (!session) return fail(`${engine.label} introuvable`);
+  if (!session) return fail(`${engine.label} not found`);
   onSession?.(session);
   const { timedOut, log } = await session.finished;
   onSession?.(null);

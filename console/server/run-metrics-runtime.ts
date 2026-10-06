@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { access, appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { now } from "./context.js";
+import { isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, pluginRoot } from "./config.js";
 import { demoSessionUsage } from "./demo-data.js";
 import { diffBases, isRunWorktreePath, sourceRepository } from "./domain.js";
@@ -154,6 +154,9 @@ export async function backfillRunMetrics(runsDirectory = dataRoot, live: Set<str
       const metrics = await compute({ ...state, sessionActive: false }, false, known, directory);
       await writeFile(`${path.join(directory, METRICS_FILE)}.tmp`, JSON.stringify(metrics, null, 2));
       await rename(`${path.join(directory, METRICS_FILE)}.tmp`, path.join(directory, METRICS_FILE));
-    } catch { /* an unreadable archive is left as it is */ }
+    } catch (error) {
+      // An unreadable archive is left as it is. A directory without a run is not one.
+      if (!isMissingFile(error)) reportFailure("Archived run not measured", runId)(error);
+    }
   }
 }

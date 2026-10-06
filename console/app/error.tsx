@@ -10,6 +10,7 @@ import { WarningCircleIcon } from "@phosphor-icons/react";
 export default function PageError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <main className="grid min-h-[100dvh] place-items-center bg-[var(--paper)] p-5">
+      <title>Implementation Harness</title>
       <div role="alert" className="flex max-w-md items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800">
         <WarningCircleIcon className="mt-0.5 shrink-0" size={15} weight="fill" aria-hidden />
         <div className="min-w-0">

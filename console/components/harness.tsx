@@ -290,11 +290,11 @@ export function Harness() {
    * The tab, the favicon and the alerts speak for every run at once, not for the
    * one on screen: the run that needs the user is rarely the one they are
    * reading, and an alert raised only for the open run left the others silent.
+   * The title is the `<title>` rendered below, not written here.
    */
   useEffect(() => {
     const previous = previousRunsRef.current;
     previousRunsRef.current = snapshot.runs;
-    document.title = documentTitle(snapshot.runs);
     const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
     icon.href = faviconDataUri(faviconColor(snapshot.runs));
     for (const alert of runAlerts(previous, snapshot.runs)) {
@@ -426,6 +426,8 @@ export function Harness() {
 
   return (
     <main className="min-h-[100dvh] bg-[var(--paper)] p-3 md:p-5">
+      {/* The only title of the page. One written to `document.title` beside a title of the layout's metadata was put back to the bare name when that one hydrated late, and stayed so until the list of runs changed again. */}
+      <title>{documentTitle(snapshot.runs)}</title>
       {/* A sidebar of runs on the left, the one that is open on the right. */}
       <div className="mx-auto grid max-w-425 grid-cols-1 items-start gap-3 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-4">
         <RunRail

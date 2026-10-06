@@ -11,7 +11,6 @@ export default function GlobalError(props: { error: Error & { digest?: string };
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
-        <title>Implementation Harness</title>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body><PageError {...props} /></body>

@@ -266,6 +266,11 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
     // A result cannot be observed after the file reporting it arrived: such a date was made up.
     let observedAt = text(item.observedAt, 40);
     if (observedAt && /^\d{4}-\d{2}-\d{2}T/.test(observedAt) && Date.parse(observedAt) > Date.parse(context.receivedAt)) { observedAt = undefined; futureDates += 1; }
+    // An item that names its own code version owns both ends: the root range spans the whole session, and the
+    // merged file, which has no root, must restate the item with the same identity.
+    const itemStart = snapshotReference(item.codeSnapshotId);
+    const itemEnd = snapshotReference(item.codeSnapshotAtEnd);
+    const ownVersion = Boolean(itemStart || itemEnd);
     const attachments: EvidenceAttachmentView[] = attachmentPaths(item).map((attachment) => {
       const archived = attachmentPath(attachment);
       return { source: attachment, ...(archived ? { path: archived } : {}), archived: Boolean(archived) };
@@ -276,8 +281,8 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       criterionIds: identifiers(item.criterionIds ?? item.criterion_ids), checkIds: identifiers(item.checkIds ?? item.check_ids), taskIds: identifiers(item.taskIds ?? item.task_ids),
       method: method ?? (typeof root.method === "string" && METHODS.has(root.method as EvidenceMethod) ? root.method as EvidenceMethod : undefined),
       basis, confirms, blocker,
-      snapshotAtStart: snapshotReference(item.codeSnapshotId) ?? reportStart,
-      snapshotAtEnd: snapshotReference(item.codeSnapshotAtEnd) ?? reportEnd,
+      snapshotAtStart: ownVersion ? itemStart : reportStart,
+      snapshotAtEnd: ownVersion ? itemEnd : reportEnd,
       supersedes: identifiers(item.supersedes),
       attachments: attachments.map((attachment) => attachment.source),
     };

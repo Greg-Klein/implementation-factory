@@ -336,6 +336,19 @@ describe("acceptance coverage", () => {
       }
     });
 
+    it("should count a per-task item once when it names its own code version inside a root range", () => {
+      const items = [
+        { id: "T1-E1", label: "Reproduction", verdict: "fail", checkIds: ["AC1-C1"], codeSnapshotId: OLD },
+        { id: "T1-E2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], codeSnapshotId: CURRENT, supersedes: ["T1-E1"] },
+      ];
+      const perTask = report("dev-evidence-T1.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: OLD, atEnd: CURRENT }, items });
+      const merged = report("dev-evidence.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, items });
+      const view = coverage({ reports: [perTask, merged] });
+      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E2", "current"]]);
+      expect(criterion(view, "AC1").checks[0].history.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E1", "stale"]]);
+      expect(criterion(view, "AC1").status).toBe("verified");
+    });
+
     it("should leave a copy without code version unknown when no single original states one", () => {
       const item = { id: "T1-E1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
       const developer = (file: string, snapshot?: string) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision: 1, ...(snapshot ? { codeSnapshot: { atStart: snapshot } } : {}), items: [item] });

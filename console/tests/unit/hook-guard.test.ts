@@ -60,6 +60,9 @@ describe("the hook guard", () => {
   it("should not take T1 named in the merged report for T10", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }] }));
     writeFileSync(path.join(tasks, "developer-report.md"), "## T10\n");
+    expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer" })).toMatch(/^The review cannot start: T1 /);
+    // What a developer's report says of another task, in the section the merge gave it, accounts for nothing.
+    writeFileSync(path.join(tasks, "developer-report.md"), "<!-- section: T10 -->\n# T10\n\nT1 will follow.\n<!-- end section: T10 -->\n");
     expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer" })).toContain("T1 ");
   });
 

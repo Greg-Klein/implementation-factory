@@ -25,7 +25,7 @@ const stop = (agentId: string, extra: object = {}, env?: Record<string, string>)
 function ledger() {
   const file = path.join(cwd, ".claude", "tasks", "gate-log.jsonl");
   if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { agentId: string; step: string; result: string; retry: boolean; root?: string; files: string[] });
+  return readFileSync(file, "utf8").trim().split("\n").map((line) => JSON.parse(line) as { agentId: string; step: string; result: string; retry: boolean; root?: string; files: string[]; ms?: number });
 }
 
 /** A stand-in for a project binary: it notes its arguments, prints `.<name>-output` and exits with `.<name>-exit`. */
@@ -64,6 +64,19 @@ describe("the stop gate", () => {
     expect(stop("a1")).toBeUndefined();
     expect(ledger().map(({ step, result, root }) => `${root} ${step}: ${result}`)).toEqual([". type-check: pass", ". lint: pass", ". related tests: pass"]);
     expect(ledger()[0]).toMatchObject({ agent: DEVELOPER, agentId: "a1", files: ["src/cart.ts"], retry: false });
+  });
+
+  it("should time each check it ran, the failing one included, and no line that ran nothing", () => {
+    start("a1");
+    edit("a1", "src/cart.ts");
+    fails("eslint", "src/cart.ts: unused variable");
+    stop("a1");
+    start("a2");
+    stop("a2");
+    const lines = ledger();
+    expect(lines.map(({ step, result }) => `${step}: ${result}`)).toEqual(["type-check: pass", "lint: fail", "no edited file recorded: none"]);
+    for (const line of lines.slice(0, 2)) expect(line.ms).toBeGreaterThanOrEqual(0);
+    expect(lines[2]).not.toHaveProperty("ms");
   });
 
   it("should lint and test the files the agent edited, and no other", () => {

@@ -69,6 +69,14 @@ function Detail({ run }: { run: RunMetrics }) {
             {run.time.phases.filter((phase) => phase.ms >= 1_000 && phase.phase <= phaseNames(run.ticket.issueUrl).length).map((phase) => <div key={phase.phase} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{phase.phase}. {phaseNames(run.ticket.issueUrl)[phase.phase - 1]}</dt><dd className="font-mono text-[10px]">{formatDuration(phase.ms)}</dd></div>)}
           </dl>
         </div>
+        {run.time.gate && (
+          <div>
+            <p className="text-[10px] font-semibold text-[var(--muted)]" title="Checks run when a developer or the senior reviewer stops">Checks at agent stop</p>
+            <dl className="mt-2 space-y-1 text-[11px]">
+              {run.time.gate.steps.map((step) => <div key={step.step} className="flex justify-between gap-3"><dt className="text-[var(--muted)]">{step.step} · {step.runs}</dt><dd className="font-mono text-[10px]">{formatDuration(step.ms)}</dd></div>)}
+            </dl>
+          </div>
+        )}
         <div>
           <p className="text-[10px] font-semibold text-[var(--muted)]">Review</p>
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">

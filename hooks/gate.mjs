@@ -281,15 +281,18 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
     for (const { step, command } of steps) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) { record({ root: where, step, command: shown(command), result: "skipped", detail: "the gate ran out of time" }); continue; }
+      const started = Date.now();
       const outcome = await run(command, root, Math.min(stepTimeout, remaining));
-      if (!outcome.ran) { record({ root: where, step, command: shown(command), result: "skipped", detail: outcome.output }); continue; }
-      if (outcome.passed) { record({ root: where, step, command: shown(command), result: "pass" }); continue; }
+      // What the check cost, whatever came of it: the run's metrics add these up per step.
+      const ms = Date.now() - started;
+      if (!outcome.ran) { record({ root: where, step, command: shown(command), result: "skipped", detail: outcome.output, ms }); continue; }
+      if (outcome.passed) { record({ root: where, step, command: shown(command), result: "pass", ms }); continue; }
       const elsewhere = step === "type-check" && peers ? typeErrorFiles(outcome.output, root)?.every((file) => !touched.includes(file)) : false;
       if (elsewhere) {
-        record({ root: where, step, command: shown(command), result: "inconclusive", detail: "type errors outside the files this agent edited, while another agent was editing" });
+        record({ root: where, step, command: shown(command), result: "inconclusive", detail: "type errors outside the files this agent edited, while another agent was editing", ms });
         continue;
       }
-      record({ root: where, step, command: shown(command), result: "fail" });
+      record({ root: where, step, command: shown(command), result: "fail", ms });
       failures.push(`${step} failed in ${where}\n$ ${shown(command)}\n${tail(outcome.output)}`);
       // The later checks of this package would mostly repeat the same breakage.
       break;

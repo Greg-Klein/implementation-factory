@@ -11,6 +11,7 @@ import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
 import { trackReopening } from "./run-metrics.js";
+import { GATE_LOG_FILE, keepGateLog } from "./run-metrics-runtime.js";
 import { keepReviewFindings } from "./review-findings.js";
 import { keepRuntimeRecipe } from "./runtime-recipe.js";
 import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
@@ -85,6 +86,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   const taskRoot = engine.taskDirectory(session.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
+  if (relative === GATE_LOG_FILE && !session.demo) await keepGateLog(session, source);
   if (!isRunDocument(relative)) { await attachmentArrived(session); return; }
   const target = path.join(dataRoot, session.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });

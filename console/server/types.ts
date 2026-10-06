@@ -500,6 +500,8 @@ export type SessionMetrics = TokenUsage & {
 };
 export type AgentMetrics = SessionMetrics & { agentId: string; name: string; activeMs?: number };
 export type RunDiff = { files: number; insertions: number; deletions: number };
+/** The time spent in the checks of the stop gate (hooks/gate.mjs), read from the `ms` of each line of its log. */
+export type GateTimes = { ms: number; steps: { step: string; runs: number; ms: number }[] };
 /**
  * What a run cost and what it delivered, in figures, written to `metrics.json`
  * beside `run.json`. Built by server/run-metrics.ts from the run state, the
@@ -542,6 +544,8 @@ export type RunMetrics = {
     incidentMs: number;
     /** Up to the first end: the time of a reopening is in `reopened`. */
     phases: { phase: number; enteredAt: string; ms: number }[];
+    /** What the stop gate's checks cost, per step, longest first. Absent when no timed check ran. */
+    gate?: GateTimes;
   };
   complexity: {
     /** What the plan predicted. */

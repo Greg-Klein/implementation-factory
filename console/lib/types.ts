@@ -198,7 +198,7 @@ export type RunMetrics = {
   harness?: { version?: string; commit?: string };
   ticket: { issueUrl: string; title?: string; repository: string };
   outcome: { status: Status; phase: number; delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; questions: number; incidents: string[]; acceptance?: AcceptanceCounts; qaStatus?: string; worktree?: string };
-  time: { startedAt: string | null; endedAt: string | null; elapsedMs: number; reopened?: { count: number; ms: number }; userWaitMs: number; waits: { reason: "question" | "session_prompt" | "terminal"; count: number; ms: number }[]; activeMs: number; incidentMs: number; phases: { phase: number; enteredAt: string; ms: number }[] };
+  time: { startedAt: string | null; endedAt: string | null; elapsedMs: number; reopened?: { count: number; ms: number }; userWaitMs: number; waits: { reason: "question" | "session_prompt" | "terminal"; count: number; ms: number }[]; activeMs: number; incidentMs: number; phases: { phase: number; enteredAt: string; ms: number }[]; gate?: { ms: number; steps: { step: string; runs: number; ms: number }[] } };
   complexity: { tasks: number; sizes: { S: number; M: number; L: number }; criteria: number; reviewTier?: 0 | 1 | 2; diff?: { files: number; insertions: number; deletions: number } };
   rework: { launches: Record<string, number>; reworkDevelopers: number; lostAgents: number };
   tokens?: { total: TokenUsage; pilot: SessionMetrics; agents: AgentMetrics[]; pilotShare: number };

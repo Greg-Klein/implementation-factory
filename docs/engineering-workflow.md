@@ -259,7 +259,7 @@ The files an agent edited are noted from its `Edit` and `Write` calls, per agent
 | lint | the edited files | the local `eslint`, when the package or the repository has a configuration |
 | related tests | the edited files | `vitest related`, `jest --findRelatedTests` or the `react-scripts` equivalent |
 
-Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry` and a `result`:
+Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry`, `ms` (how long the check took, on the lines of a check that was started) and a `result`:
 
 | Result | Meaning |
 | --- | --- |

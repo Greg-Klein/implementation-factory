@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { now } from "./context.js";
@@ -8,7 +8,7 @@ import { demoSessionUsage } from "./demo-data.js";
 import { diffBases, isRunWorktreePath, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { normalizeArchivedRun } from "./run-incidents.js";
-import { buildRunMetrics, diffFromNumstat } from "./run-metrics.js";
+import { buildRunMetrics, diffFromNumstat, gateTimes } from "./run-metrics.js";
 import type { RunSession } from "./run-session.js";
 import { fetchMergeRequestTarget } from "./ticket.js";
 import type { HarnessVersion, RunDiff, RunMetrics, RunState } from "./types.js";
@@ -16,6 +16,8 @@ import type { HarnessVersion, RunDiff, RunMetrics, RunState } from "./types.js";
 const exec = promisify(execFile);
 
 export const METRICS_FILE = "metrics.json";
+/** The stop gate's log, as the hook names it in the task directory and as it is kept beside `run.json`. */
+export const GATE_LOG_FILE = "gate-log.jsonl";
 /** Reading every transcript of a run again is cheap, not free: the live figure moves at most this often. */
 const USAGE_REFRESH_MS = 5_000;
 
@@ -44,17 +46,38 @@ async function runDiff(state: RunState): Promise<RunDiff | undefined> {
   return undefined;
 }
 
-async function compute(state: RunState, demo: boolean, previous: RunMetrics | undefined, qaStatus?: string): Promise<RunMetrics> {
+/**
+ * Keeps the lines of the stop gate's log beside `run.json`. The workflow empties
+ * its task directory before it ends and a reopening starts the file again, so
+ * the lines not kept yet are added to the copy, which is never rewritten from
+ * the source. Queued behind the run's metrics, which read the copy.
+ */
+export function keepGateLog(session: RunSession, source: string) {
+  const next = session.metricsChain.then(async () => {
+    const target = path.join(dataRoot, session.id, GATE_LOG_FILE);
+    const lines = (content: string) => content.split("\n").filter((line) => line.trim());
+    const kept = new Set(lines(await readFile(target, "utf8").catch(() => "")));
+    const added = lines(await readFile(source, "utf8").catch(() => "")).filter((line) => !kept.has(line));
+    if (added.length === 0) return;
+    await mkdir(path.dirname(target), { recursive: true });
+    await appendFile(target, `${added.join("\n")}\n`);
+  });
+  session.metricsChain = next.then(() => undefined, () => undefined);
+  return session.metricsChain;
+}
+
+async function compute(state: RunState, demo: boolean, previous: RunMetrics | undefined, directory: string, qaStatus?: string): Promise<RunMetrics> {
   const usage = demo ? demoSessionUsage(state) : await usageOf(state).catch(() => []);
   // The worktree goes once the run delivered: the size measured while it was there stays.
   const diff = demo ? undefined : await runDiff(state) ?? previous?.complexity.diff;
-  return buildRunMetrics({ state, usage, diff, qaStatus, at: now() });
+  const gate = demo ? undefined : gateTimes(await readFile(path.join(directory, GATE_LOG_FILE), "utf8").catch(() => ""));
+  return buildRunMetrics({ state, usage, diff, gate, qaStatus, at: now() });
 }
 
 /** The figures of a run as it stands, written beside `run.json` unless the run is simulated. One computation at a time per run. */
 export function recordRunMetrics(session: RunSession): Promise<RunMetrics> {
   const next = session.metricsChain.then(async () => {
-    const metrics = await compute(session.archivedState(), session.demo, session.metrics ?? undefined, session.acceptanceView?.qa?.status);
+    const metrics = await compute(session.archivedState(), session.demo, session.metrics ?? undefined, path.join(dataRoot, session.id), session.acceptanceView?.qa?.status);
     session.metrics = metrics;
     applyUsage(session, metrics);
     if (!session.demo) {
@@ -128,7 +151,7 @@ export async function backfillRunMetrics(runsDirectory = dataRoot, live: Set<str
     try {
       const state = normalizeArchivedRun(JSON.parse(await readFile(path.join(directory, "run.json"), "utf8")), runId);
       if (!state || !state.startedAt) continue;
-      const metrics = await compute({ ...state, sessionActive: false }, false, known);
+      const metrics = await compute({ ...state, sessionActive: false }, false, known, directory);
       await writeFile(`${path.join(directory, METRICS_FILE)}.tmp`, JSON.stringify(metrics, null, 2));
       await rename(`${path.join(directory, METRICS_FILE)}.tmp`, path.join(directory, METRICS_FILE));
     } catch { /* an unreadable archive is left as it is */ }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import { deliveredCodeSettled, deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
 import type { SessionUsage } from "../../server/engine/types";
-import { buildRunMetrics, comparableRuns, diffFromNumstat, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
+import { buildRunMetrics, comparableRuns, diffFromNumstat, gateTimes, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
 import type { RunMetrics, RunState } from "../../server/types";
 import { parseWorkflowState } from "../../server/workflow-state";
 
@@ -118,6 +118,34 @@ describe("the figures of a run", () => {
     const metrics = buildRunMetrics({ state: run({ incidents: [incident] }), usage: [], at: at(10) });
     expect(metrics.time.incidentMs).toBe(5 * 60_000);
     expect(metrics.outcome.incidents).toEqual(["no_next_action"]);
+  });
+});
+
+describe("the time spent in the stop gate", () => {
+  const line = (entry: object) => JSON.stringify({ at: at(1), agent: "developer", agentId: "a1", retry: false, files: [], ...entry });
+
+  it("should add up the checks per step, the longest first", () => {
+    const log = [
+      line({ step: "lint", result: "pass", ms: 4_000 }), line({ step: "type-check", result: "pass", ms: 30_000 }),
+      line({ step: "type-check", result: "fail", ms: 50_000 }), line({ step: "related tests", result: "skipped", ms: 9_000 }),
+    ].join("\n");
+    expect(gateTimes(`${log}\n`)).toEqual({ ms: 93_000, steps: [{ step: "type-check", runs: 2, ms: 80_000 }, { step: "related tests", runs: 1, ms: 9_000 }, { step: "lint", runs: 1, ms: 4_000 }] });
+  });
+
+  it("should count nothing for a line without a duration or that cannot be read", () => {
+    const log = [line({ step: "no edited file recorded", result: "none" }), "{ cut short", line({ step: "lint", result: "pass", ms: "12" }), line({ step: "lint", result: "pass", ms: 1_500 })].join("\n");
+    expect(gateTimes(log)).toEqual({ ms: 1_500, steps: [{ step: "lint", runs: 1, ms: 1_500 }] });
+  });
+
+  it("should say nothing when no check was timed", () => {
+    expect(gateTimes("")).toBeUndefined();
+    expect(gateTimes(line({ step: "lint", result: "pass" }))).toBeUndefined();
+  });
+
+  it("should put the gate under the time of the run only when there is one", () => {
+    const gate = { ms: 1_500, steps: [{ step: "lint", runs: 1, ms: 1_500 }] };
+    expect(buildRunMetrics({ state: run(), usage: [], gate, at: at(10) }).time.gate).toEqual(gate);
+    expect(buildRunMetrics({ state: run(), usage: [], at: at(10) }).time).not.toHaveProperty("gate");
   });
 });
 

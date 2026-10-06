@@ -1,6 +1,6 @@
 import { runInProgress, sourceRepository } from "./domain.js";
 import type { SessionUsage } from "./engine/index.js";
-import type { AgentMetrics, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
+import type { AgentMetrics, GateTimes, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
 import { declaredCompletion } from "./workflow-state.js";
 
 /**
@@ -141,16 +141,36 @@ function timeMetrics(state: RunState, at: number): RunMetrics["time"] {
 
 const REWORK_REPORT = /developer-report-rework[^/]*\.md$/;
 
+/**
+ * What the stop gate's checks cost, from the content of its log: one JSON line
+ * per check, timed since the gate writes `ms`. A line without it, written by an
+ * older gate or for a check that never ran, counts for nothing.
+ */
+export function gateTimes(log: string): GateTimes | undefined {
+  const steps = new Map<string, { step: string; runs: number; ms: number }>();
+  for (const line of log.split("\n")) {
+    let entry: { step?: unknown; ms?: unknown };
+    try { entry = JSON.parse(line); } catch { continue; }
+    if (!entry || typeof entry.step !== "string" || typeof entry.ms !== "number" || !Number.isFinite(entry.ms) || entry.ms < 0) continue;
+    const known = steps.get(entry.step) ?? { step: entry.step, runs: 0, ms: 0 };
+    steps.set(entry.step, { step: entry.step, runs: known.runs + 1, ms: known.ms + entry.ms });
+  }
+  if (steps.size === 0) return undefined;
+  const sorted = [...steps.values()].sort((left, right) => right.ms - left.ms);
+  return { ms: sorted.reduce((sum, step) => sum + step.ms, 0), steps: sorted };
+}
+
 export type MetricsInput = {
   state: RunState;
   usage: SessionUsage[];
   diff?: RunDiff;
+  gate?: GateTimes;
   qaStatus?: string;
   /** When the figures are computed, which is where a run still going is measured up to. */
   at: string;
 };
 
-export function buildRunMetrics({ state, usage, diff, qaStatus, at }: MetricsInput): RunMetrics {
+export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: MetricsInput): RunMetrics {
   const tasks = state.planTasks ?? [];
   const size = (letter: string) => tasks.filter((task) => task.complexity?.toUpperCase() === letter).length;
   const launches: Record<string, number> = {};
@@ -174,7 +194,7 @@ export function buildRunMetrics({ state, usage, diff, qaStatus, at }: MetricsInp
       ...(qaStatus ?? state.acceptance?.qa?.status ? { qaStatus: qaStatus ?? state.acceptance?.qa?.status } : {}),
       ...(state.worktree ? { worktree: state.worktree.state } : {}),
     },
-    time: timeMetrics(state, new Date(at).getTime()),
+    time: { ...timeMetrics(state, new Date(at).getTime()), ...(gate ? { gate } : {}) },
     complexity: {
       tasks: tasks.length, sizes: { S: size("S"), M: size("M"), L: size("L") },
       criteria: state.acceptance?.available ? state.acceptance.counts.total : 0,

@@ -413,7 +413,8 @@ export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; pe
  * last opened, so nothing is ever applied to an implicit "current" run.
  */
 export type ClientMessage =
-  | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string }
+  /** `requestId` is chosen by the page and comes back in `run.started`, in the queued notice or in `error`: the page opens the run its own launch created, not the next one it hears about. */
+  | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string; requestId?: string }
   | { type: "run.subscribe"; runId: string | null }
   | { type: "terminal.input"; runId: string; data: string }
   | { type: "instruction.send"; runId: string; text: string }
@@ -447,8 +448,9 @@ export type ClientMessage =
   /** Drops the review findings kept for a repository. Its next run is told of no habit. */
   | { type: "findings.forget"; repository: string }
   /** `scenario`: the regular workflow, the pilot handing back with nothing next, or a batch of three tickets with one conflict. */
-  | { type: "demo.start"; scenario?: "workflow" | "incident" | "batch" }
-  | { type: "feedback.submit"; runId: string; body: string }
+  | { type: "demo.start"; scenario?: "workflow" | "incident" | "batch"; requestId?: string }
+  /** `requestId` comes back in the `error` that refuses it, which is how the page puts the text back. */
+  | { type: "feedback.submit"; runId: string; body: string; requestId?: string }
   | { type: "question.answer"; runId: string; answers: Record<string, string> }
   /** The user's decision on the prompt the page was shown, typed into the session by the engine. */
   | { type: "sessionPrompt.answer"; runId: string; promptId: string; decision: "accept" | "refuse" }
@@ -466,6 +468,8 @@ export type ServerMessage =
   | { type: "harness"; snapshot: HarnessSnapshot }
   /** The full state of one run, sent only to the pages that opened it. */
   | { type: "run"; state: RunState }
+  /** The run a `run.start` or a `demo.start` created, answered to the page that asked, before the state of that run. */
+  | { type: "run.started"; runId: string; requestId?: string }
   | { type: "terminal.output"; runId: string; data: string }
   /**
    * Something the harness did that belongs to no run: the improvement loop
@@ -474,13 +478,13 @@ export type ServerMessage =
    * several runs means a feed picked at random. `queuedId` names the waiting
    * launch a notice is about, so the page can drop it once that launch is gone.
    */
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string }
   /** What became of a batch, answered to the page that pasted it. `duplicates`: tickets already queued, running or waiting for their merge, left out. */
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   /** A batch queued nothing because these tickets have no checkout: the page asks where their merge requests go, then sends it again with `targets`. */
   | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
-  | { type: "error"; message: string; runId?: string }
+  | { type: "error"; message: string; runId?: string; requestId?: string }
   /** What became of a worktree removal, answered to the page that asked. `risks`: what a forced removal would lose. */
   | { type: "worktree.result"; runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] }
   /** Answered to the page that asked to forget a recipe. `forgotten` is false when there was none. */

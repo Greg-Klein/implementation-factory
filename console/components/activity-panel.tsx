@@ -1,14 +1,14 @@
 "use client";
 
 import { ArrowRightIcon, CheckIcon, CircleNotchIcon, FileTextIcon, RobotIcon, WarningIcon } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { activeAgents, elapsedLabel, generatedDocuments, healthNotice, isDemoRun } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 import { AgentAvatar, AgentName } from "./agent-avatar";
 import { DocumentViewer } from "./document-viewer";
 
-export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => void; onShowQuestion: () => void }) {
+export function ActivityPanel({ run, onFeedback, refusedFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => boolean; refusedFeedback?: { requestId: string; body: string }; onShowQuestion: () => void }) {
   const runningAgents = activeAgents(run.agents);
   const now = useNow(runningAgents.length > 0);
   const [feedback, setFeedback] = useState("");
@@ -21,10 +21,19 @@ export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunSta
     if (!feedback.trim()) return;
     // The demonstration shows the panel without feeding the loop: a simulated
     // feedback would write a real file in data/feedback/pending/.
-    if (!demo) onFeedback(feedback);
+    // Not sent, the text stays in the field: the page says why above.
+    if (!demo && !onFeedback(feedback)) return;
     setFeedback("");
     setQueued(true);
   };
+  // The server answers nothing when it saves a feedback, so the field is cleared
+  // as soon as it left. A refusal comes after: the text goes back, unless the
+  // user already started another one.
+  useEffect(() => {
+    if (!refusedFeedback) return;
+    setQueued(false);
+    setFeedback((current) => current || refusedFeedback.body);
+  }, [refusedFeedback?.requestId]);
   return (
     <aside className="scrollbar-thin flex min-h-0 flex-col bg-[var(--tint)] lg:overflow-y-auto">
       {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-[var(--raised)] p-4">

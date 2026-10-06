@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { broadcast, broadcastToViewers, now } from "./context.js";
+import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
 import { admitBatch, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
@@ -318,7 +318,7 @@ export class RunRegistry {
    */
   async launchProposal(issueUrl: string, paths: string[]): Promise<BatchOutcome> {
     const [listed] = this.proposals.proposed([issueUrl]);
-    const proposal = this.proposals.open().find((candidate) => candidate.issueUrl === listed);
+    const proposal = listed === undefined ? undefined : this.proposals.open().find((candidate) => candidate.issueUrl === listed);
     if (!proposal) throw new Error("This ticket is no longer listed.");
     if (paths.length === 0) throw new Error("Choose at least one repository.");
     const outcome = await this.enqueueBatch(await resolveTargets(proposal.issueUrl, paths, proposal.baseBranch));
@@ -469,7 +469,7 @@ export class RunRegistry {
     const key = runLockKey(ticket);
     const dependents = conflictingEntries(this.queue, ticket, this.context());
     const scheduled = this.tickets.some((known) => runLockKey({ cwd: known.repository, issueUrl: known.issueUrl }) === key);
-    const mergeRequestUrl = state.mergeRequestUrl ?? state.workflow?.result?.mergeRequestUrl;
+    const mergeRequestUrl = state.mergeRequestUrl;
     if (mergeRequestUrl && (dependents.length > 0 || scheduled)) {
       const watch: MergeWatch = { issueUrl: ticketIdentity(state.issueUrl), repository, mergeRequestUrl, ...(state.branch ? { branch: state.branch } : {}), runId: session.id, state: "open", since: now() };
       this.watches = [...this.watches.filter((known) => runLockKey({ cwd: known.repository, issueUrl: known.issueUrl }) !== key), watch];
@@ -708,7 +708,7 @@ export class RunRegistry {
     this.sessions.delete(runId);
     this.settled.delete(runId);
     // A worktree still on disk keeps its run within reach, or nothing would offer its removal before the next start.
-    const adopted = session.state.worktree?.state === "kept" ? this.archive.adopt(session.archivedState()) : undefined;
+    const adopted = session.state.worktree?.state === "kept" ? this.archive.adopt(session.archivedState(), session.acceptanceView) : undefined;
     if (adopted) broadcastToViewers(runId, { type: "run", state: adopted.state });
     this.publishSnapshot();
     await this.drain();
@@ -897,7 +897,7 @@ export class RunRegistry {
       await mkdir(path.dirname(queueFile), { recursive: true });
       await writeFile(`${queueFile}.tmp`, content);
       await rename(`${queueFile}.tmp`, queueFile);
-    }).catch(() => undefined);
+    }).catch(reportFailure("Queue not saved", queueFile));
     return this.queueWrites;
   }
 
@@ -908,7 +908,16 @@ export class RunRegistry {
    */
   async restoreQueue() {
     let stored: unknown = [];
-    try { stored = JSON.parse(await readFile(queueFile, "utf8")) as unknown; } catch { /* no queue was left */ }
+    // Only a missing file means no queue was left. One that cannot be read is kept
+    // aside before the next write replaces it with whatever is queued by then.
+    try { stored = JSON.parse(await readFile(queueFile, "utf8")) as unknown; }
+    catch (error) {
+      if (!isMissingFile(error)) {
+        const aside = `${queueFile}.unreadable-${Date.now()}`;
+        await rename(queueFile, aside).catch(reportFailure("Unreadable queue not kept aside", queueFile));
+        reportFailure("Queue unreadable, started empty", `kept as ${path.basename(aside)}`)(error);
+      }
+    }
     ({ queue: this.queue, tickets: this.tickets, edges: this.edges, watches: this.watches } = restoreQueueFile(stored));
     // The sessions that were writing there are gone with the process that started them.
     await clearScheduleFiles();

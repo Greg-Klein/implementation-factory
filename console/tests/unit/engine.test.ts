@@ -203,4 +203,10 @@ describe("the headless scheduling session", () => {
     expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HARNESS_HOOK_URL: "http://127.0.0.1:3210/api/hooks?token=x", IMPL_HOOK_SPOOL: "/data/runs/run-1/hooks-spool.jsonl" }))
       .toEqual({ PATH: "/usr/bin" });
   });
+
+  it("should name its output file to the guard, and never inherit the one of another session", () => {
+    expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1" }, "/data/schedule/call-1/output.json"))
+      .toEqual({ PATH: "/usr/bin", IMPL_SCHEDULE_OUTPUT: "/data/schedule/call-1/output.json" });
+    expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_SCHEDULE_OUTPUT: "/data/schedule/call-0/output.json" })).toEqual({ PATH: "/usr/bin" });
+  });
 });

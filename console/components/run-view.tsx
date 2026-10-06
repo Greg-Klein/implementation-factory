@@ -8,6 +8,7 @@ import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
 import { EvidencePanel } from "./evidence-panel";
 import { IncidentPanel } from "./incident-panel";
+import { PanelBoundary } from "./panel-boundary";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 import { TrackingPanel } from "./tracking-panel";
@@ -15,13 +16,17 @@ import { WorktreePanel } from "./worktree-panel";
 
 type Tab = "conversation" | "suivi" | "terminal" | "preuves";
 
+/** A feedback the server refused after the page had cleared its field: `body` goes back into it. */
+export type RefusedFeedback = { runId: string; requestId: string; body: string };
+
+/** Those that return a boolean say whether the message left the page: a draft is cleared only then. */
 export type RunViewActions = {
   terminalInput: (data: string) => void;
   terminalResize: (cols: number, rows: number) => void;
-  sendInstruction: (text: string) => void;
+  sendInstruction: (text: string) => boolean;
   answer: (answers: Record<string, string>) => void;
   answerPrompt: (promptId: string, decision: "accept" | "refuse") => void;
-  feedback: (body: string) => void;
+  feedback: (body: string) => boolean;
   stop: () => void;
   close: () => void;
   incident: (incident: RunIncident, action: IncidentAction, reason?: string) => void;
@@ -32,14 +37,17 @@ export type RunViewActions = {
   openRecipe: () => void;
 };
 
-export function RunView({ run, connected, writing, terminalRef, actions, incidentResult, worktreeResult }: {
+export function RunView({ run, visible = true, connected, writing, terminalRef, actions, incidentResult, worktreeResult, refusedFeedback }: {
   run: RunState;
+  /** False while the metrics cover the view: it stays mounted, since nothing replays what its terminal printed. */
+  visible?: boolean;
   connected: boolean;
   writing: boolean;
   terminalRef: Ref<TerminalHandle>;
   actions: RunViewActions;
   incidentResult?: IncidentResult;
   worktreeResult?: WorktreeResult;
+  refusedFeedback?: RefusedFeedback;
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
@@ -64,7 +72,9 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
   };
 
   // Switching run switches subject: what had been read in the previous one says
-  // nothing about this one, and the tab returns to the dialogue.
+  // nothing about this one, and the tab returns to the dialogue. The panels are
+  // keyed by the run and start again on their own; this view is not, because it
+  // holds the terminal.
   useEffect(() => {
     setTab("conversation");
     setSeenEvidenceAt(undefined);
@@ -96,13 +106,14 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
       window.removeEventListener("resize", measure);
       document.fonts?.removeEventListener("loadingdone", measure);
     };
-  }, [tab, tabList, unread.conversation, unread.preuves]);
+    // A hidden view measures zero: measured again when it comes back.
+  }, [tab, tabList, unread.conversation, unread.preuves, visible]);
 
   const active = runInProgress(run.status);
   const idleSession = holdsIdleSession(run);
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[196px_minmax(0,1fr)_300px]">
+    <div className={visible ? "grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[196px_minmax(0,1fr)_300px]" : "hidden"}>
       <PhaseRail run={run} onOpenRecipe={actions.openRecipe} />
       <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
         <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2">
@@ -134,21 +145,24 @@ export function RunView({ run, connected, writing, terminalRef, actions, inciden
           </div>
         </div>
         <WorktreePanel result={worktreeResult && worktreeResult.runId === run.id && canRemoveWorktree(run) ? worktreeResult : undefined} connected={connected} onConfirm={() => actions.removeWorktree(true)} onDismiss={actions.dismissWorktreeResult} />
-        <IncidentPanel run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
+        <IncidentPanel key={run.id} run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} sessionPrompt={run.sessionPrompt} connected={connected} onAnswerPrompt={actions.answerPrompt} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
+          <PanelBoundary name="Conversation" resetKey={run.id}>
+          <ConversationPanel key={run.id} messages={run.messages} pendingQuestion={run.pendingQuestion} sessionPrompt={run.sessionPrompt} connected={connected} onAnswerPrompt={actions.answerPrompt} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={visible && tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
+          </PanelBoundary>
         </div>
         <div className={tab === "suivi" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <TrackingPanel run={run} />
+          <PanelBoundary name="Tracking" resetKey={run.id}><TrackingPanel key={run.id} run={run} /></PanelBoundary>
         </div>
         <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
-          <TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} />
+          {/* No key: the terminal holds what the run printed, and is cleared and replayed by the page on a switch. */}
+          <PanelBoundary name="Terminal" resetKey={run.id}><TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} /></PanelBoundary>
         </div>
         <div className={tab === "preuves" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <EvidencePanel run={run} />
+          <PanelBoundary name="Evidence" resetKey={run.id}><EvidencePanel key={run.id} run={run} /></PanelBoundary>
         </div>
       </section>
-      <ActivityPanel run={run} onFeedback={actions.feedback} onShowQuestion={() => setTab("conversation")} />
+      <ActivityPanel key={run.id} run={run} onFeedback={actions.feedback} refusedFeedback={refusedFeedback?.runId === run.id ? refusedFeedback : undefined} onShowQuestion={() => setTab("conversation")} />
     </div>
   );
 }

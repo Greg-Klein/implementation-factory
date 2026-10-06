@@ -5,6 +5,7 @@ import { DEFAULT_HEALTH_POLICY, evaluateRunHealth, healthSignalsView, wokeUpFrom
 import { reconcileIncidents, resolutionOutcome } from "./run-incidents.js";
 import type { RunSession } from "./run-session.js";
 import type { RunHealthView, WaitReason } from "./types.js";
+import { reportFailure } from "./context.js";
 
 /**
  * The one scheduler behind run health: a tick for every live run, plus a look
@@ -54,7 +55,7 @@ export async function applyHealth(session: RunSession, now: number, policy: Heal
   const transition = reconcileIncidents(session.state.incidents ?? [], verdict.incident, {
     runId: session.id, now: at, outcome: (incident) => resolutionOutcome(incident, input, verdict),
   });
-  const dismissed = verdict.incident && transition.incidents.find((incident) => incident.fingerprint === verdict.incident!.fingerprint)?.status === "dismissed";
+  const dismissed = verdict.incident && transition.incidents.findLast((incident) => incident.fingerprint === verdict.incident!.fingerprint)?.status === "dismissed";
   // A cause the user classified as a false positive stays visible in the incident, not in the health.
   const shown = dismissed ? { health: "healthy" as const } : verdict;
   const workflow: RunHealthView["workflow"] = session.demo ? undefined
@@ -134,7 +135,11 @@ export class RunMonitor {
     if (this.stopped || session.disposed) return Promise.resolve(false);
     // The simulated run plays in seconds: its graces are shortened to match.
     const policy = session.demo ? { ...this.policy, turnEndGraceMs: Math.min(this.policy.turnEndGraceMs, demoHealthGraceMs()), artifactGraceMs: Math.min(this.policy.artifactGraceMs, demoHealthGraceMs()) } : this.policy;
-    return session.serializeHealth(() => (this.stopped ? false : applyHealth(session, this.clock(), policy))).catch(() => false);
+    return session.serializeHealth(() => (this.stopped ? false : applyHealth(session, this.clock(), policy))).catch((error: unknown) => {
+      // A health evaluation that throws is not a run where nothing changed.
+      reportFailure("Run health not evaluated", session.id)(error);
+      return false;
+    });
   }
 }
 

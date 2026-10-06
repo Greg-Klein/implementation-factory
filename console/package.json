@@ -9,7 +9,7 @@
     "postinstall": "node scripts/postinstall.mjs",
     "build": "next build --webpack",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json",
     "test:unit": "jest --runInBand",
     "test:integration": "playwright test",
     "test:integration:headed": "playwright test --headed",

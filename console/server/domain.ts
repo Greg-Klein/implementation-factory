@@ -432,17 +432,49 @@ export function createsMergeRequest(command: string | undefined) {
   return command !== undefined && OPENS_MERGE_REQUEST.test(command);
 }
 
-const MERGE_REQUEST_URL = /https?:\/\/[^\s"'<>()\\]*?\/(?:-\/merge_requests|merge_requests|pull)\/\d+/;
+const MERGE_REQUEST_URL = /https?:\/\/[^\s"'<>()\\]*?\/(?:-\/merge_requests|merge_requests|pull)\/\d+/g;
+
+/** Every text a tool response holds, whatever its shape. */
+function responseTexts(value: unknown, depth = 0): string[] {
+  if (typeof value === "string") return [value];
+  if (!value || typeof value !== "object" || depth > 4) return [];
+  return Object.values(value).flatMap((entry) => responseTexts(entry, depth + 1));
+}
+
+/** The address the forge gives the object it just created: `web_url` on GitLab, `html_url` on GitHub. */
+function createdAddress(text: string) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < start || text.slice(0, start).trim()) return undefined;
+  let answer: unknown;
+  // Up to its last brace: whatever a CLI prints after the object does not make it unread.
+  try { answer = JSON.parse(text.slice(start, end + 1)) as unknown; } catch { return undefined; }
+  if (!isRecord(answer)) return undefined;
+  const address = [answer.web_url, answer.html_url].find((candidate): candidate is string => typeof candidate === "string" && Boolean(parseDeliveryUrl(candidate)));
+  return address?.match(MERGE_REQUEST_URL)?.[0];
+}
 
 /**
  * The created merge request only ever names itself in the output of the command
  * that opened it, and that output reaches the harness as a PostToolUse response
- * whose shape depends on the tool.
+ * whose shape depends on the tool. That output also quotes what the description
+ * says, and a description cites other merge requests (the parent of a stacked
+ * run for one): an API answer is read as the object it is, and a printed output
+ * by its last address, which is where a CLI names what it created. What the
+ * command printed on its standard output is read first: the remote's own
+ * messages, which may name another merge request, arrive on the error output.
  */
 export function mergeRequestUrl(toolResponse: unknown) {
-  if (toolResponse === undefined || toolResponse === null) return undefined;
-  const text = typeof toolResponse === "string" ? toolResponse : JSON.stringify(toolResponse);
-  return text?.match(MERGE_REQUEST_URL)?.[0];
+  const printed = isRecord(toolResponse) && typeof toolResponse.stdout === "string" ? [toolResponse.stdout] : [];
+  for (const texts of [printed, responseTexts(toolResponse)]) {
+    for (const text of texts) {
+      const created = createdAddress(text);
+      if (created) return created;
+    }
+    const last = texts.flatMap((text) => text.match(MERGE_REQUEST_URL) ?? []).at(-1);
+    if (last) return last;
+  }
+  return undefined;
 }
 
 export function gitRemoteProjects(config: string): string[] {
@@ -1045,6 +1077,15 @@ export function permissionMode(value: string | undefined, fallback: string) {
   return mode && (permissionModes as readonly string[]).includes(mode) ? mode : fallback;
 }
 
+/**
+ * Whether a text can name a self-improvement worktree: letters, digits and
+ * dashes. Anything else never reaches git, a path or a file name, by whichever
+ * door it came in.
+ */
+export function isImprovementWorktreeName(name: unknown): name is string {
+  return typeof name === "string" && /^[a-z0-9-]+$/i.test(name);
+}
+
 /** A ticket of the demonstration: it has no repository, no GitLab and nothing to keep across a restart. */
 export function isSimulatedTicket(issueUrl: string) {
   return issueUrl.startsWith("ticket-simule://");
@@ -1173,11 +1214,11 @@ export function readProposalSnapshot(content: unknown): TicketProposal[] | undef
   const proposals = new Map<string, TicketProposal>();
   for (const entry of content.tickets.filter(isRecord)) {
     const issueUrl = typeof entry.url === "string" ? normalizeTicketUrl(entry.url) : undefined;
-    if (!issueUrl || proposals.has(issueUrl)) continue;
+    if (!issueUrl || proposals.has(ticketIdentity(issueUrl))) continue;
     const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
     const baseBranch = branchName(entry.baseBranch);
     const repositories = Array.isArray(entry.repositories) ? [...new Set(entry.repositories.map(projectPath).filter((project): project is string => Boolean(project)))] : [];
-    proposals.set(issueUrl, {
+    proposals.set(ticketIdentity(issueUrl), {
       issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}), ...(baseBranch ? { baseBranch } : {}),
       ...(repositories.length > 0 ? { repositories } : {}),
     });

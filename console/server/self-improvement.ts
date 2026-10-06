@@ -67,7 +67,12 @@ function startConflictResolution(worktreeName: string, onto: string) {
   if (!selfImprovementAutorun()) return false;
   const child = engine.startConflictResolution({ worktreeName, onto });
   if (!child) return false;
+  // A session that could not start: without this listener the failure was an unhandled error event.
+  // The close that follows it is the same failure, said once.
+  let failed = false;
+  child.on("error", (error) => { failed = true; notice("attention", "Assisted rebase failed", `${worktreeName}: ${error.message}`); });
   child.on("close", (code) => {
+    if (failed) return;
     notice(code === 0 ? "info" : "attention", code === 0 ? "Assisted rebase completed" : "Assisted rebase failed", worktreeName);
   });
   return true;

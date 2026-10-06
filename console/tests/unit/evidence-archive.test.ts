@@ -161,6 +161,34 @@ describe("evidence archive on disk", () => {
     expect(await confinedPath(tasks, "../../secret.png")).toBeUndefined();
   });
 
+  it("should read back the coverage it showed, snapshots included, after a restart", async () => {
+    const files = new Map<string, Buffer>();
+    const storage = memoryStorage((name) => files.get(name));
+    const clock = () => "2026-09-27T10:00:00.000Z";
+    const live = new EvidenceArchive(storage, clock);
+    await live.settleSnapshot({ id: "snap-a", capturedAt: "2026-09-27T10:00:00.000Z" });
+    files.set("acceptance-criteria.json", Buffer.from(criteria));
+    files.set("assets/result.png", Buffer.from("png-1"));
+    files.set("qa-evidence.json", Buffer.from(qa(1, "pass")));
+    await live.ingest("acceptance-criteria.json");
+    await live.ingest("qa-evidence.json");
+    expect(live.view().criteria[0].status).toBe("verified");
+
+    const readBack = new EvidenceArchive(storage, clock);
+    expect(await readBack.restore()).toBe(true);
+    expect(readBack.currentSnapshot).toEqual({ id: "snap-a", capturedAt: "2026-09-27T10:00:00.000Z" });
+    expect(readBack.view().criteria[0].status).toBe("verified");
+    expect(readBack.view().counts).toEqual(live.view().counts);
+
+    // The code moved after the evidence was taken: kept too, so the archive says stale and not verified.
+    await live.settleSnapshot({ id: "snap-b", capturedAt: "2026-09-27T10:05:00.000Z" });
+    const later = new EvidenceArchive(storage, clock);
+    await later.restore();
+    expect(later.currentSnapshot?.id).toBe("snap-b");
+    expect(later.view().criteria[0].status).toBe(live.view().criteria[0].status);
+    expect(later.view().criteria[0].status).not.toBe("verified");
+  });
+
   it("should keep two runs apart", async () => {
     const tasks = (name: string) => path.join(root, name, ".claude", "tasks");
     for (const name of ["one", "two"]) {

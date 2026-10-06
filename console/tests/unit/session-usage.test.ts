@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "@jest/globals";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { readSessionUsage, transcriptDirectory, usageFromTranscript } from "../../server/engine/usage";
+import { createUsageReader, readSessionUsage, transcriptDirectory, usageFromTranscript, type TranscriptAccess } from "../../server/engine/usage";
 
 const call = (id: string, usage: Record<string, number>, extra: Record<string, unknown> = {}) => JSON.stringify({
   type: "assistant", timestamp: "2026-10-03T11:50:37.000Z", ...extra,
@@ -75,6 +75,37 @@ describe("sessions of a run", () => {
     const source = { transcriptPath: path.join(directory, "session-a.jsonl"), cwd: "/elsewhere" };
     expect(await readSessionUsage({ ...source, isolated: false })).toHaveLength(2);
     expect(await readSessionUsage({ ...source, isolated: true })).toHaveLength(3);
+  });
+
+  it("should read only what a transcript gained since the last reading, and nothing of one that did not move", async () => {
+    root = mkdtempSync(path.join(os.tmpdir(), "usage-"));
+    const file = path.join(root, "session.jsonl");
+    const lines = [call("msg_1", { output_tokens: 100 }), call("msg_2", { output_tokens: 30 }), call("msg_2", { output_tokens: 45 })].map((line) => (line.endsWith("\n") ? line : `${line}\n`));
+    const ranges: [number, number][] = [];
+    const access: TranscriptAccess = {
+      size: async (target) => (existsSync(target) ? statSync(target).size : undefined),
+      read: async (target, from, to) => { ranges.push([from, to]); return readFileSync(target).subarray(from, to); },
+    };
+    const usageOf = createUsageReader(access);
+
+    writeFileSync(file, lines[0]);
+    expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
+    expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
+    expect(ranges).toEqual([[0, lines[0].length]]);
+
+    // A line caught half written is not counted yet, and is not lost either.
+    const half = Math.floor(lines[1].length / 2);
+    writeFileSync(file, lines[0] + lines[1].slice(0, half));
+    expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
+    writeFileSync(file, lines[0] + lines[1] + lines[2]);
+    expect(await usageOf(file)).toEqual(usageFromTranscript(lines.join("")));
+    expect(await usageOf(file)).toMatchObject({ calls: 2, outputTokens: 145 });
+    expect(ranges).toEqual([[0, lines[0].length], [lines[0].length, lines[0].length + half], [lines[0].length + half, lines.join("").length]]);
+
+    // Written again from scratch: read from its start.
+    writeFileSync(file, lines[1]);
+    expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 30 });
+    expect(await usageOf(path.join(root, "missing.jsonl"))).toBeUndefined();
   });
 
   it("should report nothing when the transcript is gone", async () => {

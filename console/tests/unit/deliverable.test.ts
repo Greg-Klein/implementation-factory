@@ -57,6 +57,28 @@ describe("run deliverable", () => {
     })).toBe("https://gitlab.com/acme/app/-/merge_requests/128");
   });
 
+  it("should name the merge request that was created, not one its description cites", () => {
+    expect(mergeRequestUrl({
+      stdout: '{"iid":129,"description":"Stacked on https://gitlab.com/acme/app/-/merge_requests/128","web_url":"https://gitlab.com/acme/app/-/merge_requests/129","references":{"full":"acme/app!129"}}',
+    })).toBe("https://gitlab.com/acme/app/-/merge_requests/129");
+    expect(mergeRequestUrl({
+      stdout: '{"number":13,"body":"Follows https://github.com/acme/app/pull/12","html_url":"https://github.com/acme/app/pull/13","url":"https://api.github.com/repos/acme/app/pulls/13"}',
+    })).toBe("https://github.com/acme/app/pull/13");
+    expect(mergeRequestUrl("Creating merge request for feat/x into main\nDescription: follows https://gitlab.com/acme/app/-/merge_requests/128\n\nhttps://gitlab.com/acme/app/-/merge_requests/129\n"))
+      .toBe("https://gitlab.com/acme/app/-/merge_requests/129");
+  });
+
+  it("should read what the command printed before what the remote said beside it", () => {
+    expect(mergeRequestUrl({
+      stdout: "Creating merge request...\nhttps://gitlab.com/g/p/-/merge_requests/12\n",
+      stderr: "remote: View merge request for parent:\nremote:   https://gitlab.com/g/p/-/merge_requests/5\n",
+    })).toBe("https://gitlab.com/g/p/-/merge_requests/12");
+    expect(mergeRequestUrl({ stdout: "", stderr: "remote: https://gitlab.com/g/p/-/merge_requests/5" })).toBe("https://gitlab.com/g/p/-/merge_requests/5");
+    expect(mergeRequestUrl({
+      stdout: '{"iid":129,"description":"Stacked on https://gitlab.com/acme/app/-/merge_requests/128","web_url":"https://gitlab.com/acme/app/-/merge_requests/129"}\n(1 request)\n',
+    })).toBe("https://gitlab.com/acme/app/-/merge_requests/129");
+  });
+
   it("should find no address when the response carries none", () => {
     expect(mergeRequestUrl("aborted: nothing to compare")).toBeUndefined();
     expect(mergeRequestUrl(undefined)).toBeUndefined();

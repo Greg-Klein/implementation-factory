@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeArchivedRun, openIncident } from "./run-incidents.js";
 import { RunSession } from "./run-session.js";
-import type { RunState, RunSummary } from "./types.js";
+import type { AcceptanceView, RunState, RunSummary } from "./types.js";
 
 /** What keeps a run of an earlier session in the list: an incident nobody closed, or a worktree still on disk. */
 function worthShowing(state: RunState) {
@@ -37,9 +37,11 @@ export class RunArchive {
   }
 
   /** A run the user closed while its worktree is still on disk: it stays readable, with the removal on offer. */
-  adopt(state: RunState) {
+  adopt(state: RunState, acceptanceView: AcceptanceView | null = null) {
     if (!state.id || !worthShowing(state)) return undefined;
     const session = new RunSession(state.id, { ...state, archived: true, sessionActive: false, pendingQuestion: undefined });
+    // Its evidence archive starts empty: the coverage the live run last showed is what it serves until the next start reads the files back.
+    session.acceptanceView = acceptanceView;
     this.runs.set(state.id, session);
     return session;
   }

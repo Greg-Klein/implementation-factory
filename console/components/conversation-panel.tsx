@@ -28,7 +28,7 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; sessionPrompt?: SessionPrompt; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; sessionPrompt?: SessionPrompt; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => boolean; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
@@ -83,8 +83,8 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
   const send = () => {
     if (!draft.trim() || !canSend) return;
     pin();
-    onSend(draft.trim());
-    setDraft("");
+    // An instruction that did not leave stays in the field.
+    if (onSend(draft.trim())) setDraft("");
   };
 
   return (

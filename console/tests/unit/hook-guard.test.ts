@@ -126,6 +126,98 @@ describe("the hook guard", () => {
     ]) expect(`${command} => ${refusal("Bash", { command }) ? "refused" : "let through"}`).toBe(`${command} => refused`);
   });
 
+  it("should refuse them behind a keyword, a wrapper, a path or a redirection, each by its own rule", () => {
+    const reset = "`git reset --hard` destroys uncommitted work";
+    const clean = "`git clean -f` deletes untracked files";
+    const checkout = "This checkout discards every uncommitted change of the tree";
+    const restore = "This restore discards every uncommitted change of the tree";
+    for (const [command, rule] of [
+      ["if ! git diff --quiet; then git reset --hard; fi", reset],
+      ["for d in a b; do git -C $d clean -fd; done", clean],
+      ["! git reset --hard", reset],
+      ["sudo git reset --hard", reset],
+      ["nohup git clean -fd", clean],
+      ["timeout 5 git reset --hard", reset],
+      ["ls | xargs git clean -f", clean],
+      ["/usr/bin/git reset --hard", reset],
+      ["git reset --hard>/dev/null", reset],
+      ["git reset --hard 2>/dev/null", reset],
+      ["git clean -fd>log", clean],
+      ["echo `git reset --hard`", reset],
+      ["echo $(git reset --hard)", reset],
+      ["git --config-env core.editor=EDITOR reset --hard", reset],
+      ["git checkout -- ./", checkout],
+      ["git checkout -- ..", checkout],
+      ["git restore ./", restore],
+      ["git restore '*'", restore],
+      ["git restore :/", restore],
+      ["git restore ':(top)'", restore],
+      ["GIT_EXEC_PATH=/usr/lib/git git reset --hard", reset],
+      ["GIT_DIR=/repo/.git /usr/bin/git reset --hard", reset],
+    ]) expect(`${command} => ${refusal("Bash", { command }) ?? "let through"}`).toContain(`${command} => ${rule}`);
+  });
+
+  describe("in the headless scheduling session", () => {
+    const output = "/data/schedule/call-1/output.json";
+    const session = { IMPL_SCHEDULE_OUTPUT: output };
+    const reads = "The scheduling session only reads tickets";
+
+    it("should refuse a forge call that writes, whatever way the method or the field is spelled", () => {
+      for (const command of [
+        "gh api -X DELETE repos/acme/shop/issues/7",
+        "gh api repos/acme/shop/issues/7/comments -f body=hello",
+        "gh api --method POST repos/acme/shop/issues/7/comments --raw-field body=hello",
+        "gh api repos/acme/shop/issues/7 --input payload.json",
+        "glab api --method PUT projects/:fullpath/issues/7 --field description=x",
+        "glab api -XPOST projects/:fullpath/issues/7/notes",
+        "glab api projects/:fullpath/merge_requests",
+        "gh api repos/acme/shop",
+        "gh issue comment 7 --body hello",
+        "glab issue update 7 --description x",
+        "gh pr create --title x",
+        "/opt/homebrew/bin/gh api -X DELETE repos/acme/shop/issues/7",
+        "GH_HOST=github.example.com gh api -X DELETE repos/acme/shop/issues/7",
+        "git log --oneline; gh api -X DELETE repos/acme/shop/issues/7",
+      ]) expect(`${command} => ${refusal("Bash", { command }, session) ?? "let through"}`).toContain(`${command} => ${reads}`);
+    });
+
+    it("should let it read an issue and its links", () => {
+      for (const command of [
+        "glab issue view 7",
+        "glab issue view 7 --repo https://gitlab.com/acme/shop",
+        "glab api \"projects/:fullpath/issues/7/links\"",
+        "glab api --hostname gitlab.example.com projects/acme%2Fshop/issues/7/links",
+        "gh issue view 7 --repo acme/shop",
+        "gh api \"repos/{owner}/{repo}/issues/7/dependencies/blocked_by\" --jq '.[] | {number, title, state}'",
+        "gh api repos/acme/shop/issues/7/dependencies/blocking --hostname github.example.com --paginate",
+        "git log --oneline -20",
+        "git grep -n checkout",
+        "git grep -n gh src",
+        "git log --grep glab",
+        "git show HEAD:bin/gh",
+        "git grep -n rm src",
+        "ls tests/fake-claude/gh",
+        "ls src",
+      ]) expect(`${command} => ${refusal("Bash", { command }, session) ?? "let through"}`).toBe(`${command} => let through`);
+    });
+
+    it("should let it write and remove its output file, and no other", () => {
+      expect(refusal("Write", { file_path: output, content: "{}" }, session)).toBeUndefined();
+      expect(refusal("Write", { file_path: "src/a.ts", content: "x" }, session)).toBe(`The scheduling session writes its output file and nothing else: ${output}.`);
+      expect(refusal("Write", { file_path: "/data/schedule/call-1/../../queue.json", content: "[]" }, session)).toContain("writes its output file and nothing else");
+      expect(refusal("Edit", { file_path: output, old_string: "a", new_string: "b" }, session)).toContain("writes its output file and nothing else");
+      expect(refusal("Bash", { command: `rm ${output}` }, session)).toBeUndefined();
+      expect(refusal("Bash", { command: "rm /data/schedule/call-1/../../queue.json" }, session)).toBe(`The scheduling session removes its own output file and nothing else: ${output}.`);
+      expect(refusal("Bash", { command: `rm -rf ${output}` }, session)).toContain("removes its own output file and nothing else");
+    });
+
+    it("should let it start its agent and no other", () => {
+      expect(refusal("Agent", { subagent_type: "implementation-harness:ticket-scheduler", prompt: "p" }, session)).toBeUndefined();
+      expect(refusal("Agent", { subagent_type: "general-purpose", prompt: "p" }, session)).toBe("The scheduling session starts `implementation-harness:ticket-scheduler` and no other agent.");
+      expect(refusal("Agent", { prompt: "p" }, session)).toContain("and no other agent");
+    });
+  });
+
   it("should let through the git commands the workflow needs", () => {
     for (const command of [
       "git reset --soft HEAD~1",
@@ -141,6 +233,17 @@ describe("the hook guard", () => {
       "git commit -m 'docs: never run git reset --hard'",
       "git log --grep 'clean -fd'",
       "git commit -F - <<EOF\nfix: x\n\ngit reset --hard was the cause\nEOF",
+      "git restore src/a.ts",
+      "git checkout -- ./src",
+      "git restore --staged ./",
+      "git diff --stat > /tmp/diff.txt",
+      "if git diff --quiet; then git status --short; fi",
+      "sudo git status",
+      "cd git && ls",
+      "git restore :/console/server/domain.ts",
+      "git restore ':(top)console/server/domain.ts'",
+      "git checkout ':/fix typo' -- src/a.ts",
+      "GIT_EXEC_PATH=/usr/lib/git git status",
     ]) expect(`${command} => ${refusal("Bash", { command }) ? "refused" : "let through"}`).toBe(`${command} => let through`);
   });
 

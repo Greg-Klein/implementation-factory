@@ -8,8 +8,8 @@ import { TargetPicker } from "./target-picker";
 
 export type ProposalActions = {
   dismiss: (issueUrls: string[]) => void;
-  /** Queues a refused ticket, one run per checkout chosen. */
-  launch: (issueUrl: string, repositories: string[]) => void;
+  /** Queues a refused ticket, one run per checkout chosen. Says whether the request left the page: the picker stays open otherwise. */
+  launch: (issueUrl: string, repositories: string[]) => boolean;
 };
 
 const iconButton = "grid size-5 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px";
@@ -51,7 +51,7 @@ export function ProposalList({ proposals, repositories, actions }: { proposals: 
               {open && (
                 <div className="mt-2">
                   <TargetPicker compact label="Merge request repositories" selected={chosen} onChange={setChosen} repositories={repositories} />
-                  <button type="button" disabled={chosen.length === 0} onClick={() => { actions.launch(proposal.issueUrl, chosen); setChoosing(undefined); }} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--ink)] px-3 py-2 text-[11px] font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
+                  <button type="button" disabled={chosen.length === 0} onClick={() => { if (actions.launch(proposal.issueUrl, chosen)) setChoosing(undefined); }} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--ink)] px-3 py-2 text-[11px] font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
                     <PlayIcon size={11} weight="fill" /> {chosen.length > 1 ? `Start in ${chosen.length} repositories` : "Start"}
                   </button>
                 </div>

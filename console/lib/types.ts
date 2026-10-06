@@ -107,9 +107,11 @@ export type Notice = { level: "info" | "attention"; title: string; detail?: stri
 export type ServerMessage =
   | { type: "harness"; snapshot: HarnessSnapshot }
   | { type: "run"; state: RunState }
+  /** The run a launch of this page created, named by the `requestId` the page gave that launch. */
+  | { type: "run.started"; runId: string; requestId?: string }
   | { type: "terminal.output"; runId: string; data: string }
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
-  | { type: "error"; message: string; runId?: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string }
+  | { type: "error"; message: string; runId?: string; requestId?: string }
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
   | ({ type: "worktree.result" } & WorktreeResult)
@@ -131,7 +133,8 @@ export type RecipeResponse = { repository: string; recipe: { content: string; up
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
 export type EvidenceItem = { id?: string; label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; attachments?: unknown[]; note?: string; kind?: string };
-export type EvidenceReport = { source: "qa" | "design" | "developer"; status?: string; items: EvidenceItem[] };
+/** A report as `normalizeEvidenceReport` hands it to the page, never as the agent wrote it. */
+export type EvidenceReport = { source?: EvidenceSource; status?: string; items: EvidenceItem[] };
 export type PendingImprovementsResponse = { items: PendingSelfImprovementReview[]; error?: string };
 
 /** Mirrors the acceptance types of server/types.ts, computed by server/acceptance.ts. */

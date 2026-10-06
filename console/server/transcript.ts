@@ -3,6 +3,7 @@ import { open } from "node:fs/promises";
 import chokidar from "chokidar";
 import { engine } from "./engine/index.js";
 import type { RunSession } from "./run-session.js";
+import { reportFailure } from "./context.js";
 
 async function readNewMessages(session: RunSession, file: string) {
   const follow = session.transcript;
@@ -73,8 +74,9 @@ function watch(session: RunSession, transcriptPath: string) {
   }
   const watcher = chokidar.watch(transcriptPath, { ignoreInitial: false });
   follow.watcher = watcher;
-  watcher.on("add", () => void readNewMessages(session, transcriptPath));
-  watcher.on("change", () => void readNewMessages(session, transcriptPath));
+  const read = () => { readNewMessages(session, transcriptPath).catch(reportFailure("Transcript not read", session.id)); };
+  watcher.on("add", read);
+  watcher.on("change", read);
 }
 
 /** Lets go of the watcher and of the timer that waits for the file, keeping what was already read. */

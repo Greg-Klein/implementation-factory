@@ -2,9 +2,11 @@
 
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { launchAnswer } from "@/lib/launch";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
+import { appendTerminalOutput } from "@/lib/terminal-output";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
 import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
@@ -13,7 +15,7 @@ import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
 import { RecipeDialog } from "./recipe-dialog";
 import { RunRail } from "./run-rail";
-import { RunView } from "./run-view";
+import { RunView, type RefusedFeedback } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
 
@@ -28,6 +30,9 @@ const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 function requestIdentifier() {
   return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
+
+/** Said when a command could not leave the page: nothing was sent, so nothing is shown as done. */
+const NOT_CONNECTED = "Not connected to the console. Nothing was sent. Try again in a moment.";
 
 const emptySnapshot: HarnessSnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, archived: [] };
 
@@ -93,16 +98,30 @@ export function Harness() {
    */
   const openRunRef = useRef<string | null>(null);
   const [openRunId, setOpenRunId] = useState<string | null>(null);
-  /** A launch adopts whichever run the server creates for it, whose id the page cannot know beforehand. */
-  const adoptNextRunRef = useRef(false);
+  /**
+   * The request id of the launch this page sent and has no answer to yet. The
+   * page opens the run the server names with that id and no other: the server
+   * answers the messages of one connection out of order, so the next run state
+   * to arrive may be that of a run opened in the meantime. In a ref for the
+   * socket handler, in state for the button that would send a second launch.
+   */
+  const pendingLaunchRef = useRef<string | undefined>(undefined);
+  const [launching, setLaunching] = useState(false);
+  const setPendingLaunch = useCallback((requestId: string | undefined) => {
+    pendingLaunchRef.current = requestId;
+    setLaunching(requestId !== undefined);
+  }, []);
   /**
    * The user asked for the launch form and is looking at it. Without this, the
    * rule below would reopen the only run of the console the instant they asked
-   * to start a second one.
+   * to start a second one. It holds until the launch is answered, for the same reason.
    */
   const [composingRun, setComposingRun] = useState(false);
-  /** The table of measures takes the place of the run view: it is about every run, not the open one. */
+  /** The table of measures covers the run view, which stays mounted under it: it is about every run, not the open one. */
   const [showMetrics, setShowMetrics] = useState(false);
+  /** The feedback last sent, kept until the next one: the server says nothing when it saves it, and names it when it refuses it. */
+  const sentFeedbackRef = useRef<RefusedFeedback | undefined>(undefined);
+  const [refusedFeedback, setRefusedFeedback] = useState<RefusedFeedback>();
 
   const openRun = useCallback((runId: string | null) => {
     openRunRef.current = runId;
@@ -136,35 +155,42 @@ export function Harness() {
       socket.onopen = () => {
         if (socketRef.current !== socket) return;
         setConnected(true);
+        setError((current) => (current === NOT_CONNECTED ? undefined : current));
         // A reconnection has to say again which run this page is reading.
         if (openRunRef.current) socket.send(JSON.stringify({ type: "run.subscribe", runId: openRunRef.current }));
       };
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as ServerMessage;
         if (message.type === "harness") setSnapshot(message.snapshot);
-        if (message.type === "run") {
-          const incoming = message.state;
-          if (adoptNextRunRef.current && incoming.id) {
-            adoptNextRunRef.current = false;
-            // What the run printed before this page was told about it reached no one:
-            // asking for the run replays it. Not when the page already opened it itself.
-            if (openRunRef.current !== incoming.id) {
-              pendingOutputRef.current = "";
-              terminalRef.current?.clear();
-              socket.send(JSON.stringify({ type: "run.subscribe", runId: incoming.id }));
-            }
-            openRunRef.current = incoming.id;
-            setOpenRunId(incoming.id);
-          }
-          if (incoming.id === openRunRef.current) setRun(incoming);
+        const answer = launchAnswer(pendingLaunchRef.current, message);
+        if (answer) setPendingLaunch(undefined);
+        // A refusal is read on the form that has to be corrected. A queued launch is no longer being
+        // composed: the page goes back to the only run of the console, or opens this one if it starts alone.
+        if (answer?.outcome === "queued") setComposingRun(false);
+        if (answer?.outcome === "started") {
+          // What the run printed before this page was told about it reached no one:
+          // asking for the run replays it.
+          pendingOutputRef.current = "";
+          terminalRef.current?.clear();
+          openRunRef.current = answer.runId;
+          setOpenRunId(answer.runId);
+          setComposingRun(false);
+          setShowMetrics(false);
+          setWorktreeResult(undefined);
+          socket.send(JSON.stringify({ type: "run.subscribe", runId: answer.runId }));
         }
+        if (message.type === "run" && message.state.id === openRunRef.current) setRun(message.state);
         if (message.type === "terminal.output" && message.runId === openRunRef.current) {
           lastOutputRef.current = Date.now();
           if (terminalRef.current) terminalRef.current.write(message.data);
-          else pendingOutputRef.current += message.data;
+          else pendingOutputRef.current = appendTerminalOutput(pendingOutputRef.current, message.data);
         }
         if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
-        if (message.type === "error") setError(message.message);
+        if (message.type === "error") {
+          setError(message.message);
+          const feedback = sentFeedbackRef.current;
+          if (feedback && message.requestId === feedback.requestId) setRefusedFeedback(feedback);
+        }
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "batch.unresolved") setUnresolved(message.tickets);
@@ -175,12 +201,15 @@ export function Harness() {
       socket.onclose = () => {
         if (socketRef.current !== socket) return;
         setConnected(false);
+        // The answer to a launch only comes on the connection that sent it. The page stops waiting for it:
+        // the list of runs says what became of the launch, and the form can send another.
+        if (pendingLaunchRef.current) { setPendingLaunch(undefined); setComposingRun(false); }
         if (!disposed) retry = setTimeout(connect, 1200);
       };
     };
     const initialConnection = window.setTimeout(connect, 0);
     return () => { disposed = true; window.clearTimeout(initialConnection); if (retry) clearTimeout(retry); socketRef.current?.close(); };
-  }, []);
+  }, [setPendingLaunch]);
 
   // A run the console no longer holds cannot stay open in front of the user.
   useEffect(() => {
@@ -313,33 +342,44 @@ export function Harness() {
     if (enabled) { unlockSound(); playCue("attention"); }
   };
 
+  /** Whether the message was written to an open connection. Nothing queues it otherwise: it is lost. */
   const send = useCallback((message: object) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
+    if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
+    socketRef.current.send(JSON.stringify(message));
+    return true;
   }, []);
+  /** A gesture of the user: when it could not leave, they are told, and the caller shows nothing as done. */
+  const command = useCallback((message: object) => {
+    const sent = send(message);
+    if (!sent) setError(NOT_CONNECTED);
+    return sent;
+  }, [send]);
+
+  /** Sends a launch that creates one run and waits for its answer on the form, where a refusal is read. */
+  const launch = useCallback((message: object) => {
+    const requestId = requestIdentifier();
+    setComposingRun(true);
+    if (command({ ...message, requestId })) setPendingLaunch(requestId);
+  }, [command, setPendingLaunch]);
 
   useEffect(() => {
     const demo = new URLSearchParams(window.location.search).get("demo");
     if (!connected || demoStartedRef.current || (demo !== "1" && demo !== "incident" && demo !== "batch")) return;
     demoStartedRef.current = true;
     // The batch of the demonstration opens no run: its tickets show in the queue, then in the list.
-    if (demo === "batch") setComposingRun(true);
-    else {
-      setComposingRun(false);
-      adoptNextRunRef.current = true;
-      clearTerminal();
-    }
-    send({ type: "demo.start", ...(demo === "1" ? {} : { scenario: demo }) });
+    if (demo === "batch") { setComposingRun(true); command({ type: "demo.start", scenario: demo }); }
+    else launch({ type: "demo.start", ...(demo === "1" ? {} : { scenario: demo }) });
     window.history.replaceState({}, "", window.location.pathname);
-  }, [connected, send]);
+  }, [connected, command, launch]);
 
+  // The strip goes only once the decision left the page: removed before, it came
+  // back at the next poll and invited a second click on a merge already asked for.
   const approveImprovement = useCallback((worktreeName: string) => {
-    setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
-    send({ type: "selfImprovement.approve", worktreeName });
-  }, [send]);
+    if (command({ type: "selfImprovement.approve", worktreeName })) setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
+  }, [command]);
   const rejectImprovement = useCallback((worktreeName: string) => {
-    setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
-    send({ type: "selfImprovement.reject", worktreeName });
-  }, [send]);
+    if (command({ type: "selfImprovement.reject", worktreeName })) setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
+  }, [command]);
 
   const changeCwd = useCallback((value: string, project?: string) => {
     cwdRef.current = value;
@@ -360,7 +400,7 @@ export function Harness() {
       setComposingRun(true);
       unlockSound();
       if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
-      send({ type: "batch.submit", issueUrls: parsedTickets.tickets, instruction, targets: Object.fromEntries(pendingUnresolved.map((ticket) => [ticket.issueUrl, targets[ticket.issueUrl] ?? []])) });
+      command({ type: "batch.submit", issueUrls: parsedTickets.tickets, instruction, targets: Object.fromEntries(pendingUnresolved.map((ticket) => [ticket.issueUrl, targets[ticket.issueUrl] ?? []])) });
       return;
     }
     const ticketUrl = parsedTickets.tickets[0];
@@ -369,22 +409,19 @@ export function Harness() {
       // One run per repository: like a batch, the list shows them and the form stays.
       setComposingRun(true);
       unlockSound();
-      send({ type: "batch.submit", issueUrls: [ticketUrl], instruction, targets: { [ticketUrl]: chosen } });
+      command({ type: "batch.submit", issueUrls: [ticketUrl], instruction, targets: { [ticketUrl]: chosen } });
       return;
     }
-    setComposingRun(false);
-    adoptNextRunRef.current = true;
-    clearTerminal();
     unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
-    send({ type: "run.start", cwd: chosen[0] ?? cwd, issueUrl: issueUrl.trim(), instruction });
+    launch({ type: "run.start", cwd: chosen[0] ?? cwd, issueUrl: issueUrl.trim(), instruction });
   };
 
   // One line is sent as it is, and the server says what is wrong with it; a batch goes only when every line is a ticket.
   const targetsMissing = singleTicket
     ? Boolean(missedProject) && !cwd.trim() && (targets[parsedTickets.tickets[0]] ?? []).length === 0
     : pendingUnresolved.some((ticket) => (targets[ticket.issueUrl] ?? []).length === 0);
-  const canStart = connected && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0) && !targetsMissing;
+  const canStart = connected && !launching && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0) && !targetsMissing;
   const runId = run?.id ?? "";
 
   return (
@@ -403,15 +440,15 @@ export function Harness() {
           onNew={newRun}
           metricsOpen={showMetrics}
           onMetrics={() => setShowMetrics((shown) => !shown)}
-          onClose={(closedRunId) => send({ type: "run.close", runId: closedRunId })}
+          onClose={(closedRunId) => { command({ type: "run.close", runId: closedRunId }); }}
           queueActions={{
-            cancel: (queuedId) => send({ type: "queue.cancel", queuedId }),
-            force: (queuedId, mode, onto) => send({ type: "queue.force", queuedId, mode, ...(onto ? { onto } : {}) }),
-            move: (queuedId, before) => send({ type: "queue.move", queuedId, before }),
+            cancel: (queuedId) => { command({ type: "queue.cancel", queuedId }); },
+            force: (queuedId, mode, onto) => { command({ type: "queue.force", queuedId, mode, ...(onto ? { onto } : {}) }); },
+            move: (queuedId, before) => { command({ type: "queue.move", queuedId, before }); },
           }}
           proposalActions={{
-            dismiss: (issueUrls) => send({ type: "proposal.dismiss", issueUrls }),
-            launch: (proposalUrl, paths) => send({ type: "proposal.launch", issueUrl: proposalUrl, repositories: paths }),
+            dismiss: (issueUrls) => { command({ type: "proposal.dismiss", issueUrls }); },
+            launch: (proposalUrl, paths) => command({ type: "proposal.launch", issueUrl: proposalUrl, repositories: paths }),
           }}
         />
 
@@ -447,43 +484,52 @@ export function Harness() {
             <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
           </div>
 
-          {showMetrics ? <MetricsPanel /> : run ? (
+          {showMetrics && <MetricsPanel />}
+          {run ? (
             <RunView
               run={run}
+              visible={!showMetrics}
               connected={connected}
               writing={writing}
               terminalRef={attachTerminal}
               actions={{
-                terminalInput: (data) => send({ type: "terminal.input", runId, data }),
-                terminalResize: (cols, rows) => send({ type: "terminal.resize", runId, cols, rows }),
-                sendInstruction: (text) => send({ type: "instruction.send", runId, text }),
-                answer: (answers) => send({ type: "question.answer", runId, answers }),
-                answerPrompt: (promptId, decision) => send({ type: "sessionPrompt.answer", runId, promptId, decision }),
-                feedback: (body) => send({ type: "feedback.submit", runId, body }),
-                stop: () => send({ type: "run.stop", runId }),
-                close: () => send({ type: "run.close", runId }),
-                // Sent with the revision the page was shown, and an id of its own: the server
-                // refuses an action on a state that moved, and runs one request once.
+                terminalInput: (data) => { command({ type: "terminal.input", runId, data }); },
+                // Sent by the layout, not by a gesture: a size that could not leave is sent again at the next one.
+                terminalResize: (cols, rows) => { send({ type: "terminal.resize", runId, cols, rows }); },
+                sendInstruction: (text) => command({ type: "instruction.send", runId, text }),
+                answer: (answers) => { command({ type: "question.answer", runId, answers }); },
+                answerPrompt: (promptId, decision) => { command({ type: "sessionPrompt.answer", runId, promptId, decision }); },
+                feedback: (body) => {
+                  const feedback = { runId, requestId: requestIdentifier(), body };
+                  setRefusedFeedback(undefined);
+                  if (!command({ type: "feedback.submit", runId, body, requestId: feedback.requestId })) return false;
+                  sentFeedbackRef.current = feedback;
+                  return true;
+                },
+                stop: () => { command({ type: "run.stop", runId }); },
+                close: () => { command({ type: "run.close", runId }); },
                 removeWorktree: (force) => {
-                  setWorktreeResult(undefined);
-                  send({ type: "worktree.remove", runId, ...(force ? { force: true } : {}) });
+                  if (command({ type: "worktree.remove", runId, ...(force ? { force: true } : {}) })) setWorktreeResult(undefined);
                 },
                 dismissWorktreeResult: () => setWorktreeResult(undefined),
                 openRecipe: () => setRecipeRepository(sourceRepository(run)),
+                // Sent with the revision the page was shown, and an id of its own: the server
+                // refuses an action on a state that moved, and runs one request once.
                 incident: (incident, action, reason) => {
                   setIncidentResult(undefined);
-                  send({ type: "incident.action", runId, incidentId: incident.id, expectedRevision: incident.revision, requestId: requestIdentifier(), action, ...(reason ? { reason } : {}) });
+                  command({ type: "incident.action", runId, incidentId: incident.id, expectedRevision: incident.revision, requestId: requestIdentifier(), action, ...(reason ? { reason } : {}) });
                 },
               }}
               incidentResult={incidentResult}
               worktreeResult={worktreeResult}
+              refusedFeedback={refusedFeedback}
             />
-          ) : (
+          ) : !showMetrics && (
             <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} parsed={parsedTickets} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} missedProject={missedProject} unresolved={pendingUnresolved} targets={targets} chooseTargets={chooseTargets} canStart={canStart} onStart={start} onOpenRecipe={setRecipeRepository} />
           )}
         </div>
       </div>
-      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => send({ type: "recipe.forget", repository: recipeRepository })} onForgetFindings={() => send({ type: "findings.forget", repository: recipeRepository })} onClose={() => setRecipeRepository(undefined)} />}
+      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => { command({ type: "recipe.forget", repository: recipeRepository }); }} onForgetFindings={() => { command({ type: "findings.forget", repository: recipeRepository }); }} onClose={() => setRecipeRepository(undefined)} />}
     </main>
   );
 }

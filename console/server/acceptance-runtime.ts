@@ -8,6 +8,7 @@ import { engine } from "./engine/index.js";
 import { acceptanceInputKind, atomicWrite, SUMMARY_FILES, SYNC_ACK_FILE } from "./evidence-archive.js";
 import type { RunSession } from "./run-session.js";
 import type { AcceptanceView } from "./types.js";
+import { reportFailure } from "./context.js";
 
 /**
  * Keeps a run's acceptance coverage current: archives what the workflow
@@ -37,8 +38,7 @@ async function identifyCode(session: RunSession, force: boolean) {
   if (!force && Date.now() - archive.snapshotTakenAt < SNAPSHOT_INTERVAL_MS) return;
   archive.snapshotTakenAt = Date.now();
   const snapshot = await takeCodeSnapshot(session.state.cwd, snapshotExclusions(session.state.cwd));
-  archive.currentSnapshot = snapshot;
-  if (snapshot) archive.rememberSnapshot(snapshot.id, snapshot.capturedAt);
+  await archive.settleSnapshot(snapshot);
 }
 
 /**
@@ -55,15 +55,16 @@ async function writeSummary(session: RunSession, view: AcceptanceView) {
   const json = `${JSON.stringify(summary.json, null, 2)}\n`;
   if (session.demo) return;
   const runDirectory = path.join(dataRoot, session.id);
-  await atomicWrite(path.join(runDirectory, "acceptance", SUMMARY_FILES.markdown), summary.markdown).catch(() => undefined);
-  await atomicWrite(path.join(runDirectory, "acceptance", SUMMARY_FILES.json), json).catch(() => undefined);
+  const failed = reportFailure("Acceptance summary not written", session.id);
+  await atomicWrite(path.join(runDirectory, "acceptance", SUMMARY_FILES.markdown), summary.markdown).catch(failed);
+  await atomicWrite(path.join(runDirectory, "acceptance", SUMMARY_FILES.json), json).catch(failed);
   // Handed back to the workflow, which reads it before the merge request. Only
   // rewritten when it says something new, since the watcher sees every write.
   const taskRoot = engine.taskDirectory(session.state.cwd);
   const previous = await readFile(path.join(taskRoot, SUMMARY_FILES.markdown), "utf8").catch(() => undefined);
   if (previous === summary.markdown) return;
-  await atomicWrite(path.join(taskRoot, SUMMARY_FILES.markdown), summary.markdown).catch(() => undefined);
-  await atomicWrite(path.join(taskRoot, SUMMARY_FILES.json), json).catch(() => undefined);
+  await atomicWrite(path.join(taskRoot, SUMMARY_FILES.markdown), summary.markdown).catch(failed);
+  await atomicWrite(path.join(taskRoot, SUMMARY_FILES.json), json).catch(failed);
 }
 
 /**

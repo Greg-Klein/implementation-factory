@@ -175,6 +175,18 @@ export class EvidenceArchive {
     if (!this.knownSnapshots.has(id)) this.knownSnapshots.set(id, capturedAt);
   }
 
+  /**
+   * The code as it stands now. Written to the index when it moved: evidence is
+   * only verifiable against the snapshot it was taken on, so an archive read
+   * back without them showed every criterion as unverified.
+   */
+  async settleSnapshot(snapshot: { id: string; capturedAt: string } | undefined) {
+    const moved = snapshot?.id !== this.currentSnapshot?.id;
+    this.currentSnapshot = snapshot;
+    if (snapshot) this.rememberSnapshot(snapshot.id, snapshot.capturedAt);
+    if (moved && this.versions.length > 0) await this.persistIndex();
+  }
+
   /** Whether an archive path is one this archive wrote, the only paths it serves. */
   serves(archivePath: string) {
     return this.versions.some((version) => version.archivePath === archivePath || version.attachments.some((attachment) => attachment.archived && attachment.archivePath === archivePath));
@@ -231,7 +243,7 @@ export class EvidenceArchive {
   async restore() {
     const index = await this.storage.read(INDEX_PATH).catch(() => undefined);
     if (!index) return false;
-    let parsed: { versions?: unknown; invalid?: unknown };
+    let parsed: { versions?: unknown; invalid?: unknown; snapshots?: unknown };
     try { parsed = JSON.parse(index.toString("utf8")) as typeof parsed; } catch { return false; }
     if (!Array.isArray(parsed.versions)) return false;
     const versions: ArchivedVersion[] = [];
@@ -244,11 +256,19 @@ export class EvidenceArchive {
     }
     this.versions = versions;
     if (parsed.invalid && typeof parsed.invalid === "object") for (const [file, invalid] of Object.entries(parsed.invalid as Record<string, Invalid>)) this.invalid.set(file, invalid);
+    // Absent from an index written before they were kept: the evidence then reads as it did, unverifiable.
+    const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots as { current?: unknown; known?: unknown } : {};
+    if (snapshots.known && typeof snapshots.known === "object") {
+      for (const [id, capturedAt] of Object.entries(snapshots.known)) if (typeof capturedAt === "string") this.rememberSnapshot(id, capturedAt);
+    }
+    const current = snapshots.current && typeof snapshots.current === "object" ? snapshots.current as { id?: unknown; capturedAt?: unknown } : undefined;
+    if (typeof current?.id === "string" && typeof current.capturedAt === "string") this.currentSnapshot = { id: current.id, capturedAt: current.capturedAt };
     return true;
   }
 
   private async persistIndex() {
-    const index = { schemaVersion: 1, versions: this.versions, invalid: Object.fromEntries(this.invalid) };
+    const snapshots = { ...(this.currentSnapshot ? { current: this.currentSnapshot } : {}), known: Object.fromEntries(this.knownSnapshots) };
+    const index = { schemaVersion: 1, versions: this.versions, invalid: Object.fromEntries(this.invalid), snapshots };
     await this.storage.write(INDEX_PATH, JSON.stringify(index, null, 2));
   }
 }

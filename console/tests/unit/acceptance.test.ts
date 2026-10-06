@@ -455,6 +455,21 @@ describe("acceptance coverage", () => {
       expect(criterion(view, "AC1").status).toBe("unverified");
     });
 
+    it("should count a failure that cites another evidence as a failure", () => {
+      for (const confirms of ["D1", "D404"]) {
+        const view = coverage({ reports: [developer(CURRENT), report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre cassé", verdict: "fail", confirms, checkIds: ["AC1-C1"] }]))] });
+        expect(criterion(view, "AC1").status).toBe("failed");
+        expect(criterion(view, "AC1").checks[0].evidence.find((entry) => entry.id === "Q1")?.basis).toBe("observed");
+      }
+    });
+
+    it("should not let a confirmation verify a check the evidence it inspected does not speak to", () => {
+      const view = coverage({ reports: [developer(CURRENT), report("qa-evidence.json", qa([{ id: "Q1", label: "Zoom confirmé", verdict: "confirmed", confirms: "D1", checkIds: ["AC2-C1"] }]))] });
+      expect(criterion(view, "AC1").status).toBe("verified");
+      expect(criterion(view, "AC2").status).toBe("unverified");
+      expect(criterion(view, "AC2").checks[0].reasons.join(" ")).toContain("confirms evidence taken on another check");
+    });
+
     it("should refuse a confirmation whose reference is missing", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre confirmé", verdict: "confirmed", confirms: "D404", checkIds: ["AC1-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("unverified");
@@ -658,6 +673,14 @@ describe("QA verdict consistency", () => {
         const view = coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", ...(mandate === undefined ? {} : { mandate }) }))] });
         expect(view.qa?.mandate).toBeUndefined();
         expect(view.qa?.unobserved).toEqual(["AC1", "AC2", "AC3"]);
+      }
+    });
+
+    it("should check every criterion when the mandate names only criteria the registry does not have", () => {
+      for (const mandate of ["all", ["AC9"], [4, null]]) {
+        const view = coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate }))] });
+        expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC1", "AC2", "AC3"] });
+        expect(view.qa?.mandate).toBeUndefined();
       }
     });
 

@@ -11,6 +11,7 @@ const API_WRITE = /\b(?:glab|gh)\s+api\b[^|;&\n]*(?:--method|-X)[\s=]*(?:POST|PU
  * What a credential looks like, by the shape its issuer gives it. Shapes only,
  * and long ones: a word such as "password" or a short example in a sentence
  * would refuse descriptions that publish nothing secret.
+ * @type {[string, RegExp][]}
  */
 const SECRETS = [
   ["a GitHub token", /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})/],
@@ -99,23 +100,45 @@ export function shellCommands(text) {
     } else if (char === "'" || char === "\"") { quote = char; started = true; }
     else if (char === "\\" && index + 1 < source.length) { index += 1; if (source[index] !== "\n") { word += source[index]; started = true; } }
     else if (/\s/.test(char) && char !== "\n") endWord();
-    else if (";\n|&(){}".includes(char)) endCommand();
+    else if (";\n|&(){}`".includes(char)) endCommand();
     else { word += char; started = true; }
   }
   endCommand();
   return commands;
 }
 
-const GIT_OPTIONS_WITH_VALUE = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix"];
+const GIT_OPTIONS_WITH_VALUE = ["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env", "--attr-source"];
 
-/** The subcommand and arguments of a git invocation, or undefined when the words run something else. */
+/**
+ * The subcommand and arguments of a git invocation, or undefined when the words
+ * run something else. Git is looked for among the words, not only in front: a
+ * shell keyword (`then`, `do`, `!`), a wrapper (`sudo`, `xargs`, `timeout 5`)
+ * or an absolute path put it anywhere, and a list of the prefixes that may come
+ * first is a list something is always missing from. The price is a line that
+ * only mentions such a command without quoting it (`echo run git reset --hard`),
+ * refused too: the refusal says why, and quoting the text lets it through. An
+ * assignment is never the command, whatever its value ends with. A redirection
+ * glued to an argument is not part of it.
+ */
 function gitInvocation(words) {
-  let index = 0;
-  while (index < words.length && (/^\w+=/.test(words[index]) || ["rtk", "command", "env", "exec", "time"].includes(words[index]))) index += 1;
-  if (words[index] !== "git") return undefined;
+  let index = words.findIndex((word) => !/^\w+=/.test(word) && (word === "git" || word.endsWith("/git")));
+  if (index < 0) return undefined;
   index += 1;
   while (index < words.length && words[index].startsWith("-")) index += GIT_OPTIONS_WITH_VALUE.includes(words[index]) ? 2 : 1;
-  return index < words.length ? { subcommand: words[index], args: words.slice(index + 1) } : undefined;
+  const args = words.slice(index + 1).map((arg) => arg.replace(/\d*[<>].*$/, "")).filter(Boolean);
+  return index < words.length ? { subcommand: words[index], args } : undefined;
+}
+
+/** Whether a path given to git covers the whole tree: the directory the command runs in, one above it, or a pattern that matches everything. */
+function coversWholeTree(arg, cwd) {
+  if (arg.startsWith("-")) return false;
+  // `:/` and `:(top)` name the root of the tree only when nothing, or everything, follows them: `:/src/a.ts` is one file.
+  const fromRoot = /^(?::\/|:\(top[^)]*\))(.*)$/.exec(arg);
+  if (fromRoot) return ["", ".", "./", "*", "**"].includes(fromRoot[1]);
+  if (["*", "**", "./*", "./**"].includes(arg)) return true;
+  const here = path.resolve(cwd || ".");
+  const target = path.resolve(here, arg);
+  return target === here || here.startsWith(target.endsWith(path.sep) ? target : `${target}${path.sep}`);
 }
 
 /** A short option among the arguments, alone or in a cluster: `-f`, `-fd`, `-xfd`. */
@@ -125,7 +148,7 @@ function hasFlag(args, letter, long) {
 
 /** Why a git command typed on the line is refused, or undefined when it may run. */
 function gitRefusal({ subcommand, args }, { cwd, env, linked }) {
-  const wholeTree = args.includes(".") || args.includes(":/");
+  const wholeTree = args.some((arg) => coversWholeTree(arg, cwd));
   switch (subcommand) {
     case "reset":
       if (args.includes("--hard")) return "`git reset --hard` destroys uncommitted work with no way back. Commit what is yours, or stop and report the git state.";
@@ -198,9 +221,65 @@ function publishedSecret(command, cwd) {
   return undefined;
 }
 
+/** What a forge API call of the scheduling session may ask for: the links of one issue, and nothing that is sent. */
+const SCHEDULE_API_ENDPOINT = /^(?:projects\/[^/\s]+|repos\/[^/\s]+\/[^/\s]+)\/issues\/\d+(?:\/links|\/dependencies\/(?:blocked_by|blocking))?$/;
+
+/** Whether the arguments of `glab api` or `gh api` only read one issue or its links: one endpoint, and no option but the ones that shape the answer. */
+function readsIssueLinks(args) {
+  const endpoints = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (["--hostname", "--jq", "-q"].includes(arg)) index += 1;
+    else if (arg === "--paginate" || /^--(?:hostname|jq)=/.test(arg)) continue;
+    else if (arg.startsWith("-")) return false;
+    else endpoints.push(arg);
+  }
+  return endpoints.length === 1 && SCHEDULE_API_ENDPOINT.test(endpoints[0]);
+}
+
+/**
+ * Why a call of the headless scheduling session is refused. That session reads
+ * the text of tickets anyone who can file one controls, with the user's forge
+ * credentials and nobody to answer a prompt, and its list of allowed tools
+ * matches a command by its first words: `gh api` allowed is `gh api -X DELETE`
+ * allowed. So what it may do is decided here, on the input of each call: write
+ * its one output file, start its one agent, read an issue and its links.
+ */
+function scheduleRefusal(payload, output) {
+  const input = payload.tool_input ?? {};
+  const tool = payload.tool_name;
+  const target = path.resolve(output);
+  if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(tool)) {
+    const file = typeof input.file_path === "string" ? path.resolve(payload.cwd || ".", input.file_path) : undefined;
+    if (tool !== "Write" || file !== target) return `The scheduling session writes its output file and nothing else: ${target}.`;
+  }
+  if ((tool === "Agent" || tool === "Task") && input.subagent_type !== `${NAMESPACE}:ticket-scheduler`) {
+    return `The scheduling session starts \`${NAMESPACE}:ticket-scheduler\` and no other agent.`;
+  }
+  if (tool !== "Bash") return undefined;
+  for (const words of shellCommands(typeof input.command === "string" ? input.command : "")) {
+    // The command is the first word past the assignments: the session's list of allowed tools
+    // refuses any other first word (a wrapper, a keyword), so nothing hides the command here,
+    // and a later word that merely reads `gh` or `rm` (`git grep -n gh src`) is an argument.
+    const [command, ...args] = words.slice(words.findIndex((word) => !/^\w+=/.test(word)));
+    const name = path.basename(command ?? "");
+    if (name === "glab" || name === "gh") {
+      const [group, action, ...rest] = args;
+      const reads = (group === "issue" && action === "view") || (group === "api" && readsIssueLinks([action, ...rest].filter((word) => word !== undefined)));
+      if (!reads) return "The scheduling session only reads tickets: `glab issue view` or `gh issue view`, and an API call that names one issue or its links, with no method, field or input option.";
+    }
+    if (name === "rm" && args.some((word) => word.startsWith("-") || path.resolve(payload.cwd || ".", word) !== target)) {
+      return `The scheduling session removes its own output file and nothing else: ${target}.`;
+    }
+  }
+  return undefined;
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
+  // The scheduling session is not a run of the workflow: it has rules of its own, and only those.
+  if (env.IMPL_SCHEDULE_OUTPUT) return scheduleRefusal(payload, env.IMPL_SCHEDULE_OUTPUT);
   const tasks = taskDirectory(payload.cwd);
   if (!inWorkflow(env, tasks)) return undefined;
   const input = payload.tool_input ?? {};

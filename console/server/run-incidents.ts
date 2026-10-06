@@ -5,7 +5,8 @@ import type { IncidentAction, IncidentDecision, RunIncident, RunState } from "./
 /**
  * The life of an incident, kept apart from its detection: opened once per
  * stable cause, updated while that cause holds, resolved only on an event that
- * actually lifts it, and never reopened once the user dismissed it. Pure.
+ * actually lifts it, opened again when a resolved cause comes back, and never
+ * reopened once the user dismissed it. Pure.
  */
 
 export const RUN_SCHEMA_VERSION = 2;
@@ -53,8 +54,11 @@ export function reconcileIncidents(incidents: RunIncident[], candidate: Incident
     return done;
   });
   if (candidate) {
-    const known = next.find((incident) => incident.fingerprint === candidate.fingerprint);
-    if (!known) {
+    // The latest one under this fingerprint speaks for the cause: a resolved
+    // incident whose cause is observed again is a new incident, or the run sits
+    // stalled with nothing open, no notification and no way to resume it.
+    const known = next.findLast((incident) => incident.fingerprint === candidate.fingerprint);
+    if (!known || known.status === "resolved") {
       const incident: RunIncident = {
         id: `incident-${crypto.randomUUID().slice(0, 8)}`, runId: context.runId, kind: candidate.kind, status: "open", revision: 1,
         detectedAt: context.now, updatedAt: context.now, fingerprint: candidate.fingerprint, title: candidate.title, reason: candidate.reason,

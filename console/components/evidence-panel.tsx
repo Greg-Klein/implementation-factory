@@ -2,6 +2,7 @@
 
 import { CaretRightIcon, CheckCircleIcon, MinusCircleIcon, WarningCircleIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
 import { createContext, useContext, useEffect, useState } from "react";
+import { normalizeEvidenceReport, readAcceptanceView } from "@/lib/evidence";
 import { acceptanceUrl, artifactUrl, evidenceCaptures } from "@/lib/run-state";
 import type {
   AcceptanceCheckView, AcceptanceCriterionView, AcceptanceQaView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
@@ -281,7 +282,7 @@ function Section({ title, file, run, qa }: { title: string; file: string; run: R
     if (!present) { setReport(undefined); setError(undefined); return; }
     let cancelled = false;
     fetchArtifact(run.id ?? "", file, archived)
-      .then((result) => { if (cancelled) return; try { setReport(JSON.parse(result.content) as EvidenceReport); } catch { setError("Unreadable document."); } })
+      .then((result) => { if (cancelled) return; try { setReport(normalizeEvidenceReport(JSON.parse(result.content) as unknown)); } catch { setError("Unreadable document."); } })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Error."); });
     return () => { cancelled = true; };
     // evidenceUpdatedAt is what tells a rewrite: a later review round overwrites
@@ -299,10 +300,16 @@ function Section({ title, file, run, qa }: { title: string; file: string; run: R
       {!present ? <p className="text-[11px] text-[var(--muted)]">No evidence written for this run.</p>
         : error ? <p className="text-[11px] text-red-700">{error}</p>
         : !report ? <p className="text-[11px] text-[var(--muted)]">Loading…</p>
-        : !Array.isArray(report.items) || report.items.length === 0 ? <p className="text-[11px] text-[var(--muted)]">No item reported.</p>
+        : report.items.length === 0 ? <p className="text-[11px] text-[var(--muted)]">No item reported.</p>
         : <ul>{report.items.map((item, index) => <Row key={index} runId={run.id ?? ""} item={item} />)}</ul>}
     </section>
   );
+}
+
+/** The reason the server gives with a refusal, when it gives one. */
+function refusal(body: unknown) {
+  const reason = body !== null && typeof body === "object" && "error" in body ? body.error : undefined;
+  return typeof reason === "string" ? reason : undefined;
 }
 
 function useAcceptance(run: RunState) {
@@ -313,11 +320,12 @@ function useAcceptance(run: RunState) {
     let cancelled = false;
     fetch(acceptanceUrl(run))
       .then(async (response) => {
-        const body = await response.json() as AcceptanceView & { error?: string };
+        const body = await response.json() as unknown;
         if (cancelled) return;
-        if (!response.ok) { setError(body.error ?? "Coverage unavailable."); return; }
+        const coverage = response.ok ? readAcceptanceView(body) : undefined;
+        if (!coverage) { setError(refusal(body) ?? "Coverage unavailable."); return; }
         setError(undefined);
-        setView(body);
+        setView(coverage);
       })
       .catch(() => { if (!cancelled) setError("Coverage unavailable."); });
     return () => { cancelled = true; };

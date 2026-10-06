@@ -1,4 +1,4 @@
-import { normalizeText } from "./domain.js";
+import { forgeWords, normalizeText, parseDeliveryUrl, parseTicketUrl } from "./domain.js";
 import type { WorkflowState, WorkflowStateName } from "./types.js";
 
 /**
@@ -62,12 +62,32 @@ export function parseWorkflowState(content: string, receivedAt: string): Workflo
   if (result && typeof result === "object" && !Array.isArray(result)) {
     const delivery = result.delivery;
     if (typeof delivery === "string" && (DELIVERIES as readonly string[]).includes(delivery)) {
-      const mergeRequestUrl = normalizeText(result.mergeRequestUrl);
+      // Only an address a merge request or a pull request can have: any other text would
+      // complete the run, and be watched for a merge no forge can ever report.
+      const declared = normalizeText(result.mergeRequestUrl)?.split(/[?#]/)[0];
+      const mergeRequestUrl = declared && parseDeliveryUrl(declared) ? declared : undefined;
       parsed.result = { delivery: delivery as (typeof DELIVERIES)[number], ...(mergeRequestUrl ? { mergeRequestUrl } : {}), blockers: identifiers(result.blockers) };
     }
   }
   if (raw.reviewTier === 0 || raw.reviewTier === 1 || raw.reviewTier === 2) parsed.reviewTier = raw.reviewTier;
   return { state: parsed };
+}
+
+/**
+ * The merge request the workflow declares, held against the ticket of the run:
+ * a merge request for a GitLab ticket, a pull request for a GitHub one,
+ * whichever project delivers it. Not the host: one instance answers under
+ * several names, and refusing the other name would leave a delivered run
+ * unable to end. The console did not see it open, so this is as far as the
+ * declaration is checked; the merge watch then asks the forge about it.
+ */
+export function declaredDelivery(workflow: WorkflowState | undefined, issueUrl: string): { url?: string; refused?: string } {
+  const url = workflow?.result?.mergeRequestUrl;
+  const delivery = url ? parseDeliveryUrl(url) : undefined;
+  if (!url || !delivery) return {};
+  const ticket = parseTicketUrl(issueUrl);
+  if (ticket && ticket.forge !== delivery.forge) return { refused: `${url} is not on ${forgeWords(ticket.forge).name}, where the ticket is.` };
+  return { url };
 }
 
 /**

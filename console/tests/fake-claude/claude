@@ -22,8 +22,16 @@
 //   { "mode": "invalid" }  writes a file the contract refuses
 //   { "edges": [{ "a": 1, "b": 2, "kind": "overlap", "reason": "…" }], "confidence": { "3": "low" } }
 // where tickets are named by their number. Tickets are invented by the tests.
+//
+// A line typed into the session that holds `fake-hook:` followed by a hook
+// payload in JSON is handed to the real `hooks/emit.mjs`, under the environment
+// the console gave the session: the one way a test sends a hook down the whole
+// chain (the address and the secret the console built, the emitter, the server)
+// instead of posting it itself.
+import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
 const scheduleCall = argv.includes("-p") ? (argv[argv.indexOf("--") + 1] ?? "").match(/^\/implementation-harness:schedule (\S+) (\S+)$/) : null;
@@ -79,6 +87,20 @@ if (inputDirectory && process.env.IMPL_RUN_ID) {
   } catch { /* the test reads what it can */ }
   process.stdin.on("data", (chunk) => { try { appendFileSync(log, chunk); } catch { /* the test reads what it can */ } });
 }
+const emitter = fileURLToPath(new URL("../../../hooks/emit.mjs", import.meta.url));
+let typed = "";
+process.stdin.on("data", (chunk) => {
+  typed = (typed + chunk.toString()).slice(-20_000);
+  for (let end = typed.search(/[\r\n]/); end >= 0; end = typed.search(/[\r\n]/)) {
+    const line = typed.slice(0, end);
+    typed = typed.slice(end + 1);
+    const at = line.indexOf("fake-hook:");
+    if (at < 0) continue;
+    const hook = spawn(process.execPath, [emitter], { env: process.env, stdio: ["pipe", "ignore", "ignore"] });
+    hook.on("error", () => { /* the test sees the hook never arrived */ });
+    hook.stdin.end(line.slice(at + "fake-hook:".length));
+  }
+});
 const quit = () => process.exit(0);
 process.on("SIGHUP", quit);
 process.on("SIGTERM", quit);

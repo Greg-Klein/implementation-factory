@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { blockedDependencies, createSignals, DEFAULT_HEALTH_POLICY, evaluateRunHealth, healthSignalsView, recordEngineSignal, requiredFiles, wokeUpFromSuspension, type HealthInput, type RunSignals } from "../../server/run-health";
-import { declaredCompletion, parseWorkflowState } from "../../server/workflow-state";
+import { declaredCompletion, declaredDelivery, parseWorkflowState } from "../../server/workflow-state";
 import type { AgentState, WorkflowState } from "../../server/types";
 
 const T0 = Date.UTC(2026, 8, 27, 10, 0, 0);
@@ -240,6 +240,31 @@ describe("workflow-state.json", () => {
     expect(parseWorkflowState('{"schemaVersion":1,"revis', at)).toHaveProperty("error");
     expect(parseWorkflowState(JSON.stringify({ schemaVersion: 2, revision: 1, state: "working" }), at)).toHaveProperty("error");
     expect(parseWorkflowState(JSON.stringify({ schemaVersion: 1, revision: 1, state: "done" }), at)).toHaveProperty("error");
+  });
+
+  it("should keep of a declared merge request only an address a forge can answer for", () => {
+    const declare = (mergeRequestUrl: unknown) => {
+      const reading = parseWorkflowState(JSON.stringify({ schemaVersion: 1, revision: 9, state: "completed", result: { delivery: "merge_request", mergeRequestUrl, blockers: [] } }), at);
+      if ("error" in reading) throw new Error(reading.error);
+      return reading.state;
+    };
+    expect(declare("https://gitlab.com/acme/shop/-/merge_requests/12?tab=diffs").result?.mergeRequestUrl).toBe("https://gitlab.com/acme/shop/-/merge_requests/12");
+    expect(declare("https://github.com/acme/shop/pull/12").result?.mergeRequestUrl).toBe("https://github.com/acme/shop/pull/12");
+    for (const claimed of ["done, see the branch", "https://gitlab.com/acme/shop/-/issues/12", "!12", 12]) {
+      expect(declare(claimed).result).toEqual({ delivery: "merge_request", blockers: [] });
+      expect(declaredCompletion(declare(claimed), undefined)).toEqual({ complete: false, problem: "End declared with a merge request the run never opened." });
+    }
+  });
+
+  it("should hold a declared merge request against the forge of the ticket", () => {
+    const delivered = (mergeRequestUrl: string) => workflow({ state: "completed", result: { delivery: "merge_request", mergeRequestUrl, blockers: [] } });
+    const ticket = "https://gitlab.com/acme/support/-/work_items/7";
+    expect(declaredDelivery(delivered("https://gitlab.com/acme/shop/-/merge_requests/12"), ticket)).toEqual({ url: "https://gitlab.com/acme/shop/-/merge_requests/12" });
+    // One instance answers under several names: the host is not held against the declaration.
+    expect(declaredDelivery(delivered("https://gitlab.company.example/acme/shop/-/merge_requests/12"), ticket)).toEqual({ url: "https://gitlab.company.example/acme/shop/-/merge_requests/12" });
+    expect(declaredDelivery(delivered("https://github.com/acme/shop/pull/12"), ticket))
+      .toEqual({ refused: "https://github.com/acme/shop/pull/12 is not on GitLab, where the ticket is." });
+    expect(declaredDelivery(workflow({ state: "working" }), ticket)).toEqual({});
   });
 
   it("should accept an end without a merge request only with its blockers written down", () => {

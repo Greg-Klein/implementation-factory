@@ -14,8 +14,9 @@ import { trackReopening } from "./run-metrics.js";
 import { GATE_LOG_FILE, keepGateLog } from "./run-metrics-runtime.js";
 import { keepReviewFindings } from "./review-findings.js";
 import { keepRuntimeRecipe } from "./runtime-recipe.js";
-import { parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
+import { declaredDelivery, parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
 import type { RunSession } from "./run-session.js";
+import { reportFailure } from "./context.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 
@@ -136,6 +137,18 @@ function readWorkflowState(session: RunSession, content: string) {
   session.workflowDiagnostic = undefined;
   const previous = session.state.workflow;
   if (previous && reading.state.revision < previous.revision) return;
+  // The merge request it names is kept in the one field everything reads, when the run
+  // did not see it open itself (opened by a command the hooks do not recognise, or before
+  // a restart). One that cannot be the delivery of this ticket is dropped from the declaration.
+  const delivery = declaredDelivery(reading.state, session.state.issueUrl);
+  if (delivery.refused && reading.state.result) {
+    const { mergeRequestUrl: _ignored, ...result } = reading.state.result;
+    reading.state.result = result;
+    if (previous?.revision !== reading.state.revision) session.activity("attention", "Declared merge request ignored", delivery.refused);
+  } else if (delivery.url && !session.state.mergeRequestUrl) {
+    session.state.mergeRequestUrl = delivery.url;
+    session.activity("system", "Merge request declared by the workflow", delivery.url);
+  }
   session.state.workflow = reading.state;
   if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", session.state.reopenings?.at(-1)?.to ? "Change after the final report delivered" : "Change asked after the final report");
   // Declared once at step 7: a later state that leaves it out does not take it back.
@@ -178,8 +191,17 @@ export async function startArtifactWatcher(session: RunSession) {
     ignored: (candidate) => !watchedForArtifacts(taskRoot, candidate),
   });
   session.artifactWatcher = watcher;
-  watcher.on("add", (file, stats) => void archiveArtifact(session, file, stats));
-  watcher.on("change", (file, stats) => void archiveArtifact(session, file, stats));
+  // The workflow deletes its task directory while it runs: a file gone between the event and
+  // the copy is a document that was not archived, which the run says instead of dropping it.
+  const archive = (file: string, stats?: Stats) => {
+    archiveArtifact(session, file, stats).catch((error: unknown) => {
+      reportFailure("Document not archived", session.id)(error);
+      session.activity("attention", "Document not archived", `${path.basename(file)}: ${error instanceof Error ? error.message : String(error)}`);
+      session.publish();
+    });
+  };
+  watcher.on("add", archive);
+  watcher.on("change", archive);
 }
 
 export async function closeArtifactWatcher(session: RunSession) {

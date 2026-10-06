@@ -262,7 +262,9 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
     const declaredBasis = BASES.has(item.basis as EvidenceBasis) ? item.basis as EvidenceBasis : undefined;
     // A developer describing its own work is reporting, whatever it measured;
     // only a reviewer's measurement is an observation of someone else's code.
-    const basis: EvidenceBasis = verdict === "confirmed" || confirms ? "confirmation" : source === "developer" ? "reported" : declaredBasis ?? "observed";
+    // A failure is never a confirmation, whatever it cites: read as one, it was
+    // worth the evidence it named and stopped counting against its criterion.
+    const basis: EvidenceBasis = verdict === "confirmed" || (confirms && verdict !== "fail") ? "confirmation" : source === "developer" ? "reported" : declaredBasis ?? "observed";
     const blocker = blockerOf(item.blocker);
     // Any other value of `kind` is ignored: the item then behaves as it always did.
     const kind = item.kind === "attempt" ? "attempt" as const : undefined;
@@ -323,8 +325,12 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
   });
   if (futureDates > 0) diagnostics.push({ level: "warning", file: context.file, message: `${futureDates} observation date${futureDates > 1 ? "s" : ""} later than the reception of the file, replaced by the reception time.` });
   const status = text(root.status, 40)?.toUpperCase();
-  // Read tolerantly: a list or a single id. Anything else is taken as no mandate, which checks every criterion.
-  const mandate = Array.isArray(root.mandate) || typeof root.mandate === "string" ? identifiers(root.mandate) : undefined;
+  // Read tolerantly: a list or a single id. Anything else is taken as no mandate, which checks every criterion,
+  // and so is a list that holds something but no identifier. Only a list left empty names no criterion.
+  const declaredMandate = Array.isArray(root.mandate) || typeof root.mandate === "string" ? identifiers(root.mandate) : undefined;
+  const emptyList = Array.isArray(root.mandate) && root.mandate.length === 0;
+  const mandate = declaredMandate && (declaredMandate.length > 0 || emptyList) ? declaredMandate : undefined;
+  if (declaredMandate && !mandate) diagnostics.push({ level: "warning", file: context.file, message: "The mandate names no criterion identifier: every criterion is held against the verdict." });
   return { source, ...(status ? { status } : {}), ...(round ? { round } : {}), ...(mandate ? { mandate } : {}), records, diagnostics };
 }
 
@@ -394,7 +400,10 @@ const QA_OBSERVATIONS = new Set(["measured", "pass", "fail"]);
 export function qaVerdictConsistency(report: { status: string; file: string; round?: number; mandate?: string[] }, criteria: Pick<Criterion, "id" | "afterDeployment">[], observed: Set<string>, language: WorkflowLanguage = "en"): AcceptanceQaView {
   const t = acceptanceText(language);
   const criterionIds = criteria.map((criterion) => criterion.id);
-  const mandate = report.mandate ? criterionIds.filter((id) => report.mandate!.includes(id)) : undefined;
+  const named = report.mandate ? criterionIds.filter((id) => report.mandate?.includes(id)) : undefined;
+  // A mandate that names only criteria the registry does not have limits nothing: read as a limit,
+  // it held the verdict against no criterion at all and any approval came out consistent.
+  const mandate = named && (named.length > 0 || report.mandate?.length === 0) ? named : undefined;
   const excused = new Set(report.status === "PASS_WITH_WARNINGS" ? criteria.filter((criterion) => criterion.afterDeployment).map((criterion) => criterion.id) : []);
   const unobserved = QA_APPROVALS.has(report.status) ? (mandate ?? criterionIds).filter((id) => !observed.has(id) && !excused.has(id)) : [];
   const warning = unobserved.length === 0 ? undefined
@@ -550,8 +559,13 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     if (entry.view.basis !== "confirmation") return { outcome, freshness: entry.view.freshness };
     const confirmed = entry.view.confirms ? (byId.get(entry.view.confirms) ?? []).map((candidate) => finalByIdentity.get(candidate.identity)!) : [];
     if (!entry.view.confirms || confirmed.length === 0) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmedNotFound(entry.view.label) };
-    const original = confirmed.find((candidate) => outcomeOf(candidate.view) === "positive" && candidate.view.basis !== "confirmation");
-    if (!original) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmsNonPositive(entry.view.label) };
+    const positive = confirmed.filter((candidate) => outcomeOf(candidate.view) === "positive" && candidate.view.basis !== "confirmation");
+    if (positive.length === 0) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmsNonPositive(entry.view.label) };
+    // Like a replacement, a confirmation holds only on a check the evidence it
+    // inspected speaks to: a result on one criterion says nothing about another.
+    const original = positive.find((candidate) => (general.has(candidate.identity) && general.has(entry.identity))
+      || [...linkedChecks.get(candidate.identity) ?? []].some((check) => linkedChecks.get(entry.identity)?.has(check)));
+    if (!original) return { outcome: "none", freshness: entry.view.freshness, problem: t.confirmsOtherCheck(entry.view.label) };
     return { outcome: outcome === "positive" ? "positive" : outcome, freshness: original.view.freshness };
   }
 

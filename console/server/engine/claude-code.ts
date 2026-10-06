@@ -271,7 +271,11 @@ function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpoo
   };
 }
 
-/** What a scheduling session may do: read the tickets and the repository, write its output file, and nothing else. */
+/**
+ * What a scheduling session may do: read the tickets and the repository, write its output file, and nothing else.
+ * This list is the first filter only. `Bash(gh api *)` also matches a call that writes and `Write` any path:
+ * `hooks/guard.mjs` (`scheduleRefusal`) decides those on the input of each call.
+ */
 const SCHEDULE_TOOLS = [
   "Read", "Write", "Glob", "Grep", "Agent", "Skill",
   "Bash(glab issue view *)", "Bash(glab api *)",
@@ -312,9 +316,12 @@ export function scheduleArguments({ pluginDir, inputPath, outputPath }: Pick<Sch
  * and must stay silent: without a run identifier and a hook address they post
  * nothing, even when the console itself was started from inside a run.
  */
-export function scheduleEnvironment<T extends Record<string, string | undefined>>(environment: T): T {
-  const cleaned = { ...environment };
-  for (const key of ["IMPL_RUN_ID", "IMPL_HARNESS_HOOK_URL", "IMPL_HOOK_SPOOL"]) delete cleaned[key];
+export function scheduleEnvironment<T extends Record<string, string | undefined>>(environment: T, outputPath?: string): T & { IMPL_SCHEDULE_OUTPUT?: string } {
+  const cleaned: T & { IMPL_SCHEDULE_OUTPUT?: string } = { ...environment };
+  for (const key of ["IMPL_RUN_ID", "IMPL_HARNESS_HOOK_URL", "IMPL_HOOK_SPOOL", "IMPL_SCHEDULE_OUTPUT"]) delete cleaned[key];
+  // What makes the guard apply the rules of a scheduling session: the allowed tools below
+  // match a command by its first words, the guard reads what each call would actually do.
+  if (outputPath) cleaned.IMPL_SCHEDULE_OUTPUT = outputPath;
   return cleaned;
 }
 
@@ -324,7 +331,7 @@ function startSchedule(options: ScheduleOptions): ScheduleSession | undefined {
   const executable = findExecutable("claude");
   if (!executable) return undefined;
   // Standard input closed: an open one is read as the prompt.
-  const child = spawnChild(executable, scheduleArguments(options), { cwd: options.repository, env: scheduleEnvironment(sessionEnvironment()), stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawnChild(executable, scheduleArguments(options), { cwd: options.repository, env: scheduleEnvironment(sessionEnvironment(), options.outputPath), stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
   let timedOut = false;
   const keep = (chunk: Buffer) => { log = (log + chunk.toString()).slice(-SCHEDULE_LOG); };

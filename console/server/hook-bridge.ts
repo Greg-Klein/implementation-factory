@@ -6,6 +6,7 @@ import { followTranscript } from "./transcript.js";
 import { processHook } from "./hooks.js";
 import { engine } from "./engine/index.js";
 import type { RunSession } from "./run-session.js";
+import { reportFailure } from "./context.js";
 
 /** Where a session writes the hooks it could not post, for the console to apply late rather than never. */
 export function hookSpoolPath(runId: string) {
@@ -36,7 +37,8 @@ async function replaySpool(session: RunSession) {
   try { await rename(spool, draining); } catch { return; }
   try {
     const bodies = spooledHooks(await readFile(draining, "utf8"));
-    for (const body of bodies) await receiveHook(session, body);
+    // One hook that cannot be applied does not take the ones spooled after it with it.
+    for (const body of bodies) await Promise.resolve().then(() => receiveHook(session, body)).catch(reportFailure("Spooled hook not applied", session.id));
   } finally {
     await rm(draining, { force: true });
   }
@@ -45,6 +47,6 @@ async function replaySpool(session: RunSession) {
 /** Applies whatever the session spooled, before anything newer is. */
 export function drainHookSpool(session: RunSession) {
   if (session.demo) return Promise.resolve();
-  session.spoolDrain ??= replaySpool(session).catch(() => undefined).finally(() => { session.spoolDrain = null; });
+  session.spoolDrain ??= replaySpool(session).catch(reportFailure("Hook spool not replayed", session.id)).finally(() => { session.spoolDrain = null; });
   return session.spoolDrain;
 }

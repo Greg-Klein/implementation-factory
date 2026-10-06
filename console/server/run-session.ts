@@ -1,7 +1,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FSWatcher } from "chokidar";
-import { ARCHIVED_ACTIVITIES, broadcastToViewers, now } from "./context.js";
+import { ARCHIVED_ACTIVITIES, broadcastToViewers, now, reportFailure } from "./context.js";
 import { dataRoot } from "./config.js";
 import { emptyState, phaseAfterInference, planTaskBoard, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
 import { engine, type EngineSession } from "./engine/index.js";
@@ -11,6 +11,7 @@ import { RUN_SCHEMA_VERSION } from "./run-incidents.js";
 import { trackTimeline } from "./run-metrics.js";
 import { refreshUsage } from "./run-metrics-runtime.js";
 import type { AcceptanceView, Activity, ConversationMessage, RunMetrics, RunState } from "./types.js";
+import { appendTerminalOutput } from "../lib/terminal-output.js";
 
 /**
  * Every event pushes the whole state to the pages showing this run, so the feed
@@ -19,7 +20,6 @@ import type { AcceptanceView, Activity, ConversationMessage, RunMetrics, RunStat
  * kept eighty events and lost its first thirty-four minutes.
  */
 const BROADCAST_ACTIVITIES = 80;
-const TERMINAL_BUFFER = 600_000;
 
 /**
  * One run and everything that belongs to it alone: its state, its archive, its
@@ -205,7 +205,7 @@ export class RunSession {
 
   appendTerminal(data: string) {
     this.signals.lastOutputAt = Date.now();
-    this.terminalBuffer = (this.terminalBuffer + data).slice(-TERMINAL_BUFFER);
+    this.terminalBuffer = appendTerminalOutput(this.terminalBuffer, data);
     broadcastToViewers(this.id, { type: "terminal.output", runId: this.id, data });
   }
 
@@ -233,7 +233,7 @@ export class RunSession {
       await mkdir(runDirectory, { recursive: true });
       await writeFile(temporary, snapshot);
       await rename(temporary, target);
-    }).catch(() => undefined);
+    }).catch(reportFailure("Run not saved", this.id));
     return this.persistence;
   }
 

@@ -28,6 +28,35 @@ export function broadcast(message: ServerMessage) {
   for (const socket of clients.keys()) deliver(socket, serialized);
 }
 
+/** When each kind of failure was last shown to a page. */
+const reportedFailures = new Map<string, number>();
+const FAILURE_NOTICE_INTERVAL_MS = 10 * 60_000;
+
+/** Whether a read failed because nothing is there, the one failure that means "absent". */
+export function isMissingFile(error: unknown) {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT";
+}
+
+/**
+ * What a write or a reading nobody awaits does with its failure: one line in
+ * the server log each time, with what failed and on what, and one notice per
+ * kind of failure every ten minutes, so a full disk says so without saying it
+ * on every event, and says it again if it lasts or comes back. A notice no page
+ * was there to receive does not count as shown. A failure dropped in silence
+ * left the disk behind the memory until the next restart read the older file
+ * as the truth.
+ */
+export function reportFailure(what: string, subject?: string) {
+  return (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[implementation-harness] ${what}${subject ? ` (${subject})` : ""}: ${message}`);
+    const shownAt = reportedFailures.get(what);
+    if (clients.size === 0 || (shownAt !== undefined && Date.now() - shownAt < FAILURE_NOTICE_INTERVAL_MS)) return;
+    reportedFailures.set(what, Date.now());
+    broadcast({ type: "notice", level: "attention", title: what, detail: subject ? `${subject}: ${message}` : message, at: now() });
+  };
+}
+
 /** To the pages showing this run, and to nobody else. */
 export function broadcastToViewers(runId: string, message: ServerMessage) {
   const serialized = JSON.stringify(message);

@@ -59,19 +59,34 @@ export function forgeWords(forge: Forge | undefined) {
 }
 
 /** A ticket URL without its query, its fragment or a trailing slash, the way a pasted URL varies. */
-export function ticketIdentity(issueUrl: string) {
+function bareTicketUrl(issueUrl: string) {
   return issueUrl.trim().split(/[?#]/)[0].replace(/\/+$/, "");
+}
+
+/**
+ * One ticket, one identity, however its address is written: GitLab serves the
+ * same issue under `/-/issues/` and `/-/work_items/`, and neither a host nor a
+ * project changes with its case. Two launches compared on the raw text were two
+ * tickets, so two runs, two branches and two merge requests. The identity is
+ * still an address of the ticket and reads back as itself. A text no ticket is
+ * read from, the demonstration's for one, keeps its bare form.
+ */
+export function ticketIdentity(issueUrl: string) {
+  const bare = bareTicketUrl(issueUrl);
+  const ticket = parseTicketUrl(bare);
+  if (!ticket) return bare;
+  return `${new URL(bare).origin}/${ticket.project.toLowerCase()}/${ticket.forge === "gitlab" ? "-/issues" : "issues"}/${ticket.number}`;
 }
 
 /** The URL of a ticket in its bare form, or undefined when the text is not one. */
 export function normalizeTicketUrl(value: string) {
-  const bare = ticketIdentity(value);
+  const bare = bareTicketUrl(value);
   return /\/\d+$/.test(bare) && parseTicketUrl(bare) ? bare : undefined;
 }
 
 /** The number a ticket is called by, `#217`, or the last segment of an address that has none. */
 export function ticketReference(issueUrl: string) {
-  const last = ticketIdentity(issueUrl).split("/").filter(Boolean).pop() ?? "";
+  const last = bareTicketUrl(issueUrl).split("/").filter(Boolean).pop() ?? "";
   return /^\d+$/.test(last) ? `#${last}` : last;
 }
 
@@ -89,12 +104,14 @@ export function parseTicketUrls(text: string): ParsedTickets {
   const tickets: string[] = [];
   const invalid: ParsedTickets["invalid"] = [];
   const duplicates: string[] = [];
+  // The same ticket pasted under two of its addresses is one ticket: the first one written is kept.
+  const seen = new Set<string>();
   text.split(/\r?\n/).forEach((line, index) => {
     for (const token of line.split(/[\s,;]+/).filter(Boolean)) {
       const ticket = normalizeTicketUrl(token);
       if (!ticket) invalid.push({ line: index + 1, text: token });
-      else if (tickets.includes(ticket)) { if (!duplicates.includes(ticket)) duplicates.push(ticket); }
-      else tickets.push(ticket);
+      else if (seen.has(ticketIdentity(ticket))) { if (!duplicates.includes(ticket)) duplicates.push(ticket); }
+      else { seen.add(ticketIdentity(ticket)); tickets.push(ticket); }
     }
   });
   return { tickets, invalid, duplicates };

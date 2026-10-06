@@ -78,6 +78,19 @@ describe("the life of an incident", () => {
     expect(incidents.reconcileIncidents(dismissed, candidate("no_next_action:1"), context)).toMatchObject({ opened: [], changed: false });
   });
 
+  it("should open a new incident when a resolved cause is observed again", () => {
+    const first = incidents.reconcileIncidents([], candidate("no_next_action:1"), context);
+    const resolved = incidents.reconcileIncidents(first.incidents, undefined, context);
+    const back = incidents.reconcileIncidents(resolved.incidents, candidate("no_next_action:1"), { ...context, now: "2026-09-27T10:05:00.000Z" });
+    expect(back.changed).toBe(true);
+    expect(back.opened).toHaveLength(1);
+    expect(back.incidents.map((incident) => incident.status)).toEqual(["resolved", "open"]);
+    expect(back.opened[0]).toMatchObject({ fingerprint: "no_next_action:1", revision: 1, detectedAt: "2026-09-27T10:05:00.000Z" });
+    expect(back.opened[0].id).not.toBe(first.incidents[0].id);
+    // The one that is open now is the one evaluated from here on: nothing more is opened.
+    expect(incidents.reconcileIncidents(back.incidents, candidate("no_next_action:1"), context)).toMatchObject({ opened: [], changed: false });
+  });
+
   it("should never resolve a lost session on its own", () => {
     const lost = incidents.reconcileIncidents([], { ...candidate("lost_session:1"), kind: "lost_session" }, context);
     expect(incidents.reconcileIncidents(lost.incidents, undefined, context).incidents[0].status).toBe("open");

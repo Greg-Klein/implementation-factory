@@ -118,6 +118,22 @@ export function clearPendingQuestion(session: RunSession) {
   session.state.pendingQuestion = undefined;
 }
 
+/**
+ * The session stopped waiting for an answer: the hook request that carried the
+ * question closed before anyone answered (the hook was interrupted, or timed
+ * out). Left in place, the question could no longer be answered, hid every
+ * later one and kept the run from ever closing.
+ */
+export function withdrawQuestion(session: RunSession, questionId: string) {
+  if (session.state.pendingQuestion?.id !== questionId) return false;
+  clearPendingQuestion(session);
+  if (session.state.status === "attention") session.state.status = "running";
+  session.activity("system", "Question withdrawn", `${engine.label} stopped waiting for the answer.`);
+  session.publish();
+  session.signal();
+  return true;
+}
+
 function apply(session: RunSession, event: EngineEvent) {
   // Read off the terminal, never carried by a hook: see session-prompt.ts.
   if (event.kind === "session.prompt" || event.kind === "session.prompt.end") return;

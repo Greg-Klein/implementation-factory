@@ -11,6 +11,23 @@ describe("a pasted ticket URL", () => {
     expect(ticketIdentity(`${ISSUE}#note_3`)).toBe(ISSUE);
   });
 
+  it("should give one identity to the addresses of one ticket, and keep it an address of that ticket", () => {
+    const identity = "https://gitlab.com/acme/shop/-/issues/101";
+    expect(ticketIdentity("https://gitlab.com/acme/shop/-/work_items/101")).toBe(identity);
+    expect(ticketIdentity("https://GitLab.com/Acme/Shop/-/issues/101/?tab=notes#note_3")).toBe(identity);
+    expect(ticketIdentity(identity)).toBe(identity);
+    expect(ticketIdentity("https://gitlab.com/acme/shop/-/issues/102")).toBe("https://gitlab.com/acme/shop/-/issues/102");
+    expect(ticketIdentity("https://gitlab.com/acme/api/-/issues/101")).toBe("https://gitlab.com/acme/api/-/issues/101");
+    expect(ticketIdentity("https://GitHub.com/Acme/Shop/issues/7#issuecomment-1")).toBe("https://github.com/acme/shop/issues/7");
+    expect(ticketIdentity("ticket-simule://lot/A-1")).toBe("ticket-simule://lot/A-1");
+  });
+
+  it("should keep once a ticket pasted under two of its addresses", () => {
+    const parsed = parseTicketUrls("https://gitlab.com/acme/shop/-/work_items/101\nhttps://gitlab.com/acme/shop/-/issues/101\nhttps://gitlab.com/acme/shop/-/issues/102");
+    expect(parsed.tickets).toEqual(["https://gitlab.com/acme/shop/-/work_items/101", "https://gitlab.com/acme/shop/-/issues/102"]);
+    expect(parsed.duplicates).toEqual(["https://gitlab.com/acme/shop/-/issues/101"]);
+  });
+
   it("should accept an issue or a work item, on any host and under nested groups", () => {
     expect(normalizeTicketUrl("https://gitlab.example.com/group/platform/repo/-/work_items/42")).toBe("https://gitlab.example.com/group/platform/repo/-/work_items/42");
     expect(normalizeTicketUrl("http://gitlab.local/a/b/-/issues/7")).toBe("http://gitlab.local/a/b/-/issues/7");
@@ -100,6 +117,15 @@ describe("the tickets a batch brings in", () => {
     const { accepted, duplicates } = admitBatch([ticket("/work/shop", 101), { ...ticket("/work/shop", 101), issueUrl: `${ticket("/work/shop", 101).issueUrl}?tab=notes` }], []);
     expect(accepted).toHaveLength(1);
     expect(duplicates).toHaveLength(1);
+  });
+
+  it("should hold one ticket under one lock whether it is written as an issue or as a work item", () => {
+    const issue = { repository: "/work/shop", issueUrl: "https://gitlab.com/acme/shop/-/issues/101" };
+    const workItem = { repository: "/work/shop", issueUrl: "https://GitLab.com/acme/shop/-/work_items/101" };
+    expect(runLockKey({ cwd: "/work/shop", issueUrl: workItem.issueUrl })).toBe("/work/shop\nhttps://gitlab.com/acme/shop/-/issues/101");
+    const { accepted, duplicates } = admitBatch([workItem], [runLockKey({ cwd: "/work/shop", issueUrl: issue.issueUrl })]);
+    expect(accepted).toEqual([]);
+    expect(duplicates).toEqual([workItem]);
   });
 
   it("should tell the same ticket number of two repositories apart", () => {

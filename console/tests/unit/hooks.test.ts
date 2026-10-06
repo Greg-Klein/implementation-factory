@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 
-import { answerQuestion, processHook } from "../../server/hooks";
+import { answerQuestion, processHook, withdrawQuestion } from "../../server/hooks";
 import { RunSession } from "../../server/run-session";
 
 // A demonstration identifier keeps the completion out of the self-improvement loop.
@@ -191,6 +191,28 @@ describe("workflow signals from Claude Code hooks", () => {
     answerQuestion(session, { "Which scope?": "One file" });
     await expect(parked).resolves.toMatchObject({ hookSpecificOutput: { permissionDecision: "allow" } });
     expect(session.state).toMatchObject({ status: "completed", endedAt: "2026-09-18T14:00:45.000Z", pendingQuestion: undefined });
+  });
+
+  it("should withdraw a question whose hook stopped waiting, and take the next one", async () => {
+    const ask = (id: string, question: string) => hook({
+      hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: id,
+      tool_input: { questions: [{ question, header: "Scope", options: [{ label: "One file" }] }] },
+    });
+    const parked = ask("q1", "Which scope?");
+    expect(session.state).toMatchObject({ status: "attention", pendingQuestion: { id: "q1" } });
+
+    // Another question's request closing says nothing about this one.
+    expect(withdrawQuestion(session, "q0")).toBe(false);
+    expect(session.state.pendingQuestion?.id).toBe("q1");
+
+    expect(withdrawQuestion(session, "q1")).toBe(true);
+    await expect(parked).resolves.toBeUndefined();
+    expect(session.state.pendingQuestion).toBeUndefined();
+    expect(session.state.status).toBe("running");
+    expect(() => answerQuestion(session, { "Which scope?": "One file" })).toThrow("No question is waiting for an answer.");
+
+    void ask("q2", "Which base?");
+    expect(session.state.pendingQuestion).toMatchObject({ id: "q2", questions: [expect.objectContaining({ question: "Which base?" })] });
   });
 
   it("should ignore a question from a finished run whose session is gone", () => {

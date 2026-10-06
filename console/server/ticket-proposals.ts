@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { handledStillFound, openProposals, readProposalSnapshot, ticketIdentity } from "./domain.js";
 import type { TicketProposal } from "./types.js";
+import { isMissingFile, reportFailure } from "./context.js";
 
 export type TicketProposalsOptions = {
   /** The snapshot a watcher writes, see contracts/ticket-proposals.md. */
@@ -57,7 +58,7 @@ export class TicketProposals {
   /** The tickets found and not started yet: refused, or about to be launched. */
   open(): TicketProposal[] {
     return openProposals(this.found, this.options.taken(), this.handled).map((proposal) => {
-      const refusal = this.refused.get(proposal.issueUrl);
+      const refusal = this.refused.get(ticketIdentity(proposal.issueUrl));
       return refusal ? { ...proposal, refusal } : proposal;
     });
   }
@@ -65,7 +66,7 @@ export class TicketProposals {
   /** Of these addresses, the ones still open right now, in their bare form. */
   proposed(issueUrls: string[]) {
     const asked = new Set(issueUrls.map(ticketIdentity));
-    return this.open().map((proposal) => proposal.issueUrl).filter((issueUrl) => asked.has(issueUrl));
+    return this.open().map((proposal) => proposal.issueUrl).filter((issueUrl) => asked.has(ticketIdentity(issueUrl)));
   }
 
   /** Records that these tickets were accepted or dismissed: they are not proposed again while the watcher still finds them. */
@@ -89,13 +90,13 @@ export class TicketProposals {
     } catch (error) {
       // No file: no watcher, or one that was removed, and nothing is proposed.
       // A file that does not parse is one caught mid-write or broken: what was read last still stands.
-      missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+      missing = isMissingFile(error);
       if (missing) found = [];
     }
     if (!found) return;
     const before = JSON.stringify(this.found);
     this.found = found;
-    const present = new Set(found.map((proposal) => proposal.issueUrl));
+    const present = new Set(found.map((proposal) => ticketIdentity(proposal.issueUrl)));
     for (const issueUrl of this.refused.keys()) if (!present.has(issueUrl)) this.refused.delete(issueUrl);
     // Only a snapshot says a ticket left the filter, an empty one included: a missing file says nothing about the decisions taken.
     const kept = missing ? this.handled : handledStillFound(this.handled, found);
@@ -125,7 +126,7 @@ export class TicketProposals {
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(`${file}.tmp`, content);
       await rename(`${file}.tmp`, file);
-    }).catch(() => undefined);
+    }).catch(reportFailure("Handled tickets not saved", file));
     return this.writes;
   }
 

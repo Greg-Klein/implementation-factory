@@ -4,6 +4,7 @@ import { storageRoot } from "./config.js";
 import { type KeptFinding, mergeReviewFindings, readReviewFindings, RECURRING_FINDINGS_FILE, recurringFindings, renderRecurringFindings, reviewFindingsStore, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import type { RunSession } from "./run-session.js";
+import { isMissingFile, reportFailure } from "./context.js";
 
 const MAX_FINDINGS_BYTES = 256_000;
 
@@ -14,7 +15,13 @@ async function keptFindings(stored: string): Promise<KeptFinding[]> {
   try {
     const parsed = JSON.parse(await readFile(stored, "utf8")) as { findings?: KeptFinding[] };
     return Array.isArray(parsed.findings) ? parsed.findings.filter((finding) => finding && typeof finding.at === "string" && typeof finding.category === "string") : [];
-  } catch {
+  } catch (error) {
+    // Only a missing file means no finding was kept. One that cannot be read is kept
+    // aside: the next write would replace the history of the repository with one run's findings.
+    if (!isMissingFile(error)) {
+      await rename(stored, `${stored}.unreadable-${Date.now()}`).catch(reportFailure("Unreadable review findings not kept aside", stored));
+      reportFailure("Review findings unreadable, started empty", stored)(error);
+    }
     return [];
   }
 }

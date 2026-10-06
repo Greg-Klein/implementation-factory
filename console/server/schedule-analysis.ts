@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isMissingFile } from "./context.js";
 import { pluginRoot, scheduleRoot, scheduleTimeoutMs, workflowLanguage } from "./config.js";
 import { scheduleInput, validateSchedule, type KnownTicket, type ScheduleOutput } from "./domain.js";
 import { engine } from "./engine/index.js";
@@ -44,7 +45,7 @@ export async function analyseTickets(repository: string, tickets: string[], know
   try {
     output = JSON.parse(await readFile(outputPath, "utf8"));
   } catch (error) {
-    return fail((error as NodeJS.ErrnoException).code === "ENOENT" ? "output file missing" : "output file unreadable", log);
+    return fail(isMissingFile(error) ? "output file missing" : "output file unreadable", log);
   }
   const validation = validateSchedule({ tickets, known: known.map(({ ticket }) => ticket.issueUrl) }, output);
   if (!validation.ok) return fail(`output refused, ${validation.error}`, log);

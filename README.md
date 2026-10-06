@@ -87,7 +87,7 @@ impl
 
 | Command | Effect |
 |---|---|
-| `impl` | starts the interface and opens the browser |
+| `impl` or `impl start` | starts the interface in the background, opens the browser and gives the terminal back |
 | `impl demo` | starts the interface on a simulated scenario |
 | `impl restart` | stops the running server, then starts the compiled version again |
 | `impl stop` | stops the running server |
@@ -95,6 +95,8 @@ impl
 | `impl config` | reads and changes the local configuration |
 | `impl improve` | processes the self-improvement feedback with Claude Code |
 | `impl help` | prints the help |
+
+The server keeps running once the terminal is closed. Its output goes to `console/data/server.log` (`server.log` in `IMPL_DATA_DIR` when it is set): follow it with `tail -f console/data/server.log`, and stop the server with `impl stop`. A server that exits while starting is reported with the end of that log and a non-zero exit code.
 
 An unknown command is refused with the help and a non-zero exit code, and the server does not start silently.
 

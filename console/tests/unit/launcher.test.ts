@@ -51,7 +51,7 @@ describe("implementation-harness launcher", () => {
   it("should document every subcommand it accepts", () => {
     const { code, stdout } = launch(["help"]);
     expect(code).toBe(0);
-    for (const subcommand of ["demo", "restart", "stop", "status", "config", "improve", "help"]) {
+    for (const subcommand of ["start", "demo", "restart", "stop", "status", "config", "improve", "help"]) {
       expect(stdout).toContain(subcommand);
     }
   });

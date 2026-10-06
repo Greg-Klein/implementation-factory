@@ -11,7 +11,7 @@ Two things in one repo:
 
 There is no desktop app. The console only runs from the checkout through `impl`, so a merged self-improvement lands in the code that serves it (plugin files on the next run, `console/` and `bin/` after `impl restart`, which the merge notice asks for).
 
-`bin/implementation-harness` is the `impl` launcher (start/demo/restart/stop/status/config/improve). `bin/config.mjs` + `env-schema.mjs` + `env-file.mjs` implement `impl config` over a local `.env` (the shell environment wins over `.env`, which wins over the defaults, see `.env.example`).
+`bin/implementation-harness` is the `impl` launcher (start/demo/restart/stop/status/config/improve). It starts the server in the background (`nohup`, output in `<data dir>/server.log`) and returns once `/api/runs` answers. `bin/config.mjs` + `env-schema.mjs` + `env-file.mjs` implement `impl config` over a local `.env` (the shell environment wins over `.env`, which wins over the defaults, see `.env.example`).
 
 ## Commands
 

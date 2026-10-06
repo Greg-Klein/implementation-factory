@@ -310,7 +310,7 @@ The design reviewer loads its own `figma-review` method. Pass the reference leve
 Loop exit criteria, enforced by the orchestrator:
 
 - no `P0` and no `P1` left on any dimension
-- QA status `PASS` or `PASS_WITH_WARNINGS`, with no acceptance criterion left without a fresh QA observation. `INCONCLUSIVE` never exits as ready
+- QA status `PASS` or `PASS_WITH_WARNINGS`, with no acceptance criterion left without a fresh QA observation, apart from those the registry marks `afterDeployment`, which QA records blocked. `INCONCLUSIVE` never exits as ready
 - `P2` findings may remain: they are reported, not fixed
 - the designer's "Écarts préexistants" may remain whatever their severity: they concern elements the ticket does not touch, and they are reported for a follow-up ticket, not fixed
 - one initial review round plus at most two rework rounds (three review rounds total, QA last each time); the time bound may stop earlier. No separate per-dimension limit. If still unresolved, stop and report the competing hypotheses and what would discriminate them

@@ -69,6 +69,8 @@ export type Criterion = {
   source?: { kind: string; reference?: string; excerpt?: string };
   expected?: string;
   checks: CriterionCheck[];
+  /** Only a deployed environment can show it: QA records it as blocked, and PASS_WITH_WARNINGS over it is consistent. */
+  afterDeployment?: true;
   /** The registry revision in which this criterion last changed meaning; evidence read against an older one no longer counts. */
   revision: number;
 };
@@ -130,6 +132,7 @@ export function parseCriteriaRegistry(value: unknown, file = "acceptance-criteri
       ...(kind ? { source: { kind, ...(text(source?.reference) ? { reference: text(source?.reference) } : {}), ...(text(source?.excerpt) ? { excerpt: text(source?.excerpt) } : {}) } } : {}),
       ...(text(verification?.expected) ? { expected: text(verification?.expected) } : {}),
       checks,
+      ...(verification?.afterDeployment === true ? { afterDeployment: true as const } : {}),
       revision: Math.min(positiveInteger(input.revision) ?? 1, revision),
     });
   }
@@ -384,12 +387,16 @@ const QA_OBSERVATIONS = new Set(["measured", "pass", "fail"]);
  * PASS_WITH_WARNINGS) is inconsistent as long as one criterion has no fresh QA
  * observation: `observed` names the criteria that have one. A focused pass
  * answers for the criteria of its mandate only; the others have no QA item by
- * design and are never held against it.
+ * design and are never held against it. A criterion the registry marks
+ * `afterDeployment` cannot be observed before the merge: PASS_WITH_WARNINGS
+ * over it is the verdict the QA contract asks for, PASS is still flagged.
  */
-export function qaVerdictConsistency(report: { status: string; file: string; round?: number; mandate?: string[] }, criterionIds: string[], observed: Set<string>, language: WorkflowLanguage = "en"): AcceptanceQaView {
+export function qaVerdictConsistency(report: { status: string; file: string; round?: number; mandate?: string[] }, criteria: Pick<Criterion, "id" | "afterDeployment">[], observed: Set<string>, language: WorkflowLanguage = "en"): AcceptanceQaView {
   const t = acceptanceText(language);
+  const criterionIds = criteria.map((criterion) => criterion.id);
   const mandate = report.mandate ? criterionIds.filter((id) => report.mandate!.includes(id)) : undefined;
-  const unobserved = QA_APPROVALS.has(report.status) ? (mandate ?? criterionIds).filter((id) => !observed.has(id)) : [];
+  const excused = new Set(report.status === "PASS_WITH_WARNINGS" ? criteria.filter((criterion) => criterion.afterDeployment).map((criterion) => criterion.id) : []);
+  const unobserved = QA_APPROVALS.has(report.status) ? (mandate ?? criterionIds).filter((id) => !observed.has(id) && !excused.has(id)) : [];
   const warning = unobserved.length === 0 ? undefined
     : t.qaUnobserved(report.status, t.enumeration(unobserved), unobserved.length);
   return { status: report.status, file: report.file, ...(report.round ? { round: report.round } : {}), ...(mandate ? { mandate } : {}), consistent: unobserved.length === 0, unobserved, ...(warning ? { warning } : {}) };
@@ -631,7 +638,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     for (const id of view.criterionIds) if (criterionIds.has(id)) observedByQa.add(id);
     for (const checkId of linkedChecks.get(entry.identity) ?? []) observedByQa.add(checkOwner.get(checkId)!.id);
   }
-  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, round: qaReport.round, mandate: qaReport.mandate }, criteria.map((criterion) => criterion.id), observedByQa, input.language) : undefined;
+  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, round: qaReport.round, mandate: qaReport.mandate }, criteria, observedByQa, input.language) : undefined;
 
   // Without a registry the criteria can only be rebuilt from an older plan's
   // strings, and nothing can be tied to them: shown, never verified.

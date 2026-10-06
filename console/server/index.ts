@@ -357,8 +357,14 @@ const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const issueUrl = requestUrl.searchParams.get("issueUrl") ?? "";
     try {
-      const repositories = await discoverRepositories();
-      const detected = issueUrl ? await detectProjectDirectory(issueUrl, repositories) : undefined;
+      const fresh = requestUrl.searchParams.has("fresh");
+      let repositories = await discoverRepositories({ fresh });
+      let detected = issueUrl ? await detectProjectDirectory(issueUrl, repositories) : undefined;
+      // The page is about to ask where the merge requests go: a checkout cloned a moment ago must be in the list it picks from.
+      if (issueUrl && !detected && !fresh) {
+        repositories = await discoverRepositories({ fresh: true });
+        detected = await detectProjectDirectory(issueUrl, repositories);
+      }
       respond(response, 200, { repositories, detected: detected ?? null });
     } catch (error) {
       respond(response, 500, { repositories: [], detected: null, error: error instanceof Error ? error.message : "Discovery failed." });

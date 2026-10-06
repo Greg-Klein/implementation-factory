@@ -219,14 +219,16 @@ export function Harness() {
     return () => window.clearInterval(timer);
   }, [refreshPendingImprovements]);
 
+  // A ticket with no checkout makes the page ask where its merge requests go: the list is read again then, so a repository cloned since the page opened can be picked.
+  const choosingTargets = pendingUnresolved.length > 0 || (snapshot.proposals ?? []).some((proposal) => proposal.refusal);
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/repositories", { signal: controller.signal })
+    fetch(choosingTargets ? "/api/repositories?fresh" : "/api/repositories", { signal: controller.signal })
       .then((response) => response.json() as Promise<RepositoryResponse>)
       .then((result) => setRepositories(result.repositories))
       .catch(() => undefined);
     return () => controller.abort();
-  }, []);
+  }, [choosingTargets]);
 
   useEffect(() => {
     setMissedProject(undefined);

@@ -57,7 +57,7 @@ test("should find a pilot with nothing next, send one continuation for two windo
   await expect(second.getByText(/Continuation requested at/)).toBeVisible();
   await expect(band.getByText(/Continuation requested at/)).toBeVisible();
   await expect.poll(() => submissions(runId)).toBe(1);
-  const [incident] = await incidents(request, runId);
+  const incident = (await incidents(request, runId))[0]!;
   expect(incident.status).toBe("open");
   expect(incident.decisions.filter((decision) => decision.outcome === "done")).toHaveLength(1);
   // Nothing is resolved on the request alone: only once the pilot is seen acting.
@@ -74,7 +74,7 @@ test("should refuse an action decided on a state that has moved since it was sho
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
   await postHook(request, runId, { hook_event_name: "Stop" });
   await expect.poll(async () => (await incidents(request, runId)).length).toBe(1);
-  const [incident] = await incidents(request, runId);
+  const incident = (await incidents(request, runId))[0]!;
   const answer = await page.evaluate(({ run, id }) => new Promise<{ outcome: string; message: string }>((resolve, reject) => {
     const socket = new WebSocket(`ws://${window.location.host}/ws`);
     const timeout = window.setTimeout(() => reject(new Error("incident.result timeout")), 5_000);

@@ -75,7 +75,7 @@ describe("the findings kept for a repository", () => {
     const first = mergeReviewFindings([], [finding("SR-R1-1"), finding("SR-R1-2")], run, NOW);
     const second = mergeReviewFindings(first, [finding("SR-R2-1"), finding("SR-R1-2", "reworded")], run, NOW + 1000);
     expect(second.map(({ id, summary }) => `${id} ${summary}`)).toEqual(["SR-R1-1 x", "SR-R2-1 x", "SR-R1-2 reworded"]);
-    expect(second[0].ticket).toBe("https://github.com/acme/shop/issues/7");
+    expect(second[0]!.ticket).toBe("https://github.com/acme/shop/issues/7");
   });
 
   it("should keep the same id of two runs apart, and let go of what is six months old", () => {
@@ -103,7 +103,7 @@ describe("the kinds of defect that keep coming back", () => {
     all.push(kept("3", "test-gap", 3), kept("4", "test-gap", 2), kept("5", "ui-state", 1));
     const recurring = recurringFindings(all, NOW);
     expect(recurring.map(({ category }) => category)).toEqual(["test-gap", "ui-state", "edge-case", "type-escape", "duplication"]);
-    expect(recurring[0].examples.map(({ ticket }) => ticket.split("/").pop())).toEqual(["4", "3", "2"]);
+    expect(recurring[0]!.examples.map(({ ticket }) => ticket.split("/").pop())).toEqual(["4", "3", "2"]);
   });
 
   it("should write a file that names each habit with its count and its examples", () => {

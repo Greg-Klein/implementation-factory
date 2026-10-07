@@ -135,16 +135,16 @@ describe("signals the health monitor reads from Claude Code", () => {
 
   it("should expect an end event only for the tools the plugin's PostToolUse hook matches, and see every call it waits on", () => {
     const hooks = JSON.parse(readFileSync(path.resolve(__dirname, "../../../hooks/hooks.json"), "utf8")) as { hooks: Record<string, { matcher?: string }[]> };
-    const post = hooks.hooks.PostToolUse.map((entry) => entry.matcher ?? "").join("|").split("|");
+    const post = hooks.hooks.PostToolUse!.map((entry) => entry.matcher ?? "").join("|").split("|");
     expect(new Set(post)).toEqual(END_REPORTED_TOOLS);
-    const pre = hooks.hooks.PreToolUse.map((entry) => entry.matcher ?? "").join("|").split("|");
+    const pre = hooks.hooks.PreToolUse!.map((entry) => entry.matcher ?? "").join("|").split("|");
     expect(pre).toEqual(expect.arrayContaining(["Bash", "Monitor", "Agent"]));
   });
 });
 
 describe("the pilot's session", () => {
   const args = sessionArguments({ pluginDir: "/opt/harness", sessionName: "implementation-harness run-1", command: "/implementation-harness:implement https://gitlab.com/g/p/-/issues/1" });
-  const valueOf = (flag: string) => args[args.indexOf(flag) + 1];
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
   it("should load the plugin on Opus and end with the command", () => {
     expect(valueOf("--plugin-dir")).toBe("/opt/harness");
@@ -160,7 +160,7 @@ describe("the pilot's session", () => {
 describe("the headless scheduling session", () => {
   const options = { pluginDir: "/opt/harness", inputPath: "/data/schedule/call-1/input.json", outputPath: "/data/schedule/call-1/output.json" };
   const args = scheduleArguments(options);
-  const valueOf = (flag: string) => args[args.indexOf(flag) + 1];
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
   it("should run without a terminal, on Sonnet, asking nothing", () => {
     expect(args[0]).toBe("-p");

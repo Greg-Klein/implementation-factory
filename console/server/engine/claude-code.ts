@@ -157,7 +157,7 @@ const PLAN_TASK_REPORT = /developer-report-([A-Za-z0-9_.-]+?)\.md/g;
 function delegatedPlanTaskIds(tool: string | undefined, input: Record<string, unknown> | undefined) {
   if (tool !== "Agent" && tool !== "Task") return undefined;
   const text = [input?.description, input?.prompt].filter((value) => typeof value === "string").join("\n");
-  const ids = [...new Set([...text.matchAll(PLAN_TASK_REPORT)].map((match) => match[1]))];
+  const ids = [...new Set([...text.matchAll(PLAN_TASK_REPORT)].flatMap((match) => match[1] ?? []))];
   return ids.length > 0 ? ids : undefined;
 }
 

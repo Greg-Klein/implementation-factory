@@ -46,7 +46,7 @@ describe("evidence archive", () => {
     expect(await archive.ingest("qa-evidence.json")).toBe(true);
     const view = archive.view();
     expect(archive.versions.filter((version) => version.file === "qa-evidence.json")).toHaveLength(1);
-    expect(view.criteria[0].status).toBe("verified");
+    expect(view.criteria[0]!.status).toBe("verified");
     expect(view.diagnostics.some((diagnostic) => diagnostic.file === "qa-evidence.json" && diagnostic.message.includes("Invalid or incomplete JSON"))).toBe(true);
   });
 
@@ -62,7 +62,7 @@ describe("evidence archive", () => {
     await archive.ingest("qa-evidence.json");
     expect((await archive.read("evidence/qa-evidence.json/v1/assets/result.png"))?.toString()).toBe("png-round-1");
     expect((await archive.read("evidence/qa-evidence.json/v2/assets/result.png"))?.toString()).toBe("png-round-2");
-    const check = archive.view().criteria[0].checks[0];
+    const check = archive.view().criteria[0]!.checks[0]!;
     expect(check.status).toBe("verified");
     expect(check.history[0]).toMatchObject({ id: "Q-R1", verdict: "fail" });
   });
@@ -81,7 +81,7 @@ describe("evidence archive", () => {
     await archive.ingest("qa-evidence.json");
     const view = archive.view();
     expect(view.diagnostics.filter((diagnostic) => diagnostic.level === "error")).toEqual([]);
-    expect(view.criteria[0].status).toBe("verified");
+    expect(view.criteria[0]!.status).toBe("verified");
   });
 
   it("should archive a capture that arrives after the report naming it", async () => {
@@ -104,7 +104,7 @@ describe("evidence archive", () => {
     await archive.ingest("qa-evidence.json");
     expect(archive.pendingAttachments()).toEqual([]);
     expect((await archive.read("evidence/qa-evidence.json/v1/assets/result.png"))?.toString()).toBe("png");
-    expect(archive.view().criteria[0].checks[0].status).toBe("verified");
+    expect(archive.view().criteria[0]!.checks[0]!.status).toBe("verified");
   });
 
   it("should still reconstruct the run once the task directory is gone", async () => {
@@ -115,7 +115,7 @@ describe("evidence archive", () => {
     await archive.ingest("acceptance-criteria.json");
     await archive.ingest("qa-evidence.json");
     files.clear();
-    expect(archive.view().criteria[0].status).toBe("verified");
+    expect(archive.view().criteria[0]!.status).toBe("verified");
     expect(await archive.read("evidence/qa-evidence.json/v1.json")).toBeDefined();
   });
 
@@ -123,7 +123,7 @@ describe("evidence archive", () => {
     const { archive, put } = memoryArchive();
     put("qa-evidence.json", qa(1, "pass", { screenshot: "../../etc/passwd" }));
     await archive.ingest("qa-evidence.json");
-    expect(archive.versions[0].attachments[0].archived).toBe(false);
+    expect(archive.versions[0]!.attachments[0]!.archived).toBe(false);
     expect(await archive.read("evidence/index.json")).toBeUndefined();
     expect(containedRelativePath("../x.png")).toBeUndefined();
     expect(containedRelativePath("/etc/passwd")).toBeUndefined();
@@ -172,12 +172,12 @@ describe("evidence archive on disk", () => {
     files.set("qa-evidence.json", Buffer.from(qa(1, "pass")));
     await live.ingest("acceptance-criteria.json");
     await live.ingest("qa-evidence.json");
-    expect(live.view().criteria[0].status).toBe("verified");
+    expect(live.view().criteria[0]!.status).toBe("verified");
 
     const readBack = new EvidenceArchive(storage, clock);
     expect(await readBack.restore()).toBe(true);
     expect(readBack.currentSnapshot).toEqual({ id: "snap-a", capturedAt: "2026-09-27T10:00:00.000Z" });
-    expect(readBack.view().criteria[0].status).toBe("verified");
+    expect(readBack.view().criteria[0]!.status).toBe("verified");
     expect(readBack.view().counts).toEqual(live.view().counts);
 
     // The code moved after the evidence was taken: kept too, so the archive says stale and not verified.
@@ -185,8 +185,8 @@ describe("evidence archive on disk", () => {
     const later = new EvidenceArchive(storage, clock);
     await later.restore();
     expect(later.currentSnapshot?.id).toBe("snap-b");
-    expect(later.view().criteria[0].status).toBe(live.view().criteria[0].status);
-    expect(later.view().criteria[0].status).not.toBe("verified");
+    expect(later.view().criteria[0]!.status).toBe(live.view().criteria[0]!.status);
+    expect(later.view().criteria[0]!.status).not.toBe("verified");
   });
 
   it("should keep two runs apart", async () => {

@@ -80,7 +80,7 @@ describe("the hook emitter", () => {
     server.close();
     // Refused once, taken on the retry, with the same identifier both times.
     expect(received).toHaveLength(2);
-    expect(JSON.parse(received[0]).hookId).toBe(JSON.parse(received[1]).hookId);
+    expect(JSON.parse(received[0]!).hookId).toBe(JSON.parse(received[1]!).hookId);
     expect(existsSync(spool)).toBe(false);
 
     await emit(`http://127.0.0.1:${port}/api/hooks`, spool, { hook_event_name: "SubagentStop", agent_id: "a1" });

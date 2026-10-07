@@ -3,7 +3,7 @@
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { formatTokens } from "@/lib/metrics";
 import { elapsedLabel, phaseNames, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
-import { forgeOf, forgeWords } from "@/lib/ticket-urls";
+import { forgeOf, forgeWords, withoutQuery } from "@/lib/ticket-urls";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 
@@ -24,7 +24,7 @@ function externalHref(value: string) {
 
 /** The rail is 236px wide and the project already shows below, so only the number is worth the room. The full address stays in the tooltip. */
 function reference(url: string, prefix: string) {
-  const last = url.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  const last = withoutQuery(url).split("/").filter(Boolean).pop();
   return last ? `${prefix}${last}` : url;
 }
 

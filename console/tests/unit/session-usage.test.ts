@@ -66,7 +66,7 @@ describe("sessions of a run", () => {
       expect.objectContaining({ sessionId: "session-a", outputTokens: 100 }),
       expect.objectContaining({ sessionId: "session-a", agentId: "a1", agentType: "implementation-harness:developer", outputTokens: 40 }),
     ]);
-    expect(sessions[0].agentId).toBeUndefined();
+    expect(sessions[0]!.agentId).toBeUndefined();
   });
 
   it("should add a second session of the same directory only when that directory belongs to the run", async () => {
@@ -88,22 +88,22 @@ describe("sessions of a run", () => {
     };
     const usageOf = createUsageReader(access);
 
-    writeFileSync(file, lines[0]);
+    writeFileSync(file, lines[0]!);
     expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
     expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
-    expect(ranges).toEqual([[0, lines[0].length]]);
+    expect(ranges).toEqual([[0, lines[0]!.length]]);
 
     // A line caught half written is not counted yet, and is not lost either.
-    const half = Math.floor(lines[1].length / 2);
-    writeFileSync(file, lines[0] + lines[1].slice(0, half));
+    const half = Math.floor(lines[1]!.length / 2);
+    writeFileSync(file, lines[0] + lines[1]!.slice(0, half));
     expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 100 });
-    writeFileSync(file, lines[0] + lines[1] + lines[2]);
+    writeFileSync(file, lines[0]! + lines[1] + lines[2]);
     expect(await usageOf(file)).toEqual(usageFromTranscript(lines.join("")));
     expect(await usageOf(file)).toMatchObject({ calls: 2, outputTokens: 145 });
-    expect(ranges).toEqual([[0, lines[0].length], [lines[0].length, lines[0].length + half], [lines[0].length + half, lines.join("").length]]);
+    expect(ranges).toEqual([[0, lines[0]!.length], [lines[0]!.length, lines[0]!.length + half], [lines[0]!.length + half, lines.join("").length]]);
 
     // Written again from scratch: read from its start.
-    writeFileSync(file, lines[1]);
+    writeFileSync(file, lines[1]!);
     expect(await usageOf(file)).toMatchObject({ calls: 1, outputTokens: 30 });
     expect(await usageOf(path.join(root, "missing.jsonl"))).toBeUndefined();
   });

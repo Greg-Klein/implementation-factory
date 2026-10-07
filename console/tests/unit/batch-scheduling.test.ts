@@ -169,7 +169,7 @@ describe("the entries that start", () => {
     expect(view([queued(102), queued(101)], { tickets }, "q101")).toMatchObject({ reason: "order", cause: "low_confidence", detail: "Unreliable prediction for #102: this ticket runs after it. #102: Nothing to search for in this ticket." });
     expect(view([queued(101)], { tickets, watches: [watch(103)] }, "q101").detail).toBe("Unreliable prediction for #103: this ticket runs after it.");
     // A failed analysis on either side is said before a vague prediction.
-    const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]];
+    const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]!];
     expect(view([queued(101), queued(102)], { tickets: mixed }, "q102")).toMatchObject({ cause: "analysis_failed", detail: "The analysis of #101 failed: this ticket runs after it." });
   });
 

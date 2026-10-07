@@ -124,7 +124,7 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
               return (
                 <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-[var(--on-tab-selected)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
                   {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "suivi" ? <KanbanIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                  {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                  {fresh && <span role="img" aria-label={fresh} title={`${fresh.charAt(0).toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                 </button>
               );
             })}

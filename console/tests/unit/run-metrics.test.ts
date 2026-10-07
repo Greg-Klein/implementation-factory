@@ -259,7 +259,7 @@ describe("a run against the others", () => {
   const others = [measured("a", 1_000_000), measured("b", 1_200_000), measured("c", 1_100_000), measured("failed", 9_000_000, {}, "failed")];
 
   it("should compare to the delivered runs only, the run itself left out", () => {
-    const { runs, scope } = comparableRuns(others[0], others);
+    const { runs, scope } = comparableRuns(others[0]!, others);
     expect(runs.map((entry) => entry.runId)).toEqual(["b", "c"]);
     expect(scope).toBe("all delivered runs");
   });

@@ -135,7 +135,7 @@ describe("why a queued launch is still waiting", () => {
   });
 
   it("should fall back on the slot count when nothing holds its ticket", () => {
-    const [described] = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([[key("/work/repo-a"), "run-1"]]));
+    const described = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([[key("/work/repo-a"), "run-1"]]))[0]!;
     expect(described.reason).toBe("slot");
     expect(described.blockedBy).toBeUndefined();
   });

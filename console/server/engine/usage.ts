@@ -55,7 +55,7 @@ function totals(calls: Map<string, Call>): Omit<SessionUsage, "sessionId"> {
     outputTokens: list.reduce((sum, call) => sum + call.output, 0),
     cacheReadTokens: list.reduce((sum, call) => sum + call.cacheRead, 0),
     cacheWriteTokens: list.reduce((sum, call) => sum + call.cacheWrite, 0),
-    firstContextTokens: list.length > 0 ? context(list[0]) : 0,
+    firstContextTokens: list[0] ? context(list[0]) : 0,
     peakContextTokens: list.reduce((peak, call) => Math.max(peak, context(call)), 0),
     ...(models.length > 0 ? { model: models.join(", ") } : {}),
   };

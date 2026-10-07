@@ -73,8 +73,9 @@ export function TargetPicker({ label, hint, selected, onChange, repositories, co
           if (event.key === "ArrowUp" && listOpen) { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
           if (event.key === "Enter" && (listOpen || typed)) {
             event.preventDefault();
-            if (listOpen) add(suggestions[activeIndex].path);
-            else add(typed);
+            const active = suggestions[activeIndex];
+            if (!listOpen) add(typed);
+            else if (active) add(active.path);
           }
           if (event.key === "Escape") setOpen(false);
         }}

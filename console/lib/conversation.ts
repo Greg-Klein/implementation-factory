@@ -41,11 +41,12 @@ export function inlineSegments(text: string): InlineSegment[] {
     index = match.index + match[0].length;
     if (match[1] !== undefined) segments.push({ kind: "strong", value: match[1] });
     else if (match[2] !== undefined) segments.push({ kind: "code", value: match[2] });
-    else if (match[4] !== undefined) segments.push({ kind: "link", value: match[3], href: match[4] });
+    else if (match[4] !== undefined) segments.push({ kind: "link", value: match[3] ?? match[4], href: match[4] });
     else {
       // A sentence ending right after a link must not swallow the punctuation.
-      const trailing = match[5].match(/[.,;:!?]+$/)?.[0] ?? "";
-      const href = match[5].slice(0, match[5].length - trailing.length);
+      const bare = match[5] ?? "";
+      const trailing = bare.match(/[.,;:!?]+$/)?.[0] ?? "";
+      const href = bare.slice(0, bare.length - trailing.length);
       segments.push({ kind: "link", value: href, href });
       if (trailing) segments.push({ kind: "plain", value: trailing });
     }

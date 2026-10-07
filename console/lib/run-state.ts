@@ -1,4 +1,4 @@
-import { forgeOf, forgeWords, parseTicketUrl, ticketReference } from "./ticket-urls";
+import { forgeOf, forgeWords, parseTicketUrl, ticketReference, withoutQuery } from "./ticket-urls";
 import type { AcceptanceCounts, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
@@ -92,14 +92,14 @@ export function elapsedLabel(start: string, end: string | undefined, now: number
  */
 export function runLabel(run: { cwd: string; repository?: string; issueUrl: string }) {
   const project = sourceRepository(run).replace(/\/+$/, "").split("/").filter(Boolean).pop();
-  const ticket = run.issueUrl.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  const ticket = withoutQuery(run.issueUrl).split("/").filter(Boolean).pop();
   const reference = ticket && /^\d+$/.test(ticket) ? `#${ticket}` : ticket;
   return [project, reference].filter(Boolean).join(" ") || run.issueUrl || "run";
 }
 
 /** A proposed ticket has no checkout yet: it is named by the project of its address, `companion #247`. */
 export function proposalLabel(issueUrl: string) {
-  const project = (parseTicketUrl(issueUrl)?.project ?? issueUrl.split("/-/")[0]).split("/").filter(Boolean).pop();
+  const project = (parseTicketUrl(issueUrl)?.project ?? issueUrl.split("/-/")[0] ?? issueUrl).split("/").filter(Boolean).pop();
   return [project, ticketReference(issueUrl)].filter(Boolean).join(" ");
 }
 
@@ -130,7 +130,7 @@ export function canRemoveWorktree(run: { status: Status; sessionActive?: boolean
 /** A merge request the way it is called, `MR !12`, or a pull request, `PR #12`. */
 export function mergeRequestLabel(mergeRequestUrl: string | undefined) {
   const words = forgeWords(forgeOf(mergeRequestUrl));
-  const number = mergeRequestUrl?.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  const number = mergeRequestUrl === undefined ? undefined : withoutQuery(mergeRequestUrl).split("/").filter(Boolean).pop();
   return number && /^\d+$/.test(number) ? `${words.short} ${words.sigil}${number}` : words.short;
 }
 
@@ -207,7 +207,7 @@ export function queueGroups<T extends { id: string; cwd: string; repository?: st
 export function queueMoveTarget(queued: { id: string }[], siblings: { id: string }[], id: string, direction: "up" | "down"): string | null | undefined {
   const position = siblings.findIndex((entry) => entry.id === id);
   if (position < 0) return undefined;
-  if (direction === "up") return position === 0 ? undefined : siblings[position - 1].id;
+  if (direction === "up") return position === 0 ? undefined : siblings[position - 1]?.id;
   const next = siblings[position + 1];
   if (!next) return undefined;
   const others = queued.filter((entry) => entry.id !== id);

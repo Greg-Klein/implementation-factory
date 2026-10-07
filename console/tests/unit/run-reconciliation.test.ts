@@ -59,7 +59,7 @@ describe("reconciling runs orphaned by a server restart", () => {
     await reconcileInterruptedRuns(runsDirectory);
     const agents = readRun("run-agents").agents;
     expect(agents[0]).toEqual(expect.objectContaining({ id: "a1", status: "abandoned" }));
-    expect(agents[0].endedAt).not.toBeUndefined();
+    expect(agents[0]!.endedAt).not.toBeUndefined();
     expect(agents[1]).toEqual(expect.objectContaining({ id: "a2", status: "completed", endedAt: "2026-09-09T08:19:40.000Z" }));
   });
 

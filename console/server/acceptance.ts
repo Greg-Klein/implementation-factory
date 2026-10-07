@@ -428,8 +428,8 @@ function withCopiedCodeVersions(reports: CoverageInput["reports"]): CoverageInpu
   return reports.map(({ version, records }) => ({ version, records: records.map((entry) => {
     if (!entry.unversionedIdentity || entry.snapshotAtStart || entry.snapshotAtEnd) return entry;
     const elsewhere = (versioned.get(entry.unversionedIdentity) ?? []).filter((candidate) => candidate.view.file !== entry.view.file);
-    if (new Set(elsewhere.map((candidate) => candidate.identity)).size !== 1) return entry;
     const [original] = elsewhere;
+    if (!original || new Set(elsewhere.map((candidate) => candidate.identity)).size !== 1) return entry;
     return {
       ...entry,
       identity: original.identity,
@@ -517,7 +517,8 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
       }
       targets.add(criterion.id);
       if (criterion.checks.some((check) => checks.has(check.id))) continue;
-      if (criterion.checks.length === 1) checks.add(criterion.checks[0].id);
+      const [only] = criterion.checks;
+      if (only && criterion.checks.length === 1) checks.add(only.id);
       else if (!idleAttempt(view)) unassigned.set(criterion.id, [...unassigned.get(criterion.id) ?? [], view]);
     }
     linkedChecks.set(entry.identity, checks);

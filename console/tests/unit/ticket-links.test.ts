@@ -32,13 +32,13 @@ describe("the dependencies a forge states between tickets", () => {
 
   it("should name the forge of the ticket", () => {
     const issue = (number: number) => `https://github.com/acme/shop/issues/${number}`;
-    expect(linkEdges(SHOP, issue(2), { blockedBy: [issue(1)], blocks: [] }, [issue(1)])[0].reason).toBe("GitHub marks #2 as blocked by #1.");
+    expect(linkEdges(SHOP, issue(2), { blockedBy: [issue(1)], blocks: [] }, [issue(1)])[0]!.reason).toBe("GitHub marks #2 as blocked by #1.");
   });
 
   it("should replace the edge of a pair by the one put over it, whichever ticket each names first", () => {
     const overlap: ScheduleEdge = { repository: SHOP, a: url(101), b: url(102), kind: "overlap", reason: "Same file." };
     const other: ScheduleEdge = { repository: SHOP, a: url(103), b: url(104), kind: "overlap", reason: "Same file." };
-    const [stated] = linkEdges(SHOP, url(102), { blockedBy: [url(101)], blocks: [] }, [url(101)]);
+    const stated = linkEdges(SHOP, url(102), { blockedBy: [url(101)], blocks: [] }, [url(101)])[0]!;
     expect(overlayEdges([overlap, other], [stated])).toEqual([stated, other]);
   });
 });

@@ -67,14 +67,14 @@ describe("the life of an incident", () => {
     const first = incidents.reconcileIncidents([], candidate("no_next_action:1"), context);
     const updated = incidents.reconcileIncidents(first.incidents, { ...candidate("no_next_action:1"), observations: [{ kind: "turn", detail: "autre" }] }, context);
     expect(updated.changed).toBe(true);
-    expect(updated.incidents[0].revision).toBe(2);
+    expect(updated.incidents[0]!.revision).toBe(2);
   });
 
   it("should resolve an incident once its cause is gone, and never reopen a dismissed one", () => {
     const first = incidents.reconcileIncidents([], candidate("no_next_action:1"), context);
     const resolved = incidents.reconcileIncidents(first.incidents, undefined, context);
     expect(resolved.resolved[0]).toMatchObject({ status: "resolved", resolution: { outcome: "Claude Code a repris la main" } });
-    const dismissed: RunIncident[] = [{ ...first.incidents[0], status: "dismissed" }];
+    const dismissed: RunIncident[] = [{ ...first.incidents[0]!, status: "dismissed" }];
     expect(incidents.reconcileIncidents(dismissed, candidate("no_next_action:1"), context)).toMatchObject({ opened: [], changed: false });
   });
 
@@ -86,14 +86,14 @@ describe("the life of an incident", () => {
     expect(back.opened).toHaveLength(1);
     expect(back.incidents.map((incident) => incident.status)).toEqual(["resolved", "open"]);
     expect(back.opened[0]).toMatchObject({ fingerprint: "no_next_action:1", revision: 1, detectedAt: "2026-09-27T10:05:00.000Z" });
-    expect(back.opened[0].id).not.toBe(first.incidents[0].id);
+    expect(back.opened[0]!.id).not.toBe(first.incidents[0]!.id);
     // The one that is open now is the one evaluated from here on: nothing more is opened.
     expect(incidents.reconcileIncidents(back.incidents, candidate("no_next_action:1"), context)).toMatchObject({ opened: [], changed: false });
   });
 
   it("should never resolve a lost session on its own", () => {
     const lost = incidents.reconcileIncidents([], { ...candidate("lost_session:1"), kind: "lost_session" }, context);
-    expect(incidents.reconcileIncidents(lost.incidents, undefined, context).incidents[0].status).toBe("open");
+    expect(incidents.reconcileIncidents(lost.incidents, undefined, context).incidents[0]!.status).toBe("open");
   });
 });
 
@@ -112,7 +112,7 @@ describe("the health monitor on a live run", () => {
     // Terminal output is not a resumption.
     session.appendTerminal("⠋ Thinking…");
     await monitor.applyHealth(session, T0 + 95_000, policy);
-    expect(session.state.incidents![0].status).toBe("open");
+    expect(session.state.incidents![0]!.status).toBe("open");
     health.recordEngineSignal(session.signals, { kind: "tool.start", tool: "Read", toolUseId: "r1", background: false, endReported: false }, T0 + 100_000);
     await monitor.applyHealth(session, T0 + 100_000, policy);
     expect(session.state.incidents![0]).toMatchObject({ status: "resolved", resolution: { outcome: "Claude Code resumed" } });
@@ -160,7 +160,7 @@ describe("actions on an incident", () => {
   async function openedRun(id: string) {
     const session = idleRun(id);
     await monitor.applyHealth(session, T0 + 61_000, policy);
-    const incident = session.state.incidents![0];
+    const incident = session.state.incidents![0]!;
     return { session, incident };
   }
 
@@ -181,12 +181,12 @@ describe("actions on an incident", () => {
     expect(await registry.incidentAction({ ...request, requestId: "window-a" })).toMatchObject({ outcome: "duplicate" });
     expect(submitted).toHaveLength(1);
     // Asked is not resumed: the incident stays open until the pilot is seen acting.
-    const current = session.state.incidents![0];
+    const current = session.state.incidents![0]!;
     expect(current).toMatchObject({ status: "open", continuation: { requestId: "window-a" } });
     expect(current.decisions).toEqual([expect.objectContaining({ requestId: "window-a", outcome: "done" })]);
     health.recordEngineSignal(session.signals, { kind: "tool.start", tool: "Read", toolUseId: "r1", background: false, endReported: false }, T0 + 70_000);
     await monitor.applyHealth(session, T0 + 70_000, policy);
-    expect(session.state.incidents![0].resolution?.outcome).toBe("Resumption observed after the continuation request");
+    expect(session.state.incidents![0]!.resolution?.outcome).toBe("Resumption observed after the continuation request");
   });
 
   it("should refuse a continuation once the session started working again between display and click", async () => {
@@ -206,7 +206,7 @@ describe("actions on an incident", () => {
     let onDisk: RunState | undefined;
     session.engine!.submit = () => { onDisk = JSON.parse(readFileSync(path.join(runsDirectory, session.id, "run.json"), "utf8")) as RunState; };
     await registry.incidentAction({ runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "r-first", action: "request_continuation" });
-    expect(onDisk?.incidents?.[0].decisions).toEqual([expect.objectContaining({ requestId: "r-first", outcome: "pending" })]);
+    expect(onDisk?.incidents?.[0]?.decisions).toEqual([expect.objectContaining({ requestId: "r-first", outcome: "pending" })]);
   });
 
   it("should close an incident as a false positive only with a reason", async () => {
@@ -238,7 +238,7 @@ describe("after a restart", () => {
     expect(state).toMatchObject({ status: "failed", sessionActive: false, health: { health: "interrupted" } });
     expect(state.pendingQuestion).toBeUndefined();
     expect(state.incidents).toHaveLength(1);
-    expect(state.incidents![0].observations.find((observation) => observation.kind === "question")?.detail).toMatch(/Which base/);
+    expect(state.incidents![0]!.observations.find((observation) => observation.kind === "question")?.detail).toMatch(/Which base/);
   });
 
   it("should date an interrupted run at its last known activity, not at the restart that found it", async () => {
@@ -263,7 +263,7 @@ describe("after a restart", () => {
       observations: [], suggestedActions: [], decisions: [{ requestId: "x", action: "request_continuation", at: "", outcome: "pending" }],
     };
     const state = incidents.normalizeArchivedRun({ status: "failed", cwd: "/w", incidents: [pending] }, "r");
-    expect(state?.incidents?.[0].decisions[0]).toMatchObject({ outcome: "unknown" });
+    expect(state?.incidents?.[0]?.decisions[0]).toMatchObject({ outcome: "unknown" });
   });
 
   it("should list interrupted runs read only, skip a corrupted archive, and drop a run once its incident is closed", async () => {
@@ -282,13 +282,13 @@ describe("after a restart", () => {
     const registry = new RunRegistry();
     registry.monitor.stop();
     (registry as unknown as { archive: InstanceType<typeof RunArchive> }).archive.get = archive.get.bind(archive);
-    const incident = archived!.state.incidents![0];
+    const incident = archived!.state.incidents![0]!;
     expect(await registry.incidentAction({ runId: archived!.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "c1", action: "request_continuation" }))
       .toMatchObject({ outcome: "refused" });
     expect(await registry.incidentAction({ runId: archived!.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "c2", action: "dismiss", reason: "Restarted by hand" }))
       .toMatchObject({ outcome: "done" });
     archive.release(archived!.id);
     expect(archive.get("run-archived")).toBeUndefined();
-    expect(read("run-archived").incidents![0].status).toBe("dismissed");
+    expect(read("run-archived").incidents![0]!.status).toBe("dismissed");
   });
 });

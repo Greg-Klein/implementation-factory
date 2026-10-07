@@ -99,7 +99,7 @@ describe("what becomes of the worktree when the session is gone", () => {
     expect(existsSync(worktree)).toBe(false);
     expect(git(repository, "rev-parse", "--verify", "feat/run-delivered")).toBeTruthy();
     expect(existsSync(path.join(repository, "node_modules", "dep", "index.js"))).toBe(true);
-    expect(session.state.activities[0].title).toBe("Worktree removed");
+    expect(session.state.activities[0]!.title).toBe("Worktree removed");
   });
 
   it("should keep it, with the reason, when the run opened no merge request", async () => {

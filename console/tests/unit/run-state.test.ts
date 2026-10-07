@@ -263,7 +263,7 @@ describe("the queue as it is shown", () => {
   it("should group by batch, then by repository, in the order asked", () => {
     const groups = queueGroups([entry("q1", "/work/shop", "b1"), entry("q2", "/work/api", "b1"), entry("q3", "/work/shop", "b1"), entry("q4", "/work/shop", "b2")]);
     expect(groups.map((group) => [group.batchId, group.count])).toEqual([["b1", 3], ["b2", 1]]);
-    expect(groups[0].repositories.map((bucket) => [bucket.name, bucket.entries.map((queued) => queued.id)])).toEqual([["shop", ["q1", "q3"]], ["api", ["q2"]]]);
+    expect(groups[0]!.repositories.map((bucket) => [bucket.name, bucket.entries.map((queued) => queued.id)])).toEqual([["shop", ["q1", "q3"]], ["api", ["q2"]]]);
   });
 
   it("should leave a launch made alone as a group of its own", () => {

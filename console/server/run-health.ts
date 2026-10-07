@@ -296,8 +296,9 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
       ? waiting("agent", signals.pilotIdleSince, running.length > 1 ? `Waiting for ${running.length} agents` : "Waiting for an agent", names, names, "the agent finishing")
       : { health: "healthy" };
   }
-  if (signals.activeTools.length > 0) {
-    if (quietFor >= policy.suspicionMs) return suspicion(`A command is still running (${signals.activeTools[0].label ?? signals.activeTools[0].tool}).`);
+  const [activeTool] = signals.activeTools;
+  if (activeTool) {
+    if (quietFor >= policy.suspicionMs) return suspicion(`A command is still running (${activeTool.label ?? activeTool.tool}).`);
     return { health: "healthy" };
   }
   if (signals.pilotIdleSince === undefined) {
@@ -312,8 +313,8 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   const idleFor = now - after(Math.max(idleSince, lastAgentEnd));
   const workflow = input.workflow;
   const declared = workflow?.nextAction;
-  if (signals.backgroundWaits.length > 0) {
-    const wait = signals.backgroundWaits[0];
+  const [wait] = signals.backgroundWaits;
+  if (wait) {
     if (quietFor >= policy.suspicionMs) return suspicion(`Claude Code is still waiting for ${wait.label ?? wait.tool} in the background.`);
     return waiting("tool", wait.since, "Waiting for a background task", wait.label ?? wait.tool, wait.label ?? wait.tool, "the background task finishing");
   }
@@ -344,8 +345,8 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
     if (signals.pilotLastActedAt !== undefined && signals.pilotLastActedAt > endedAt) continue;
     if (now - after(endedAt) < policy.artifactGraceMs || idleFor < policy.artifactGraceMs) continue;
     const missing = requiredFiles(agent, input.planDelegations ?? []).filter((file) => !input.artifacts.includes(file));
-    if (missing.length === 0) continue;
-    const file = missing[0];
+    const [file] = missing;
+    if (!file) continue;
     return {
       health: "stalled", title: `${fileLabel(file)} expected`,
       detail: `${agentType(agent.name)} finished without writing ${file}, and nothing takes over.`,

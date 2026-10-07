@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
+import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, withoutQuery, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 import type { WorkflowLanguage } from "./acceptance-text.js";
 
@@ -337,8 +337,9 @@ const BRANCH_NAME = /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))
  */
 export function branchFromCommand(command: string | undefined) {
   const match = command?.match(BRANCH_NAME);
-  if (!command || !match) return undefined;
-  const name = match[1].replace(/^["']|["']$/g, "");
+  const captured = match?.[1];
+  if (!command || !match || !captured) return undefined;
+  const name = captured.replace(/^["']|["']$/g, "");
   const variable = /^\$\{?(\w+)\}?$/.exec(name)?.[1];
   const resolved = variable ? lastAssignment(command.slice(0, match.index), variable) : name;
   return resolved && !/[$`]/.test(resolved) ? resolved : undefined;
@@ -346,7 +347,7 @@ export function branchFromCommand(command: string | undefined) {
 
 function lastAssignment(command: string, variable: string) {
   const assignments = [...command.matchAll(new RegExp(`(?:^|[\\s;&|])${variable}=("[^"]*"|'[^']*'|[^\\s;&|]+)`, "g"))];
-  return assignments.at(-1)?.[1].replace(/^["']|["']$/g, "");
+  return assignments.at(-1)?.[1]?.replace(/^["']|["']$/g, "");
 }
 
 /**
@@ -479,8 +480,8 @@ export function mergeRequestUrl(toolResponse: unknown) {
 
 export function gitRemoteProjects(config: string): string[] {
   const projects = new Set<string>();
-  for (const match of config.matchAll(/^\s*url\s*=\s*(.+)$/gm)) {
-    const url = match[1].trim().replace(/\.git$/, "");
+  for (const [, value = ""] of config.matchAll(/^\s*url\s*=\s*(.+)$/gm)) {
+    const url = value.trim().replace(/\.git$/, "");
     const scp = url.match(/^[^/]+@[^:/]+:(.+)$/)?.[1];
     const project = scp ?? url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]+\/(.+)$/i)?.[1];
     if (project) projects.add(project.replace(/^\/+/, ""));
@@ -493,8 +494,8 @@ export function originProject(config: string): string | undefined {
   let section = "";
   const origin: string[] = [];
   for (const line of config.split("\n")) {
-    const header = line.match(/^\s*\[(.+)\]\s*$/);
-    if (header) section = header[1].trim();
+    const header = line.match(/^\s*\[(.+)\]\s*$/)?.[1];
+    if (header !== undefined) section = header.trim();
     else if (section === 'remote "origin"') origin.push(line);
   }
   return gitRemoteProjects(origin.join("\n"))[0] ?? gitRemoteProjects(config)[0];
@@ -511,7 +512,7 @@ export function deliveryProjects(issueUrl: string, projects: (string | undefined
   const own = ticketProjectPath(issueUrl)?.toLowerCase();
   const known = [...new Set(projects.filter((project): project is string => Boolean(project)))];
   if (known.length === 0) return undefined;
-  return known.length > 1 || known[0].toLowerCase() !== own ? known : undefined;
+  return known.length > 1 || known[0]?.toLowerCase() !== own ? known : undefined;
 }
 
 /** A previous run leaves its documents in the project, and only this run's own count. */
@@ -620,7 +621,7 @@ export function mergeReviewFindings(kept: KeptFinding[], incoming: ReviewFinding
   const at = new Date(now).toISOString();
   const rewritten = new Set(incoming.map((finding) => finding.id));
   const others = kept.filter((finding) => !(finding.runId === run.runId && rewritten.has(finding.id)));
-  const merged = [...others, ...incoming.map((finding) => ({ ...finding, runId: run.runId, ticket: run.ticket.split(/[?#]/)[0], at }))];
+  const merged = [...others, ...incoming.map((finding) => ({ ...finding, runId: run.runId, ticket: withoutQuery(run.ticket), at }))];
   return merged.filter((finding) => now - Date.parse(finding.at) < FINDINGS_KEPT_DAYS * DAY_MS).slice(-FINDINGS_KEPT_MOST);
 }
 
@@ -635,7 +636,7 @@ export function recurringFindings(kept: KeptFinding[], now: number): RecurringFi
   for (const finding of recent) groups.set(finding.category, [...(groups.get(finding.category) ?? []), finding]);
   return [...groups]
     .map(([category, findings]) => ({
-      category, label: FINDING_CATEGORIES[category], tickets: new Set(findings.map((finding) => finding.ticket)).size, findings: findings.length,
+      category, label: FINDING_CATEGORIES[category] ?? category, tickets: new Set(findings.map((finding) => finding.ticket)).size, findings: findings.length,
       examples: [...findings].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 3),
     }))
     .filter((group) => group.tickets >= 2)
@@ -810,7 +811,9 @@ export function agentRole(name: string) {
 
 /** The first name and picture of the agent started in that position of the run, the name numbered once the pool has gone round. */
 export function agentIdentity(index: number) {
-  const { name, avatar } = NICKNAMES[index % NICKNAMES.length];
+  const picked = NICKNAMES[index % NICKNAMES.length];
+  if (!picked) throw new RangeError(`No agent is started in position ${index}.`);
+  const { name, avatar } = picked;
   const round = Math.floor(index / NICKNAMES.length);
   return { nickname: round === 0 ? name : `${name} ${round + 1}`, avatar: `/avatars/${avatar}.webp` };
 }

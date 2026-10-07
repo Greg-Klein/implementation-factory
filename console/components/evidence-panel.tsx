@@ -211,7 +211,7 @@ function CheckBlock({ runId, check, titled }: { runId: string; check: Acceptance
 
 function CriterionRow({ runId, criterion }: { runId: string; criterion: AcceptanceCriterionView }) {
   const [open, setOpen] = useState(false);
-  const single = criterion.checks.length === 1 && criterion.checks[0].id === criterion.id;
+  const single = criterion.checks.length === 1 && criterion.checks[0]?.id === criterion.id;
   return (
     <li className="border-b border-[var(--line)] last:border-b-0" data-testid={`criterion-${criterion.id}`}>
       <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex w-full items-start gap-2.5 py-3 text-left">

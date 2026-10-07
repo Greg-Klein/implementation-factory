@@ -1,3 +1,4 @@
+import { defined } from "../../lib/defined.js";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -39,7 +40,7 @@ function addCalls(calls: Map<string, Call>, text: string, sidechain: boolean) {
     calls.set(id, {
       input: count(usage.input_tokens), output: count(usage.output_tokens),
       cacheRead: count(usage.cache_read_input_tokens), cacheWrite: count(usage.cache_creation_input_tokens),
-      model, at: known?.at ?? (typeof entry.timestamp === "string" ? entry.timestamp : undefined),
+      ...defined({ model, at: known?.at ?? (typeof entry.timestamp === "string" ? entry.timestamp : undefined) }),
     });
   }
   return calls;

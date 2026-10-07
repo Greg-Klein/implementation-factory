@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { runInProgress, sourceRepository } from "./domain.js";
 import type { SessionUsage } from "./engine/index.js";
 import type { AgentMetrics, GateTimes, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
@@ -194,7 +195,7 @@ export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: Metr
       questions: (state.userWaits ?? []).filter((wait) => wait.reason === "question").length,
       incidents: (state.incidents ?? []).map((incident) => incident.kind),
       ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
-      ...(qaStatus ?? state.acceptance?.qa?.status ? { qaStatus: qaStatus ?? state.acceptance?.qa?.status } : {}),
+      ...defined({ qaStatus: (qaStatus ?? state.acceptance?.qa?.status) || undefined }),
       ...(state.worktree ? { worktree: state.worktree.state } : {}),
     },
     time: { ...timeMetrics(state, new Date(at).getTime()), ...(gate ? { gate } : {}) },
@@ -252,11 +253,13 @@ export function metricsBaseline(run: RunMetrics, others: RunMetrics[]): MetricsB
   const measured = runs.filter((other) => other.tokens);
   return {
     runs: runs.length, scope,
-    tokens: median(measured.map((other) => other.tokens!.total.total)),
-    activeMs: median(runs.map((other) => other.time.activeMs)),
-    userWaitMs: median(runs.map((other) => other.time.userWaitMs)),
-    pilotCalls: median(measured.map((other) => other.tokens!.pilot.calls)),
-    pilotShare: median(measured.map((other) => other.tokens!.pilotShare)),
+    ...defined({
+      tokens: median(measured.map((other) => other.tokens!.total.total)),
+      activeMs: median(runs.map((other) => other.time.activeMs)),
+      userWaitMs: median(runs.map((other) => other.time.userWaitMs)),
+      pilotCalls: median(measured.map((other) => other.tokens!.pilot.calls)),
+      pilotShare: median(measured.map((other) => other.tokens!.pilotShare)),
+    }),
   };
 }
 

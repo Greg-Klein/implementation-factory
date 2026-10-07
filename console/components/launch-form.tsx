@@ -11,7 +11,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
   value: string;
   onChange: (value: string, project?: string) => void;
   repositories: RepositoryOption[];
-  detectedProject?: string;
+  detectedProject?: string | undefined;
   onOpenRecipe: (repository: string) => void;
   detecting: boolean;
 }) {
@@ -121,10 +121,10 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
   cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
   /** The ticket field as read by parseTicketUrls: two tickets or more make a batch. */
   parsed: ParsedTickets;
-  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
+  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string | undefined;
   detectingProject: boolean; canStart: boolean; onStart: () => void;
   /** The single ticket's project when no checkout of it was found. */
-  missedProject?: string;
+  missedProject?: string | undefined;
   /** The tickets of the batch the server found no checkout for. */
   unresolved: UnresolvedTicket[];
   targets: Record<string, string[]>;

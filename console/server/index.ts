@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir } from "node:fs/promises";
 import os from "node:os";
@@ -154,7 +155,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
       send(socket, { type: "batch.unresolved", tickets: unresolved });
       return;
     }
-    const outcome = await registry.enqueueBatch(resolved, { instruction: message.instruction });
+    const outcome = await registry.enqueueBatch(resolved, defined({ instruction: message.instruction }));
     send(socket, { type: "batch.result", batchId: outcome.batchId, accepted: outcome.entries.length, duplicates: outcome.duplicates });
     return;
   }
@@ -449,7 +450,7 @@ wss.on("connection", (socket) => {
       // Answered to the page that asked, never written into a run's state: a
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
-      send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined, ...requestIdOf(message) });
+      send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message) });
       if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
     }
   });

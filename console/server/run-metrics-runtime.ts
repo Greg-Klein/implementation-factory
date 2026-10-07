@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { execFile } from "node:child_process";
 import { access, appendFile, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -29,7 +30,7 @@ export async function harnessVersion(root = pluginRoot): Promise<HarnessVersion>
 }
 
 function usageOf(state: RunState) {
-  return engine.sessionUsage({ transcriptPath: state.transcriptPath, cwd: state.cwd, isolated: isRunWorktreePath(sourceRepository(state), state.cwd) });
+  return engine.sessionUsage({ ...defined({ transcriptPath: state.transcriptPath }), cwd: state.cwd, isolated: isRunWorktreePath(sourceRepository(state), state.cwd) });
 }
 
 /** What the run changed since the branch it was cut from, committed or not. Undefined once the worktree is gone or when no base can be read. */
@@ -71,7 +72,7 @@ async function compute(state: RunState, demo: boolean, previous: RunMetrics | un
   // The worktree goes once the run delivered: the size measured while it was there stays.
   const diff = demo ? undefined : await runDiff(state) ?? previous?.complexity.diff;
   const gate = demo ? undefined : gateTimes(await readFile(path.join(directory, GATE_LOG_FILE), "utf8").catch(() => ""));
-  return buildRunMetrics({ state, usage, diff, gate, qaStatus, at: now() });
+  return buildRunMetrics({ state, usage, ...defined({ diff, gate, qaStatus }), at: now() });
 }
 
 /** The figures of a run as it stands, written beside `run.json` unless the run is simulated. One computation at a time per run. */
@@ -117,7 +118,7 @@ export function refreshUsage(session: RunSession) {
     if (session.disposed) return;
     void session.metricsChain.then(async () => {
       const state = session.archivedState();
-      const metrics = buildRunMetrics({ state, usage: session.demo ? demoSessionUsage(state) : await usageOf(state).catch(() => []), diff: session.metrics?.complexity.diff, at: now() });
+      const metrics = buildRunMetrics({ state, usage: session.demo ? demoSessionUsage(state) : await usageOf(state).catch(() => []), ...defined({ diff: session.metrics?.complexity.diff }), at: now() });
       if (!session.disposed && applyUsage(session, metrics)) session.publish();
     });
   }, wait);

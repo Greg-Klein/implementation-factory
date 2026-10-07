@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ARCHIVED_ACTIVITIES, isMissingFile, now, reportFailure } from "./context.js";
@@ -38,7 +39,7 @@ export async function prepareRunWorktree(repository: string, runId: string): Pro
     ].filter(Boolean);
     return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", ") };
   } catch (error) {
-    return { worktree: { path: worktreePath, state: "active" }, summary: "", warning: error instanceof Error ? error.message.split("\n")[0] : String(error) };
+    return { worktree: { path: worktreePath, state: "active" }, summary: "", ...defined({ warning: error instanceof Error ? error.message.split("\n")[0] : String(error) }) };
   }
 }
 

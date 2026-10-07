@@ -2,6 +2,7 @@
 
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { defined } from "@/lib/defined";
 import { launchAnswer } from "@/lib/launch";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
@@ -185,7 +186,7 @@ export function Harness() {
           if (terminalRef.current) terminalRef.current.write(message.data);
           else pendingOutputRef.current = appendTerminalOutput(pendingOutputRef.current, message.data);
         }
-        if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
+        if (message.type === "notice") setNotice({ level: message.level, title: message.title, ...defined({ detail: message.detail }), at: message.at });
         if (message.type === "error") {
           setError(message.message);
           const feedback = sentFeedbackRef.current;
@@ -194,7 +195,7 @@ export function Harness() {
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "batch.unresolved") setUnresolved(message.tickets);
-        if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
+        if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, ...defined({ risks: message.risks }) });
         if (message.type === "recipe.result" || message.type === "findings.result") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };

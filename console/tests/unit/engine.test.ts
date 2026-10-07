@@ -55,8 +55,9 @@ describe("engine event translation", () => {
       .toMatchObject({ kind: "tool.start", tool: "Grep", target: "actionLabel" });
     expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "developer", prompt: "…" } }))
       .toMatchObject({ kind: "tool.start", tool: "Agent", target: "developer" });
-    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "TodoWrite", tool_input: { todos: [] } }))
-      .toMatchObject({ kind: "tool.start", tool: "TodoWrite", target: undefined });
+    const untargeted = claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "TodoWrite", tool_input: { todos: [] } });
+    expect(untargeted).toMatchObject({ kind: "tool.start", tool: "TodoWrite" });
+    expect(untargeted).not.toHaveProperty("target");
   });
 
   it("should drop the notification that only says the session went quiet", () => {

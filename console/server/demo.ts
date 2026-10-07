@@ -8,7 +8,7 @@ import type { RunSession } from "./run-session.js";
 import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
 /** The demo has no real worktree to list, so it fakes one entry alongside the real ones. */
-export const demoState: { pendingImprovement?: PendingSelfImprovementReview } = {};
+export const demoState: { pendingImprovement?: PendingSelfImprovementReview | undefined } = {};
 
 function scheduleDemo(session: RunSession, delay: number, callback: () => void) {
   const timer = setTimeout(() => { session.demoTimers.delete(timer); callback(); }, delay);

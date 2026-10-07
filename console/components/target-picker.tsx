@@ -11,7 +11,7 @@ import type { RepositoryOption } from "@/lib/types";
  */
 export function TargetPicker({ label, hint, selected, onChange, repositories, compact = false }: {
   label: string;
-  hint?: string;
+  hint?: string | undefined;
   selected: string[];
   onChange: (paths: string[]) => void;
   repositories: RepositoryOption[];

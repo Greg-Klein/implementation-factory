@@ -45,9 +45,9 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
   writing: boolean;
   terminalRef: Ref<TerminalHandle>;
   actions: RunViewActions;
-  incidentResult?: IncidentResult;
-  worktreeResult?: WorktreeResult;
-  refusedFeedback?: RefusedFeedback;
+  incidentResult?: IncidentResult | undefined;
+  worktreeResult?: WorktreeResult | undefined;
+  refusedFeedback?: RefusedFeedback | undefined;
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
@@ -66,7 +66,7 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
    * a button that is about to get narrower. A message the user typed themselves
    * is not news to them.
    */
-  const unread: Partial<Record<Tab, string>> = {
+  const unread: Partial<Record<Tab, string | undefined>> = {
     conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "pending decision" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "new message" : undefined,
     preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "new evidence" : undefined,
   };

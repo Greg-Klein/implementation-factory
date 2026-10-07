@@ -4,7 +4,7 @@ export type RunStatus = "idle" | "starting" | "running" | "attention" | "complet
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type AgentStatus = "running" | "completed" | "failed" | "abandoned";
 /** `nickname`: a first name given in start order within the run, so two agents of one type can be told apart; `avatar`: the picture bound to that name; `role`: the label of its type. */
-export type AgentState = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: AgentStatus; startedAt: string; endedAt?: string };
+export type AgentState = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: AgentStatus; startedAt: string; endedAt?: string | undefined };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 /** `askedAt`: when the question reached the console, which is what its wait is dated from. Absent from a run archived before it was kept. */
 export type PendingQuestion = { id: string; questions: Question[]; askedAt?: string };
@@ -234,19 +234,19 @@ export type RunState = {
   baseBranch?: string;
   /** The base the watcher named for this ticket, handed to the workflow as `IMPL_TICKET_BASE_BRANCH`. */
   ticketBaseBranch?: string;
-  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion | undefined; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
   sessionActive: boolean;
   /** The agent stopped at a prompt of its own before the session started, and the user has not answered yet. */
-  sessionPrompt?: SessionPrompt;
+  sessionPrompt?: SessionPrompt | undefined;
   /** What the agent is doing at this instant, from the tool it last called. Cleared as soon as it hands control back. */
-  action?: string;
+  action?: string | undefined;
   /** When a file of the "Evidence" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
   /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
   ticketTitle?: string;
   /** The tasks of the plan, absent until `planner-output.json` has been read. */
-  planTasks?: PlanTask[];
+  planTasks?: PlanTask[] | undefined;
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
   /** When each document was first seen, from the file's own write time. Absent on runs archived before it was recorded. */
@@ -273,7 +273,7 @@ export type RunState = {
   /** Tokens consumed so far, read from the transcripts while the run goes. */
   usage?: RunUsage;
   /** The commit the run worktree was cut at, which the size of the change is measured from. */
-  baseCommit?: string;
+  baseCommit?: string | undefined;
   /** The file the dialogue is read from, kept so the usage of the run can be read once the session is gone. */
   transcriptPath?: string;
   /** Set on an archive the console reads back after a restart: the run has no session and takes no instruction. */

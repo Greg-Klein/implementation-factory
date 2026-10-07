@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { defined } from "../lib/defined.js";
 import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, withoutQuery, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 import type { WorkflowLanguage } from "./acceptance-text.js";
@@ -29,7 +30,7 @@ export function normalizeQuestion(value: unknown): Question | undefined {
     if (!option || typeof option !== "object") return [];
     const candidate = option as Record<string, unknown>;
     if (typeof candidate.label !== "string" || !candidate.label.trim()) return [];
-    return [{ label: candidate.label.trim(), description: typeof candidate.description === "string" ? candidate.description.trim() : undefined }];
+    return [{ label: candidate.label.trim(), ...defined({ description: typeof candidate.description === "string" ? candidate.description.trim() : undefined }) }];
   }) : [];
   return {
     question: input.question.trim(),
@@ -842,7 +843,7 @@ export function planTaskBoard(tasks: PlanTask[], delegations: PlanDelegation[], 
     const agent = agentId ? agents.find((candidate) => candidate.id === agentId) : undefined;
     const status = reports.has(`developer-report-${task.id}.md`) ? "done" as const : handed.length > 0 ? "in_progress" as const : "todo" as const;
     if (!agentId) return { ...task, status };
-    return { ...task, status, assignee: { agentId, nickname: agent?.nickname, avatar: agent?.avatar, role: agent?.role } };
+    return { ...task, status, assignee: { agentId, ...defined({ nickname: agent?.nickname, avatar: agent?.avatar, role: agent?.role }) } };
   });
 }
 
@@ -1025,21 +1026,16 @@ export function summarizeRun(state: RunState): RunSummary {
     repository: sourceRepository(state),
     ...(state.worktree ? { worktree: state.worktree } : {}),
     issueUrl: state.issueUrl,
-    ticketTitle: state.ticketTitle,
     startedAt: state.startedAt,
     endedAt: state.endedAt,
-    branch: state.branch,
-    mergeRequestUrl: state.mergeRequestUrl,
-    error: state.error,
-    action: state.action,
     sessionActive: state.sessionActive,
-    pendingQuestionId: state.pendingQuestion?.id,
     pendingQuestionCount: state.pendingQuestion?.questions.length ?? 0,
+    ...defined({
+      ticketTitle: state.ticketTitle, branch: state.branch, mergeRequestUrl: state.mergeRequestUrl, error: state.error, action: state.action,
+      pendingQuestionId: state.pendingQuestion?.id, lastMessageId: lastMessage?.id, lastMessageAuthor: lastMessage?.author, evidenceUpdatedAt: state.evidenceUpdatedAt,
+    }),
     ...(state.sessionPrompt ? { sessionPromptId: state.sessionPrompt.id } : {}),
     runningAgents: state.agents.filter((agent) => agent.status === "running").length,
-    lastMessageId: lastMessage?.id,
-    lastMessageAuthor: lastMessage?.author,
-    evidenceUpdatedAt: state.evidenceUpdatedAt,
     ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
     holdsRepository: runHoldsRepository(state),
     takesSlot: runTakesSlot(state),
@@ -1222,7 +1218,7 @@ export function readProposalSnapshot(content: unknown): TicketProposal[] | undef
     const baseBranch = branchName(entry.baseBranch);
     const repositories = Array.isArray(entry.repositories) ? [...new Set(entry.repositories.map(projectPath).filter((project): project is string => Boolean(project)))] : [];
     proposals.set(ticketIdentity(issueUrl), {
-      issueUrl, ...(text(entry.title) ? { title: text(entry.title) } : {}), ...(text(entry.source) ? { source: text(entry.source) } : {}), ...(baseBranch ? { baseBranch } : {}),
+      issueUrl, ...defined({ title: text(entry.title), source: text(entry.source) }), ...(baseBranch ? { baseBranch } : {}),
       ...(repositories.length > 0 ? { repositories } : {}),
     });
   }

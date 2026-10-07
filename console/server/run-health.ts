@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import path from "node:path";
 import type { EngineEvent } from "./engine/types.js";
 import type { AgentState, IncidentAction, IncidentKind, IncidentObservation, PlanDelegation, PlanTask, RunHealth, RunStatus, RunWait, WaitReason, WorkflowState } from "./types.js";
@@ -55,14 +56,14 @@ export type RunSignals = {
   /** Terminal output. A spinner is output, never progress: kept apart, and never used to clear a doubt. */
   lastOutputAt: number;
   /** Set when the pilot handed control back, cleared as soon as it acts again. */
-  pilotIdleSince?: number;
+  pilotIdleSince?: number | undefined;
   /** The last time the pilot itself did something: whatever ended before that, it has taken over. */
   pilotLastActedAt?: number;
   /** The pilot, or the user in the terminal, said something after that turn ended. */
-  permission?: { since: number; message?: string };
-  terminalInteraction?: { since: number; message?: string };
+  permission?: { since: number; message?: string } | undefined;
+  terminalInteraction?: { since: number; message?: string } | undefined;
   /** A call for attention whose cause the agent did not give. */
-  unexplainedAttention?: { since: number; message?: string };
+  unexplainedAttention?: { since: number; message?: string } | undefined;
   /** Calls whose end the agent reports, by call id: a foreground command in the pilot or in a subagent. */
   activeTools: Map<string, { tool: string; agentId?: string; since: number; label?: string }>;
   /** Calls that return at once and wake the pilot later. They last until the pilot wakes up. */
@@ -401,9 +402,12 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
 /** How the evaluation of a run reads the signals, whatever holds them. */
 export function healthSignalsView(signals: RunSignals): HealthInput["signals"] {
   return {
-    lastExecutionAt: signals.lastExecutionAt, lastProgressAt: signals.lastProgressAt, pilotIdleSince: signals.pilotIdleSince, pilotLastActedAt: signals.pilotLastActedAt,
-    permission: signals.permission, terminalInteraction: signals.terminalInteraction, unexplainedAttention: signals.unexplainedAttention,
-    resumedAt: signals.resumedAt, exit: signals.exit,
+    lastExecutionAt: signals.lastExecutionAt, lastProgressAt: signals.lastProgressAt,
+    ...defined({
+      pilotIdleSince: signals.pilotIdleSince, pilotLastActedAt: signals.pilotLastActedAt,
+      permission: signals.permission, terminalInteraction: signals.terminalInteraction, unexplainedAttention: signals.unexplainedAttention,
+      resumedAt: signals.resumedAt, exit: signals.exit,
+    }),
     activeTools: [...signals.activeTools.values()],
     backgroundWaits: [...signals.backgroundWaits.values()],
   };

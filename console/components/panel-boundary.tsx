@@ -3,8 +3,8 @@
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { Component, type ReactNode } from "react";
 
-type Props = { name: string; resetKey?: string | null; children: ReactNode };
-type State = { error?: Error; resetKey?: string | null };
+type Props = { name: string; resetKey?: string | null | undefined; children: ReactNode };
+type State = { error?: Error | undefined; resetKey?: string | null | undefined };
 
 /**
  * A panel that throws while rendering says so in its own place. Without this,

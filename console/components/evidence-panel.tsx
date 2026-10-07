@@ -272,7 +272,7 @@ function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
 }
 
 /** One report as the workflow last wrote it, the view this tab had before criteria existed. */
-function Section({ title, file, run, qa }: { title: string; file: string; run: RunState; qa?: AcceptanceQaView }) {
+function Section({ title, file, run, qa }: { title: string; file: string; run: RunState; qa?: AcceptanceQaView | undefined }) {
   const [report, setReport] = useState<EvidenceReport>();
   const [error, setError] = useState<string>();
   const present = run.artifacts.includes(file);

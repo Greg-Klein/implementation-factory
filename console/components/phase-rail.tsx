@@ -28,7 +28,7 @@ function reference(url: string, prefix: string) {
   return last ? `${prefix}${last}` : url;
 }
 
-function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; label: string; title: string; href?: string }) {
+function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; label: string; title: string; href?: string | undefined }) {
   const body = <><span className="shrink-0 text-[var(--muted)]">{icon}</span><span className="truncate font-mono text-[10px]">{label}</span>{href && <ArrowSquareOutIcon size={10} className="shrink-0 text-[var(--muted)]" />}</>;
   return href
     ? <a href={href} target="_blank" rel="noreferrer" title={title} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[var(--ink)] transition hover:bg-[var(--paper)]">{body}</a>

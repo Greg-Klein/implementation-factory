@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
@@ -144,7 +145,7 @@ export class RunRegistry {
   /** What the queue is scheduled against, beside the ticket locks and the slots. */
   private context(): ScheduleContext {
     return {
-      runs: [...this.sessions.values()].map(({ id, state }) => ({ id, cwd: state.cwd, repository: state.repository, issueUrl: state.issueUrl, status: state.status, branch: state.branch, mergeRequestUrl: state.mergeRequestUrl })),
+      runs: [...this.sessions.values()].map(({ id, state }) => ({ id, cwd: state.cwd, issueUrl: state.issueUrl, status: state.status, ...defined({ repository: state.repository, branch: state.branch, mergeRequestUrl: state.mergeRequestUrl }) })),
       tickets: this.tickets, edges: this.edges, watches: this.watches,
     };
   }
@@ -761,7 +762,7 @@ export class RunRegistry {
       if (answered) return { outcome: "duplicate" as const, message: answered.message };
       const live = !session.state.archived && this.sessions.get(session.id) === session;
       const incident = session.state.incidents?.find((entry) => entry.id === request.incidentId);
-      const check = checkIncidentAction({ ...request, incident, live, input: live ? healthInput(session) : undefined });
+      const check = checkIncidentAction({ ...request, incident, live, ...(live ? { input: healthInput(session) } : {}) });
       if (!check.ok) {
         if (!check.duplicate) session.answeredRequests.set(request.requestId, { outcome: "refused", message: check.message });
         return { outcome: check.duplicate ? "duplicate" as const : "refused" as const, message: check.message };
@@ -773,7 +774,7 @@ export class RunRegistry {
       await session.persist();
       let message: string;
       if (request.action === "dismiss") {
-        current = { ...current, status: "dismissed", resolution: { at, outcome: "Dismissed as a false positive", detail: request.reason?.trim() } };
+        current = { ...current, status: "dismissed", resolution: { at, outcome: "Dismissed as a false positive", ...defined({ detail: request.reason?.trim() }) } };
         session.activity("system", `Incident dismissed as a false positive: ${current.title}`, request.reason?.trim());
         message = "Incident dismissed as a false positive.";
       } else if (request.action === "stop") {
@@ -889,7 +890,7 @@ export class RunRegistry {
    * session, which drains the queue again.
    */
   private releaseFinishedSessions() {
-    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, repository: session.state.repository, issueUrl: session.state.issueUrl, status: session.state.status, sessionActive: session.state.sessionActive }));
+    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, ...defined({ repository: session.state.repository }), issueUrl: session.state.issueUrl, status: session.state.status, sessionActive: session.state.sessionActive }));
     // An entry the schedule holds waits for a merge, not for a session: no session is closed for it.
     const waiting = this.describe().filter((view) => view.reason === "ticket");
     for (const runId of sessionsToReleaseForQueue(runs, waiting)) {

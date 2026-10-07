@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { actionLabel, agentIdentity, forgeOf, agentRole, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, delegatedTasks, isDeveloperDelegation, mergeRequestUrl, pairDelegation, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { now, reportFailure } from "./context.js";
 import { continueDemoRun } from "./demo.js";
@@ -140,7 +141,7 @@ function apply(session: RunSession, event: EngineEvent) {
   recordEngineSignal(session.signals, event, Date.now(), event.kind === "tool.start" ? actionLabel(event.tool, event.command, event.target) : undefined);
   if (event.kind === "agent.start") {
     const known = session.state.agents.find((agent) => agent.id === event.agentId);
-    const identity = known?.nickname ? { nickname: known.nickname, avatar: known.avatar } : agentIdentity(session.state.agents.length);
+    const identity = known?.nickname ? { nickname: known.nickname, ...defined({ avatar: known.avatar }) } : agentIdentity(session.state.agents.length);
     session.state.agents = [{ id: event.agentId, name: event.agentName, ...identity, role: agentRole(event.agentName), status: "running", startedAt: now() }, ...session.state.agents.filter((agent) => agent.id !== event.agentId)];
     if (!known && session.state.planDelegations) session.state.planDelegations = pairDelegation(session.state.planDelegations, event.agentName, event.agentId);
     session.refreshPlanTasks();

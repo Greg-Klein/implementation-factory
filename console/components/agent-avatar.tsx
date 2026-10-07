@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /** The picture bound to an agent's first name, or its initial when there is no picture or it fails to load. */
-export function AgentAvatar({ nickname, avatar, size = 32 }: { nickname: string; avatar?: string; size?: number }) {
+export function AgentAvatar({ nickname, avatar, size = 32 }: { nickname: string; avatar?: string | undefined; size?: number }) {
   const [failed, setFailed] = useState(false);
   const style = { width: size, height: size };
   if (avatar && !failed) {
@@ -13,7 +13,7 @@ export function AgentAvatar({ nickname, avatar, size = 32 }: { nickname: string;
 }
 
 /** "Tom · Dev": the first name the run gave an agent, then its role, or the bare type for an agent recorded before names existed. */
-export function AgentName({ name, nickname, role, className = "" }: { name: string; nickname?: string; role?: string; className?: string }) {
+export function AgentName({ name, nickname, role, className = "" }: { name: string; nickname?: string | undefined; role?: string | undefined; className?: string }) {
   if (!nickname) return <span className={className}>{name}</span>;
   const suffix = role ?? name;
   return <span className={className}>{nickname}{suffix && <span className="text-[var(--muted)]"> · {suffix}</span>}</span>;

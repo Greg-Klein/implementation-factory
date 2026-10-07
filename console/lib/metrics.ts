@@ -1,3 +1,4 @@
+import { defined } from "./defined";
 import type { RunMetrics } from "./types";
 
 /** Tokens in the unit a person compares: thousands below a million, millions above: "412k", "1.61M". */
@@ -67,9 +68,11 @@ export function summarize(runs: RunMetrics[]): MetricsSummary | undefined {
   const measured = delivered.filter((run) => run.tokens);
   return {
     runs: delivered.length,
-    tokens: median(measured.map((run) => run.tokens!.total.total)),
-    activeMs: median(delivered.map((run) => run.time.activeMs)),
-    userWaitMs: median(delivered.map((run) => run.time.userWaitMs)),
-    pilotShare: median(measured.map((run) => run.tokens!.pilotShare)),
+    ...defined({
+      tokens: median(measured.map((run) => run.tokens!.total.total)),
+      activeMs: median(delivered.map((run) => run.time.activeMs)),
+      userWaitMs: median(delivered.map((run) => run.time.userWaitMs)),
+      pilotShare: median(measured.map((run) => run.tokens!.pilotShare)),
+    }),
   };
 }

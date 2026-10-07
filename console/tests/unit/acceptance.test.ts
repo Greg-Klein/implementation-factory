@@ -5,6 +5,8 @@ import {
 } from "../../server/acceptance";
 import { workflowLanguageOf } from "../../server/acceptance-text";
 import type { AcceptanceReportVersion } from "../../server/types";
+import { defined } from "../../lib/defined";
+import { overridden, type Overrides } from "./overrides";
 
 const NOW = "2026-09-27T10:00:00.000Z";
 const CURRENT = "snap-current";
@@ -39,8 +41,8 @@ function qa(items: Record<string, unknown>[], extra: Record<string, unknown> = {
   return { schemaVersion: 2, source: "qa", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT, atEnd: CURRENT }, items, ...extra };
 }
 
-function coverage(partial: Partial<CoverageInput>) {
-  return deriveAcceptanceCoverage({ registry: registry(), reports: [], currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT, OLD]), now: NOW, ...partial });
+function coverage(partial: Overrides<CoverageInput>) {
+  return deriveAcceptanceCoverage(overridden<CoverageInput>({ registry: registry(), reports: [], currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT, OLD]), now: NOW }, partial));
 }
 
 function criterion(view: ReturnType<typeof coverage>, id: string) {
@@ -72,7 +74,7 @@ describe("acceptance criteria registry", () => {
     expect(parsed.registry?.criteria[0]!.checks.map((check) => check.id)).toEqual(["AC1-unit", "AC1-browser"]);
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ level: "warning", file: "acceptance-criteria.json", message: expect.stringContaining("AC1") })]);
     const view = deriveAcceptanceCoverage({
-      registry: parsed.registry, now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
+      ...defined({ registry: parsed.registry }), now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
       reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "unit", verdict: "pass", criterionIds: ["AC1"], checkIds: ["AC1-unit"] }]))],
     });
     expect(view.diagnostics.filter((entry) => entry.level === "error")).toEqual([]);
@@ -485,7 +487,7 @@ describe("acceptance coverage", () => {
   });
 
   it("should rebuild criteria from an older plan without ever verifying them", () => {
-    const view = deriveAcceptanceCoverage({ plan: parsePlanLinks({ acceptance_criteria: ["Given a, then b"], tasks: [] }), reports: [], now: NOW });
+    const view = deriveAcceptanceCoverage({ ...defined({ plan: parsePlanLinks({ acceptance_criteria: ["Given a, then b"], tasks: [] }) }), reports: [], now: NOW });
     expect(view.available).toBe(false);
     expect(view.criteria[0]).toMatchObject({ id: "AC1", reconstructed: true, status: "unverified" });
   });

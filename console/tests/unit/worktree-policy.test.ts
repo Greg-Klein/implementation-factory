@@ -1,13 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
 import { excludeLine, isRunWorktreePath, listSetting, relativeHooksPath, runWorktreePath, withExcludeLines, worktreeKeptDetail, worktreeProvisioning, worktreeRemoval } from "../../server/domain";
 import type { RunState, WorkflowState } from "../../server/types";
+import { overridden, type Overrides } from "./overrides";
 
 type Run = Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt">;
 
 const MR = "https://gitlab.com/acme/app/-/merge_requests/12";
 const workflow = (overrides: Partial<WorkflowState> = {}): WorkflowState => ({ schemaVersion: 1, revision: 4, state: "completed", result: { delivery: "merge_request", mergeRequestUrl: MR, blockers: [] }, receivedAt: "2026-10-03T10:00:00.000Z", ...overrides });
 /** A run that delivered: finished, its merge request open, its evidence archived, its session gone. */
-const delivered = (overrides: Partial<Run> = {}): Run => ({ status: "completed", sessionActive: false, mergeRequestUrl: MR, workflow: workflow(), archiveSyncedAt: "2026-10-03T10:01:00.000Z", ...overrides });
+const delivered = (overrides: Overrides<Run> = {}) => overridden<Run>({ status: "completed", sessionActive: false, mergeRequestUrl: MR, workflow: workflow(), archiveSyncedAt: "2026-10-03T10:01:00.000Z" }, overrides);
 const safe = { exists: true, clean: true, pushed: true };
 
 describe("where the worktree of a run lives", () => {

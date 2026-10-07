@@ -26,10 +26,15 @@ function forgeAddress(value: string, gitlab: RegExp, github: RegExp): ForgeAddre
     return undefined;
   }
   if (!/^https?:$/.test(url.protocol)) return undefined;
-  const onGitLab = url.pathname.match(gitlab);
-  if (onGitLab) return { forge: "gitlab", hostname: url.hostname, project: onGitLab[1], number: onGitLab[2] };
-  const onGitHub = /gitlab/i.test(url.hostname) ? null : url.pathname.match(github);
-  return onGitHub ? { forge: "github", hostname: url.hostname, project: onGitHub[1], number: onGitHub[2] } : undefined;
+  const [, gitlabProject, gitlabNumber] = url.pathname.match(gitlab) ?? [];
+  if (gitlabProject && gitlabNumber) return { forge: "gitlab", hostname: url.hostname, project: gitlabProject, number: gitlabNumber };
+  const [, githubProject, githubNumber] = (/gitlab/i.test(url.hostname) ? null : url.pathname.match(github)) ?? [];
+  return githubProject && githubNumber ? { forge: "github", hostname: url.hostname, project: githubProject, number: githubNumber } : undefined;
+}
+
+/** An address without its query or its fragment. */
+export function withoutQuery(url: string) {
+  return url.replace(/[?#].*$/s, "");
 }
 
 /** The ticket an address points at: a GitLab issue or work item, or a GitHub issue. */
@@ -60,7 +65,7 @@ export function forgeWords(forge: Forge | undefined) {
 
 /** A ticket URL without its query, its fragment or a trailing slash, the way a pasted URL varies. */
 function bareTicketUrl(issueUrl: string) {
-  return issueUrl.trim().split(/[?#]/)[0].replace(/\/+$/, "");
+  return withoutQuery(issueUrl.trim()).replace(/\/+$/, "");
 }
 
 /**

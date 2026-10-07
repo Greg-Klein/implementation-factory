@@ -88,8 +88,8 @@ test("should take several tickets at once, start those that conflict with nothin
   const calls = scheduleCalls().slice(callsBefore);
   expect(calls).toHaveLength(1);
   expect(calls[0]).toMatchObject({ cwd: repository, runId: null, hookUrl: null });
-  expect(calls[0].input).toMatchObject({ repository, tickets: [url(1), url(2), url(3)].map((issueUrl) => ({ issue_url: issueUrl })) });
-  expect(calls[0].argv.at(-1)).toMatch(/^\/implementation-harness:schedule \S+input\.json \S+output\.json$/);
+  expect(calls[0]!.input).toMatchObject({ repository, tickets: [url(1), url(2), url(3)].map((issueUrl) => ({ issue_url: issueUrl })) });
+  expect(calls[0]!.argv.at(-1)).toMatch(/^\/implementation-harness:schedule \S+input\.json \S+output\.json$/);
 
   // The instruction went to every ticket of the batch.
   const { runs } = await snapshot(request);
@@ -199,7 +199,7 @@ test("should wait for the merge request of the ticket it conflicts with, then st
   await expect.poll(() => standing(request)).toEqual({ running: [1], waiting: [2] });
 
   // The first ticket opens its merge request, then its session is stopped: nothing is merged yet.
-  const [first] = (await snapshot(request)).runs;
+  const first = (await snapshot(request)).runs[0]!;
   const mergeRequest = `https://gitlab.com/${project}/-/merge_requests/31`;
   await postHook(request, first.id, { hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "mr1", tool_input: { command: "glab mr create --fill --yes" }, tool_response: { stdout: `${mergeRequest}\n` } });
   await page.getByRole("button", { name: "Open run batch-merge #1" }).click();
@@ -210,7 +210,7 @@ test("should wait for the merge request of the ticket it conflicts with, then st
   mergeRequestState(31, "opened");
   await expect(queue(page).getByText("Waits for MR !31 to be merged (#1)")).toBeVisible();
   expect(await standing(request)).toEqual({ running: [1], waiting: [2] });
-  expect((await snapshot(request)).runs[0].status).toBe("stopped");
+  expect((await snapshot(request)).runs[0]!.status).toBe("stopped");
 
   mergeRequestState(31, "merged");
   await expect.poll(async () => (await snapshot(request)).runs.map((run) => number(run.issueUrl)).sort()).toEqual([1, 2]);
@@ -227,7 +227,7 @@ test("should take GitHub issues, wait for the pull request of the one in conflic
   await page.getByRole("button", { name: "Start 2 tickets" }).click();
   await expect.poll(() => standing(request)).toEqual({ running: [1], waiting: [2] });
 
-  const [first] = (await snapshot(request)).runs;
+  const first = (await snapshot(request)).runs[0]!;
   const pullRequest = `https://github.com/${project}/pull/41`;
   await postHook(request, first.id, { hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "pr1", tool_input: { command: "gh pr create --base main --body-file .claude/tasks/mr-description.md" }, tool_response: { stdout: `${pullRequest}\n` } });
   await page.getByRole("button", { name: "Open run batch-github #1" }).click();

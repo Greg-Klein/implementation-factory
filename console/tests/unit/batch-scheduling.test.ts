@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { conflictingEntries, describeQueue, heldWatches, pruneSchedule, runLockKey, sessionsToReleaseForQueue, startableEntries, type ScheduleContext, type ScheduleRun } from "../../server/domain";
 import type { MergeWatch, QueuedRun, ScheduledTicket, ScheduleEdge } from "../../server/types";
+import { overridden, type Overrides } from "./overrides";
 
 // Invented tickets of two invented repositories.
 const SHOP = "/work/shop";
@@ -16,7 +17,7 @@ function running(iid: number, overrides: Partial<ScheduleRun> = {}): ScheduleRun
 }
 const overlap = (a: number, b: number, repository = SHOP): ScheduleEdge => ({ repository, a: url(a), b: url(b), kind: "overlap", reason: `Tickets ${a} and ${b} change the same file.` });
 const dependsOn = (first: number, second: number): ScheduleEdge => ({ repository: SHOP, a: url(second), b: url(first), kind: "depends_on", order: [url(first), url(second)], reason: `Le ticket ${second} a besoin du ticket ${first}.` });
-const predicted = (iid: number, overrides: Partial<ScheduledTicket> = {}): ScheduledTicket => ({ issueUrl: url(iid), repository: SHOP, analysis: "done", areas: [], files: [], confidence: "high", summary: `Ticket ${iid}.`, ...overrides });
+const predicted = (iid: number, overrides: Overrides<ScheduledTicket> = {}) => overridden<ScheduledTicket>({ issueUrl: url(iid), repository: SHOP, analysis: "done", areas: [], files: [], confidence: "high", summary: `Ticket ${iid}.` }, overrides);
 const watch = (iid: number, overrides: Partial<MergeWatch> = {}): MergeWatch => ({ issueUrl: url(iid), repository: SHOP, mergeRequestUrl: `https://gitlab.com/acme/shop/-/merge_requests/${iid - 100}`, branch: `feat/${iid}`, runId: `run-${iid}`, state: "open", since: "2026-10-01T10:00:00.000Z", ...overrides });
 const holdersOf = (runs: ScheduleRun[]) => new Map(runs.map((run) => [runLockKey(run), run.id]));
 
@@ -169,7 +170,7 @@ describe("the entries that start", () => {
     expect(view([queued(102), queued(101)], { tickets }, "q101")).toMatchObject({ reason: "order", cause: "low_confidence", detail: "Unreliable prediction for #102: this ticket runs after it. #102: Nothing to search for in this ticket." });
     expect(view([queued(101)], { tickets, watches: [watch(103)] }, "q101").detail).toBe("Unreliable prediction for #103: this ticket runs after it.");
     // A failed analysis on either side is said before a vague prediction.
-    const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]];
+    const mixed = [predicted(101, { analysis: "failed", confidence: undefined, summary: undefined }), tickets[1]!];
     expect(view([queued(101), queued(102)], { tickets: mixed }, "q102")).toMatchObject({ cause: "analysis_failed", detail: "The analysis of #101 failed: this ticket runs after it." });
   });
 

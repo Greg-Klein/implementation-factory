@@ -1,3 +1,4 @@
+import { defined } from "../../lib/defined.js";
 import * as pty from "node-pty";
 import { spawn as spawnChild } from "node:child_process";
 import path from "node:path";
@@ -128,7 +129,7 @@ function questionEvent(payload: Record<string, unknown>): EngineEvent | undefine
     })
     : [];
   if (questions.length === 0) return undefined;
-  return { kind: "question", id: normalizeText(payload.tool_use_id), questions, input };
+  return { kind: "question", ...defined({ id: normalizeText(payload.tool_use_id) }), questions, input };
 }
 
 /**
@@ -157,7 +158,7 @@ const PLAN_TASK_REPORT = /developer-report-([A-Za-z0-9_.-]+?)\.md/g;
 function delegatedPlanTaskIds(tool: string | undefined, input: Record<string, unknown> | undefined) {
   if (tool !== "Agent" && tool !== "Task") return undefined;
   const text = [input?.description, input?.prompt].filter((value) => typeof value === "string").join("\n");
-  const ids = [...new Set([...text.matchAll(PLAN_TASK_REPORT)].map((match) => match[1]))];
+  const ids = [...new Set([...text.matchAll(PLAN_TASK_REPORT)].flatMap((match) => match[1] ?? []))];
   return ids.length > 0 ? ids : undefined;
 }
 
@@ -181,10 +182,10 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
     // permission request first of all, really does block on the user.
     if (type && type in NOTIFICATION_CAUSES) {
       const cause = NOTIFICATION_CAUSES[type];
-      return cause ? { kind: "attention", message, cause } : undefined;
+      return cause ? { kind: "attention", ...defined({ message }), cause } : undefined;
     }
     if (message && IDLE_NOTIFICATION.test(message)) return undefined;
-    return { kind: "attention", message, cause: message && /permission/i.test(message) ? "permission" : "unknown" };
+    return { kind: "attention", ...defined({ message }), cause: message && /permission/i.test(message) ? "permission" : "unknown" };
   }
   if (name === "Stop") return { kind: "turn.end" };
   const input = payload.tool_input as Record<string, unknown> | undefined;
@@ -199,7 +200,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
     if (tool === "AskUserQuestion") return questionEvent(payload);
     const planTaskIds = delegatedPlanTaskIds(tool, input);
     return {
-      kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input), ...(planTaskIds ? { planTaskIds } : {}),
+      kind: "tool.start", tool: tool ?? "", ...defined({ command, target: toolTarget(input) }), ...(planTaskIds ? { planTaskIds } : {}),
       ...(toolUseId ? { toolUseId } : {}), ...(caller ? { agentId: caller } : {}),
       background: backgroundCall(tool, input), endReported: END_REPORTED_TOOLS.has(tool ?? ""),
     };
@@ -210,7 +211,7 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
       const agentId = normalizeText(input?.task_id) ?? normalizeText(input?.shell_id);
       return agentId ? { kind: "agent.kill", agentId } : undefined;
     }
-    return { kind: "tool.end", command, response: payload.tool_response, ...(toolUseId ? { toolUseId } : {}), ...(caller ? { agentId: caller } : {}) };
+    return { kind: "tool.end", ...defined({ command }), response: payload.tool_response, ...(toolUseId ? { toolUseId } : {}), ...(caller ? { agentId: caller } : {}) };
   }
   return undefined;
 }

@@ -1,6 +1,6 @@
 export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
-export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string };
+export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string | undefined };
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[]; askedAt?: string };
@@ -28,19 +28,19 @@ export type RunState = {
   /** The base the watcher named for this ticket. */
   ticketBaseBranch?: string;
   worktree?: RunWorktree;
-  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion | undefined; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. Absent on states built before this field existed. */
   sessionActive?: boolean;
   /** The agent stopped at a prompt of its own before the session started, and the user has not answered yet. */
-  sessionPrompt?: SessionPrompt;
+  sessionPrompt?: SessionPrompt | undefined;
   /** What Claude is doing at this instant, from the tool it last called. Absent as soon as it hands control back. */
-  action?: string;
+  action?: string | undefined;
   /** When a file of the "Evidence" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
   /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
   ticketTitle?: string;
   /** The tasks of the plan, absent until `planner-output.json` has been read. */
-  planTasks?: PlanTask[];
+  planTasks?: PlanTask[] | undefined;
   /** Every developer handed plan tasks, in launch order, kept so the board survives the archive. */
   planDelegations?: PlanDelegation[];
   /** Non blocking remarks on how the reviewers worked, computed by the server (reviewPlanNotes). */

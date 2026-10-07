@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { runInProgress, sourceRepository } from "./domain.js";
 import type { SessionUsage } from "./engine/index.js";
 import type { AgentMetrics, GateTimes, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
@@ -131,7 +132,10 @@ function timeMetrics(state: RunState, at: number): RunMetrics["time"] {
   const userWaitMs = Math.min(elapsedMs, waits.reduce((sum, wait) => sum + wait.ms, 0));
   const incidentMs = (state.incidents ?? []).reduce((sum, incident) => sum + within(time(incident.detectedAt), incident.resolution ? time(incident.resolution.at) : lastEnd), 0);
   const arrivals = Object.entries(state.phaseArrivals ?? {}).map(([phase, enteredAt]) => ({ phase: Number(phase), enteredAt })).sort((left, right) => left.phase - right.phase);
-  const phases = arrivals.map((arrival, index) => ({ ...arrival, ms: span(time(arrival.enteredAt), index + 1 < arrivals.length ? time(arrivals[index + 1].enteredAt) : ended) }));
+  const phases = arrivals.map((arrival, index) => {
+    const next = arrivals[index + 1];
+    return { ...arrival, ms: span(time(arrival.enteredAt), next ? time(next.enteredAt) : ended) };
+  });
   const endedAt = state.endedAt && lastEnd > ended ? new Date(lastEnd).toISOString() : state.endedAt;
   return {
     startedAt: state.startedAt, endedAt, elapsedMs, userWaitMs, waits, activeMs: elapsedMs - userWaitMs, incidentMs, phases,
@@ -191,7 +195,7 @@ export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: Metr
       questions: (state.userWaits ?? []).filter((wait) => wait.reason === "question").length,
       incidents: (state.incidents ?? []).map((incident) => incident.kind),
       ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
-      ...(qaStatus ?? state.acceptance?.qa?.status ? { qaStatus: qaStatus ?? state.acceptance?.qa?.status } : {}),
+      ...defined({ qaStatus: (qaStatus ?? state.acceptance?.qa?.status) || undefined }),
       ...(state.worktree ? { worktree: state.worktree.state } : {}),
     },
     time: { ...timeMetrics(state, new Date(at).getTime()), ...(gate ? { gate } : {}) },
@@ -213,7 +217,7 @@ export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: Metr
 /** The size of a change from `git diff --numstat`: one line per file, a binary file counting for no line. */
 export function diffFromNumstat(output: string): RunDiff {
   const lines = output.split("\n").map((line) => line.trim().split(/\s+/)).filter((fields) => fields.length >= 3);
-  const lineCount = (value: string) => (/^\d+$/.test(value) ? Number(value) : 0);
+  const lineCount = (value = "") => (/^\d+$/.test(value) ? Number(value) : 0);
   return { files: lines.length, insertions: lines.reduce((sum, fields) => sum + lineCount(fields[0]), 0), deletions: lines.reduce((sum, fields) => sum + lineCount(fields[1]), 0) };
 }
 
@@ -221,7 +225,10 @@ export function median(values: number[]) {
   if (values.length === 0) return undefined;
   const sorted = [...values].sort((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  const upper = sorted[middle];
+  const lower = sorted[middle - 1];
+  if (upper === undefined) return undefined;
+  return sorted.length % 2 || lower === undefined ? upper : (lower + upper) / 2;
 }
 
 /** Fewer runs than this and a median says nothing: the comparison is not made. */
@@ -246,11 +253,13 @@ export function metricsBaseline(run: RunMetrics, others: RunMetrics[]): MetricsB
   const measured = runs.filter((other) => other.tokens);
   return {
     runs: runs.length, scope,
-    tokens: median(measured.map((other) => other.tokens!.total.total)),
-    activeMs: median(runs.map((other) => other.time.activeMs)),
-    userWaitMs: median(runs.map((other) => other.time.userWaitMs)),
-    pilotCalls: median(measured.map((other) => other.tokens!.pilot.calls)),
-    pilotShare: median(measured.map((other) => other.tokens!.pilotShare)),
+    ...defined({
+      tokens: median(measured.map((other) => other.tokens!.total.total)),
+      activeMs: median(runs.map((other) => other.time.activeMs)),
+      userWaitMs: median(runs.map((other) => other.time.userWaitMs)),
+      pilotCalls: median(measured.map((other) => other.tokens!.pilot.calls)),
+      pilotShare: median(measured.map((other) => other.tokens!.pilotShare)),
+    }),
   };
 }
 

@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FSWatcher } from "chokidar";
@@ -117,7 +118,7 @@ export class RunSession {
   summary() { return summarizeRun(this.state); }
 
   activity(kind: Activity["kind"], title: string, detail?: string) {
-    const entry: Activity = { id: crypto.randomUUID(), at: now(), kind, title, detail };
+    const entry: Activity = { id: crypto.randomUUID(), at: now(), kind, title, ...defined({ detail }) };
     this.archive = [entry, ...this.archive].slice(0, ARCHIVED_ACTIVITIES);
     this.state.activities = [entry, ...this.state.activities].slice(0, BROADCAST_ACTIVITIES);
   }

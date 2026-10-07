@@ -60,7 +60,8 @@ export function runAlerts(previous: RunSummary[], next: RunSummary[]): RunAlert[
  */
 export function documentTitle(runs: RunSummary[]) {
   const waiting = runs.filter((run) => pendingDecisions(run) > 0);
-  if (waiting.length === 1) return `● ${pendingAnswerLabel(pendingDecisions(waiting[0]))} · ${NAME}`;
+  const [only] = waiting;
+  if (only && waiting.length === 1) return `● ${pendingAnswerLabel(pendingDecisions(only))} · ${NAME}`;
   if (waiting.length > 1) return `● ${waiting.length} runs are waiting for an answer · ${NAME}`;
   const attention = runs.filter((run) => run.status === "attention").length;
   if (attention > 0) return `● Needs attention${attention > 1 ? ` (${attention})` : ""} · ${NAME}`;

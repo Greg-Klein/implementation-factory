@@ -2,6 +2,7 @@
 
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { defined } from "@/lib/defined";
 import { launchAnswer } from "@/lib/launch";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
@@ -185,7 +186,7 @@ export function Harness() {
           if (terminalRef.current) terminalRef.current.write(message.data);
           else pendingOutputRef.current = appendTerminalOutput(pendingOutputRef.current, message.data);
         }
-        if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
+        if (message.type === "notice") setNotice({ level: message.level, title: message.title, ...defined({ detail: message.detail }), at: message.at });
         if (message.type === "error") {
           setError(message.message);
           const feedback = sentFeedbackRef.current;
@@ -194,7 +195,7 @@ export function Harness() {
         // The batch went in: the form is free for the next one, and the queue says the rest.
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "batch.unresolved") setUnresolved(message.tickets);
-        if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, risks: message.risks });
+        if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, ...defined({ risks: message.risks }) });
         if (message.type === "recipe.result" || message.type === "findings.result") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
@@ -231,8 +232,9 @@ export function Harness() {
    * run: with several, picking one for the user would be guessing.
    */
   useEffect(() => {
-    if (openRunId !== null || composingRun || snapshot.runs.length !== 1) return;
-    openRun(snapshot.runs[0].id);
+    const only = snapshot.runs.length === 1 ? snapshot.runs[0] : undefined;
+    if (openRunId !== null || composingRun || !only) return;
+    openRun(only.id);
   }, [snapshot.runs, openRunId, composingRun, openRun]);
 
   const refreshPendingImprovements = useCallback(() => {
@@ -405,7 +407,7 @@ export function Harness() {
     }
     const ticketUrl = parsedTickets.tickets[0];
     const chosen = missedProject && ticketUrl ? targets[ticketUrl] ?? [] : [];
-    if (chosen.length > 1) {
+    if (ticketUrl && chosen.length > 1) {
       // One run per repository: like a batch, the list shows them and the form stays.
       setComposingRun(true);
       unlockSound();
@@ -418,8 +420,9 @@ export function Harness() {
   };
 
   // One line is sent as it is, and the server says what is wrong with it; a batch goes only when every line is a ticket.
+  const singleTicketUrl = parsedTickets.tickets[0];
   const targetsMissing = singleTicket
-    ? Boolean(missedProject) && !cwd.trim() && (targets[parsedTickets.tickets[0]] ?? []).length === 0
+    ? Boolean(missedProject) && !cwd.trim() && ((singleTicketUrl ? targets[singleTicketUrl] : undefined) ?? []).length === 0
     : pendingUnresolved.some((ticket) => (targets[ticket.issueUrl] ?? []).length === 0);
   const canStart = connected && !launching && issueUrl.trim().length > 0 && (singleTicket || parsedTickets.invalid.length === 0) && !targetsMissing;
   const runId = run?.id ?? "";

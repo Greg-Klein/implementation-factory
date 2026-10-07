@@ -145,7 +145,7 @@ describe("the tracking board", () => {
   });
 
   it("should show no assignee until the delegated agent has started", () => {
-    const [task] = planTaskBoard(plan, [{ agentType: "developer", taskIds: ["T1"] }], [], []);
+    const task = planTaskBoard(plan, [{ agentType: "developer", taskIds: ["T1"] }], [], [])[0]!;
     expect(task.status).toBe("in_progress");
     expect(task).not.toHaveProperty("assignee");
   });
@@ -182,7 +182,7 @@ describe("the tracking board fed by hooks", () => {
 
   it("should not record a reviewer handed the per-task reports as a delegation", () => {
     hook({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "implementation-harness:senior-reviewer", prompt: "Read developer-report-T3.md" } });
-    expect(session.state.planTasks?.[2].status).toBe("todo");
+    expect(session.state.planTasks?.[2]?.status).toBe("todo");
   });
 
   it("should keep the name an agent was given when it starts again", () => {

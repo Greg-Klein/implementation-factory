@@ -8,7 +8,7 @@ import type { RunSession } from "./run-session.js";
 import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
 /** The demo has no real worktree to list, so it fakes one entry alongside the real ones. */
-export const demoState: { pendingImprovement?: PendingSelfImprovementReview } = {};
+export const demoState: { pendingImprovement?: PendingSelfImprovementReview | undefined } = {};
 
 function scheduleDemo(session: RunSession, delay: number, callback: () => void) {
   const timer = setTimeout(() => { session.demoTimers.delete(timer); callback(); }, delay);
@@ -37,6 +37,13 @@ function finishDemoTask(session: RunSession, taskId: string) {
 
 function startDemoReviewer(session: RunSession) {
   session.state.agents = [{ id: "demo-reviewer", name: "senior-reviewer", ...agentIdentity(session.state.agents.length), role: agentRole("senior-reviewer"), status: "running", startedAt: now() }, ...session.state.agents];
+}
+
+/** A document of the demo data. A name it does not hold is a mistake in this file, said at once. */
+function demoDocument(name: string) {
+  const content = demoArtifactContents[name];
+  if (content === undefined) throw new Error(`The demo has no document named ${name}.`);
+  return content;
 }
 
 /**
@@ -244,8 +251,8 @@ export function continueDemoRun(session: RunSession) {
   scheduleDemo(session, demoStepDuration, () => {
     session.state.phase = 4;
     session.state.artifacts = [...session.state.artifacts, "implementation-plan.md", "planner-output.json"];
-    session.state.planTasks = plannedTasks(demoArtifactContents["planner-output.json"]);
-    writeDemoDocument(session, "planner-output.json", demoArtifactContents["planner-output.json"]);
+    session.state.planTasks = plannedTasks(demoDocument("planner-output.json"));
+    writeDemoDocument(session, "planner-output.json", demoDocument("planner-output.json"));
     session.activity("artifact", "Implementation plan approved", "implementation-plan.md");
     session.refreshPlanTasks();
     session.publish();
@@ -277,7 +284,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "assets/panneau-preferences.png", "qa-plan.md", "design-inventory.md"];
     session.artifactArrived("qa-plan.md", now());
     session.artifactArrived("design-inventory.md", now());
-    writeDemoDocument(session, "assets/panneau-preferences.png", png(demoArtifactContents["assets/panneau-preferences.png"]), false);
+    writeDemoDocument(session, "assets/panneau-preferences.png", png(demoDocument("assets/panneau-preferences.png")), false);
     writeDemoDocument(session, "dev-evidence.json", JSON.stringify(demoAcceptance.developer, null, 2));
     session.state.evidenceUpdatedAt = now();
     session.activity("agent", "Implementation done, checks in progress");
@@ -321,7 +328,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md", "designer-review.md", "assets/reference-panneau-preferences.png"];
     session.artifactArrived("qa-report.md", now());
     session.artifactArrived("designer-review.md", now());
-    writeDemoDocument(session, "assets/reference-panneau-preferences.png", png(demoArtifactContents["assets/reference-panneau-preferences.png"]), false);
+    writeDemoDocument(session, "assets/reference-panneau-preferences.png", png(demoDocument("assets/reference-panneau-preferences.png")), false);
     writeDemoDocument(session, "design-evidence.json", JSON.stringify(demoAcceptance.design, null, 2));
     writeDemoDocument(session, "qa-evidence-round1.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
     writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundTwo), false);

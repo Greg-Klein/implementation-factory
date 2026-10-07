@@ -7,15 +7,11 @@ import type { ParsedTickets } from "@/lib/ticket-urls";
 import type { RepositoryOption, UnresolvedTicket } from "@/lib/types";
 import { TargetPicker } from "./target-picker";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
-}
-
 function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting, onOpenRecipe }: {
   value: string;
   onChange: (value: string, project?: string) => void;
   repositories: RepositoryOption[];
-  detectedProject?: string;
+  detectedProject?: string | undefined;
   onOpenRecipe: (repository: string) => void;
   detecting: boolean;
 }) {
@@ -64,7 +60,8 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
             if (!listOpen || suggestions.length === 0) return;
             if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => (index + 1) % suggestions.length); }
             if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
-            if (event.key === "Enter") { event.preventDefault(); select(suggestions[activeIndex]); }
+            const active = suggestions[activeIndex];
+            if (event.key === "Enter") { event.preventDefault(); if (active) select(active); }
             if (event.key === "Escape") setOpen(false);
           }}
           placeholder="Detected from the ticket, or start typing…"
@@ -124,10 +121,10 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
   cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
   /** The ticket field as read by parseTicketUrls: two tickets or more make a batch. */
   parsed: ParsedTickets;
-  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
+  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string | undefined;
   detectingProject: boolean; canStart: boolean; onStart: () => void;
   /** The single ticket's project when no checkout of it was found. */
-  missedProject?: string;
+  missedProject?: string | undefined;
   /** The tickets of the batch the server found no checkout for. */
   unresolved: UnresolvedTicket[];
   targets: Record<string, string[]>;
@@ -136,7 +133,8 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
   onOpenRecipe: (repository: string) => void;
 }) {
   const batch = parsed.tickets.length > 1;
-  const singleTargets = !batch && missedProject && parsed.tickets[0] ? targets[parsed.tickets[0]] ?? [] : [];
+  const singleTicket = parsed.tickets[0];
+  const singleTargets = !batch && missedProject && singleTicket ? targets[singleTicket] ?? [] : [];
   const lines = issueUrl.split("\n").length;
   return (
     <section className="scrollbar-thin grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(340px,.8fr)]">
@@ -176,7 +174,7 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, parsed, instruc
           {batch
             ? <p className="mb-5 text-[11px] leading-4 text-[var(--muted)]">The repository of each ticket is detected from its URL. Tickets of the same repository are compared before they start: those that touch the same code run one after the other.</p>
             : missedProject && !cwd.trim()
-              ? <TargetPicker label="Merge request repositories" hint={`No checkout of ${missedProject}. Choose where the change goes: each repository gets its own run and merge request.`} selected={singleTargets} onChange={(paths) => chooseTargets(parsed.tickets[0], paths)} repositories={repositories} />
+              ? <TargetPicker label="Merge request repositories" hint={`No checkout of ${missedProject}. Choose where the change goes: each repository gets its own run and merge request.`} selected={singleTargets} onChange={(paths) => { if (singleTicket) chooseTargets(singleTicket, paths); }} repositories={repositories} />
               : <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} onOpenRecipe={onOpenRecipe} />}
           {batch && unresolved.length > 0 && (
             <div role="group" aria-label="Tickets without a checkout" className="mb-5 space-y-4 rounded-[11px] border border-amber-300/70 bg-[var(--raised)] p-3.5">

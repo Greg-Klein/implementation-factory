@@ -1,3 +1,4 @@
+import { defined } from "../../lib/defined.js";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -39,7 +40,7 @@ function addCalls(calls: Map<string, Call>, text: string, sidechain: boolean) {
     calls.set(id, {
       input: count(usage.input_tokens), output: count(usage.output_tokens),
       cacheRead: count(usage.cache_read_input_tokens), cacheWrite: count(usage.cache_creation_input_tokens),
-      model, at: known?.at ?? (typeof entry.timestamp === "string" ? entry.timestamp : undefined),
+      ...defined({ model, at: known?.at ?? (typeof entry.timestamp === "string" ? entry.timestamp : undefined) }),
     });
   }
   return calls;
@@ -55,7 +56,7 @@ function totals(calls: Map<string, Call>): Omit<SessionUsage, "sessionId"> {
     outputTokens: list.reduce((sum, call) => sum + call.output, 0),
     cacheReadTokens: list.reduce((sum, call) => sum + call.cacheRead, 0),
     cacheWriteTokens: list.reduce((sum, call) => sum + call.cacheWrite, 0),
-    firstContextTokens: list.length > 0 ? context(list[0]) : 0,
+    firstContextTokens: list[0] ? context(list[0]) : 0,
     peakContextTokens: list.reduce((peak, call) => Math.max(peak, context(call)), 0),
     ...(models.length > 0 ? { model: models.join(", ") } : {}),
   };

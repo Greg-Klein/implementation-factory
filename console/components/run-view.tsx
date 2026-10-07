@@ -45,9 +45,9 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
   writing: boolean;
   terminalRef: Ref<TerminalHandle>;
   actions: RunViewActions;
-  incidentResult?: IncidentResult;
-  worktreeResult?: WorktreeResult;
-  refusedFeedback?: RefusedFeedback;
+  incidentResult?: IncidentResult | undefined;
+  worktreeResult?: WorktreeResult | undefined;
+  refusedFeedback?: RefusedFeedback | undefined;
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
@@ -66,7 +66,7 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
    * a button that is about to get narrower. A message the user typed themselves
    * is not news to them.
    */
-  const unread: Partial<Record<Tab, string>> = {
+  const unread: Partial<Record<Tab, string | undefined>> = {
     conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "pending decision" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "new message" : undefined,
     preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "new evidence" : undefined,
   };
@@ -124,7 +124,7 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
               return (
                 <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-[var(--on-tab-selected)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
                   {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "suivi" ? <KanbanIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                  {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                  {fresh && <span role="img" aria-label={fresh} title={`${fresh.charAt(0).toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                 </button>
               );
             })}

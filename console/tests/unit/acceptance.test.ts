@@ -5,6 +5,8 @@ import {
 } from "../../server/acceptance";
 import { workflowLanguageOf } from "../../server/acceptance-text";
 import type { AcceptanceReportVersion } from "../../server/types";
+import { defined } from "../../lib/defined";
+import { overridden, type Overrides } from "./overrides";
 
 const NOW = "2026-09-27T10:00:00.000Z";
 const CURRENT = "snap-current";
@@ -39,8 +41,8 @@ function qa(items: Record<string, unknown>[], extra: Record<string, unknown> = {
   return { schemaVersion: 2, source: "qa", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT, atEnd: CURRENT }, items, ...extra };
 }
 
-function coverage(partial: Partial<CoverageInput>) {
-  return deriveAcceptanceCoverage({ registry: registry(), reports: [], currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT, OLD]), now: NOW, ...partial });
+function coverage(partial: Overrides<CoverageInput>) {
+  return deriveAcceptanceCoverage(overridden<CoverageInput>({ registry: registry(), reports: [], currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT, OLD]), now: NOW }, partial));
 }
 
 function criterion(view: ReturnType<typeof coverage>, id: string) {
@@ -53,12 +55,12 @@ describe("acceptance criteria registry", () => {
   it("should keep identifiers, provenance and required checks", () => {
     const parsed = registry();
     expect(parsed.criteria.map((entry) => entry.id)).toEqual(["AC1", "AC2", "AC3"]);
-    expect(parsed.criteria[0].source).toEqual({ kind: "ticket", excerpt: "Conserver le filtre" });
-    expect(parsed.criteria[1].checks.map((check) => check.id)).toEqual(["AC2-C1", "AC2-C2"]);
+    expect(parsed.criteria[0]!.source).toEqual({ kind: "ticket", excerpt: "Conserver le filtre" });
+    expect(parsed.criteria[1]!.checks.map((check) => check.id)).toEqual(["AC2-C1", "AC2-C2"]);
   });
 
   it("should turn a criterion without checks into its own single check", () => {
-    expect(registry().criteria[2].checks).toEqual([{ id: "AC3", description: "Une erreur serveur est affichée" }]);
+    expect(registry().criteria[2]!.checks).toEqual([{ id: "AC3", description: "Une erreur serveur est affichée" }]);
   });
 
   it("should report duplicates and malformed entries without dropping the rest", () => {
@@ -69,14 +71,14 @@ describe("acceptance criteria registry", () => {
 
   it("should read checks written on the criterion instead of under verification, with a warning on the registry", () => {
     const parsed = parseCriteriaRegistry({ schemaVersion: 1, criteria: [{ id: "AC1", text: "a", checks: [{ id: "AC1-unit", kind: "unit" }, { id: "AC1-browser", kind: "e2e" }] }] });
-    expect(parsed.registry?.criteria[0].checks.map((check) => check.id)).toEqual(["AC1-unit", "AC1-browser"]);
+    expect(parsed.registry?.criteria[0]!.checks.map((check) => check.id)).toEqual(["AC1-unit", "AC1-browser"]);
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ level: "warning", file: "acceptance-criteria.json", message: expect.stringContaining("AC1") })]);
     const view = deriveAcceptanceCoverage({
-      registry: parsed.registry, now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
+      ...defined({ registry: parsed.registry }), now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
       reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "unit", verdict: "pass", criterionIds: ["AC1"], checkIds: ["AC1-unit"] }]))],
     });
     expect(view.diagnostics.filter((entry) => entry.level === "error")).toEqual([]);
-    expect(view.criteria[0].status).toBe("unverified");
+    expect(view.criteria[0]!.status).toBe("unverified");
   });
 
   it("should mark a criterion after deployment only when the registry says so with true", () => {
@@ -85,7 +87,7 @@ describe("acceptance criteria registry", () => {
   });
 
   it("should warn on an unknown schema version and refuse a document without criteria", () => {
-    expect(parseCriteriaRegistry({ schemaVersion: 9, criteria: [] }).diagnostics[0].level).toBe("warning");
+    expect(parseCriteriaRegistry({ schemaVersion: 9, criteria: [] }).diagnostics[0]!.level).toBe("warning");
     expect(parseCriteriaRegistry({ nope: true }).registry).toBeUndefined();
     expect(parseCriteriaRegistry(null).registry).toBeUndefined();
   });
@@ -106,18 +108,18 @@ describe("plan links", () => {
 describe("evidence reports", () => {
   it("should read the historical format as reported or observed results with no link", () => {
     const { records } = report("qa-evidence.json", { source: "qa", items: [{ label: "Lint", verdict: "pass", command: "npm run lint" }] });
-    expect(records[0].view).toMatchObject({ label: "Lint", verdict: "pass", basis: "observed", criterionIds: [], freshness: "unknown" });
+    expect(records[0]!.view).toMatchObject({ label: "Lint", verdict: "pass", basis: "observed", criterionIds: [], freshness: "unknown" });
   });
 
   it("should call a developer's own evidence a reported result", () => {
     const { records } = report("dev-evidence-T1.json", { source: "developer", items: [{ id: "D1", label: "x", verdict: "measured", criterionIds: ["AC1"] }] });
-    expect(records[0].view.basis).toBe("reported");
+    expect(records[0]!.view.basis).toBe("reported");
   });
 
   it("should reject an unreadable report and flag unknown verdicts", () => {
     expect("records" in parseEvidenceReport({ items: "x" }, { file: "qa-evidence.json", version: 1, receivedAt: NOW, hash: "h" })).toBe(false);
     const parsed = parseEvidenceReport({ source: "qa", items: [{ label: "x", verdict: "green" }, "junk"] }, { file: "qa-evidence.json", version: 1, receivedAt: NOW, hash: "h" }) as ParsedReport;
-    expect(parsed.records[0].view.verdict).toBe("unverified");
+    expect(parsed.records[0]!.view.verdict).toBe("unverified");
     expect(parsed.diagnostics.map((entry) => entry.message).join(" ")).toContain("Unknown verdict");
     expect(parsed.diagnostics).toHaveLength(2);
   });
@@ -139,7 +141,7 @@ describe("evidence reports", () => {
 
   it("should map attachments to their archived copy of that version", () => {
     const { records } = report("qa-evidence.json", qa([{ id: "Q1", label: "a", verdict: "pass", screenshot: "assets/result.png", attachments: ["assets/log.txt"] }]), 2);
-    expect(records[0].view.attachments).toEqual([
+    expect(records[0]!.view.attachments).toEqual([
       { source: "assets/result.png", path: "evidence/qa-evidence.json/v2/assets/result.png", archived: true },
       { source: "assets/log.txt", path: "evidence/qa-evidence.json/v2/assets/log.txt", archived: true },
     ]);
@@ -150,7 +152,7 @@ describe("acceptance coverage", () => {
   it("should leave every criterion unverified when no evidence exists", () => {
     const view = coverage({});
     expect(view.counts).toMatchObject({ total: 3, verified: 0, unverified: 3 });
-    expect(criterion(view, "AC1").checks[0].reasons).toContain("No evidence covers this check.");
+    expect(criterion(view, "AC1").checks[0]!.reasons).toContain("No evidence covers this check.");
   });
 
   it("should verify a criterion whose check passed on the current code", () => {
@@ -161,7 +163,7 @@ describe("acceptance coverage", () => {
   it("should fail a criterion as soon as one current check fails", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Zoom", verdict: "pass", checkIds: ["AC2-C1"] }, { id: "Q2", label: "Clavier", verdict: "fail", actual: "focus perdu", checkIds: ["AC2-C2"] }]))] });
     expect(criterion(view, "AC2").status).toBe("failed");
-    expect(criterion(view, "AC2").checks[1].reasons[0]).toContain("focus perdu");
+    expect(criterion(view, "AC2").checks[1]!.reasons[0]).toContain("focus perdu");
   });
 
   it("should not let one passing check cover the others", () => {
@@ -172,7 +174,7 @@ describe("acceptance coverage", () => {
   it("should mark a check blocked by an identified obstacle", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Erreur serveur", verdict: "not_run", criterionIds: ["AC3"], blocker: { reason: "Environnement de test inaccessible", action: "Fournir un compte" } }]))] });
     expect(criterion(view, "AC3").status).toBe("blocked");
-    expect(criterion(view, "AC3").checks[0].reasons[0]).toContain("Environnement de test inaccessible");
+    expect(criterion(view, "AC3").checks[0]!.reasons[0]).toContain("Environnement de test inaccessible");
   });
 
   it("should lift a blocker once another source reports a result on the same check", () => {
@@ -181,7 +183,7 @@ describe("acceptance coverage", () => {
       report("qa-evidence.json", qa([{ id: "Q1", label: "Erreur serveur", verdict: "pass", criterionIds: ["AC3"] }], { codeSnapshot: undefined })),
     ] });
     expect(criterion(view, "AC3").status).toBe("unverified");
-    expect(criterion(view, "AC3").checks[0].reasons.join(" ")).toContain("Unknown version");
+    expect(criterion(view, "AC3").checks[0]!.reasons.join(" ")).toContain("Unknown version");
   });
 
   it("should put failure before blocking before incomplete coverage", () => {
@@ -195,7 +197,7 @@ describe("acceptance coverage", () => {
   it("should not count a not-run check without a blocker as blocked", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "not_run", actual: "pas lancé", checkIds: ["AC1-C1"] }]))] });
     expect(criterion(view, "AC1").status).toBe("unverified");
-    expect(criterion(view, "AC1").checks[0].reasons[0]).toContain("Not run");
+    expect(criterion(view, "AC1").checks[0]!.reasons[0]).toContain("Not run");
   });
 
   it("should keep a green lint out of every functional criterion", () => {
@@ -223,9 +225,9 @@ describe("acceptance coverage", () => {
       { id: "Q2", label: "Zoom", verdict: "pass", checkIds: ["AC2-C1"] },
     ]))] });
     const [zoom, keyboard] = criterion(view, "AC2").checks;
-    expect(zoom.status).toBe("verified");
-    expect(zoom.reasons).toEqual([]);
-    expect(keyboard.reasons).toEqual(["\"Vague\" cites AC2 without naming this check: it only counts if `checkIds` cites AC2-C2."]);
+    expect(zoom!.status).toBe("verified");
+    expect(zoom!.reasons).toEqual([]);
+    expect(keyboard!.reasons).toEqual(["\"Vague\" cites AC2 without naming this check: it only counts if `checkIds` cites AC2-C2."]);
     expect(renderAcceptanceSummary(view).markdown).toContain("**AC2** unverified: Le formulaire reste utilisable à 200 % (\"Vague\" cites AC2 without naming this check");
   });
 
@@ -252,26 +254,26 @@ describe("acceptance coverage", () => {
     it("should call evidence taken on older code stale", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: OLD, atEnd: OLD } }))] });
       expect(criterion(view, "AC1").status).toBe("unverified");
-      expect(criterion(view, "AC1").checks[0].evidence[0].freshness).toBe("stale");
+      expect(criterion(view, "AC1").checks[0]!.evidence[0]!.freshness).toBe("stale");
       expect(view.counts.stale).toBe(1);
     });
 
     it("should call a measurement inconclusive when the code moved during it", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: OLD, atEnd: CURRENT } }))] });
-      expect(criterion(view, "AC1").checks[0].evidence[0].freshness).toBe("inconclusive");
+      expect(criterion(view, "AC1").checks[0]!.evidence[0]!.freshness).toBe("inconclusive");
       expect(criterion(view, "AC1").status).toBe("unverified");
     });
 
     it("should not trust an identifier the snapshot utility never produced", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: "snap-made-up" } }))] });
-      expect(criterion(view, "AC1").checks[0].evidence[0].freshness).toBe("unknown");
+      expect(criterion(view, "AC1").checks[0]!.evidence[0]!.freshness).toBe("unknown");
       expect(criterion(view, "AC1").status).toBe("unverified");
     });
 
     it("should not verify anything when the current code cannot be identified", () => {
       const view = coverage({ currentSnapshot: undefined, reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("unverified");
-      expect(criterion(view, "AC1").checks[0].reasons.join(" ")).toContain("Unknown version");
+      expect(criterion(view, "AC1").checks[0]!.reasons.join(" ")).toContain("Unknown version");
     });
 
     it("should count a failure of unknown version as a current failure", () => {
@@ -285,29 +287,29 @@ describe("acceptance coverage", () => {
 
     it("should let a round two success replace a round one failure it names", () => {
       const view = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([{ id: "Q1-R2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], supersedes: ["Q1-R1"], screenshot: "assets/result.png" }], { round: 2 }), 2)] });
-      const check = criterion(view, "AC1").checks[0];
+      const check = criterion(view, "AC1").checks[0]!;
       expect(check.status).toBe("verified");
       expect(check.history.map((entry) => [entry.id, entry.supersededBy])).toEqual([["Q1-R1", "Q1-R2"]]);
       // Same file name, two rounds: each version keeps its own capture.
-      expect(check.history[0].attachments[0].path).toBe("evidence/qa-evidence.json/v1/assets/result.png");
-      expect(check.evidence[0].attachments[0].path).toBe("evidence/qa-evidence.json/v2/assets/result.png");
+      expect(check.history[0]!.attachments[0]!.path).toBe("evidence/qa-evidence.json/v1/assets/result.png");
+      expect(check.evidence[0]!.attachments[0]!.path).toBe("evidence/qa-evidence.json/v2/assets/result.png");
     });
 
     it("should keep an older failure standing when nothing replaces it explicitly", () => {
       const view = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([{ id: "Q1-R2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { round: 2 }), 2)] });
       expect(criterion(view, "AC1").status).toBe("unverified");
-      expect(criterion(view, "AC1").checks[0].reasons[0]).toContain("Q1-R1");
+      expect(criterion(view, "AC1").checks[0]!.reasons[0]).toContain("Q1-R1");
     });
 
     it("should report a current pass and a current failure as a failure with a conflict", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "A", label: "Filtre", verdict: "fail", checkIds: ["AC1-C1"] }, { id: "B", label: "Filtre bis", verdict: "pass", checkIds: ["AC1-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("failed");
-      expect(criterion(view, "AC1").checks[0].reasons.join(" ")).toContain("Contradictory");
+      expect(criterion(view, "AC1").checks[0]!.reasons.join(" ")).toContain("Contradictory");
     });
 
     it("should refuse a replacement taken on stale code or on another check", () => {
       const stale = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([{ id: "Q1-R2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], supersedes: ["Q1-R1"] }], { codeSnapshot: { atStart: OLD } }), 2)] });
-      expect(criterion(stale, "AC1").checks[0].history).toHaveLength(0);
+      expect(criterion(stale, "AC1").checks[0]!.history).toHaveLength(0);
       const elsewhere = coverage({ reports: [roundOne(), report("qa-evidence.json", qa([{ id: "Q9", label: "Zoom", verdict: "pass", checkIds: ["AC2-C1"], supersedes: ["Q1-R1"] }]), 2)] });
       expect(elsewhere.diagnostics.some((entry) => entry.message.includes("does not check the same thing"))).toBe(true);
     });
@@ -316,7 +318,7 @@ describe("acceptance coverage", () => {
       const item = { id: "D1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
       const developer = (file: string) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: CURRENT }, items: [item] });
       const view = coverage({ reports: [developer("dev-evidence-T1.json"), developer("dev-evidence.json"), developer("dev-evidence-round1.json")] });
-      expect(criterion(view, "AC1").checks[0].evidence).toHaveLength(1);
+      expect(criterion(view, "AC1").checks[0]!.evidence).toHaveLength(1);
       expect(criterion(view, "AC1").status).toBe("verified");
     });
 
@@ -324,10 +326,10 @@ describe("acceptance coverage", () => {
       const item = { id: "D1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
       const developer = (file: string, criteriaRevision?: number) => report(file, { schemaVersion: 2, source: "developer", ...(criteriaRevision ? { criteriaRevision } : {}), codeSnapshot: { atStart: CURRENT }, items: [item] });
       const view = coverage({ reports: [developer("dev-evidence-T1.json", 1), developer("dev-evidence.json", 2)] });
-      expect(criterion(view, "AC1").checks[0].evidence).toHaveLength(1);
+      expect(criterion(view, "AC1").checks[0]!.evidence).toHaveLength(1);
       expect(criterion(view, "AC1").status).toBe("verified");
       const undeclared = coverage({ reports: [developer("dev-evidence-T1.json"), developer("dev-evidence.json", 1)] });
-      expect(criterion(undeclared, "AC1").checks[0].evidence).toHaveLength(1);
+      expect(criterion(undeclared, "AC1").checks[0]!.evidence).toHaveLength(1);
     });
 
     it("should count a per-task item once when the merged copy drops the root code version it relied on", () => {
@@ -336,7 +338,7 @@ describe("acceptance coverage", () => {
       const merged = report("dev-evidence.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, items: [item] });
       for (const reports of [[perTask, merged], [merged, perTask]]) {
         const view = coverage({ reports });
-        expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.freshness)).toEqual(["current"]);
+        expect(criterion(view, "AC1").checks[0]!.evidence.map((entry) => entry.freshness)).toEqual(["current"]);
         expect(view.diagnostics.map((entry) => entry.message).join("\n")).not.toContain("réutilisé");
       }
     });
@@ -349,8 +351,8 @@ describe("acceptance coverage", () => {
       const perTask = report("dev-evidence-T1.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, codeSnapshot: { atStart: OLD, atEnd: CURRENT }, items });
       const merged = report("dev-evidence.json", { schemaVersion: 2, source: "developer", criteriaRevision: 1, items });
       const view = coverage({ reports: [perTask, merged] });
-      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E2", "current"]]);
-      expect(criterion(view, "AC1").checks[0].history.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E1", "stale"]]);
+      expect(criterion(view, "AC1").checks[0]!.evidence.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E2", "current"]]);
+      expect(criterion(view, "AC1").checks[0]!.history.map((entry) => [entry.id, entry.freshness])).toEqual([["T1-E1", "stale"]]);
       expect(criterion(view, "AC1").status).toBe("verified");
     });
 
@@ -358,9 +360,9 @@ describe("acceptance coverage", () => {
       const item = { id: "T1-E1", label: "Filtre", verdict: "measured", checkIds: ["AC1-C1"] };
       const developer = (file: string, snapshot?: string) => report(file, { schemaVersion: 2, source: "developer", criteriaRevision: 1, ...(snapshot ? { codeSnapshot: { atStart: snapshot } } : {}), items: [item] });
       const alone = coverage({ reports: [developer("dev-evidence.json")] });
-      expect(criterion(alone, "AC1").checks[0].evidence.map((entry) => entry.freshness)).toEqual(["unknown"]);
+      expect(criterion(alone, "AC1").checks[0]!.evidence.map((entry) => entry.freshness)).toEqual(["unknown"]);
       const ambiguous = coverage({ reports: [developer("dev-evidence-T1.json", CURRENT), developer("dev-evidence-round1.json", OLD), developer("dev-evidence.json")] });
-      expect(criterion(ambiguous, "AC1").checks[0].evidence.map((entry) => entry.freshness).sort()).toEqual(["current", "stale", "unknown"]);
+      expect(criterion(ambiguous, "AC1").checks[0]!.evidence.map((entry) => entry.freshness).sort()).toEqual(["current", "stale", "unknown"]);
     });
 
     it("should not let a merged copy vouch for a criterion revised after the item was measured", () => {
@@ -375,7 +377,7 @@ describe("acceptance coverage", () => {
       const first = report("qa-evidence.json", qa([{ id: "PILOT-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: "6ffd758838" } }), 1);
       const corrected = report("qa-evidence.json", qa([{ id: "PILOT-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], codeSnapshotId: CURRENT }]), 2);
       const view = coverage({ reports: [first, corrected] });
-      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.version)).toEqual([2]);
+      expect(criterion(view, "AC1").checks[0]!.evidence.map((entry) => entry.version)).toEqual([2]);
       expect(criterion(view, "AC1").status).toBe("verified");
       expect(view.diagnostics.map((entry) => entry.message).join("\n")).not.toContain("reused");
     });
@@ -388,7 +390,7 @@ describe("acceptance coverage", () => {
         developer("dev-evidence.json", item, 1),
         developer("dev-evidence-T4.json", { ...item, note: "testé en T2-E4" }, 2),
       ] });
-      expect(criterion(view, "AC1").checks[0].evidence.map((entry) => entry.note)).toEqual(["testé en T2-E4"]);
+      expect(criterion(view, "AC1").checks[0]!.evidence.map((entry) => entry.note)).toEqual(["testé en T2-E4"]);
     });
 
     it("should keep counting a failure its producer rewrote as a success under the same id", () => {
@@ -447,7 +449,7 @@ describe("acceptance coverage", () => {
     it("should resolve a confirmation to the evidence it inspected", () => {
       const view = coverage({ reports: [developer(CURRENT), report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre confirmé", verdict: "confirmed", confirms: "D1", checkIds: ["AC1-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("verified");
-      expect(criterion(view, "AC1").checks[0].evidence.find((entry) => entry.id === "Q1")?.basis).toBe("confirmation");
+      expect(criterion(view, "AC1").checks[0]!.evidence.find((entry) => entry.id === "Q1")?.basis).toBe("confirmation");
     });
 
     it("should not make a confirmation of stale evidence current", () => {
@@ -459,7 +461,7 @@ describe("acceptance coverage", () => {
       for (const confirms of ["D1", "D404"]) {
         const view = coverage({ reports: [developer(CURRENT), report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre cassé", verdict: "fail", confirms, checkIds: ["AC1-C1"] }]))] });
         expect(criterion(view, "AC1").status).toBe("failed");
-        expect(criterion(view, "AC1").checks[0].evidence.find((entry) => entry.id === "Q1")?.basis).toBe("observed");
+        expect(criterion(view, "AC1").checks[0]!.evidence.find((entry) => entry.id === "Q1")?.basis).toBe("observed");
       }
     });
 
@@ -467,13 +469,13 @@ describe("acceptance coverage", () => {
       const view = coverage({ reports: [developer(CURRENT), report("qa-evidence.json", qa([{ id: "Q1", label: "Zoom confirmé", verdict: "confirmed", confirms: "D1", checkIds: ["AC2-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("verified");
       expect(criterion(view, "AC2").status).toBe("unverified");
-      expect(criterion(view, "AC2").checks[0].reasons.join(" ")).toContain("confirms evidence taken on another check");
+      expect(criterion(view, "AC2").checks[0]!.reasons.join(" ")).toContain("confirms evidence taken on another check");
     });
 
     it("should refuse a confirmation whose reference is missing", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre confirmé", verdict: "confirmed", confirms: "D404", checkIds: ["AC1-C1"] }]))] });
       expect(criterion(view, "AC1").status).toBe("unverified");
-      expect(criterion(view, "AC1").checks[0].reasons.join(" ")).toContain("cannot be found");
+      expect(criterion(view, "AC1").checks[0]!.reasons.join(" ")).toContain("cannot be found");
     });
   });
 
@@ -481,11 +483,11 @@ describe("acceptance coverage", () => {
     const changed = registry({ ...registryJson, revision: 2, criteria: [{ ...registryJson.criteria[0], revision: 2 }, ...registryJson.criteria.slice(1)] });
     const view = coverage({ registry: changed, reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }]))] });
     expect(criterion(view, "AC1").status).toBe("unverified");
-    expect(criterion(view, "AC1").checks[0].reasons[0]).toContain("earlier version of the criterion");
+    expect(criterion(view, "AC1").checks[0]!.reasons[0]).toContain("earlier version of the criterion");
   });
 
   it("should rebuild criteria from an older plan without ever verifying them", () => {
-    const view = deriveAcceptanceCoverage({ plan: parsePlanLinks({ acceptance_criteria: ["Given a, then b"], tasks: [] }), reports: [], now: NOW });
+    const view = deriveAcceptanceCoverage({ ...defined({ plan: parsePlanLinks({ acceptance_criteria: ["Given a, then b"], tasks: [] }) }), reports: [], now: NOW });
     expect(view.available).toBe(false);
     expect(view.criteria[0]).toMatchObject({ id: "AC1", reconstructed: true, status: "unverified" });
   });
@@ -498,7 +500,7 @@ describe("break attempts", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([attempt("A1", "pass")]))] });
     const target = criterion(view, "AC1");
     expect(target.status).toBe("unverified");
-    expect(target.checks[0].evidence).toEqual([]);
+    expect(target.checks[0]!.evidence).toEqual([]);
     expect(target.attempts.map((entry) => [entry.id, entry.kind])).toEqual([["A1", "attempt"]]);
     expect(target.reasons).toContain("A break attempt that finds nothing does not verify the criterion.");
     expect(view.general).toEqual([]);
@@ -508,7 +510,7 @@ describe("break attempts", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }, attempt("A1", "fail", { actual: "valeur perdue" })]))] });
     const target = criterion(view, "AC1");
     expect(target.status).toBe("failed");
-    expect(target.checks[0].evidence.map((entry) => entry.id)).toEqual(["Q1", "A1"]);
+    expect(target.checks[0]!.evidence.map((entry) => entry.id)).toEqual(["Q1", "A1"]);
     expect(target.attempts).toEqual([]);
   });
 
@@ -532,7 +534,7 @@ describe("break attempts", () => {
     ]))] });
     expect(criterion(view, "AC1").status).toBe("unverified");
     expect(renderAcceptanceSummary(view).markdown).toContain("**AC1** unverified: Le filtre garde sa valeur au retour (An earlier failure was not explicitly replaced: D1.)");
-    expect(renderAcceptanceSummary(view).json.criteria[0].reasons.at(-1)).toBe("A break attempt that finds nothing does not verify the criterion.");
+    expect(renderAcceptanceSummary(view).json.criteria[0]!.reasons.at(-1)).toBe("A break attempt that finds nothing does not verify the criterion.");
   });
 
   it("should not show a passing attempt on a multi-check criterion as uncounted evidence", () => {
@@ -546,7 +548,7 @@ describe("break attempts", () => {
       report("qa-evidence.json", qa([attempt("A1", "fail")], { round: 1 }), 1),
       report("qa-evidence.json", qa([{ id: "Q2", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"], supersedes: ["A1"] }], { round: 2 }), 2),
     ] });
-    const check = criterion(view, "AC1").checks[0];
+    const check = criterion(view, "AC1").checks[0]!;
     expect(check.status).toBe("verified");
     expect(check.history.map((entry) => entry.id)).toEqual(["A1"]);
   });
@@ -557,13 +559,13 @@ describe("break attempts", () => {
       report("qa-evidence.json", qa([attempt("A2", "pass", { supersedes: ["A1"] })], { round: 2 }), 2),
     ] });
     expect(criterion(view, "AC1").status).toBe("unverified");
-    expect(criterion(view, "AC1").checks[0].history.map((entry) => entry.id)).toEqual(["A1"]);
+    expect(criterion(view, "AC1").checks[0]!.history.map((entry) => entry.id)).toEqual(["A1"]);
   });
 
   it("should treat an item with another kind, or none, exactly as before", () => {
     const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", kind: "observation", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }]))] });
     expect(criterion(view, "AC1").status).toBe("verified");
-    expect(criterion(view, "AC1").checks[0].evidence[0].kind).toBeUndefined();
+    expect(criterion(view, "AC1").checks[0]!.evidence[0]!.kind).toBeUndefined();
   });
 
   it("should warn about an attempt that cites no criterion", () => {
@@ -626,7 +628,7 @@ describe("QA verdict consistency", () => {
     });
 
     it("should still flag the other unobserved criteria", () => {
-      const view = coverage({ registry: deployed, reports: [report("qa-evidence.json", qa([observedAll[0], blocked], { status: "PASS_WITH_WARNINGS" }))] });
+      const view = coverage({ registry: deployed, reports: [report("qa-evidence.json", qa([observedAll[0]!, blocked], { status: "PASS_WITH_WARNINGS" }))] });
       expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC2"] });
     });
   });
@@ -738,8 +740,8 @@ describe("acceptance coverage in French", () => {
     expect(view.counts).toMatchObject({ total: 3, verified: 1, blocked: 1, unverified: 1 });
     expect(coverageSentence(view.counts, "fr")).toBe("1 critère vérifié sur 3 · 1 bloqué · 1 non vérifié");
     expect(coverageSentence(view.counts)).toBe("1 of 3 criteria verified · 1 blocked · 1 unverified");
-    expect(criterion(view, "AC2").checks[0].reasons).toEqual(["Aucune preuve ne couvre ce contrôle."]);
-    expect(criterion(coverage({ reports: reports() }), "AC2").checks[0].reasons).toEqual(["No evidence covers this check."]);
+    expect(criterion(view, "AC2").checks[0]!.reasons).toEqual(["Aucune preuve ne couvre ce contrôle."]);
+    expect(criterion(coverage({ reports: reports() }), "AC2").checks[0]!.reasons).toEqual(["No evidence covers this check."]);
   });
 
   it("should render the merge request summary in the language it is asked for", () => {

@@ -16,7 +16,7 @@ const MessageBody = memo(function MessageBody({ text }: { text: string }) {
 });
 
 /** Claude Code only writes a message to its transcript once the action that followed it has returned, so the panel says it is waiting rather than looking finished, and names the action it is waiting on. */
-function WritingHint({ action }: { action?: string }) {
+function WritingHint({ action }: { action?: string | undefined }) {
   return (
     <div aria-live="polite" title="Claude Code only writes its message once the current action ends: the terminal is ahead of this panel." className="px-1">
       <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
@@ -29,7 +29,7 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; sessionPrompt?: SessionPrompt; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => boolean; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion | undefined; sessionPrompt?: SessionPrompt | undefined; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string | undefined; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => boolean; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);

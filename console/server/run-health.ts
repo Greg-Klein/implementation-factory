@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import path from "node:path";
 import type { EngineEvent } from "./engine/types.js";
 import type { AgentState, IncidentAction, IncidentKind, IncidentObservation, PlanDelegation, PlanTask, RunHealth, RunStatus, RunWait, WaitReason, WorkflowState } from "./types.js";
@@ -55,14 +56,14 @@ export type RunSignals = {
   /** Terminal output. A spinner is output, never progress: kept apart, and never used to clear a doubt. */
   lastOutputAt: number;
   /** Set when the pilot handed control back, cleared as soon as it acts again. */
-  pilotIdleSince?: number;
+  pilotIdleSince?: number | undefined;
   /** The last time the pilot itself did something: whatever ended before that, it has taken over. */
   pilotLastActedAt?: number;
   /** The pilot, or the user in the terminal, said something after that turn ended. */
-  permission?: { since: number; message?: string };
-  terminalInteraction?: { since: number; message?: string };
+  permission?: { since: number; message?: string } | undefined;
+  terminalInteraction?: { since: number; message?: string } | undefined;
   /** A call for attention whose cause the agent did not give. */
-  unexplainedAttention?: { since: number; message?: string };
+  unexplainedAttention?: { since: number; message?: string } | undefined;
   /** Calls whose end the agent reports, by call id: a foreground command in the pilot or in a subagent. */
   activeTools: Map<string, { tool: string; agentId?: string; since: number; label?: string }>;
   /** Calls that return at once and wake the pilot later. They last until the pilot wakes up. */
@@ -296,8 +297,9 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
       ? waiting("agent", signals.pilotIdleSince, running.length > 1 ? `Waiting for ${running.length} agents` : "Waiting for an agent", names, names, "the agent finishing")
       : { health: "healthy" };
   }
-  if (signals.activeTools.length > 0) {
-    if (quietFor >= policy.suspicionMs) return suspicion(`A command is still running (${signals.activeTools[0].label ?? signals.activeTools[0].tool}).`);
+  const [activeTool] = signals.activeTools;
+  if (activeTool) {
+    if (quietFor >= policy.suspicionMs) return suspicion(`A command is still running (${activeTool.label ?? activeTool.tool}).`);
     return { health: "healthy" };
   }
   if (signals.pilotIdleSince === undefined) {
@@ -312,8 +314,8 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   const idleFor = now - after(Math.max(idleSince, lastAgentEnd));
   const workflow = input.workflow;
   const declared = workflow?.nextAction;
-  if (signals.backgroundWaits.length > 0) {
-    const wait = signals.backgroundWaits[0];
+  const [wait] = signals.backgroundWaits;
+  if (wait) {
     if (quietFor >= policy.suspicionMs) return suspicion(`Claude Code is still waiting for ${wait.label ?? wait.tool} in the background.`);
     return waiting("tool", wait.since, "Waiting for a background task", wait.label ?? wait.tool, wait.label ?? wait.tool, "the background task finishing");
   }
@@ -344,8 +346,8 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
     if (signals.pilotLastActedAt !== undefined && signals.pilotLastActedAt > endedAt) continue;
     if (now - after(endedAt) < policy.artifactGraceMs || idleFor < policy.artifactGraceMs) continue;
     const missing = requiredFiles(agent, input.planDelegations ?? []).filter((file) => !input.artifacts.includes(file));
-    if (missing.length === 0) continue;
-    const file = missing[0];
+    const [file] = missing;
+    if (!file) continue;
     return {
       health: "stalled", title: `${fileLabel(file)} expected`,
       detail: `${agentType(agent.name)} finished without writing ${file}, and nothing takes over.`,
@@ -400,9 +402,12 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
 /** How the evaluation of a run reads the signals, whatever holds them. */
 export function healthSignalsView(signals: RunSignals): HealthInput["signals"] {
   return {
-    lastExecutionAt: signals.lastExecutionAt, lastProgressAt: signals.lastProgressAt, pilotIdleSince: signals.pilotIdleSince, pilotLastActedAt: signals.pilotLastActedAt,
-    permission: signals.permission, terminalInteraction: signals.terminalInteraction, unexplainedAttention: signals.unexplainedAttention,
-    resumedAt: signals.resumedAt, exit: signals.exit,
+    lastExecutionAt: signals.lastExecutionAt, lastProgressAt: signals.lastProgressAt,
+    ...defined({
+      pilotIdleSince: signals.pilotIdleSince, pilotLastActedAt: signals.pilotLastActedAt,
+      permission: signals.permission, terminalInteraction: signals.terminalInteraction, unexplainedAttention: signals.unexplainedAttention,
+      resumedAt: signals.resumedAt, exit: signals.exit,
+    }),
     activeTools: [...signals.activeTools.values()],
     backgroundWaits: [...signals.backgroundWaits.values()],
   };

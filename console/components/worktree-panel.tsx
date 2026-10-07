@@ -12,7 +12,7 @@ const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--lin
  * that succeeded shows in the run state and needs no band.
  */
 export function WorktreePanel({ result, connected, onConfirm, onDismiss }: {
-  result?: WorktreeResult;
+  result?: WorktreeResult | undefined;
   connected: boolean;
   onConfirm: () => void;
   onDismiss: () => void;

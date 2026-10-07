@@ -8,7 +8,7 @@ import type { RunState } from "@/lib/types";
 import { AgentAvatar, AgentName } from "./agent-avatar";
 import { DocumentViewer } from "./document-viewer";
 
-export function ActivityPanel({ run, onFeedback, refusedFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => boolean; refusedFeedback?: { requestId: string; body: string }; onShowQuestion: () => void }) {
+export function ActivityPanel({ run, onFeedback, refusedFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => boolean; refusedFeedback?: { requestId: string; body: string } | undefined; onShowQuestion: () => void }) {
   const runningAgents = activeAgents(run.agents);
   const now = useNow(runningAgents.length > 0);
   const [feedback, setFeedback] = useState("");

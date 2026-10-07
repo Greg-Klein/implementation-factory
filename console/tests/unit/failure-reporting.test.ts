@@ -86,7 +86,7 @@ describe("the queue file found at start", () => {
     expect(restored.snapshot().queued).toEqual([]);
     const aside = readdirSync(storage).filter((name) => name.startsWith("queue.json.unreadable-"));
     expect(aside).toHaveLength(1);
-    expect(readFileSync(path.join(storage, aside[0]), "utf8")).toBe(half);
+    expect(readFileSync(path.join(storage, aside[0]!), "utf8")).toBe(half);
     expect(readdirSync(storage)).not.toContain("queue.json");
     expect(received.map((message) => message.title)).toEqual(["Queue unreadable, started empty"]);
   });

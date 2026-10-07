@@ -122,7 +122,7 @@ describe("a batch of tickets", () => {
     // One session, in the checkout, reporting to no run.
     expect(calls()).toHaveLength(1);
     expect(calls()[0]).toMatchObject({ cwd: expect.stringContaining(path.basename(shop)), runId: null, hookUrl: null });
-    expect(calls()[0].input).toEqual({ repository: shop, language: "en", tickets: [101, 102, 103].map((iid) => ({ issue_url: url(iid) })), known: [] });
+    expect(calls()[0]!.input).toEqual({ repository: shop, language: "en", tickets: [101, 102, 103].map((iid) => ({ issue_url: url(iid) })), known: [] });
     // The answer was read: its directory is gone, ticket content with it.
     expect(readdirSync(path.join(storage, "data", "schedule"))).toEqual([]);
   });
@@ -199,10 +199,10 @@ describe("a batch of tickets", () => {
     expect(second.duplicates).toEqual([url(102), `${url(101)}?tab=notes`]);
     expect(second.entries.map((entry) => entry.issueUrl)).toEqual([url(104)]);
     await until(analysed(queued), "the second analysis");
-    const call = calls()[1];
+    const call = calls()[1]!;
     expect(call.input.tickets).toEqual([{ issue_url: url(104) }]);
     expect(call.input.known.map((known) => [known.issue_url, known.state])).toEqual([[url(101), "running"], [url(102), "queued"], [url(103), "running"]]);
-    expect(call.input.known[0].files).toEqual(["src/ticket-101.ts"]);
+    expect(call.input.known[0]!.files).toEqual(["src/ticket-101.ts"]);
     expect(waiting(104)).toMatchObject({ reason: "conflict", cause: "depends_on", detail: "Needs ticket 103." });
     await expect(registry.enqueueBatch(tickets(shop, 101, 102))).rejects.toThrow(/already queued, running or waiting for a merge/);
   });
@@ -300,7 +300,7 @@ describe("a batch of tickets", () => {
     fixture({});
     await registry.enqueueBatch(tickets(shop, 102, 103));
     await until(() => numbers().length === 3, "the two new tickets to start");
-    const call = calls()[1];
+    const call = calls()[1]!;
     expect(call.input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
     expect(call.input.known).toEqual([]);
     expect(stored(registry, 101)).toMatchObject({ analysis: "done", files: ["src/ticket-101.ts"], confidence: "high" });
@@ -329,7 +329,7 @@ describe("a batch of tickets", () => {
     fixture({ mode: "invalid" });
     await registry.enqueueBatch(tickets(shop, 102, 103));
     await until(analysed(queued), "the second analysis to fail");
-    expect(calls()[1].input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
+    expect(calls()[1]!.input.tickets).toEqual([102, 103, 101].map((iid) => ({ issue_url: url(iid) })));
     expect(stored(registry, 101)).toMatchObject({ analysis: "failed", failure: "output file missing" });
     expect(numbers()).toEqual([101]);
     expect(waiting(102)).toMatchObject({ reason: "merge", cause: "analysis_failed", analysisFailure: expect.stringMatching(/output refused/), detail: expect.stringMatching(/^The batch analysis failed \(output refused/) });
@@ -364,9 +364,9 @@ describe("a batch of tickets", () => {
     registry.forceQueued(waiting(102)!.id, "base");
     // The three places are taken: forced or not, it waits for one.
     expect(waiting(102)).toMatchObject({ reason: "slot", forced: { mode: "base" } });
-    started[1].state.status = "stopped";
-    started[1].state.sessionActive = false;
-    started[1].publish();
+    started[1]!.state.status = "stopped";
+    started[1]!.state.sessionActive = false;
+    started[1]!.publish();
     await until(() => numbers().length === 4, "the forced ticket to start");
     expect(numbers()).toEqual([101, 103, 104, 102]);
     expect(waiting(105)?.reason).toBe("conflict");
@@ -379,10 +379,10 @@ describe("a batch of tickets", () => {
     await until(() => numbers().length === 1, "the dependency to start first");
     expect(numbers()).toEqual([101]);
     expect(() => registry.forceQueued(waiting(102)!.id, "stacked")).toThrow(/branch of #101 is not known yet/);
-    started[0].state.branch = "feat/101-promo";
+    started[0]!.state.branch = "feat/101-promo";
     registry.forceQueued(waiting(102)!.id, "stacked", url(101));
     await until(() => numbers().length === 2, "the stacked ticket to start");
-    expect(started[1].state.baseBranch).toBe("feat/101-promo");
+    expect(started[1]!.state.baseBranch).toBe("feat/101-promo");
   });
 
   it("should move and remove waiting tickets", async () => {
@@ -390,14 +390,14 @@ describe("a batch of tickets", () => {
     const { registry, queued } = harness();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103));
     const [first, second, third] = queued().map((entry) => entry.id);
-    registry.moveQueued(third, first);
+    registry.moveQueued(third!, first!);
     expect(queued().map((entry) => entry.id)).toEqual([third, first, second]);
-    registry.moveQueued(third, null);
+    registry.moveQueued(third!, null);
     expect(queued().map((entry) => entry.id)).toEqual([first, second, third]);
-    registry.cancelQueued(second);
+    registry.cancelQueued(second!);
     expect(queued().map((entry) => entry.id)).toEqual([first, third]);
-    expect(() => registry.moveQueued(second, null)).toThrow(/no longer queued/);
-    expect(() => registry.forceQueued(second, "base")).toThrow(/no longer queued/);
+    expect(() => registry.moveQueued(second!, null)).toThrow(/no longer queued/);
+    expect(() => registry.forceQueued(second!, "base")).toThrow(/no longer queued/);
   });
 });
 

@@ -21,7 +21,7 @@ test("should bring back a batch whose analysis a restart interrupted, one ticket
     issueUrl: expect.stringMatching(/\/issues\/2$/), batchId: "batch-restored",
     reason: "conflict", cause: "analysis_failed", analysisFailure: "console restarted during the analysis",
   })]);
-  expect(restored.queued[0].analysing).toBeUndefined();
+  expect(restored.queued[0]!.analysing).toBeUndefined();
 
   await page.goto("/");
   const queue = page.getByRole("group", { name: "Queued runs" });

@@ -211,7 +211,7 @@ function CheckBlock({ runId, check, titled }: { runId: string; check: Acceptance
 
 function CriterionRow({ runId, criterion }: { runId: string; criterion: AcceptanceCriterionView }) {
   const [open, setOpen] = useState(false);
-  const single = criterion.checks.length === 1 && criterion.checks[0].id === criterion.id;
+  const single = criterion.checks.length === 1 && criterion.checks[0]?.id === criterion.id;
   return (
     <li className="border-b border-[var(--line)] last:border-b-0" data-testid={`criterion-${criterion.id}`}>
       <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex w-full items-start gap-2.5 py-3 text-left">
@@ -272,7 +272,7 @@ function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
 }
 
 /** One report as the workflow last wrote it, the view this tab had before criteria existed. */
-function Section({ title, file, run, qa }: { title: string; file: string; run: RunState; qa?: AcceptanceQaView }) {
+function Section({ title, file, run, qa }: { title: string; file: string; run: RunState; qa?: AcceptanceQaView | undefined }) {
   const [report, setReport] = useState<EvidenceReport>();
   const [error, setError] = useState<string>();
   const present = run.artifacts.includes(file);

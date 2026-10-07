@@ -18,14 +18,14 @@ function markdown(directory: string): string[] {
 function metadata(file: string): Record<string, unknown> {
   const match = readFileSync(file, "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) throw new Error(`Missing metadata: ${file}`);
-  return parse(match[1]);
+  return parse(match[1]!);
 }
 
 function example(contract: string): Record<string, unknown> {
   const source = readFileSync(path.join(root, "contracts", `${contract}.md`), "utf8");
   const match = source.match(/```json\n([\s\S]*?)\n```/);
   if (!match) throw new Error(`Missing JSON example: ${contract}`);
-  return JSON.parse(match[1]);
+  return JSON.parse(match[1]!);
 }
 
 describe("plugin composition", () => {
@@ -38,7 +38,7 @@ describe("plugin composition", () => {
     for (const file of definitions) {
       const prose = readFileSync(file, "utf8").replace(/```[^\n]*\n[\s\S]*?```/g, "");
       for (const match of prose.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
-        const target = match[1].split("#")[0];
+        const target = match[1]!.split("#")[0];
         if (!target || /^(?:https?:|mailto:)/.test(target)) continue;
         const resolved = target.startsWith("${CLAUDE_PLUGIN_ROOT}/")
           ? path.join(root, target.slice("${CLAUDE_PLUGIN_ROOT}/".length))
@@ -63,7 +63,7 @@ describe("plugin composition", () => {
     const agentNames = new Set(markdown(path.join(root, "agents")).map((file) => `${namespace}:${metadata(file).name}`));
     for (const file of definitions) {
       for (const match of readFileSync(file, "utf8").matchAll(/`(implementation-harness:[a-z][a-z-]*)`/g)) {
-        if (!skills.has(match[1]) && !agentNames.has(match[1])) missing.add(match[1]);
+        if (!skills.has(match[1]!) && !agentNames.has(match[1]!)) missing.add(match[1]!);
       }
     }
     expect([...missing]).toEqual([]);
@@ -75,8 +75,8 @@ describe("plugin composition", () => {
       expect(existsSync(path.join(directory, "references/epistemics.md"))).toBe(true);
       for (const file of markdown(directory)) {
         for (const match of readFileSync(file, "utf8").matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
-          if (/^https?:/.test(match[1])) continue;
-          const relative = path.relative(directory, path.resolve(path.dirname(file), match[1]));
+          if (/^https?:/.test(match[1]!)) continue;
+          const relative = path.relative(directory, path.resolve(path.dirname(file), match[1]!));
           expect(relative.startsWith("..")).toBe(false);
         }
       }
@@ -88,10 +88,10 @@ describe("extracted artifact contracts", () => {
   it("should keep registry and planner examples consumable by the console", () => {
     const registry = parseCriteriaRegistry(example("acceptance-criteria"));
     expect(registry.diagnostics).toEqual([]);
-    expect(registry.registry?.criteria[0].id).toBe("AC1");
+    expect(registry.registry?.criteria[0]!.id).toBe("AC1");
     const plan = example("planner");
-    expect(parsePlanLinks(plan)?.tasks[0].criterionIds).toEqual(["AC1"]);
-    expect(plannedTasks(JSON.stringify(plan))?.[0].id).toBe("T1");
+    expect(parsePlanLinks(plan)?.tasks[0]!.criterionIds).toEqual(["AC1"]);
+    expect(plannedTasks(JSON.stringify(plan))?.[0]?.id).toBe("T1");
   });
 
   it.each([
@@ -115,14 +115,14 @@ describe("extracted artifact contracts", () => {
     if (!("records" in parsed)) throw new Error(`Unreadable ${contract} contract`);
     expect(parsed.source).toBe(source);
     expect(parsed.records).toHaveLength(items.length);
-    expect(parsed.records[0].view.basis).toBe(basis);
-    expect(parsed.records[0].snapshotAtStart).toBe("snap-final");
-    expect(parsed.records[0].snapshotAtEnd).toBe("snap-final");
+    expect(parsed.records[0]!.view.basis).toBe(basis);
+    expect(parsed.records[0]!.snapshotAtStart).toBe("snap-final");
+    expect(parsed.records[0]!.snapshotAtEnd).toBe("snap-final");
   });
 
   it("should keep the schedule example valid under the rules its own contract states", () => {
     const source = readFileSync(path.join(root, "contracts", "schedule.md"), "utf8");
-    const [input, output] = [...source.matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]));
+    const [input, output] = [...source.matchAll(/```json\n([\s\S]*?)\n```/g)].map((match) => JSON.parse(match[1]!));
     const requested = input.tickets.map((ticket: { issue_url: string }) => ticket.issue_url);
     const known = input.known.map((ticket: { issue_url: string }) => ticket.issue_url);
     expect(output.tickets.map((ticket: { issue_url: string }) => ticket.issue_url)).toEqual(requested);

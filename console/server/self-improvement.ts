@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now, reportFailure } from "./context.js";
@@ -20,7 +21,7 @@ const auditedRuns = new Set<string>();
  * into the activity feed of a run that may no longer exist.
  */
 export function notice(level: "info" | "attention", title: string, detail?: string) {
-  broadcast({ type: "notice", level, title, detail, at: now() });
+  broadcast({ type: "notice", level, title, ...defined({ detail }), at: now() });
 }
 
 /** The report of an improvement worktree, undefined until its agent has written it. */
@@ -47,11 +48,11 @@ export async function listPendingImprovements(): Promise<PendingSelfImprovementR
     if (commits === 0) {
       const worktreeName = path.basename(worktree.path);
       const reported = (await readImprovementReport(worktreeName)) !== undefined;
-      reviews.push({ worktreeName, branch: worktree.branch, commits: 0, status: commitlessImprovementStatus({ reported }) });
+      reviews.push({ worktreeName, ...defined({ branch: worktree.branch }), commits: 0, status: commitlessImprovementStatus({ reported }) });
       continue;
     }
     const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
-    reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits, mergesCleanly, status: "ready" });
+    reviews.push({ worktreeName: path.basename(worktree.path), ...defined({ branch: worktree.branch }), commits, mergesCleanly, status: "ready" });
   }
   if (demoState.pendingImprovement) reviews.push(demoState.pendingImprovement);
   return reviews;

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import os from "node:os";
 import path from "node:path";
 import type { RunState, WorkflowState } from "../../server/types";
+import { overridden, type Overrides } from "./overrides";
 
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
@@ -55,17 +56,17 @@ beforeEach(() => {
 afterEach(() => rmSync(runsDirectory, { recursive: true, force: true }));
 
 /** A run whose session is gone, in the worktree the console prepared for it, with a pushed ticket branch. */
-async function finishedRun(id: string, overrides: Partial<RunState> = {}) {
+async function finishedRun(id: string, overrides: Overrides<RunState> = {}) {
   const { worktree } = await lifecycle.prepareRunWorktree(repository, id);
   git(worktree.path, "checkout", "-q", "-b", `feat/${id}`);
   writeFileSync(path.join(worktree.path, "app.ts"), "export const answer = 43;\n");
   git(worktree.path, "commit", "-q", "-am", "feat: answer");
   git(worktree.path, "push", "-q", "-u", "origin", `feat/${id}`);
-  const session = new RunSession(id, {
+  const session = new RunSession(id, overridden<Partial<RunState>>({
     status: "completed", phase: 10, cwd: worktree.path, repository, worktree, issueUrl: ISSUE, sessionActive: false,
     startedAt: "2026-10-03T09:00:00.000Z", endedAt: "2026-10-03T10:00:00.000Z",
-    mergeRequestUrl: MR, workflow: completedWorkflow, archiveSyncedAt: "2026-10-03T10:00:30.000Z", ...overrides,
-  });
+    mergeRequestUrl: MR, workflow: completedWorkflow, archiveSyncedAt: "2026-10-03T10:00:30.000Z",
+  }, overrides));
   return { session, worktree: worktree.path };
 }
 
@@ -99,7 +100,7 @@ describe("what becomes of the worktree when the session is gone", () => {
     expect(existsSync(worktree)).toBe(false);
     expect(git(repository, "rev-parse", "--verify", "feat/run-delivered")).toBeTruthy();
     expect(existsSync(path.join(repository, "node_modules", "dep", "index.js"))).toBe(true);
-    expect(session.state.activities[0].title).toBe("Worktree removed");
+    expect(session.state.activities[0]!.title).toBe("Worktree removed");
   });
 
   it("should keep it, with the reason, when the run opened no merge request", async () => {

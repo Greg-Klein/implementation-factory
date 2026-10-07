@@ -46,7 +46,7 @@ test("should start a ticket from the base branch its watcher named", async ({ re
   found([{ url: issueUrl, title: "Afficher les points", baseBranch: "feat-87-loyalty" }]);
   await expect.poll(async () => (await snapshot(request)).runs.length).toBe(1);
 
-  const file = path.join(fakeClaudeInputDirectory, `${(await snapshot(request)).runs[0].id}.session.json`);
+  const file = path.join(fakeClaudeInputDirectory, `${(await snapshot(request)).runs[0]!.id}.session.json`);
   await expect.poll(() => existsSync(file)).toBe(true);
   const session = JSON.parse(readFileSync(file, "utf8")) as { ticketBaseBranch?: string; baseBranch?: string };
   expect(session.ticketBaseBranch).toBe("feat-87-loyalty");

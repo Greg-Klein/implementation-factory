@@ -78,7 +78,7 @@ type RunSummary = { id: string; status: string };
 export async function currentRun(request: APIRequestContext): Promise<RunSummary> {
   const snapshot = await (await request.get("/api/runs")).json() as { runs: RunSummary[] };
   expect(snapshot.runs.length, "exactly one run expected").toBe(1);
-  return snapshot.runs[0];
+  return snapshot.runs[0]!;
 }
 
 /** Its full state, which the list of runs deliberately does not carry. */

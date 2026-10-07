@@ -11,7 +11,7 @@ import type { Activity, RunState, ServerMessage } from "./types.js";
  * showing it, so a console with three runs does not push three transcripts and
  * three terminals into every tab.
  */
-export const clients = new Map<WebSocket, { runId?: string }>();
+export const clients = new Map<WebSocket, { runId?: string | undefined }>();
 
 export function now() { return new Date().toISOString(); }
 

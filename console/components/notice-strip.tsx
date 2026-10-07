@@ -10,7 +10,7 @@ import type { Notice } from "@/lib/types";
  * current, which with several runs means a feed picked at random, so they get
  * their own line above the runs instead.
  */
-export function NoticeStrip({ notice, onDismiss }: { notice?: Notice; onDismiss: () => void }) {
+export function NoticeStrip({ notice, onDismiss }: { notice?: Notice | undefined; onDismiss: () => void }) {
   if (!notice) return null;
   const attention = notice.level === "attention";
   return (

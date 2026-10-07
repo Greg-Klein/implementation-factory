@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import type {
@@ -129,8 +130,8 @@ export function parseCriteriaRegistry(value: unknown, file = "acceptance-criteri
     const kind = text(source?.kind, 40);
     criteria.push({
       id, text: statement,
-      ...(kind ? { source: { kind, ...(text(source?.reference) ? { reference: text(source?.reference) } : {}), ...(text(source?.excerpt) ? { excerpt: text(source?.excerpt) } : {}) } } : {}),
-      ...(text(verification?.expected) ? { expected: text(verification?.expected) } : {}),
+      ...(kind ? { source: { kind, ...defined({ reference: text(source?.reference), excerpt: text(source?.excerpt) }) } } : {}),
+      ...defined({ expected: text(verification?.expected) }),
       checks,
       ...(verification?.afterDeployment === true ? { afterDeployment: true as const } : {}),
       revision: Math.min(positiveInteger(input.revision) ?? 1, revision),
@@ -203,7 +204,7 @@ function blockerOf(value: unknown) {
   if (typeof value === "string" && value.trim()) return { reason: value.trim().slice(0, 500) };
   const blocker = record(value);
   const reason = text(blocker?.reason, 500);
-  return reason ? { reason, ...(text(blocker?.action, 500) ? { action: text(blocker?.action, 500) } : {}) } : undefined;
+  return reason ? { reason, ...defined({ action: text(blocker?.action, 500) }) } : undefined;
 }
 
 export type ParsedReport = {
@@ -297,8 +298,8 @@ export function parseEvidenceReport(value: unknown, context: ReportContext, atta
       key: `${context.file}@${context.version}#${index}`,
       ...(id ? { id } : {}),
       label, verdict, ...(kind ? { kind } : {}), source, file: context.file, version: context.version, receivedAt: context.receivedAt,
-      ...(positiveInteger(item.round) ?? round ? { round: positiveInteger(item.round) ?? round } : {}),
-      ...(itemProducer ? { producer: { ...(text(itemProducer.role, 80) ? { role: text(itemProducer.role, 80) } : {}), ...(text(itemProducer.agentId, 120) ? { agentId: text(itemProducer.agentId, 120) } : {}) } } : {}),
+      ...defined({ round: (positiveInteger(item.round) ?? round) || undefined }),
+      ...(itemProducer ? { producer: defined({ role: text(itemProducer.role, 80), agentId: text(itemProducer.agentId, 120) }) } : {}),
       ...(observedAt ? { observedAt } : {}),
       ...(content.method ? { method: content.method } : {}),
       basis,
@@ -428,8 +429,8 @@ function withCopiedCodeVersions(reports: CoverageInput["reports"]): CoverageInpu
   return reports.map(({ version, records }) => ({ version, records: records.map((entry) => {
     if (!entry.unversionedIdentity || entry.snapshotAtStart || entry.snapshotAtEnd) return entry;
     const elsewhere = (versioned.get(entry.unversionedIdentity) ?? []).filter((candidate) => candidate.view.file !== entry.view.file);
-    if (new Set(elsewhere.map((candidate) => candidate.identity)).size !== 1) return entry;
     const [original] = elsewhere;
+    if (!original || new Set(elsewhere.map((candidate) => candidate.identity)).size !== 1) return entry;
     return {
       ...entry,
       identity: original.identity,
@@ -517,7 +518,8 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
       }
       targets.add(criterion.id);
       if (criterion.checks.some((check) => checks.has(check.id))) continue;
-      if (criterion.checks.length === 1) checks.add(criterion.checks[0].id);
+      const [only] = criterion.checks;
+      if (only && criterion.checks.length === 1) checks.add(only.id);
       else if (!idleAttempt(view)) unassigned.set(criterion.id, [...unassigned.get(criterion.id) ?? [], view]);
     }
     linkedChecks.set(entry.identity, checks);
@@ -652,7 +654,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     for (const id of view.criterionIds) if (criterionIds.has(id)) observedByQa.add(id);
     for (const checkId of linkedChecks.get(entry.identity) ?? []) observedByQa.add(checkOwner.get(checkId)!.id);
   }
-  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, round: qaReport.round, mandate: qaReport.mandate }, criteria, observedByQa, input.language) : undefined;
+  const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, ...defined({ round: qaReport.round, mandate: qaReport.mandate }) }, criteria, observedByQa, input.language) : undefined;
 
   // Without a registry the criteria can only be rebuilt from an older plan's
   // strings, and nothing can be tied to them: shown, never verified.

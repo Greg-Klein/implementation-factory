@@ -1,12 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
 import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, summarizeRun } from "../../server/domain";
 import type { QueuedRun, RunState } from "../../server/types";
+import { overridden, type Overrides } from "./overrides";
 
 const TICKET = "https://gitlab.com/acme/app/-/issues/266";
 const OTHER_TICKET = "https://gitlab.com/acme/app/-/issues/258";
 
-function state(overrides: Partial<RunState> = {}): RunState {
-  return { ...emptyState(), id: "run-1", cwd: "/work/repo-a/.claude/worktrees/run-1", repository: "/work/repo-a", issueUrl: OTHER_TICKET, ...overrides };
+function state(overrides: Overrides<RunState> = {}): RunState {
+  return overridden<RunState>({ ...emptyState(), id: "run-1", cwd: "/work/repo-a/.claude/worktrees/run-1", repository: "/work/repo-a", issueUrl: OTHER_TICKET }, overrides);
 }
 
 /** A waiting launch. Its `cwd` follows its repository unless a test sets it apart: the two are the same path until the run starts. */
@@ -124,7 +125,9 @@ describe("what the side list is told about a run", () => {
   });
 
   it("should report no pending decision when nothing is waiting", () => {
-    expect(summarizeRun(state())).toMatchObject({ pendingQuestionCount: 0, pendingQuestionId: undefined });
+    const summary = summarizeRun(state());
+    expect(summary.pendingQuestionCount).toBe(0);
+    expect(summary).not.toHaveProperty("pendingQuestionId");
   });
 });
 
@@ -135,7 +138,7 @@ describe("why a queued launch is still waiting", () => {
   });
 
   it("should fall back on the slot count when nothing holds its ticket", () => {
-    const [described] = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([[key("/work/repo-a"), "run-1"]]));
+    const described = describeQueue([queued({ cwd: "/work/repo-b" })], new Map([[key("/work/repo-a"), "run-1"]]))[0]!;
     expect(described.reason).toBe("slot");
     expect(described.blockedBy).toBeUndefined();
   });

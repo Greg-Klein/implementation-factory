@@ -186,7 +186,7 @@ describe("the proposals the console reads", () => {
     expect(JSON.parse(readFileSync(handledFile, "utf8"))).toEqual(["https://gitlab.com/acme/shop/-/issues/1", "https://gitlab.com/acme/shop/-/issues/2"]);
     const aside = readdirSync(directory).filter((name) => name.startsWith("handled.json.unreadable-"));
     expect(aside).toHaveLength(1);
-    expect(readFileSync(path.join(directory, aside[0]), "utf8")).toBe('["https://gitlab.com/acme/shop/-/work_it');
+    expect(readFileSync(path.join(directory, aside[0]!), "utf8")).toBe('["https://gitlab.com/acme/shop/-/work_it');
 
     // A ticket the watcher finds afterwards is new, and queued as usual.
     write([1, 2, 3]);

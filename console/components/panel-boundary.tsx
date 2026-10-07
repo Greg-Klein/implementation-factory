@@ -3,8 +3,8 @@
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { Component, type ReactNode } from "react";
 
-type Props = { name: string; resetKey?: string | null; children: ReactNode };
-type State = { error?: Error; resetKey?: string | null };
+type Props = { name: string; resetKey?: string | null | undefined; children: ReactNode };
+type State = { error?: Error | undefined; resetKey?: string | null | undefined };
 
 /**
  * A panel that throws while rendering says so in its own place. Without this,
@@ -13,7 +13,7 @@ type State = { error?: Error; resetKey?: string | null };
  * run on screen: what broke on one run says nothing about the next.
  */
 export class PanelBoundary extends Component<Props, State> {
-  state: State = { resetKey: this.props.resetKey };
+  override state: State = { resetKey: this.props.resetKey };
 
   static getDerivedStateFromError(error: unknown): Partial<State> {
     return { error: error instanceof Error ? error : new Error(String(error)) };
@@ -23,7 +23,7 @@ export class PanelBoundary extends Component<Props, State> {
     return props.resetKey === state.resetKey ? null : { error: undefined, resetKey: props.resetKey };
   }
 
-  render() {
+  override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (

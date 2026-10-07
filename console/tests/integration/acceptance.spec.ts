@@ -89,7 +89,7 @@ test("should follow a real run from a failed round to a replaced one, and keep b
 
   await expect(page.getByTestId("acceptance-sentence")).toHaveText("1 of 2 criteria verified · 1 blocked");
   const view = await coverage(request, runId);
-  expect(view.criteria[0].checks[0].history.map((entry) => entry.id)).toEqual(["QA-R1-1"]);
+  expect(view.criteria[0]!.checks[0]!.history.map((entry) => entry.id)).toEqual(["QA-R1-1"]);
   const capture = async (version: number) => Buffer.from((await (await artifact(request, runId, `evidence/qa-evidence.json/v${version}/assets/result.png`)).json() as { content: string }).content, "base64").toString();
   expect(await capture(1)).toBe("round-1");
   expect(await capture(2)).toBe("round-2");
@@ -106,7 +106,7 @@ test("should follow a real run from a failed round to a replaced one, and keep b
   writeFileSync(path.join(worktree, "app.ts"), "export const answer = 43;\n");
   writeTask(worktree, "qa-evidence-round2.json", readFileSync(path.join(taskDirectory(worktree), "qa-evidence.json"), "utf8"));
   await expect.poll(async () => statusOf(await coverage(request, runId), "AC1")).toBe("unverified");
-  expect((await coverage(request, runId)).criteria[0].checks[0].evidence[0].freshness).toBe("stale");
+  expect((await coverage(request, runId)).criteria[0]!.checks[0]!.evidence[0]!.freshness).toBe("stale");
 
   // Before cleaning up, the workflow asks for a confirmed archive, then deletes its directory.
   writeTask(worktree, "archive-sync-request.json", { requestId: "sync-e2e" });
@@ -164,7 +164,7 @@ test("should show the demo's criteria in every state, with the replaced round in
   const row = page.getByRole("button", { name: /^Open run acme-dashboard/ });
   await expect(row.getByText("2/5 AC", { exact: true })).toBeVisible();
   await expect(row.getByLabel("2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified")).toBeVisible();
-  for (const [id, label] of [["AC1", "Verified"], ["AC2", "Verified"], ["AC3", "Unverified"], ["AC4", "Failed"], ["AC5", "Blocked"]]) {
+  for (const [id, label] of [["AC1", "Verified"], ["AC2", "Verified"], ["AC3", "Unverified"], ["AC4", "Failed"], ["AC5", "Blocked"]] as const) {
     await expect(page.getByTestId(`criterion-${id}`).getByRole("button").first()).toContainText(label);
   }
 

@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { execFile } from "node:child_process";
 import { copyFile, cp, lstat, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -17,7 +18,7 @@ export async function listWorktrees(repository: string = pluginRoot): Promise<Wo
     const lines = block.split("\n");
     const worktreePath = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
     if (!worktreePath) return [];
-    return [{ path: worktreePath, branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length) }];
+    return [{ path: worktreePath, ...defined({ branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length) }) }];
   });
 }
 

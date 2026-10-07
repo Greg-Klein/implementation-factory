@@ -158,10 +158,10 @@ function ArchivedRow({ run, selected, index, onOpen }: { run: RunSummary; select
 export function RunRail({ runs, queued, archived = [], proposals = [], repositories = [], maxConcurrentRuns, selectedRunId, onOpen, onNew, metricsOpen = false, onMetrics, onClose, queueActions, proposalActions }: {
   runs: RunSummary[];
   queued: QueuedRunView[];
-  archived?: RunSummary[];
+  archived?: RunSummary[] | undefined;
   /** The checkouts a ticket of the watcher can be sent to when it has none of its own. */
   repositories?: RepositoryOption[];
-  proposals?: TicketProposal[];
+  proposals?: TicketProposal[] | undefined;
   maxConcurrentRuns: number;
   selectedRunId: string | null;
   onOpen: (runId: string) => void;

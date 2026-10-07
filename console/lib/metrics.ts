@@ -1,3 +1,4 @@
+import { defined } from "./defined";
 import type { RunMetrics } from "./types";
 
 /** Tokens in the unit a person compares: thousands below a million, millions above: "412k", "1.61M". */
@@ -24,7 +25,10 @@ export function median(values: number[]) {
   if (values.length === 0) return undefined;
   const sorted = [...values].sort((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  const upper = sorted[middle];
+  const lower = sorted[middle - 1];
+  if (upper === undefined) return undefined;
+  return sorted.length % 2 || lower === undefined ? upper : (lower + upper) / 2;
 }
 
 const ROLES: Record<string, string> = {
@@ -64,9 +68,11 @@ export function summarize(runs: RunMetrics[]): MetricsSummary | undefined {
   const measured = delivered.filter((run) => run.tokens);
   return {
     runs: delivered.length,
-    tokens: median(measured.map((run) => run.tokens!.total.total)),
-    activeMs: median(delivered.map((run) => run.time.activeMs)),
-    userWaitMs: median(delivered.map((run) => run.time.userWaitMs)),
-    pilotShare: median(measured.map((run) => run.tokens!.pilotShare)),
+    ...defined({
+      tokens: median(measured.map((run) => run.tokens!.total.total)),
+      activeMs: median(delivered.map((run) => run.time.activeMs)),
+      userWaitMs: median(delivered.map((run) => run.time.userWaitMs)),
+      pilotShare: median(measured.map((run) => run.tokens!.pilotShare)),
+    }),
   };
 }

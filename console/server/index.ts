@@ -1,3 +1,4 @@
+import { defined } from "../lib/defined.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir } from "node:fs/promises";
 import os from "node:os";
@@ -154,7 +155,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
       send(socket, { type: "batch.unresolved", tickets: unresolved });
       return;
     }
-    const outcome = await registry.enqueueBatch(resolved, { instruction: message.instruction });
+    const outcome = await registry.enqueueBatch(resolved, defined({ instruction: message.instruction }));
     send(socket, { type: "batch.result", batchId: outcome.batchId, accepted: outcome.entries.length, duplicates: outcome.duplicates });
     return;
   }
@@ -317,9 +318,9 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }
-  const acceptanceRoute = request.method === "GET" ? requestPath?.match(/^\/api\/runs\/([^/]+)\/acceptance$/) : null;
+  const acceptanceRoute = request.method === "GET" ? requestPath?.match(/^\/api\/runs\/([^/]+)\/acceptance$/)?.[1] : undefined;
   if (acceptanceRoute) {
-    const session = registry.get(decodeURIComponent(acceptanceRoute[1]));
+    const session = registry.get(decodeURIComponent(acceptanceRoute));
     if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
     // Asking is also a moment to look at the code again (at most every few
     // seconds): evidence goes stale when the code moves, and nothing else
@@ -328,23 +329,23 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Coverage unavailable." }); }
     return;
   }
-  if (request.method === "GET" && request.url?.startsWith("/api/runs/")) {
-    const session = registry.get(decodeURIComponent(request.url.slice("/api/runs/".length).split("?")[0]));
+  if (request.method === "GET" && requestPath?.startsWith("/api/runs/")) {
+    const session = registry.get(decodeURIComponent(requestPath.slice("/api/runs/".length)));
     if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
     respond(response, 200, { state: session.state });
     return;
   }
   // Archived runs have routes of their own: nothing here can reach a live session, a slot or a checkout.
-  const archiveAcceptance = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)\/acceptance$/) : null;
+  const archiveAcceptance = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)\/acceptance$/)?.[1] : undefined;
   if (archiveAcceptance) {
-    const archived = registry.archive.get(decodeURIComponent(archiveAcceptance[1]));
+    const archived = registry.archive.get(decodeURIComponent(archiveAcceptance));
     if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
     respond(response, 200, archived.acceptanceView ?? archived.evidence.view());
     return;
   }
-  const archiveRun = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)$/) : null;
+  const archiveRun = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)$/)?.[1] : undefined;
   if (archiveRun) {
-    const archived = registry.archive.get(decodeURIComponent(archiveRun[1]));
+    const archived = registry.archive.get(decodeURIComponent(archiveRun));
     if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
     respond(response, 200, { state: archived.state });
     return;
@@ -449,7 +450,7 @@ wss.on("connection", (socket) => {
       // Answered to the page that asked, never written into a run's state: a
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
-      send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined, ...requestIdOf(message) });
+      send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message) });
       if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
     }
   });

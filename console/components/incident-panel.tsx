@@ -19,7 +19,7 @@ const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--lin
 export function IncidentPanel({ run, connected, result, onAction, onOpenTerminal, onOpenConversation }: {
   run: RunState;
   connected: boolean;
-  result?: IncidentResult;
+  result?: IncidentResult | undefined;
   onAction: (incident: RunIncident, action: IncidentAction, reason?: string) => void;
   onOpenTerminal: () => void;
   onOpenConversation: () => void;

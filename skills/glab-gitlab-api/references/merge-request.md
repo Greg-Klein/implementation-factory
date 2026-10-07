@@ -134,7 +134,7 @@ The response's `markdown` field is already a ready-to-embed image link. Paste ea
 Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-harness:review`:
 
 ```md
-## Revue automatisée
+## Pré-revue automatisée
 
 Les revues senior, QA et design ont tourné sur N rounds. Les constats ci-dessous sont ce qui reste après la boucle de retouches.
 

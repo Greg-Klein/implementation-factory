@@ -587,12 +587,13 @@ export function reviewFindingsStore(storageRoot: string, repository: string) {
  * The findings of a `senior-findings.json`, or undefined when the file is not
  * one. An entry that cannot be counted (no id, no summary) is dropped, and a
  * category outside the list is filed under `other` rather than refused: a
- * reviewer that invents a word still leaves its report readable.
+ * reviewer that invents a word still leaves its report readable. A bare array
+ * is read as the list itself: a review that found nothing often writes `[]`.
  */
 export function readReviewFindings(text: string): ReviewFinding[] | undefined {
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { return undefined; }
-  const entries = (parsed as { findings?: unknown } | null)?.findings;
+  const entries = Array.isArray(parsed) ? parsed : (parsed as { findings?: unknown } | null)?.findings;
   if (!Array.isArray(entries)) return undefined;
   const findings: ReviewFinding[] = [];
   for (const entry of entries) {

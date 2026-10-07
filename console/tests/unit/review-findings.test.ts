@@ -54,8 +54,16 @@ describe("reading the findings a senior reviewer wrote", () => {
     ]);
   });
 
+  it("should read a bare array as the list of findings", () => {
+    expect(readReviewFindings(JSON.stringify([
+      { id: "SR-R1-1", category: "edge-case", severity: "P1", summary: "The empty list is not handled." },
+      { id: "SR-R1-2", category: "edge-case" },
+    ]))).toEqual([{ id: "SR-R1-1", category: "edge-case", severity: "P1", summary: "The empty list is not handled.", fixed: false }]);
+  });
+
   it("should tell a review that found nothing from a file that is not one", () => {
     expect(readReviewFindings("{\"findings\": []}")).toEqual([]);
+    expect(readReviewFindings("[]")).toEqual([]);
     expect(readReviewFindings("{\"items\": []}")).toBeUndefined();
     expect(readReviewFindings("# Revue senior")).toBeUndefined();
   });

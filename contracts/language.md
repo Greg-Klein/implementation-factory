@@ -37,7 +37,7 @@ The ones several agents rely on have a fixed English form, so that everyone name
 | `## Critères d'acceptation` | `## Acceptance criteria` |
 | `## Notes d'implémentation` | `## Implementation notes` |
 | `Hors scope selon le ticket :` | `Out of scope per the ticket:` |
-| `## Revue automatisée` | `## Automated review` |
+| `## Pré-revue automatisée` | `## Automated pre-review` |
 | `### Constats` | `### Findings` |
 | `### Corrigé pendant la boucle` | `### Fixed during the loop` |
 | `### Constats écartés` | `### Dismissed findings` |

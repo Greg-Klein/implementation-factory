@@ -12,7 +12,8 @@ import { inWorkflow, taskDirectory } from "./guard.mjs";
  * `.claude/tasks/gate-log.jsonl`, which the pilot reads instead of the report.
  *
  * Three things keep it from doing harm. It blocks once: the second stop is
- * always let through and recorded as it stands. It fails open: a check that
+ * always let through and recorded as it stands, and an agent that already
+ * handed its report back is never held, since it would not resume. It fails open: a check that
  * cannot run is `skipped`, a package with nothing to run is `none`, and any
  * error in here lets the agent go. And it stays in scope: lint and tests cover
  * the files this agent edited, and while a peer of a parallel batch is still
@@ -89,6 +90,31 @@ export function gateObserve(payload, env = process.env) {
   if (typeof edited !== "string" || !edited) return;
   mkdirSync(directory, { recursive: true });
   appendFileSync(agentFile(directory, agentId, "files"), `${path.resolve(payload.cwd || ".", edited)}\n`);
+}
+
+/**
+ * Whether the agent ended its turn by handing its report back to its caller.
+ * A background agent does so before its stop fires, and a block then reaches a
+ * transcript nobody reads again: the agent never resumes. False when the
+ * transcript cannot be read.
+ */
+function handedBack(payload) {
+  const transcript = payload.agent_transcript_path
+    || (payload.transcript_path && payload.session_id
+      ? path.join(path.dirname(payload.transcript_path), String(payload.session_id), "subagents", `agent-${payload.agent_id}.jsonl`)
+      : undefined);
+  if (typeof transcript !== "string") return false;
+  let lines;
+  try { lines = readFileSync(transcript, "utf8").trim().split("\n"); } catch { return false; }
+  for (const line of lines.reverse()) {
+    let entry;
+    try { entry = JSON.parse(line); } catch { continue; }
+    if (entry?.type !== "assistant") continue;
+    const content = entry.message?.content;
+    const last = Array.isArray(content) ? content[content.length - 1] : undefined;
+    return last?.type === "tool_use" && last.name === "SubagentHandback";
+  }
+  return false;
 }
 
 function editedFiles(directory, agentId) {
@@ -312,6 +338,7 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
   // for the session's own stop only, and a gate that forgot it had already sent
   // this agent back would hold it for ever.
   const retry = Boolean(payload.stop_hook_active) || existsSync(sentBack);
+  const delivered = handedBack(payload);
   const top = repositoryRoot(payload.cwd || ".");
   const fromTree = treeEdits(directory, agentId, payload.cwd || ".").filter((file) => existsSync(file));
   const inRepository = (file) => file.startsWith(top + path.sep) && !file.startsWith(path.join(top, ".claude") + path.sep);
@@ -320,7 +347,7 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
   const scope = files.slice(0, 20).map((file) => path.relative(top, file));
   const record = (entry) => {
     if (!tasks) return;
-    appendFileSync(path.join(tasks, LEDGER), `${JSON.stringify({ at: new Date().toISOString(), agent: payload.agent_type, agentId, retry, ...entry, files: scope })}\n`);
+    appendFileSync(path.join(tasks, LEDGER), `${JSON.stringify({ at: new Date().toISOString(), agent: payload.agent_type, agentId, retry, ...(delivered ? { handedBack: true } : {}), ...entry, files: scope })}\n`);
   };
   if (!files.length) {
     // Written so an agent that edited nothing reads as that, and not as a gate that never ran.
@@ -372,7 +399,7 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
     }
   }
 
-  if (failures.length && !retry) {
+  if (failures.length && !retry && !delivered) {
     mkdirSync(directory, { recursive: true });
     writeFileSync(sentBack, "");
     return [

@@ -260,12 +260,12 @@ The files an agent edited are noted from its `Edit` and `Write` calls, per agent
 | lint | the edited files | the local `eslint`, when the package or the repository has a configuration |
 | related tests | the edited files | `vitest related`, `jest --findRelatedTests` or the `react-scripts` equivalent |
 
-Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry`, `ms` (how long the check took, on the lines of a check that was started) and a `result`:
+Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry`, `handedBack` (only when true), `ms` (how long the check took, on the lines of a check that was started) and a `result`:
 
 | Result | Meaning |
 | --- | --- |
 | `pass` | the check ran and passed |
-| `fail` | the check ran and failed. With `retry: false` the agent was sent back with the output; with `retry: true` it was let go with the failure still there |
+| `fail` | the check ran and failed. With `retry: false` the agent was sent back with the output; with `retry: true` it was let go with the failure still there; with `handedBack: true` it had already handed its report back and was let go at once |
 | `inconclusive` | every type error is outside the agent's files, and another gated agent was editing. The errors come from the half-written code of a parallel batch. The pilot's repository-wide gates settle them once the batch is over |
 | `skipped` | the check could not run: tool missing, ten minutes exceeded, or the twenty minutes of the whole gate spent |
 | `none` | nothing to run: no edit recorded for this agent, only documentation or YAML edited, no package above its files, or a package with no check |
@@ -273,6 +273,7 @@ Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twent
 Choices worth knowing before changing it:
 
 - **It blocks once.** The second stop is always let through and recorded as it stands, so no agent loops on it. The gate keeps its own note of having sent an agent back, because Claude Code documents `stop_hook_active` only for the stop of the session.
+- **It does not hold an agent that already handed back.** A background agent ends its turn with a `SubagentHandback` call, which delivers its report before its stop fires; a block then lands in a transcript the agent never reads again, and the stop it held never reaches the console, which shows the agent abandoned. The gate reads the agent's transcript (`agent_transcript_path`, otherwise `<session>/subagents/agent-<id>.jsonl` beside the session's), and when its last turn is that call it records the checks with `handedBack: true` and lets the stop through. The pilot or the orchestrator relaunches the work. A transcript it cannot read leaves the block as it was.
 - **It fails open.** An error in the gate, a check that cannot run and a session outside a run all let the agent go. `IMPL_STOP_GATE=off` in the console's environment turns it off.
 - **It runs the tests related to the edited files.** A legacy suite is often red on the base branch, and an agent blocked on a failure it did not cause learns to ignore the gate. The pilot runs the whole suite, on a tree nobody is editing.
 - **A blocked stop is not forwarded to the console**, like a call the guard refuses, because the agent is still working.

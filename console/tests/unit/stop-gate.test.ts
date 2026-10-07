@@ -164,6 +164,56 @@ describe("the stop gate", () => {
     expect(stop("a1")?.decision).toBe("block");
   });
 
+  describe("an agent that handed its report back before its stop", () => {
+    /** The agent's transcript as Claude Code keeps it beside the session's, ending on the given content of its last turn. */
+    function transcript(agentId: string, last: object) {
+      const directory = path.join(state, "transcripts", "s1", "subagents");
+      mkdirSync(directory, { recursive: true });
+      const turns = [
+        { type: "assistant", message: { content: [{ type: "text", text: "Done." }, last] } },
+        { type: "user", message: { content: [{ type: "tool_result", content: "Report delivered to your caller." }] } },
+      ];
+      writeFileSync(path.join(directory, `agent-${agentId}.jsonl`), turns.map((turn) => JSON.stringify(turn)).join("\n") + "\n");
+      return { transcript_path: path.join(state, "transcripts", "s1.jsonl") };
+    }
+    const handback = { type: "tool_use", name: "SubagentHandback", input: { message: "T1 done." } };
+
+    it("should record the failure without holding it, and release it as a peer", () => {
+      start("a1");
+      edit("a1", "src/cart.ts");
+      fails("tsc", "src/cart.ts(3,1): error TS2322: Type 'string' is not assignable to type 'number'.");
+      expect(stop("a1", transcript("a1", handback))).toBeUndefined();
+      expect(ledger()).toEqual([expect.objectContaining({ agentId: "a1", step: "type-check", result: "fail", retry: false, handedBack: true })]);
+
+      // Let go, it no longer covers the next agent's type errors as a peer's half-written code.
+      start("a2");
+      edit("a2", "src/total.ts");
+      expect(stop("a2")?.reason).toContain("type-check failed");
+    });
+
+    it("should find the transcript the stop names itself", () => {
+      start("a1");
+      edit("a1", "src/cart.ts");
+      fails("eslint", "src/cart.ts: unused variable");
+      const { transcript_path } = transcript("a1", handback);
+      const named = path.join(state, "agent.jsonl");
+      writeFileSync(named, readFileSync(path.join(path.dirname(transcript_path), "s1", "subagents", "agent-a1.jsonl")));
+      expect(stop("a1", { agent_transcript_path: named })).toBeUndefined();
+      expect(ledger().find(({ step }) => step === "lint")).toMatchObject({ result: "fail", handedBack: true });
+    });
+
+    it("should still send back an agent whose last turn is not a hand-back, or whose transcript cannot be read", () => {
+      start("a1");
+      edit("a1", "src/cart.ts");
+      fails("tsc", "src/cart.ts(3,1): error TS2322: Type 'string' is not assignable to type 'number'.");
+      expect(stop("a1", transcript("a1", { type: "text", text: "Finished." }))?.decision).toBe("block");
+      start("a2");
+      edit("a2", "src/cart.ts");
+      expect(stop("a2", { transcript_path: path.join(state, "missing.jsonl") })?.decision).toBe("block");
+      expect(ledger().every((line) => !("handedBack" in line))).toBe(true);
+    });
+  });
+
   it("should not hold an agent for type errors outside its files while a peer is editing, and hold it when it works alone", () => {
     start("a1");
     start("a2");

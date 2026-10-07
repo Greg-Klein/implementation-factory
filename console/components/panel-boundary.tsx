@@ -13,7 +13,7 @@ type State = { error?: Error; resetKey?: string | null };
  * run on screen: what broke on one run says nothing about the next.
  */
 export class PanelBoundary extends Component<Props, State> {
-  state: State = { resetKey: this.props.resetKey };
+  override state: State = { resetKey: this.props.resetKey };
 
   static getDerivedStateFromError(error: unknown): Partial<State> {
     return { error: error instanceof Error ? error : new Error(String(error)) };
@@ -23,7 +23,7 @@ export class PanelBoundary extends Component<Props, State> {
     return props.resetKey === state.resetKey ? null : { error: undefined, resetKey: props.resetKey };
   }
 
-  render() {
+  override render() {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (

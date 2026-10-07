@@ -7,10 +7,6 @@ import type { ParsedTickets } from "@/lib/ticket-urls";
 import type { RepositoryOption, UnresolvedTicket } from "@/lib/types";
 import { TargetPicker } from "./target-picker";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
-}
-
 function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting, onOpenRecipe }: {
   value: string;
   onChange: (value: string, project?: string) => void;

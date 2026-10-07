@@ -251,7 +251,7 @@ A refused call is not forwarded to the console. A guard that cannot read what it
 
 A developer report says its checks pass, and nothing verified that sentence. When `developer` or `senior-reviewer` stops during a run of the workflow, `hooks/gate.mjs`, called by `hooks/emit.mjs`, runs the checks its edits call for and writes each verdict to `.claude/tasks/gate-log.jsonl`. The pilot and the review orchestrator take the verdict from that file.
 
-The files an agent edited are noted from its `Edit` and `Write` calls, per agent. For each package they belong to (the nearest `package.json` that is more than repository tooling):
+The files an agent edited are noted from its `Edit` and `Write` calls, per agent, and read off the working tree: when a gated agent starts while no other one is at work, the gate fingerprints every path git sees as changed, and at its stop every path whose content moved since counts as edited. Agents write most of their code through the shell (`sed`, a heredoc, a code generator), which no tool input shows. Two agents in one tree cannot tell their changes apart, so the fingerprint is not taken while a peer works and is dropped when one starts; a commit made while the agent worked voids it too. For each package they belong to (the nearest `package.json` that is more than repository tooling):
 
 | Check | Covers | Command |
 | --- | --- | --- |
@@ -277,7 +277,7 @@ Choices worth knowing before changing it:
 - **A blocked stop is not forwarded to the console**, like a call the guard refuses, because the agent is still working.
 - **The message gives results.** The agent definitions say a `stop gate` message is the output of the agent's own checks. An agent that was not told so treats a hook reason as text from outside and declines to act on it.
 
-The gate has three limits. It does not record an edit made through the shell (`sed`, a code generator). It checks Node packages only. While a gate runs for more than `IMPL_STALL_MINUTES`, the console shows a doubt on the run.
+The gate has three limits. During a parallel batch it only sees the edits made through `Edit` and `Write`. It checks Node packages only. While a gate runs for more than `IMPL_STALL_MINUTES`, the console shows a doubt on the run.
 
 ## Runtime recipe of a repository
 

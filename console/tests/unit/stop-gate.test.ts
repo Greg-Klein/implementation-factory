@@ -50,6 +50,7 @@ beforeEach(() => {
   writeFileSync(path.join(cwd, "tsconfig.json"), "{}");
   writeFileSync(path.join(cwd, "eslint.config.js"), "");
   for (const file of ["src/cart.ts", "src/total.ts", "src/other.ts"]) writeFileSync(path.join(cwd, file), "");
+  writeFileSync(path.join(cwd, ".gitignore"), "node_modules/\n.*-args\n.*-exit\n.*-output\n");
   for (const name of ["tsc", "eslint", "jest"]) binary(name);
 });
 afterEach(() => { rmSync(cwd, { recursive: true, force: true }); rmSync(state, { recursive: true, force: true }); });
@@ -87,6 +88,42 @@ describe("the stop gate", () => {
     stop("a1");
     expect(argumentsOf("eslint")).toEqual([path.join(cwd, "src/cart.ts")]);
     expect(argumentsOf("jest")).toEqual([`--findRelatedTests --passWithNoTests ${path.join(cwd, "src/cart.ts")}`]);
+  });
+
+  it("should check the files an agent changed through the shell, and not those already changed before it started", () => {
+    writeFileSync(path.join(cwd, "src/total.ts"), "export const total = 0;\n");
+    start("a1");
+    writeFileSync(path.join(cwd, "src/cart.ts"), "export const cart = [];\n");
+    stop("a1");
+    expect(argumentsOf("eslint")).toEqual([path.join(cwd, "src/cart.ts")]);
+    expect(ledger()[0]).toMatchObject({ agentId: "a1", step: "type-check", result: "pass", files: ["src/cart.ts"] });
+  });
+
+  it("should send back an agent whose shell edit breaks the type-check", () => {
+    start("a1");
+    writeFileSync(path.join(cwd, "src/cart.ts"), "export const cart: number = 'one';\n");
+    fails("tsc", "src/cart.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.");
+    expect(stop("a1")?.reason).toContain("error TS2322");
+  });
+
+  it("should not take a peer's shell edits for its own when agents of a batch work side by side", () => {
+    start("a1");
+    start("a2");
+    writeFileSync(path.join(cwd, "src/other.ts"), "export const other = 1;\n");
+    stop("a2");
+    stop("a1");
+    expect(ledger().map(({ agentId, step, result }) => `${agentId} ${step}: ${result}`)).toEqual(["a2 no edited file recorded: none", "a1 no edited file recorded: none"]);
+    expect(argumentsOf("eslint")).toEqual([]);
+  });
+
+  it("should not read the tree when a commit was made while the agent worked", () => {
+    spawnSync("git", ["add", "-A"], { cwd });
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"], { cwd });
+    writeFileSync(path.join(cwd, "src/total.ts"), "export const total = 0;\n");
+    start("a1");
+    spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "total"], { cwd });
+    stop("a1");
+    expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["no edited file recorded: none"]);
   });
 
   it("should send the agent back once with the failing output, then let it go and record the failure that remains", () => {

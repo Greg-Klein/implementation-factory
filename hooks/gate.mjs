@@ -17,6 +17,10 @@ import { inWorkflow, taskDirectory } from "./guard.mjs";
  * error in here lets the agent go. And it stays in scope: lint and tests cover
  * the files this agent edited, and while a peer of a parallel batch is still
  * editing, a type error outside those files is `inconclusive`, not a failure.
+ *
+ * Agents mostly edit through the shell, which no tool input shows, so the
+ * files an agent changed are also read off the working tree: what differs
+ * from the state it was in when the agent started.
  */
 
 const GATED = ["implementation-harness:developer", "implementation-harness:senior-reviewer"];
@@ -29,6 +33,8 @@ const ESLINT_CONFIGS = [
 const LEDGER = "gate-log.jsonl";
 const TAIL_LINES = 60;
 const MAX_OUTPUT = 2_000_000;
+/** Beyond this many changed paths the tree is not fingerprinted: hashing them would cost more than the gate saves. */
+const MAX_TREE_PATHS = 5000;
 /** How long an agent may stay silent and still count as editing beside this one. */
 const PEER_QUIET_MS = 15 * 60_000;
 
@@ -65,7 +71,12 @@ export function gateObserve(payload, env = process.env) {
   if (payload.hook_event_name === "SubagentStart") {
     if (!GATED.includes(payload.agent_type)) return;
     mkdirSync(directory, { recursive: true });
+    // Two agents at work in one tree cannot tell their changes apart, even after one of them stops.
+    const peers = peersEditing(directory, agentId, Date.now());
+    for (const entry of readdirSync(directory).filter((name) => name.endsWith(".active"))) rmSync(path.join(directory, entry.replace(/\.active$/, ".tree")), { force: true });
     writeFileSync(agentFile(directory, agentId, "active"), "");
+    const tree = peers ? undefined : treeFingerprint(payload.cwd || ".");
+    if (tree) writeFileSync(agentFile(directory, agentId, "tree"), JSON.stringify(tree));
     return;
   }
   if (payload.hook_event_name !== "PreToolUse") return;
@@ -83,6 +94,57 @@ function editedFiles(directory, agentId) {
   try { text = readFileSync(agentFile(directory, agentId, "files"), "utf8"); } catch { /* the agent edited nothing through a tool */ }
   // Resolved like git resolves the repository, or a checkout reached through a symlink would hold none of them.
   return [...new Set(text.split("\n").filter(Boolean).map((file) => { try { return realpathSync(file); } catch { return file; } }))];
+}
+
+/**
+ * The content of every path git sees as changed, untracked included, keyed by
+ * its path from the repository root, with the commit it is changed against. A
+ * deleted path has no content. Undefined when git cannot say.
+ */
+function treeFingerprint(cwd) {
+  const top = repositoryRoot(cwd);
+  if (!top) return undefined;
+  const status = spawnSync("git", ["-C", top, "status", "--porcelain=v1", "-z", "--untracked-files=all"], { encoding: "utf8", timeout: 30_000, maxBuffer: 64 * 1024 * 1024 });
+  if (status.status !== 0) return undefined;
+  const fields = status.stdout.split("\0");
+  const paths = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    const entry = fields[index];
+    if (entry.length < 4) continue;
+    paths.push(entry.slice(3));
+    // A rename or a copy is followed by the path it came from.
+    if (/[RC]/.test(entry.slice(0, 2))) index += 1;
+  }
+  if (paths.length > MAX_TREE_PATHS) return undefined;
+  const present = paths.filter((file) => existsSync(path.join(top, file)));
+  const hashed = present.length
+    ? spawnSync("git", ["-C", top, "hash-object", "--stdin-paths"], { input: present.join("\n"), encoding: "utf8", timeout: 30_000, maxBuffer: 64 * 1024 * 1024 })
+    : { status: 0, stdout: "" };
+  const hashes = hashed.stdout.split("\n").filter(Boolean);
+  if (hashed.status !== 0 || hashes.length !== present.length) return undefined;
+  const files = Object.fromEntries(paths.map((file) => [file, null]));
+  present.forEach((file, index) => { files[file] = hashes[index]; });
+  const head = spawnSync("git", ["-C", top, "rev-parse", "--verify", "-q", "HEAD"], { encoding: "utf8", timeout: 30_000 });
+  return { top, head: head.status === 0 ? head.stdout.trim() : null, files };
+}
+
+/**
+ * The paths whose content changed between two fingerprints of one tree, as
+ * absolute paths. A path changed at both ends with the same content was not
+ * touched in between; one changed at a single end was. Undefined when the
+ * commit moved in between, since a commit makes the changes it took look undone.
+ */
+function treeChanges(before, after) {
+  if (!before || !after || before.top !== after.top || before.head !== after.head) return undefined;
+  const changed = new Set();
+  for (const [file, hash] of Object.entries(after.files)) if (!(file in before.files) || before.files[file] !== hash) changed.add(file);
+  for (const file of Object.keys(before.files)) if (!(file in after.files)) changed.add(file);
+  return [...changed].map((file) => path.join(after.top, file));
+}
+
+function treeEdits(directory, agentId, cwd) {
+  const before = readJson(agentFile(directory, agentId, "tree"));
+  return before ? treeChanges(before, treeFingerprint(cwd)) ?? [] : [];
 }
 
 /** Whether another gated agent of the session was at work recently: its half-written code is in the tree. */
@@ -240,7 +302,7 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
   const agentId = payload.agent_id;
   const sentBack = agentFile(directory, agentId, "sent-back");
   const release = () => {
-    for (const extension of ["files", "active", "sent-back"]) rmSync(agentFile(directory, agentId, extension), { force: true });
+    for (const extension of ["files", "active", "sent-back", "tree"]) rmSync(agentFile(directory, agentId, extension), { force: true });
   };
   if (gateDisabled(env)) { release(); return undefined; }
 
@@ -249,7 +311,9 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
   // this agent back would hold it for ever.
   const retry = Boolean(payload.stop_hook_active) || existsSync(sentBack);
   const top = repositoryRoot(payload.cwd || ".");
-  const files = top ? editedFiles(directory, agentId).filter((file) => file.startsWith(top + path.sep) && !file.startsWith(path.join(top, ".claude") + path.sep)) : [];
+  const fromTree = treeEdits(directory, agentId, payload.cwd || ".").filter((file) => existsSync(file));
+  const inRepository = (file) => file.startsWith(top + path.sep) && !file.startsWith(path.join(top, ".claude") + path.sep);
+  const files = top ? [...new Set([...editedFiles(directory, agentId), ...fromTree])].filter(inRepository) : [];
   // The files say which task a line is about to a reader that only knows the plan's file scopes.
   const scope = files.slice(0, 20).map((file) => path.relative(top, file));
   const record = (entry) => {

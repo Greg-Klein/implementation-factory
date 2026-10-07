@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { excludeLine, isRunWorktreePath, listSetting, relativeHooksPath, runWorktreePath, withExcludeLines, worktreeKeptDetail, worktreeProvisioning, worktreeRemoval } from "../../server/domain";
+import { dependencyDrift, excludeLine, isRunWorktreePath, lockedPackages, listSetting, relativeHooksPath, runWorktreePath, withExcludeLines, worktreeKeptDetail, worktreeProvisioning, worktreeRemoval } from "../../server/domain";
 import type { RunState, WorkflowState } from "../../server/types";
 import { overridden, type Overrides } from "./overrides";
 
@@ -119,6 +119,41 @@ describe("what a worktree takes from the ignored files of the checkout", () => {
 
   it("should not take a file for a directory, nor a directory for a file", () => {
     expect(worktreeProvisioning(["node_modules", ".env/"], ["node_modules"], [".env*"])).toEqual({ directories: [], files: [], paths: [], hooks: [] });
+  });
+});
+
+describe("what a package-lock.json pins at the top of node_modules", () => {
+  const lockfile = {
+    lockfileVersion: 3,
+    packages: {
+      "": { name: "app", dependencies: { "left-pad": "^1.0.0" } },
+      "node_modules/left-pad": { version: "1.3.0" },
+      "node_modules/@scope/kit": { version: "2.0.0", dev: true },
+      "node_modules/kit/node_modules/inner": { version: "0.1.0" },
+      "node_modules/fsevents": { version: "2.3.3", optional: true },
+      "node_modules/sometimes": { version: "1.0.0", devOptional: true },
+      "node_modules/local": { resolved: "packages/local", link: true },
+      "packages/local": { version: "0.0.1" },
+    },
+  };
+
+  it("should list the top-level packages with their version, scoped ones included", () => {
+    expect(lockedPackages(lockfile)).toEqual([{ name: "left-pad", version: "1.3.0" }, { name: "@scope/kit", version: "2.0.0" }]);
+  });
+
+  it("should not judge a file npm 7 or later did not write", () => {
+    expect(lockedPackages({ lockfileVersion: 1, dependencies: { "left-pad": { version: "1.3.0" } } })).toBeUndefined();
+    expect(lockedPackages(["node_modules/left-pad"])).toBeUndefined();
+    expect(lockedPackages(null)).toBeUndefined();
+  });
+
+  it("should report a package missing or installed at another version, and nothing for one that matches", () => {
+    const locked = lockedPackages(lockfile) ?? [];
+    expect(dependencyDrift(locked, ["1.3.0", "2.0.0"])).toEqual([]);
+    expect(dependencyDrift(locked, ["1.2.0", undefined])).toEqual([
+      { name: "left-pad", version: "1.3.0", installed: "1.2.0" },
+      { name: "@scope/kit", version: "2.0.0", installed: undefined },
+    ]);
   });
 });
 

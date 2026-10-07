@@ -85,6 +85,44 @@ describe("the worktree a run starts in", () => {
     expect(git(repository, "status", "--porcelain")).toBe("");
   });
 
+  describe("when the checkout's dependencies are compared with its lockfile", () => {
+    function lockDep(version: string) {
+      writeFileSync(path.join(repository, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: { "": { name: "app" }, "node_modules/dep": { version }, "node_modules/pdf-parse": { version: "2.4.5" } } }));
+      git(repository, "add", "package-lock.json");
+      git(repository, "commit", "-q", "-m", "lock");
+    }
+    const installDep = (name: string, version: string) => writeFileSync(path.join(repository, "node_modules", name, "package.json"), JSON.stringify({ name, version }));
+
+    it("should name the directory and the packages an install behind the lockfile lacks", async () => {
+      lockDep("1.2.0");
+      installDep("dep", "1.0.0");
+      const prepared = await lifecycle.prepareRunWorktree(repository, "run-stale");
+      expect(prepared.stale).toEqual({ directories: ["node_modules"], detail: "node_modules: 2 packages differ from package-lock.json (dep 1.0.0 instead of 1.2.0, pdf-parse missing)" });
+      expect(prepared.unchecked).toBeUndefined();
+      expect(prepared.worktree.dependencies).toBe("clone");
+    });
+
+    it("should report nothing when the install matches the lockfile", async () => {
+      lockDep("1.2.0");
+      installDep("dep", "1.2.0");
+      mkdirSync(path.join(repository, "node_modules", "pdf-parse"));
+      installDep("pdf-parse", "2.4.5");
+      const prepared = await lifecycle.prepareRunWorktree(repository, "run-fresh");
+      expect(prepared).not.toHaveProperty("stale");
+      expect(prepared).not.toHaveProperty("unchecked");
+    });
+
+    it("should say the check could not run when the lockfile does not parse, and keep the dependencies", async () => {
+      writeFileSync(path.join(repository, "package-lock.json"), "{ not json");
+      git(repository, "add", "package-lock.json");
+      git(repository, "commit", "-q", "-m", "broken lock");
+      const prepared = await lifecycle.prepareRunWorktree(repository, "run-unreadable");
+      expect(prepared.unchecked).toBeTruthy();
+      expect(prepared).not.toHaveProperty("stale");
+      expect(prepared.worktree.dependencies).toBe("clone");
+    });
+  });
+
   it("should fail rather than hand back a path when the repository cannot take a worktree", async () => {
     const plain = path.join(storage, `plain-${counter}`);
     mkdirSync(plain);

@@ -3,7 +3,7 @@ import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ARCHIVED_ACTIVITIES, isMissingFile, now, reportFailure } from "./context.js";
 import { worktreeCopyFiles, worktreeDependencyDirectories } from "./config.js";
-import { isRunWorktreePath, runHoldsRepository, runWorktreePath, sourceRepository, worktreeKeptDetail, worktreeRemoval } from "./domain.js";
+import { dependencyDrift, isRunWorktreePath, lockedPackages, runHoldsRepository, runWorktreePath, sourceRepository, worktreeKeptDetail, worktreeRemoval } from "./domain.js";
 import { normalizeArchivedRun } from "./run-incidents.js";
 import { createRunWorktree, provisionWorktree, pruneWorktrees, removeRunWorktree, worktreeFacts } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
@@ -24,22 +24,73 @@ const REMOVED = "Worktree removed";
  * Creates the worktree and fills it. A failure to create it is the caller's
  * to report, and the run must not start; a failure to bring the dependencies
  * over leaves a worktree that works after an install, so it is only reported
- * back as `warning`.
+ * back as `warning`. Dependencies behind their lockfile come back as `stale`,
+ * and a check that could not read them as `unchecked`.
  */
-export async function prepareRunWorktree(repository: string, runId: string): Promise<{ worktree: RunWorktree; summary: string; warning?: string }> {
+export async function prepareRunWorktree(repository: string, runId: string): Promise<{ worktree: RunWorktree; summary: string; warning?: string; stale?: StaleDependencies; unchecked?: string }> {
   const worktreePath = runWorktreePath(repository, runId);
   await createRunWorktree(repository, worktreePath);
   try {
     const provisioned = await provisionWorktree(repository, worktreePath, { dependencyDirectories: worktreeDependencyDirectories, copyFiles: worktreeCopyFiles });
+    const checked = await staleDependencies(worktreePath, [...provisioned.cloned, ...provisioned.linked]).then(
+      (stale) => (stale.directories.length > 0 ? { stale } : {}),
+      (error: unknown) => ({ unchecked: error instanceof Error ? error.message.split("\n")[0] : String(error) }),
+    );
     const parts = [
       provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dependency ${provisioned.cloned.length > 1 ? "directories" : "directory"} cloned` : "",
       provisioned.linked.length > 0 ? `${provisioned.linked.length} linked by symlink` : "",
       provisioned.copied.length > 0 ? `${provisioned.copied.length} configuration file${provisioned.copied.length > 1 ? "s" : ""} copied` : "",
       provisioned.hooks.length > 0 ? `git hooks copied (${provisioned.hooks.join(", ")})` : "",
     ].filter(Boolean);
-    return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", ") };
+    return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", "), ...checked };
   } catch (error) {
     return { worktree: { path: worktreePath, state: "active" }, summary: "", ...defined({ warning: error instanceof Error ? error.message.split("\n")[0] : String(error) }) };
+  }
+}
+
+export type StaleDependencies = { directories: string[]; detail: string };
+
+/**
+ * The dependency directories brought over that do not hold what the lockfile
+ * of the checked out code pins: the main checkout's install may be older than
+ * its lockfile, and the run would then build and test against other versions
+ * than the repository's. Only npm's `package-lock.json` is read; a directory
+ * with no lockfile beside it, or another package manager, is not judged.
+ */
+export async function staleDependencies(worktreePath: string, directories: string[]): Promise<StaleDependencies> {
+  const stale: string[] = [];
+  const details: string[] = [];
+  for (const relative of directories.filter((directory) => path.basename(directory) === "node_modules").sort()) {
+    const text = await readUnlessMissing(path.join(worktreePath, path.dirname(relative), "package-lock.json"));
+    const locked = text === undefined ? undefined : lockedPackages(JSON.parse(text));
+    if (!locked) continue;
+    const manifests = await Promise.all(locked.map(({ name }) => readUnlessMissing(path.join(worktreePath, relative, name, "package.json"))));
+    const drift = dependencyDrift(locked, manifests.map(installedVersion));
+    if (drift.length === 0) continue;
+    stale.push(relative);
+    const examples = drift.slice(0, 3).map((entry) => (entry.installed === undefined ? `${entry.name} missing` : `${entry.name} ${entry.installed} instead of ${entry.version}`));
+    details.push(`${relative}: ${drift.length} package${drift.length > 1 ? "s" : ""} differ from package-lock.json (${examples.join(", ")}${drift.length > 3 ? ", ..." : ""})`);
+  }
+  return { directories: stale, detail: details.join("; ") };
+}
+
+async function readUnlessMissing(file: string) {
+  try {
+    return await readFile(file, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return undefined;
+    throw error;
+  }
+}
+
+/** The version a package's manifest declares; undefined for a manifest that is absent or does not parse, which an install would replace. */
+function installedVersion(manifest: string | undefined) {
+  if (manifest === undefined) return undefined;
+  try {
+    const version = (JSON.parse(manifest) as { version?: unknown }).version;
+    return typeof version === "string" ? version : undefined;
+  } catch {
+    return undefined;
   }
 }
 

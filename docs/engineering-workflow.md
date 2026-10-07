@@ -102,6 +102,7 @@ The console passes these variables to the session:
 | `IMPL_SOURCE_REPOSITORY` | The main checkout. |
 | `IMPL_SOURCE_BRANCH` | The branch of the main checkout at launch. Absent on a detached HEAD. |
 | `IMPL_WORKTREE_DEPENDENCIES` | `symlink` as soon as one dependency directory is a link, `clone` when all are copies. Absent when none was brought over. |
+| `IMPL_WORKTREE_DEPENDENCIES_STALE` | The dependency directories, comma separated, whose install does not match the `package-lock.json` beside them: a top-level package missing or at another version. The pilot reinstalls them before the first agent. Absent when all match, and for a directory with no npm lockfile. |
 
 | Item | In the worktree |
 | --- | --- |

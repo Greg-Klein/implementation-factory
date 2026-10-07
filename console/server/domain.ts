@@ -953,6 +953,33 @@ export function worktreeProvisioning(ignoredEntries: string[], linkNames: string
   return { directories, files, paths, hooks };
 }
 
+/**
+ * The packages an npm `package-lock.json` puts at the top of its `node_modules`,
+ * with the version it pins. Optional packages are left out, since an install
+ * may rightly skip them on this platform, and so are links. Undefined when the
+ * content is not a lockfile with a `packages` map (npm 7 and later).
+ */
+export function lockedPackages(lockfile: unknown): { name: string; version: string }[] | undefined {
+  if (!lockfile || typeof lockfile !== "object") return undefined;
+  const packages = (lockfile as { packages?: unknown }).packages;
+  if (!packages || typeof packages !== "object" || Array.isArray(packages)) return undefined;
+  const locked: { name: string; version: string }[] = [];
+  for (const [key, entry] of Object.entries(packages)) {
+    if (!key.startsWith("node_modules/") || !entry || typeof entry !== "object") continue;
+    const name = key.slice("node_modules/".length);
+    if (!name || name.includes("/node_modules/")) continue;
+    const { version, optional, devOptional, link } = entry as Record<string, unknown>;
+    if (typeof version !== "string" || optional === true || devOptional === true || link === true) continue;
+    locked.push({ name, version });
+  }
+  return locked;
+}
+
+/** The locked packages a dependency directory does not hold at their pinned version, `installed` undefined for a missing one. */
+export function dependencyDrift(locked: { name: string; version: string }[], installed: (string | undefined)[]) {
+  return locked.flatMap((entry, index) => installed[index] === entry.version ? [] : [{ ...entry, installed: installed[index] }]);
+}
+
 /** `core.hooksPath` as a path inside the repository, or undefined when it is absolute, empty or leaves the repository. */
 export function relativeHooksPath(value: string) {
   const trimmed = value.trim().replace(/^(\.\/)+/, "").replace(/\/+$/, "");

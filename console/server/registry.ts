@@ -558,6 +558,8 @@ export class RunRegistry {
     session.state.worktree = prepared.worktree;
     session.activity("system", "Worktree created", [worktree, prepared.summary].filter(Boolean).join(" · "));
     if (prepared.warning) session.activity("attention", "Dependencies not brought into the worktree", prepared.warning);
+    if (prepared.stale) session.activity("attention", "Dependencies behind the lockfile, the workflow reinstalls them", prepared.stale.detail);
+    if (prepared.unchecked) session.activity("attention", "Dependencies not checked against the lockfile", prepared.unchecked);
     session.publish();
     void fetchTicketTitle(entry.issueUrl, repository).then((title) => {
       if (!title) return;
@@ -596,6 +598,7 @@ export class RunRegistry {
         IMPL_SOURCE_REPOSITORY: repository,
         ...(sourceBranch ? { IMPL_SOURCE_BRANCH: sourceBranch } : {}),
         ...(prepared.worktree.dependencies ? { IMPL_WORKTREE_DEPENDENCIES: prepared.worktree.dependencies } : {}),
+        ...(prepared.stale ? { IMPL_WORKTREE_DEPENDENCIES_STALE: prepared.stale.directories.join(",") } : {}),
         // A stacked start: the workflow cuts its branch from this one and targets it, always from the run's own worktree.
         ...(entry.forced?.mode === "stacked" ? { IMPL_BASE_BRANCH: entry.forced.baseBranch } : {}),
         // The base the ticket's source named, typically its feature branch. A stacked start, on a branch already cut from it, wins.

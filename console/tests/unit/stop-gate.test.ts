@@ -208,6 +208,25 @@ describe("the stop gate", () => {
     expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["no check found: none"]);
   });
 
+  it("should run no check for an agent that only edited documentation or pipeline files", () => {
+    start("a1");
+    edit("a1", "README.md");
+    edit("a1", ".gitlab-ci.yml");
+    expect(stop("a1")).toBeUndefined();
+    expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["no file a check reads: none"]);
+    expect(argumentsOf("tsc")).toEqual([]);
+  });
+
+  it("should still type-check the package when a documentation edit comes with a code edit", () => {
+    start("a1");
+    edit("a1", "docs/notes.md");
+    writeFileSync(path.join(cwd, "src/cart.ts"), "export const cart = [];\n");
+    edit("a1", "src/cart.ts");
+    stop("a1");
+    expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["type-check: pass", "lint: pass", "related tests: pass"]);
+    expect(ledger()[0].files).toEqual(["docs/notes.md", "src/cart.ts"]);
+  });
+
   it("should say an agent edited nothing rather than stay silent", () => {
     start("a1");
     expect(stop("a1")).toBeUndefined();

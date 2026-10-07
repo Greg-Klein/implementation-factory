@@ -26,6 +26,8 @@ import { inWorkflow, taskDirectory } from "./guard.mjs";
 const GATED = ["implementation-harness:developer", "implementation-harness:senior-reviewer"];
 const EDITING_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 const SCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+// Prose and pipeline files: no compiler, linter or test runner reads them, so they open no package check.
+const UNCHECKED_EXTENSIONS = [".md", ".markdown", ".txt", ".rst", ".yml", ".yaml"];
 const ESLINT_CONFIGS = [
   "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts",
   ".eslintrc", ".eslintrc.js", ".eslintrc.cjs", ".eslintrc.json", ".eslintrc.yml", ".eslintrc.yaml",
@@ -327,8 +329,15 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
     return undefined;
   }
 
+  const checked = files.filter((file) => !UNCHECKED_EXTENSIONS.includes(path.extname(file).toLowerCase()));
+  if (!checked.length) {
+    record({ result: "none", step: "no file a check reads" });
+    release();
+    return undefined;
+  }
+
   const byRoot = new Map();
-  for (const file of files) {
+  for (const file of checked) {
     const root = packageRoot(file, top);
     if (root) byRoot.set(root, [...(byRoot.get(root) ?? []), file]);
   }

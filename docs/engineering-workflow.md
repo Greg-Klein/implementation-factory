@@ -252,7 +252,7 @@ A refused call is not forwarded to the console. A guard that cannot read what it
 
 A developer report says its checks pass, and nothing verified that sentence. When `developer` or `senior-reviewer` stops during a run of the workflow, `hooks/gate.mjs`, called by `hooks/emit.mjs`, runs the checks its edits call for and writes each verdict to `.claude/tasks/gate-log.jsonl`. The pilot and the review orchestrator take the verdict from that file.
 
-The files an agent edited are noted from its `Edit` and `Write` calls, per agent, and read off the working tree: when a gated agent starts while no other one is at work, the gate fingerprints every path git sees as changed, and at its stop every path whose content moved since counts as edited. Agents write most of their code through the shell (`sed`, a heredoc, a code generator), which no tool input shows. Two agents in one tree cannot tell their changes apart, so the fingerprint is not taken while a peer works and is dropped when one starts; a commit made while the agent worked voids it too. For each package they belong to (the nearest `package.json` that is more than repository tooling):
+The files an agent edited are noted from its `Edit` and `Write` calls, per agent, and read off the working tree: when a gated agent starts while no other one is at work, the gate fingerprints every path git sees as changed, and at its stop every path whose content moved since counts as edited. Agents write most of their code through the shell (`sed`, a heredoc, a code generator), which no tool input shows. Two agents in one tree cannot tell their changes apart, so the fingerprint is not taken while a peer works and is dropped when one starts; a commit made while the agent worked voids it too. Documentation and YAML files (`.md`, `.markdown`, `.txt`, `.rst`, `.yml`, `.yaml`) are left out: no check reads them, and an agent that only edited those runs no check at all. For each package the other files belong to (the nearest `package.json` that is more than repository tooling):
 
 | Check | Covers | Command |
 | --- | --- | --- |
@@ -268,7 +268,7 @@ Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twent
 | `fail` | the check ran and failed. With `retry: false` the agent was sent back with the output; with `retry: true` it was let go with the failure still there |
 | `inconclusive` | every type error is outside the agent's files, and another gated agent was editing. The errors come from the half-written code of a parallel batch. The pilot's repository-wide gates settle them once the batch is over |
 | `skipped` | the check could not run: tool missing, ten minutes exceeded, or the twenty minutes of the whole gate spent |
-| `none` | nothing to run: no edit recorded for this agent, no package above its files, or a package with no check |
+| `none` | nothing to run: no edit recorded for this agent, only documentation or YAML edited, no package above its files, or a package with no check |
 
 Choices worth knowing before changing it:
 

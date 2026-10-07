@@ -61,7 +61,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
             if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => (index + 1) % suggestions.length); }
             if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
             const active = suggestions[activeIndex];
-            if (event.key === "Enter" && active) { event.preventDefault(); select(active); }
+            if (event.key === "Enter") { event.preventDefault(); if (active) select(active); }
             if (event.key === "Escape") setOpen(false);
           }}
           placeholder="Detected from the ticket, or start typing…"

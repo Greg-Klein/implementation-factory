@@ -34,7 +34,7 @@ export async function prepareRunWorktree(repository: string, runId: string): Pro
     const provisioned = await provisionWorktree(repository, worktreePath, { dependencyDirectories: worktreeDependencyDirectories, copyFiles: worktreeCopyFiles });
     const checked = await staleDependencies(worktreePath, [...provisioned.cloned, ...provisioned.linked]).then(
       (stale) => (stale.directories.length > 0 ? { stale } : {}),
-      (error: unknown) => ({ unchecked: error instanceof Error ? error.message.split("\n")[0] : String(error) }),
+      (error: unknown) => defined({ unchecked: error instanceof Error ? error.message.split("\n")[0] : String(error) }),
     );
     const parts = [
       provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dependency ${provisioned.cloned.length > 1 ? "directories" : "directory"} cloned` : "",

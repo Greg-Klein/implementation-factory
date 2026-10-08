@@ -274,7 +274,7 @@ describe("the stop gate", () => {
     edit("a1", "src/cart.ts");
     stop("a1");
     expect(ledger().map(({ step, result }) => `${step}: ${result}`)).toEqual(["type-check: pass", "lint: pass", "related tests: pass"]);
-    expect(ledger()[0].files).toEqual(["docs/notes.md", "src/cart.ts"]);
+    expect(ledger()[0]?.files).toEqual(["docs/notes.md", "src/cart.ts"]);
   });
 
   it("should say an agent edited nothing rather than stay silent", () => {

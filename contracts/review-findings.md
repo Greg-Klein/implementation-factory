@@ -35,6 +35,8 @@ The senior reviewer writes its findings twice. `senior-review.md` holds them as 
 | `ui-state` | a loading, empty or error state missing |
 | `boundary-validation` | outside data trusted without validation |
 | `authorization` | a permission or ownership check missing |
+| `injection` | an outside value reaching a query, a command, a path, markup or a URL unescaped |
+| `secret-exposure` | a secret, a token or personal data leaving in a log, an error, a response or a URL |
 | `data-integrity` | a write that can lose or corrupt data |
 | `type-escape` | a type silenced: `any`, unsafe cast, non-null assertion |
 | `test-cannot-fail` | a test that cannot fail for the defect it covers |

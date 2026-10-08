@@ -556,6 +556,8 @@ export const FINDING_CATEGORIES: Record<string, string> = {
   "ui-state": "A loading, empty or error state missing",
   "boundary-validation": "Outside data trusted without validation",
   authorization: "A permission or ownership check missing",
+  injection: "An outside value reaching a query, a command, a path, markup or a URL unescaped",
+  "secret-exposure": "A secret, a token or personal data leaving in a log, an error, a response or a URL",
   "data-integrity": "A write that can lose or corrupt data",
   "type-escape": "A type silenced: any, unsafe cast, non-null assertion",
   "test-cannot-fail": "A test that cannot fail for the defect it covers",

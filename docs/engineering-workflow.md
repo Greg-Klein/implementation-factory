@@ -53,7 +53,7 @@ The native `skills:` field preloads the body of the skill. Putting it on every c
 | Decomposition and dependencies | Planner; shared files sequenced by the pilot. |
 | Simplicity and conventions | Common principles; applied within the scope of the role. |
 | Root cause and regression | Developer through `self-check`, then independent counterexamples through `review-change`. |
-| Security and data integrity | Planner, developer and senior at the modified boundaries; QA for observable behaviours. |
+| Security and data integrity | Planner, developer and senior at the modified boundaries; QA for observable behaviours. The code review adds an adversarial reading when the diff touches a trust boundary (`skills/review-change/references/code-review.md`). |
 | Concurrency, cancellation and resources | Targeted analysis of the transitions and owners; separate orchestration of the resources shared between agents. |
 | Performance, migrations and rollback | Analysis proportionate to the risk and to the real consumers, with no systematic audit. |
 | Accessibility and selector contracts | Developer and QA, which tests the keyboard path, the focus and the accessible name when the change touches them. The designer measures contrast, keyboard path, visible focus, role and name, target size on the modified surface. |

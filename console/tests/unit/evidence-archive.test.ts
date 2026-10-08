@@ -6,7 +6,7 @@ import { acceptanceInputKind, confinedPath, containedRelativePath, diskStorage, 
 
 const criteria = JSON.stringify({ schemaVersion: 1, revision: 1, criteria: [{ id: "AC1", text: "Le filtre est conservé" }] });
 const qa = (round: number, verdict: string, extra: Record<string, unknown> = {}) => JSON.stringify({
-  schemaVersion: 2, source: "qa", round, criteriaRevision: 1, codeSnapshot: { atStart: "snap-a", atEnd: "snap-a" },
+  schemaVersion: 2, source: "qa", status: "PASS", round, criteriaRevision: 1, codeSnapshot: { atStart: "snap-a", atEnd: "snap-a" },
   items: [{ id: `Q-R${round}`, label: "Filtre conservé", verdict, criterionIds: ["AC1"], screenshot: "assets/result.png", ...extra }],
 });
 

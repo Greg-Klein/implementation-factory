@@ -386,6 +386,7 @@ function idleAttempt(view: EvidenceView) {
 }
 
 const QA_APPROVALS = new Set(["PASS", "PASS_WITH_WARNINGS"]);
+const QA_STATUSES = new Set([...QA_APPROVALS, "INCONCLUSIVE", "FAIL"]);
 /** The verdicts of something QA executed itself, as opposed to a confirmation or a code reading. */
 const QA_OBSERVATIONS = new Set(["measured", "pass", "fail"]);
 
@@ -653,6 +654,10 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     if (!QA_OBSERVATIONS.has(view.verdict) || view.freshness !== "current") continue;
     for (const id of view.criterionIds) if (criterionIds.has(id)) observedByQa.add(id);
     for (const checkId of linkedChecks.get(entry.identity) ?? []) observedByQa.add(checkOwner.get(checkId)!.id);
+  }
+  const liveQaReport = input.registry ? reports.findLast((entry) => entry.source === "qa" && entry.current && !isRoundCopy(entry.file)) : undefined;
+  if (liveQaReport && !QA_STATUSES.has(liveQaReport.status ?? "")) {
+    diagnostics.push({ level: "error", file: liveQaReport.file, message: `The QA verdict is ${liveQaReport.status ? `\`${liveQaReport.status}\`, not one of ${[...QA_STATUSES].join(", ")}` : "missing (no `status`)"}: the console cannot hold it against what QA observed.` });
   }
   const qa = qaReport?.status ? qaVerdictConsistency({ status: qaReport.status, file: qaReport.file, ...defined({ round: qaReport.round, mandate: qaReport.mandate }) }, criteria, observedByQa, input.language) : undefined;
 

@@ -75,7 +75,7 @@ describe("acceptance criteria registry", () => {
     expect(parsed.diagnostics).toEqual([expect.objectContaining({ level: "warning", file: "acceptance-criteria.json", message: expect.stringContaining("AC1") })]);
     const view = deriveAcceptanceCoverage({
       ...defined({ registry: parsed.registry }), now: NOW, currentSnapshot: { id: CURRENT, capturedAt: NOW }, knownSnapshots: new Set([CURRENT]),
-      reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "unit", verdict: "pass", criterionIds: ["AC1"], checkIds: ["AC1-unit"] }]))],
+      reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "unit", verdict: "pass", criterionIds: ["AC1"], checkIds: ["AC1-unit"] }], { status: "INCONCLUSIVE" }))],
     });
     expect(view.diagnostics.filter((entry) => entry.level === "error")).toEqual([]);
     expect(view.criteria[0]!.status).toBe("unverified");
@@ -638,6 +638,28 @@ describe("QA verdict consistency", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([], { status }))] });
       expect(view.qa).toEqual({ status, file: "qa-evidence.json", consistent: true, unobserved: [] });
     }
+  });
+
+  it("should report a live QA file whose verdict is missing or unknown as an anomaly", () => {
+    for (const extra of [{}, { verdict: "PASS" }, { status: "PASSED" }]) {
+      const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll, extra))] });
+      expect(view.diagnostics).toContainEqual(expect.objectContaining({ level: "error", file: "qa-evidence.json", message: expect.stringContaining("QA verdict") }));
+    }
+  });
+
+  it("should not report the verdict of a QA file that declares one, nor of a round copy or an earlier version", () => {
+    const view = coverage({ reports: [
+      report("qa-evidence.json", qa([], { round: 1 }), 1),
+      report("qa-evidence-round1.json", qa([], { round: 1 }), 1),
+      report("qa-evidence.json", qa(observedAll, { status: "PASS", round: 2 }), 2),
+    ] });
+    expect(view.qa).toMatchObject({ status: "PASS" });
+    expect(view.diagnostics.filter((entry) => entry.message.includes("QA verdict"))).toEqual([]);
+  });
+
+  it("should not report a missing QA verdict without a registry", () => {
+    const view = deriveAcceptanceCoverage({ reports: [report("qa-evidence.json", qa(observedAll))], now: NOW });
+    expect(view.diagnostics.filter((entry) => entry.message.includes("QA verdict"))).toEqual([]);
   });
 
   it("should say nothing about QA when no report declares a status, or without a registry", () => {

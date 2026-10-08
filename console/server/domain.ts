@@ -128,6 +128,60 @@ export function hasAuditableEvidence(snapshot: Pick<RunState, "status" | "agents
   return snapshot.status === "failed" || snapshot.agents.length > 0 || snapshot.artifacts.length > 0;
 }
 
+export type AuditEvidence = Pick<RunState, "status" | "incidents" | "acceptance" | "workflow" | "reopenings">;
+
+/**
+ * What a run proved went wrong, each reason being something the console observed
+ * itself. An improvement session is opened on these and on nothing else: asked to
+ * find improvements in a run that went well, a session finds some, and the harness
+ * then changes after every ticket. A rework round is not a reason, it is the review
+ * doing its work, and a cost counts only against a baseline (`metricsFindings`).
+ */
+export function auditReasons(run: AuditEvidence, findings: { metric: string; detail: string }[]): string[] {
+  const reasons: string[] = [];
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (run.status === "failed") reasons.push("The run failed.");
+  const incidents = run.incidents ?? [];
+  if (incidents.length > 0) reasons.push(`${count(incidents.length, "incident", "incidents")} (${[...new Set(incidents.map((incident) => incident.kind))].join(", ")}).`);
+  const counts = run.acceptance?.available ? run.acceptance.counts : undefined;
+  if (counts && counts.failed > 0) reasons.push(`${count(counts.failed, "acceptance criterion", "acceptance criteria")} failed.`);
+  if (counts && counts.blocked > 0) reasons.push(`${count(counts.blocked, "acceptance criterion", "acceptance criteria")} blocked.`);
+  const qa = run.acceptance?.qa;
+  if (qa && !qa.consistent) reasons.push(`QA declared ${qa.status} over ${count(qa.unobserved, "criterion", "criteria")} it did not observe.`);
+  if (run.workflow?.state === "blocked" || (run.workflow?.result?.blockers.length ?? 0) > 0) reasons.push("The workflow ended blocked.");
+  const reopenings = run.reopenings?.length ?? 0;
+  if (reopenings > 0) reasons.push(`${count(reopenings, "change", "changes")} asked after the final report.`);
+  for (const finding of findings) if (finding.metric !== "rework") reasons.push(finding.detail);
+  return reasons;
+}
+
+/** An entry of `pending/` as the gate reads it: a file, so every field is checked. An entry older than `reasons` carries none. */
+export type PendingEntry = { kind: "feedback" } | { kind: "audit"; runId: string; reasons: string[] };
+
+export function pendingEntry(value: unknown): PendingEntry | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const entry = value as Record<string, unknown>;
+  if (entry.source !== "autonomous") return typeof entry.feedback === "string" && entry.feedback.trim() ? { kind: "feedback" } : undefined;
+  if (typeof entry.runId !== "string" || !entry.runId) return undefined;
+  const reasons = Array.isArray(entry.reasons) ? entry.reasons.filter((reason): reason is string => typeof reason === "string" && reason.trim() !== "") : [];
+  return { kind: "audit", runId: entry.runId, reasons };
+}
+
+/**
+ * Why an improvement session opens at the end of a run, undefined when it does not.
+ * What this run proved comes first. Failing that, what was already waiting: feedback
+ * the user wrote, or the audit of an earlier run whose session could not open
+ * because an improvement was still undecided.
+ */
+export function improvementCause(runId: string, reasons: string[], pending: PendingEntry[]): string | undefined {
+  if (reasons.length > 0) return reasons.join(" ");
+  const feedback = pending.filter((entry) => entry.kind === "feedback").length;
+  if (feedback > 0) return `${feedback} user feedback ${feedback === 1 ? "entry is" : "entries are"} waiting.`;
+  const earlier = pending.filter((entry) => entry.kind === "audit" && entry.runId !== runId && entry.reasons.length > 0).length;
+  if (earlier > 0) return `The audit of ${earlier} earlier ${earlier === 1 ? "run is" : "runs are"} still waiting with something to fix.`;
+  return undefined;
+}
+
 const IMPROVEMENT_WORKTREE_PREFIX = "self-improvement-";
 
 export function improvementWorktreeName(runId: string) {

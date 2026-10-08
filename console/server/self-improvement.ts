@@ -1,16 +1,17 @@
 import { defined } from "../lib/defined.js";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { broadcast, now, reportFailure } from "./context.js";
+import { broadcast, isMissingFile, now, reportFailure } from "./context.js";
 import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
-import { commitlessImprovementStatus, hasAuditableEvidence, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
+import { auditReasons, commitlessImprovementStatus, hasAuditableEvidence, improvementCause, pendingEntry, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { metricsBaseline, metricsFindings } from "./run-metrics.js";
 import { recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
 import type { PendingSelfImprovementReview, RunState } from "./types.js";
+import type { PendingEntry } from "./domain.js";
 
 const auditedRuns = new Set<string>();
 
@@ -130,15 +131,42 @@ export async function saveFeedback(session: RunSession, body: string) {
   session.publish();
 }
 
+/**
+ * What waits in `pending/`. A file that cannot be read or is not an entry is
+ * reported and stepped over: it neither opens a session nor hides the others.
+ */
+async function pendingEntries(): Promise<PendingEntry[]> {
+  const names = await readdir(feedbackRoot).catch((error: unknown) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
+  const entries: PendingEntry[] = [];
+  for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
+    try {
+      const entry = pendingEntry(JSON.parse(await readFile(path.join(feedbackRoot, name), "utf8")) as unknown);
+      if (entry) entries.push(entry);
+      else reportFailure("Pending feedback entry not understood", name)(new Error("neither user feedback nor a self-audit"));
+    } catch (error) {
+      // The improvement session moves entries out of the directory while this reads it.
+      if (!isMissingFile(error)) reportFailure("Pending feedback entry not read", name)(error);
+    }
+  }
+  return entries;
+}
+
+/** Writes the entry of the run and returns what the run proved went wrong, which decides whether a session opens on it. */
 async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
   const id = `self-audit-${session.id}`;
   // What the run cost, and how that compares to the runs before it: figures, never ticket content.
   const metrics = await recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id));
   const others = metrics ? await storedMetrics().catch(() => []) : [];
+  const findings = metrics ? metricsFindings(metrics, others) : [];
+  const reasons = auditReasons(snapshot, findings);
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
     id, runId: session.id, createdAt: now(), status: "pending", source: "autonomous",
-    objective: "Find durable improvements from observable friction, failures, repeated review findings and missing verification in this run.",
+    objective: "Find the cause of what `reasons` lists and fix it durably. With no reason, this entry is kept for comparison with later runs and justifies no change on its own.",
+    reasons,
     signals: {
       finalStatus: snapshot.status,
       finalPhase: snapshot.phase,
@@ -161,10 +189,24 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
       } : null,
       workflowStateDeclared: Boolean(snapshot.workflow),
     },
-    ...(metrics ? { metrics, baseline: metricsBaseline(metrics, others), findings: metricsFindings(metrics, others) } : {}),
+    ...(metrics ? { metrics, baseline: metricsBaseline(metrics, others), findings } : {}),
   }, null, 2));
   session.activity("artifact", "Self-audit queued", `${id}.json`);
   session.publish();
+  return reasons;
+}
+
+/** Opens the improvement session only on something proven, and says in the feed of the run which it was. */
+async function improveOnEvidence(session: RunSession, reasons: string[]) {
+  const cause = improvementCause(session.id, reasons, await pendingEntries());
+  if (!cause) {
+    session.activity("system", "Self-improvement not needed", "Nothing went wrong in this run and no feedback is waiting. Its self-audit is kept for comparison with later runs.");
+    session.publish();
+    return;
+  }
+  session.activity("system", "Self-improvement justified", cause);
+  session.publish();
+  await startAutonomousImprovement(session);
 }
 
 /** Resolves once the launch itself has returned, which is what lets the next audit take its turn. */
@@ -236,7 +278,7 @@ export function scheduleAutonomousReview(session: RunSession) {
     return;
   }
   auditQueue.push(() => queueAutonomousReview(session, snapshot)
-    .then(() => startAutonomousImprovement(session))
+    .then((reasons) => improveOnEvidence(session, reasons))
     .catch((error) => {
       session.activity("attention", "Self-audit not possible", normalizeText(error instanceof Error ? error.message : error));
       session.publish();

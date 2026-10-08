@@ -301,7 +301,7 @@ The available settings:
 | `IMPL_SEARCH_ROOTS` | roots where checkouts are looked for, separated by commas | `~/workspace` |
 | `IMPL_PERMISSION_MODE` | permission mode of each run: `manual`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions` | `auto` |
 | `IMPL_LANGUAGE` | language of what a run writes for people (questions, reports, merge request or pull request text): `en` or `fr`. The interface itself is always in English | `en` |
-| `IMPL_SELF_IMPROVEMENT_AUTORUN` | self-audit at the end of each run | `true` |
+| `IMPL_SELF_IMPROVEMENT_AUTORUN` | self-improvement session at the end of a run that proved something went wrong | `true` |
 | `IMPL_REMOTE_CONTROL` | Remote Control on the terminal of a run | `true` |
 | `IMPL_PORT` | listening port | `3210` |
 | `IMPL_HOST` | listening interface; outside the loopback, the console is reachable from the network and says so on start | `127.0.0.1` |
@@ -368,7 +368,17 @@ Before choosing what to fix, it also reads the `self-improvement-*` branches the
 
 The tickets, logs and raw feedback stay under `console/data/` and are never added to the improvement commit.
 
-The harness can also criticise itself without human feedback. At the end of each workflow, including after a failure or a manual stop, it records a self-audit covering the failures, interventions, review loops, missing documents and incomplete checks. In autonomous mode, Claude Code processes this evidence in an isolated worktree. A self-generated signal has to appear on at least two runs, except for a deterministic bug or a security defect. The decision is taken once per run, and only if the run left something to analyse: a delegated agent, a document produced or an unexpected exit. A session stopped before that is dismissed, with a line in the activity feed.
+The harness can also criticise itself without human feedback. At the end of each workflow, including after a failure or a manual stop, it records a self-audit covering the failures, interventions, review loops, missing documents and incomplete checks. The decision is taken once per run, and only if the run left something to analyse: a delegated agent, a document produced or an unexpected exit. A session stopped before that is dismissed, with a line in the activity feed.
+
+Recording an audit does not open an improvement session. In autonomous mode, Claude Code processes the evidence in an isolated worktree only when the harness observed something that went wrong in the run:
+
+- the run failed, or an incident was raised;
+- an acceptance criterion ended failed or blocked, or QA declared a pass over a criterion it did not observe;
+- the workflow ended blocked;
+- a change was asked after the final report;
+- a cost stands out against the delivered runs (tokens, active time, pilot calls), which needs at least three comparable runs.
+
+A rework round asked by a reviewer is not one of them: it is the review doing its work. A session also opens when user feedback is waiting, or when the audit of an earlier run is still waiting with one of these reasons because an improvement was undecided at the time. Otherwise the activity feed says "Self-improvement not needed", and the audit stays in `pending/` as comparison material for the next session. The reasons are written in the audit (`reasons`), and the session changes nothing on the ground of an audit that carries none.
 
 The policy is set with `impl config`, or directly:
 
@@ -376,7 +386,7 @@ The policy is set with `impl config`, or directly:
 impl config set IMPL_SELF_IMPROVEMENT_AUTORUN=false
 ```
 
-It starts the analysis in the background at the end of the run. The option is on by default; setting it to `false` turns the loop off.
+It starts the analysis in the background at the end of such a run. The option is on by default; setting it to `false` turns the loop off.
 
 The agent works in an isolated worktree and always leaves its commit on its `self-improvement-*` branch. Nothing is merged automatically and nothing is pushed to GitHub. The right panel shows the diff, and its merge button is the only way to promote it. A merge lands in the checkout that serves the console. Each new session reads the commands, agents, skills and hooks again, so they apply from the next run, with no restart. When the merge touches `console/` or `bin/`, the banner says so and asks for an `impl restart`. The harness does not restart itself, because sessions may be running under it.
 

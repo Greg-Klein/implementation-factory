@@ -90,9 +90,9 @@ export const schema = [
   },
   {
     key: "IMPL_SELF_IMPROVEMENT_AUTORUN",
-    label: "Self-audit at the end of each run",
-    comment: "Run a Claude Code self-audit after every completed workflow.",
-    help: "Runs a Claude Code self-audit after every completed workflow.",
+    label: "Self-improvement on a run that went wrong",
+    comment: "Open a self-improvement session at the end of a run that proved something went wrong.",
+    help: "Opens a self-improvement session at the end of a run that proved something went wrong, or when feedback is waiting.",
     fallback: "true",
     kind: "boolean",
     readBy: "console",

@@ -3,6 +3,7 @@ name: rebase
 description: Replay a pending improvement branch on top of the harness when git alone could not, resolving the conflicts without losing either side.
 disable-model-invocation: true
 argument-hint: <commit-to-replay-onto>
+model: sonnet
 ---
 
 Replay this worktree's improvement branch on top of: $ARGUMENTS

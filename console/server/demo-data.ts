@@ -883,6 +883,6 @@ export function demoSessionUsage(state: Pick<RunState, "id" | "agents" | "activi
   const pilotCalls = 2 + state.activities.length;
   return [
     { sessionId, ...session(pilotCalls, 70_000, 1_800, "claude-opus-5-5") },
-    ...state.agents.map((agent) => ({ sessionId, agentId: agent.id, agentType: agent.name, ...session(agent.endedAt ? 14 : 6, 38_000, 2_400, agent.name.includes("developer") ? "claude-opus-5-5" : "claude-sonnet-5-5") })),
+    ...state.agents.map((agent) => ({ sessionId, agentId: agent.id, agentType: agent.name, ...session(agent.endedAt ? 14 : 6, 38_000, 2_400, "claude-sonnet-5-5") })),
   ];
 }

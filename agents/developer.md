@@ -1,7 +1,7 @@
 ---
 name: developer
 description: Implement an assigned plan task or rework within its file scope, self-check the change and return versioned evidence for independent review.
-model: opus
+model: sonnet
 color: blue
 ---
 

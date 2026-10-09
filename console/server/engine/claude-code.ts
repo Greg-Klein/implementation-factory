@@ -229,6 +229,24 @@ export function sessionArguments({ pluginDir, sessionName, command }: { pluginDi
   return ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--settings", JSON.stringify({ outputStyle: "Concise" }), "--name", sessionName, ...remote, command];
 }
 
+/**
+ * The command line of a session that works on the harness itself, detached, in
+ * a worktree of its own. Each names its model, so the user's default one never
+ * decides: Opus to diagnose a run and rewrite what drives the next ones, Sonnet
+ * to replay a branch.
+ */
+export function backgroundArguments({ pluginDir, worktreeName, sessionName, model, command }: { pluginDir: string; worktreeName: string; sessionName: string; model: "opus" | "sonnet"; command: string }) {
+  return [
+    "--background", "--worktree", worktreeName,
+    "--add-dir", pluginDir,
+    "--plugin-dir", pluginDir,
+    "--model", model,
+    "--permission-mode", "auto",
+    "--name", sessionName,
+    command,
+  ];
+}
+
 function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code was not found in PATH.");
@@ -369,25 +387,19 @@ export const claudeCode: Engine = {
   startSelfImprovement: ({ worktreeName, feedbackDirectory, runId }) => {
     const executable = findExecutable("claude");
     if (!executable) return undefined;
-    return spawnChild(executable, [
-      "--background", "--worktree", worktreeName,
-      "--add-dir", pluginRoot,
-      "--plugin-dir", pluginRoot,
-      "--permission-mode", "auto",
-      "--name", `implementation-harness self-improvement ${runId.slice(-8)}`,
-      `/implementation-harness:improve ${feedbackDirectory}`,
-    ], { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+    return spawnChild(executable, backgroundArguments({
+      pluginDir: pluginRoot, worktreeName, model: "opus",
+      sessionName: `implementation-harness self-improvement ${runId.slice(-8)}`,
+      command: `/implementation-harness:improve ${feedbackDirectory}`,
+    }), { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
   startConflictResolution: ({ worktreeName, onto }) => {
     const executable = findExecutable("claude");
     if (!executable) return undefined;
-    return spawnChild(executable, [
-      "--background", "--worktree", worktreeName,
-      "--add-dir", pluginRoot,
-      "--plugin-dir", pluginRoot,
-      "--permission-mode", "auto",
-      "--name", `implementation-harness rebase ${worktreeName.slice(-8)}`,
-      `/implementation-harness:rebase ${onto}`,
-    ], { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+    return spawnChild(executable, backgroundArguments({
+      pluginDir: pluginRoot, worktreeName, model: "sonnet",
+      sessionName: `implementation-harness rebase ${worktreeName.slice(-8)}`,
+      command: `/implementation-harness:rebase ${onto}`,
+    }), { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
 };

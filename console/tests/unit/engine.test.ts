@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
+import { backgroundArguments, claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
 import { engine } from "../../server/engine/index";
 
 describe("engine contract", () => {
@@ -155,6 +155,20 @@ describe("the pilot's session", () => {
 
   it("should replace the user's output style with the concise one", () => {
     expect(JSON.parse(valueOf("--settings"))).toEqual({ outputStyle: "Concise" });
+  });
+});
+
+describe("a session that works on the harness", () => {
+  const args = backgroundArguments({ pluginDir: "/opt/harness", worktreeName: "self-improvement-1", sessionName: "implementation-harness rebase 1", model: "sonnet", command: "/implementation-harness:rebase abc123" });
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
+
+  it("should run detached in its worktree, on the model it is given, and end with the command", () => {
+    expect(args[0]).toBe("--background");
+    expect(valueOf("--worktree")).toBe("self-improvement-1");
+    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(valueOf("--model")).toBe("sonnet");
+    expect(valueOf("--permission-mode")).toBe("auto");
+    expect(args.at(-1)).toBe("/implementation-harness:rebase abc123");
   });
 });
 

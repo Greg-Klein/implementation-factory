@@ -53,8 +53,8 @@ The boundary has known leaks, to count in when a second engine is written:
 | `event(payload)` | translates a raw event into an `EngineEvent` | the whole hook vocabulary |
 | `questionAnswer(input, answers)` | what the agent expects back from a question | `updatedInput` for Claude Code |
 | `startSchedule(options)` | starts the headless session that compares the tickets of a batch, returns `{ finished, kill }` | arguments, allowed tools, environment |
-| `startSelfImprovement(options)` | starts the detached self-improvement loop | worktree and permission flags |
-| `startConflictResolution(options)` | replays an improvement branch git alone could not rebase | worktree and permission flags |
+| `startSelfImprovement(options)` | starts the detached self-improvement loop, on Opus | worktree, model and permission flags |
+| `startConflictResolution(options)` | replays an improvement branch git alone could not rebase, on Sonnet | worktree, model and permission flags |
 
 ### EngineSession
 

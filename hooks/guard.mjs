@@ -4,6 +4,8 @@ import path from "node:path";
 const NAMESPACE = "implementation-harness";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
 const REVIEWERS = ["senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator"];
+// The model the developer declares, and the one the pilot may pass for a task the plan sizes `L`.
+const DEVELOPER_MODELS = ["sonnet", "opus"];
 const PUBLISHING = /\bgit\b[^|;&\n]*\bcommit\b|\bglab\s+(?:mr|issue)\s+(?:create|update|note)\b|\bgh\s+(?:pr|issue)\s+(?:create|edit|comment)\b/;
 /** A call that writes on the forge through its API: how a merge request and its review comment are published on GitLab. */
 const API_WRITE = /\b(?:glab|gh)\s+api\b[^|;&\n]*(?:--method|-X)[\s=]*(?:POST|PUT|PATCH)\b/i;
@@ -290,8 +292,8 @@ export function guardDecision(payload, env = process.env) {
       return `Invoke \`${NAMESPACE}:${type}\`, not the bare name \`${type}\`: an agent of the same name installed beside this plugin wins the dispatch and the run gets another output contract.`;
     }
     const agent = type.startsWith(`${NAMESPACE}:`) ? type.slice(NAMESPACE.length + 1) : "";
-    if (agent === "developer" && typeof input.model === "string" && input.model && input.model !== "opus") {
-      return `Invoke \`${NAMESPACE}:developer\` without a model override: the developer runs on Opus, the model its definition declares, whatever the size of the task.`;
+    if (agent === "developer" && typeof input.model === "string" && input.model && !DEVELOPER_MODELS.includes(input.model)) {
+      return `Invoke \`${NAMESPACE}:developer\` without a model override, or with \`opus\` for a task the plan sizes \`L\`: the developer runs on Sonnet, the model its definition declares.`;
     }
     if (tasks && REVIEWERS.includes(agent)) {
       const missing = unreportedTasks(tasks);

@@ -3,6 +3,7 @@ name: improve
 description: Improve this harness from user feedback and autonomous run evidence, with validation and a reversible commit.
 disable-model-invocation: true
 argument-hint: <feedback-directory>
+model: opus
 ---
 
 Improve the Implementation Harness from the user feedback and autonomous self-audits stored under: $ARGUMENTS

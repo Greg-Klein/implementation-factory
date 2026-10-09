@@ -33,13 +33,14 @@ describe("the hook guard", () => {
     expect(refusal("Agent", { subagent_type: "Explore" })).toBeUndefined();
   });
 
-  it("should refuse a developer moved off Opus and let its declared model through", () => {
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" })).toContain("without a model override");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" })).toContain("Opus");
+  it("should refuse a developer on another model than Sonnet or Opus and let those two through", () => {
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" })).toContain("without a model override");
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "fable" })).toContain("Sonnet");
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" })).toBeUndefined();
     expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "opus" })).toBeUndefined();
     expect(refusal("Agent", { subagent_type: "implementation-harness:developer" })).toBeUndefined();
     expect(refusal("Agent", { subagent_type: "implementation-harness:qa-reviewer", model: "sonnet" })).toBeUndefined();
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" }, {})).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" }, {})).toBeUndefined();
   });
 
   it("should refuse a reviewer while a planned task has no report, naming the task", () => {

@@ -2,7 +2,7 @@
 
 The harness separates the responsibilities of the agents, the reusable methods and the formats the console consumes. The `commands/`, `agents/`, `skills/` and `hooks/` directories stay at the root of the plugin.
 
-The [architecture diagram](architecture.html) shows the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML page, to open in a browser. The [agent map](agent-map.html) draws the same run as agents, scripts and the engineer's own steps, with the model each agent runs on; it loads its diagram library from a CDN.
+The [agent map](https://greg-klein.github.io/implementation-harness/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-harness/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
 
 The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
 

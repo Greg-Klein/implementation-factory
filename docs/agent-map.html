@@ -260,6 +260,7 @@
   .tip p { margin: 0; font-size: 13.5px; line-height: 1.5; color: #c9cddb; }
   [data-tips] g.node.agent, [data-tips] g.node.script { cursor: help; }
 
+  footer a { color: #ffb872; text-decoration: none; border-bottom: 1px solid rgba(255, 157, 60, .4); }
   footer { padding: 40px 40px 72px; color: var(--muted); font-size: 13px; max-width: 90ch; }
   code { font: 12px "JetBrains Mono", ui-monospace, Menlo, monospace; color: #b9bfd3; background: rgba(255, 255, 255, .05); padding: 1px 5px; border-radius: 5px; }
 
@@ -598,7 +599,7 @@ flowchart LR
 <div class="tip" id="tip" role="tooltip"></div>
 
 <footer>
-  Models read from the frontmatter of <code>agents/*.md</code> and <code>commands/*.md</code>, and from <code>console/server/engine/claude-code.ts</code>. At tiers 0 and 1, the pilot runs Senior and QA on Sonnet; they keep Opus at tier 2. The Designer runs on Sonnet at every tier. The Dev runs on Sonnet, and the pilot moves it to Opus for a task the plan sizes L. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
+  Models read from the frontmatter of <code>agents/*.md</code> and <code>commands/*.md</code>, and from <code>console/server/engine/claude-code.ts</code>. At tiers 0 and 1, the pilot runs Senior and QA on Sonnet; they keep Opus at tier 2. The Designer runs on Sonnet at every tier. The Dev runs on Sonnet, and the pilot moves it to Opus for a task the plan sizes L. The machinery underneath, from the path of a hook to the evidence chain, is on the <a href="architecture.html">architecture page</a>. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
 </footer>
 
 <script type="module">

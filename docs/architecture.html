@@ -3,488 +3,802 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Implementation Harness, architecture diagram</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<title>Implementation Harness, architecture</title>
 <style>
   :root {
-    --paper: #f3f4ef; --surface: #fafbf7; --raised: #ffffff; --sunken: #f1f3ee;
-    --ink: #1c211f; --muted: #707873; --line: #d8dcd5; --line-strong: #b9bfb8;
-    --accent: #477a62; --accent-soft: #dce9e0; --accent-strong: #2f5546;
-    --doc: #3f6d8a; --doc-soft: #e3edf3;
-    --warn-bg: #fffbeb; --warn-line: #e8c96a; --warn: #92400e;
-    --err-bg: #fef2f2; --err-line: #f3b4b4; --err: #b91c1c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --paper: #101412; --surface: #151917; --raised: #1c211e; --sunken: #121614;
-      --ink: #e2e7e2; --muted: #949c97; --line: #2a312d; --line-strong: #46504a;
-      --accent: #7fb096; --accent-soft: #1e3028; --accent-strong: #b3d3c1;
-      --doc: #85afc9; --doc-soft: #1b2831;
-      --warn-bg: #2a2110; --warn-line: #6b5520; --warn: #f5cf6b;
-      --err-bg: #2b1616; --err-line: #6b2c2c; --err: #f19999;
-    }
+    --bg: #0a0b0f;
+    --panel: #10121a;
+    --panel-edge: #1f2330;
+    --ink: #eceef4;
+    --muted: #8b90a3;
+    --line: #5b6178;
+    --agent: #ff9d3c;
+    --agent-fill: #3a2210;
+    --script: #4ade80;
+    --script-fill: #12301f;
+    --swe: #facc15;
+    --swe-fill: #3a310a;
   }
   * { box-sizing: border-box; }
-  html { background: var(--paper); }
+  html { scroll-behavior: smooth; }
   body {
-    margin: 0; color: var(--ink); background: var(--paper);
-    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 14px; line-height: 1.55;
+    margin: 0;
+    color: var(--ink);
+    font: 15px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(255, 157, 60, .13), transparent 62%),
+      radial-gradient(820px 520px at 96% 4%, rgba(74, 222, 128, .10), transparent 60%),
+      var(--bg);
   }
-  main { max-width: 1180px; margin: 0 auto; padding: 32px 28px 64px; }
-  header.page { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 8px; }
-  .over { font-size: 10px; text-transform: uppercase; letter-spacing: .16em; color: var(--muted); margin: 0 0 6px; }
-  h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
-  h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; letter-spacing: -.01em; }
-  p { margin: 0; }
-  .lead { color: var(--muted); max-width: 78ch; }
-  section { border-top: 1px solid var(--line); padding-top: 24px; margin-top: 28px; }
-  header.page + section { border-top: 0; margin-top: 16px; }
-  .caption { color: var(--muted); max-width: 86ch; margin-bottom: 14px; }
-  code, .mono { font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; font-size: .86em; }
-  code { background: var(--accent-soft); color: var(--accent-strong); padding: 1px 5px; border-radius: 5px; }
-  figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; }
-  figure svg { display: block; width: 100%; min-width: 900px; height: auto; }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image: radial-gradient(rgba(255, 255, 255, .055) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(to bottom, #000, transparent 85%);
+  }
 
-  /* SVG vocabulary */
-  .box { fill: var(--raised); stroke: var(--line-strong); stroke-width: 1; }
-  .zone { fill: var(--sunken); stroke: var(--line); stroke-width: 1; }
-  .term { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
-  .ask { fill: var(--warn-bg); stroke: var(--warn-line); stroke-width: 1; }
-  .docbox { fill: var(--doc-soft); stroke: var(--doc); stroke-width: 1; }
-  .later { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 4; }
-  .t { fill: var(--ink); font-size: 13px; font-weight: 600; }
-  .s { fill: var(--muted); font-size: 11px; }
-  .m { fill: var(--ink); font-size: 10.5px; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  .md { fill: var(--doc); font-size: 10.5px; font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; }
-  .z { fill: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; }
-  .l { fill: var(--ink); font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
-  .lz { stroke: var(--sunken); }
-  .a { fill: none; stroke: var(--accent); stroke-width: 1.6; marker-end: url(#arr); }
-  .aq { fill: none; stroke: var(--warn); stroke-width: 1.6; marker-end: url(#arr-q); }
-  .ad { fill: none; stroke: var(--doc); stroke-width: 1.6; stroke-dasharray: 2 3; marker-end: url(#arr-d); }
-  .an { fill: none; stroke: var(--muted); stroke-width: 1.4; marker-end: url(#arr-n); }
-  #arr path { fill: var(--accent); } #arr-q path { fill: var(--warn); }
-  #arr-d path { fill: var(--doc); } #arr-n path { fill: var(--muted); }
+  header { padding: 64px 40px 22px; max-width: 1100px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 9px;
+    font: 500 12px/1 "JetBrains Mono", ui-monospace, Menlo, monospace;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    padding: 7px 12px; border: 1px solid var(--panel-edge); border-radius: 999px;
+    background: rgba(255, 255, 255, .025);
+  }
+  .eyebrow i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--script);
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, .6); animation: ping 2.2s ease-out infinite;
+  }
+  h1 {
+    font-size: clamp(34px, 5vw, 56px); line-height: 1.04; letter-spacing: -0.035em;
+    margin: 20px 0 14px; font-weight: 700;
+    background: linear-gradient(100deg, #fff 20%, var(--agent) 55%, var(--swe) 90%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: sheen 9s ease-in-out infinite alternate;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; font-size: 17px; }
 
-  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; font-size: 12px; color: var(--muted); }
-  .legend span { display: inline-flex; align-items: center; gap: 7px; }
-  .legend svg { width: 34px; height: 10px; min-width: 0; }
+  .legend {
+    position: sticky; top: 12px; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 22px; align-items: center;
+    margin: 18px 40px 0; padding: 11px 18px;
+    background: rgba(16, 18, 26, .94);
+    border: 1px solid var(--panel-edge); border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .45);
+  }
+  .key { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink); }
+  .shape { width: 32px; height: 19px; border: 1.5px solid; }
+  .shape.agent { background: var(--agent-fill); border-color: var(--agent); box-shadow: 0 0 14px rgba(255, 157, 60, .45); }
+  .shape.swe { background: var(--swe-fill); border-color: var(--swe); border-radius: 10px; box-shadow: 0 0 14px rgba(250, 204, 21, .45); }
+  .shape.script {
+    width: 19px; height: 19px; transform: rotate(45deg) scale(.8);
+    background: var(--script-fill); border-color: var(--script); box-shadow: 0 0 14px rgba(74, 222, 128, .45);
+  }
+  .zoom { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zoom button {
+    font: inherit; font-size: 15px; width: 30px; height: 28px; cursor: pointer; color: var(--ink);
+    border: 1px solid var(--panel-edge); background: rgba(255, 255, 255, .04); border-radius: 8px;
+    transition: border-color .15s, background .15s, transform .12s;
+  }
+  .zoom button:hover { border-color: var(--muted); background: rgba(255, 255, 255, .09); }
+  .zoom button:active { transform: scale(.93); }
 
-  ol.steps { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 10px; }
-  ol.steps li { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-  ol.steps .n { font-family: "Geist Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: var(--accent); font-weight: 600; }
-  ol.steps h3 { font-size: 13px; margin: 2px 0 4px; font-weight: 600; }
-  ol.steps p { font-size: 12px; color: var(--muted); line-height: 1.45; }
-  ol.steps .f { display: block; margin-top: 6px; font-family: "Geist Mono", ui-monospace, Menlo, monospace; font-size: 10.5px; color: var(--doc); overflow-wrap: anywhere; }
-  ol.steps li.you { border-color: var(--warn-line); background: var(--warn-bg); }
-  ol.steps li.you .n { color: var(--warn); }
+  section { padding: 56px 40px 8px; }
+  .head { display: flex; gap: 16px; align-items: baseline; }
+  .num {
+    font: 500 13px/1 "JetBrains Mono", ui-monospace, Menlo, monospace;
+    color: var(--agent); padding: 6px 9px; border-radius: 8px;
+    border: 1px solid rgba(255, 157, 60, .35); background: rgba(255, 157, 60, .08);
+  }
+  h2 { font-size: 24px; margin: 0; letter-spacing: -0.02em; font-weight: 650; }
+  section > p { margin: 10px 0 20px; color: var(--muted); max-width: 78ch; }
+  .canvas {
+    position: relative;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .03), rgba(255, 255, 255, .012)), var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 18px;
+    padding: 28px;
+    overflow: auto;
+    box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .05);
+    scrollbar-color: #2a2f40 transparent;
+  }
+  .canvas .mermaid { width: max-content; margin: 0 auto; }
+  .rows { position: relative; width: max-content; margin: 0 auto; display: flex; flex-direction: column; gap: 132px; }
+  .rows .mermaid { margin: 0; }
+  .xlinks { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+  .xlinks path.link {
+    fill: none; stroke: var(--line); stroke-width: 1.4px; stroke-linecap: round;
+    stroke-dasharray: 7 7; animation: flow 1.1s linear infinite paused;
+  }
+  .xlinks path.link.dotted { stroke-dasharray: 1.5 7; animation-duration: 1.7s; }
+  section.live .xlinks path.link { animation-play-state: running; }
+  .xlinks marker path { fill: var(--line); }
+  .xlinks text {
+    fill: var(--muted); font-size: 11.5px; text-anchor: middle;
+    paint-order: stroke; stroke: var(--panel); stroke-width: 7px; stroke-linejoin: round;
+  }
+  .anim .xlinks { opacity: 0; transition: opacity .9s ease; }
+  .anim section.in .xlinks { opacity: 1; transition-delay: 1.1s; }
+  pre.mermaid:not([data-processed]) { visibility: hidden; height: 400px; }
 
-  .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
-  .chip { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--raised); font-size: 12px; color: var(--muted); }
-  .chip b { display: block; color: var(--ink); font-size: 12px; margin-bottom: 2px; }
-  .chip.warn { background: var(--warn-bg); border-color: var(--warn-line); } .chip.warn b { color: var(--warn); }
-  .chip.err { background: var(--err-bg); border-color: var(--err-line); } .chip.err b { color: var(--err); }
+  /* Sections slide in once, when they reach the viewport. */
+  .anim section .head, .anim section > p, .anim section .canvas {
+    opacity: 0; transform: translateY(18px);
+    transition: opacity .7s cubic-bezier(.2, .7, .2, 1), transform .7s cubic-bezier(.2, .7, .2, 1);
+  }
+  .anim section.in .head, .anim section.in > p, .anim section.in .canvas { opacity: 1; transform: none; }
+  .anim section.in > p { transition-delay: .08s; }
+  .anim section.in .canvas { transition-delay: .16s; }
 
-  .tag { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; border: 1.2px dotted var(--muted); color: var(--muted); border-radius: 999px; padding: 2px 9px; margin-left: 8px; vertical-align: 2px; }
-  .latercard { border: 1.2px dotted var(--muted); border-radius: 10px; padding: 14px 16px; background: var(--raised); max-width: 560px; }
-  .latercard h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
-  .latercard ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--muted); }
-  .latercard li { margin: 3px 0; }
-  footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+  /* Diagram: shapes. Transforms stay off the SVG groups, Mermaid positions them with one. */
+  .mermaid svg { overflow: visible; }
+  .mermaid .node rect, .mermaid .node polygon {
+    transition: filter .25s ease, stroke-width .25s ease, fill .25s ease;
+  }
+  .mermaid section.live .node.swe rect, section.live .mermaid .node.swe rect { animation: breathe 2.8s ease-in-out infinite; }
+  .mermaid .node { cursor: default; transition: opacity .25s ease; }
+  .mermaid .node:hover rect, .mermaid .node:hover polygon { stroke-width: 2.6px !important; }
+  .mermaid .node.agent:hover rect { filter: drop-shadow(0 0 16px rgba(255, 157, 60, .75)); fill: #4a2a12 !important; }
+  .mermaid .node.script:hover polygon { filter: drop-shadow(0 0 16px rgba(74, 222, 128, .7)); fill: #173d28 !important; }
+  .mermaid .node.swe:hover rect { filter: drop-shadow(0 0 18px rgba(250, 204, 21, .8)); fill: #4a3f0c !important; }
+
+  .mermaid .nodeLabel { color: #c9cddb !important; font-size: 13px; line-height: 1.45; }
+  .mermaid .nodeLabel b { font-weight: 600; font-size: 14px; letter-spacing: -0.005em; }
+  .mermaid .node.agent .nodeLabel b { color: #ffb872; }
+  .mermaid .node.swe .nodeLabel b { color: #fde05c; }
+  .mermaid .node.script .nodeLabel b { color: #86efac; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; font-weight: 500; }
+
+  .mermaid .cluster rect { rx: 14; ry: 14; fill: rgba(255, 255, 255, .025) !important; stroke: #2a2f40 !important; stroke-dasharray: 4 5; }
+  .mermaid .cluster-label foreignObject { overflow: visible; }
+  .mermaid .cluster-label foreignObject > div { white-space: nowrap; }
+  .mermaid .cluster-label .nodeLabel { color: var(--muted) !important; font-size: 12.5px; font-weight: 500; }
+
+  /* Diagram: links. The dashes travel along each link, in its direction. */
+  .mermaid .flowchart-link {
+    stroke: var(--line) !important; stroke-width: 1.4px !important;
+    stroke-dasharray: 7 7 !important; stroke-linecap: round;
+    animation: flow 1.1s linear infinite paused;
+    transition: stroke .25s ease, opacity .25s ease, stroke-width .25s ease;
+  }
+  section.live .mermaid .flowchart-link { animation-play-state: running; }
+  .mermaid .flowchart-link.edge-pattern-dotted { stroke-dasharray: 1.5 7 !important; animation-duration: 1.7s; opacity: .8; }
+  .mermaid marker path { fill: var(--line) !important; stroke: var(--line) !important; }
+  .mermaid .edgeLabel, .mermaid .edgeLabel p { background: var(--panel) !important; color: var(--muted) !important; font-size: 11.5px; }
+  .mermaid .edgeLabel p { padding: 1px 5px; border-radius: 5px; }
+  .mermaid .edgeLabel { transition: opacity .25s ease; }
+
+  /* Pointing at a node keeps it, its links and its neighbours lit. */
+  .mermaid svg.focus .node:not(.hot), .mermaid svg.focus .edgeLabel { opacity: .22; }
+  .mermaid svg.focus .flowchart-link:not(.hot) { opacity: .12; }
+  .mermaid svg.focus .flowchart-link.hot { stroke: #fff !important; stroke-width: 2px !important; animation-duration: .55s; opacity: 1; }
+
+  /* Nodes come in from the top of each diagram down. */
+  .anim .mermaid .node { opacity: 0; }
+  .anim section.in .mermaid .node { animation: rise .55s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(.25s + var(--i, 0) * 45ms); }
+  .anim .mermaid .edgePaths, .anim .mermaid .edgeLabels, .anim .mermaid .clusters { opacity: 0; transition: opacity .9s ease; }
+  .anim section.in .mermaid .edgePaths, .anim section.in .mermaid .edgeLabels { opacity: 1; transition-delay: calc(.35s + var(--n, 10) * 45ms); }
+  .anim section.in .mermaid .clusters { opacity: 1; transition-delay: .2s; }
+
+  /* Agents: the list on the left picks what the card on the right shows. */
+  .agents { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 28px; align-items: start; }
+  .agent-list { display: flex; flex-direction: column; gap: 6px; }
+  .agent-list button {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 11px 14px; text-align: left; cursor: pointer;
+    font: inherit; color: var(--ink);
+    background: rgba(255, 255, 255, .02);
+    border: 1px solid transparent; border-radius: 11px;
+    transition: background .18s ease, border-color .18s ease, transform .18s ease;
+  }
+  .agent-list button::before {
+    content: ""; flex: none; width: 18px; height: 12px;
+    background: var(--agent-fill); border: 1.5px solid var(--agent);
+    transition: box-shadow .18s ease;
+  }
+  .agent-list button:hover { background: rgba(255, 255, 255, .05); transform: translateX(3px); }
+  .agent-list button:focus-visible { outline: 2px solid var(--agent); outline-offset: 2px; }
+  .agent-list button[aria-selected="true"] { background: rgba(255, 157, 60, .1); border-color: rgba(255, 157, 60, .45); }
+  .agent-list button[aria-selected="true"]::before { box-shadow: 0 0 12px rgba(255, 157, 60, .7); }
+  .agent-list .name { flex: 1; font-weight: 500; }
+  .agent-list .model { font: 11.5px "JetBrains Mono", ui-monospace, Menlo, monospace; color: var(--muted); }
+
+  .agent-card {
+    min-height: 100%; padding: 28px 32px;
+    border: 1px solid rgba(255, 157, 60, .28); border-radius: 14px;
+    background: linear-gradient(160deg, rgba(255, 157, 60, .09), rgba(255, 157, 60, .015) 55%);
+  }
+  .agent-card:focus-visible { outline: 2px solid var(--agent); outline-offset: 2px; }
+  .agent-card > * { animation: card-in .35s cubic-bezier(.2, .7, .2, 1) both; }
+  .agent-card > :nth-child(2) { animation-delay: .04s; }
+  .agent-card > :nth-child(3) { animation-delay: .08s; }
+  .agent-card > :nth-child(4) { animation-delay: .12s; }
+  .agent-card .kind { font: 500 11.5px "JetBrains Mono", ui-monospace, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .agent-card h3 { margin: 8px 0 12px; font-size: 30px; line-height: 1.1; letter-spacing: -0.025em; color: #ffb872; text-wrap: balance; }
+  .agent-card .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+  .agent-card .badge {
+    font: 500 12px "JetBrains Mono", ui-monospace, Menlo, monospace;
+    padding: 5px 10px; border-radius: 999px;
+    color: var(--ink); border: 1px solid var(--panel-edge); background: rgba(255, 255, 255, .04);
+  }
+  .agent-card .badge.main { color: #1c1206; background: var(--agent); border-color: var(--agent); }
+  .agent-card .does { margin: 0 0 22px; max-width: 68ch; font-size: 16px; color: #d5d8e3; }
+  .agent-card dl { display: grid; grid-template-columns: max-content 1fr; gap: 10px 22px; margin: 0; padding-top: 20px; border-top: 1px solid var(--panel-edge); }
+  .agent-card dt { color: var(--muted); font-size: 13px; }
+  .agent-card dd { margin: 0; font-size: 14px; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(8px); } }
+  @media (max-width: 820px) {
+    .agents { grid-template-columns: 1fr; }
+    .agent-card { padding: 22px 20px; }
+    .agent-card dl { grid-template-columns: 1fr; gap: 2px 0; }
+    .agent-card dd { margin-bottom: 10px; }
+  }
+
+  /* The card that opens on an agent or a script. */
+  .tip {
+    --tone: var(--agent);
+    position: fixed; z-index: 20; top: 0; left: 0; width: 300px; padding: 14px 16px;
+    background: #171a26; border: 1px solid var(--panel-edge); border-top: 2px solid var(--tone);
+    border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, .6);
+    pointer-events: none; opacity: 0; transform: translateY(6px);
+    transition: opacity .16s ease, transform .16s ease;
+  }
+  .tip.open { opacity: 1; transform: none; }
+  .tip.script { --tone: var(--script); }
+  .tip.swe { --tone: var(--swe); }
+  .tip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+  .tip-head strong { font-size: 15px; font-weight: 600; color: var(--tone); }
+  .tip-head span {
+    flex: none; font: 500 11px "JetBrains Mono", ui-monospace, Menlo, monospace;
+    padding: 3px 8px; border-radius: 999px; color: var(--ink);
+    border: 1px solid var(--panel-edge); background: rgba(255, 255, 255, .05);
+  }
+  .tip p { margin: 0; font-size: 13.5px; line-height: 1.5; color: #c9cddb; }
+  [data-tips] g.node.agent, [data-tips] g.node.script { cursor: help; }
+
+  footer { padding: 40px 40px 72px; color: var(--muted); font-size: 13px; max-width: 90ch; }
+  code { font: 12px "JetBrains Mono", ui-monospace, Menlo, monospace; color: #b9bfd3; background: rgba(255, 255, 255, .05); padding: 1px 5px; border-radius: 5px; }
+
+  @keyframes flow { to { stroke-dashoffset: -14; } }
+  @keyframes rise { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes breathe { 50% { stroke-width: 3.2px; stroke: #fff1a8; } }
+  @keyframes ping { 70%, 100% { box-shadow: 0 0 0 9px rgba(74, 222, 128, 0); } }
+  @keyframes sheen { to { background-position: 100% 0; } }
+
+  @media (max-width: 700px) {
+    header, section, footer { padding-left: 16px; padding-right: 16px; }
+    .legend { margin: 14px 16px 0; gap: 12px; }
+    .canvas { padding: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+    .anim section .head, .anim section > p, .anim section .canvas { opacity: 1; transform: none; }
+    .anim .xlinks { opacity: 1; }
+    .anim .mermaid .node, .anim .mermaid .edgePaths, .anim .mermaid .edgeLabels, .anim .mermaid .clusters { opacity: 1; }
+  }
+
+  header p a, footer a { color: #ffb872; text-decoration: none; border-bottom: 1px solid rgba(255, 157, 60, .4); }
+  header p a:hover, footer a:hover { border-bottom-color: #ffb872; }
+  :root { --file: #60a5fa; --file-fill: #0f2236; --err: #f87171; }
+  .shape.file { background: var(--file-fill); border-color: var(--file); border-radius: 50% / 28%; box-shadow: 0 0 14px rgba(96, 165, 250, .45); }
+  .mermaid .node.file .nodeLabel b { color: #93c5fd; }
+  .mermaid .node.file:hover path, .mermaid .node.file:hover rect { filter: drop-shadow(0 0 16px rgba(96, 165, 250, .7)); }
+  .tip.file { --tone: var(--file); }
+  [data-tips] g.node.file { cursor: help; }
+
+  .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin: 18px 0 0; }
+  .chips.wide { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .chip {
+    padding: 14px 16px; border-radius: 12px; font-size: 13.5px; color: #c9cddb;
+    border: 1px solid var(--panel-edge); background: rgba(255, 255, 255, .025);
+  }
+  .chip > b { display: block; margin-bottom: 5px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .chip.warn { border-color: rgba(250, 204, 21, .35); background: rgba(250, 204, 21, .05); }
+  .chip.warn > b { color: #fde05c; }
+  .chip.err { border-color: rgba(248, 113, 113, .35); background: rgba(248, 113, 113, .05); }
+  .chip.err > b { color: #fca5a5; }
+  .anim section .chips { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.2, .7, .2, 1) .24s, transform .7s cubic-bezier(.2, .7, .2, 1) .24s; }
+  .anim section.in .chips { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .anim section .chips { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
-    <marker id="arr-q" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
-    <marker id="arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
-    <marker id="arr-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker>
-  </defs>
-</svg>
-<main>
-  <header class="page">
-    <p class="over">Implementation Harness</p>
-    <h1>How the harness works</h1>
-    <p class="lead">A local console that starts the real <code>claude</code> binary on a GitLab or GitHub ticket and shows what it does. No direct API call and no key: everything goes through the Claude Code session and its hooks. The console's interface is in English, and its labels are quoted as they appear. The language of what the workflow writes (reports, questions, merge request text) is chosen by the <code>IMPL_LANGUAGE</code> setting (<code>en</code> by default, <code>fr</code> for French).</p>
-  </header>
 
-  <section>
-    <h2>1. The path of a run</h2>
-    <p class="caption">You paste the URL of a ticket, the server finds the repository, creates a git worktree for the run and opens a Claude Code session in it, in a PTY. The main checkout is not touched. Each hook of the session comes back to the server, which updates the state of the run and pushes it to the interface. A question from the workflow blocks the session until you answer.</p>
-    <figure>
-      <svg viewBox="0 0 1140 720" role="img" aria-label="Path of a run between the interface, the server, the run worktree and the Claude Code session">
-        <!-- ticket -->
-        <rect class="box" x="30" y="24" width="220" height="56" rx="8"/>
-        <text class="t" x="46" y="48">Ticket</text>
-        <text class="s" x="46" y="66">a URL pasted in the console</text>
-        <path class="a" d="M140 80V128"/>
-        <text class="l" x="196" y="108">ticket URL</text>
+<header>
+  <span class="eyebrow"><i></i>Claude Code plugin + local console</span>
+  <h1>Inside the console</h1>
+  <p>How the local console runs a ticket: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Who does what and on which model is in the <a href="agent-map.html">agent map</a>; this page shows the machinery underneath.</p>
+</header>
 
-        <!-- UI -->
-        <rect class="box" x="30" y="130" width="220" height="570" rx="8"/>
-        <text class="t" x="46" y="158">React interface</text>
-        <text class="s" x="46" y="176">Next.js, 127.0.0.1:3210</text>
-        <text class="s" x="46" y="407">run view, terminal,</text>
-        <text class="s" x="46" y="422">tracking, evidence</text>
-        <text class="s" x="46" y="547">question card,</text>
-        <text class="s" x="46" y="562">"Your turn"</text>
-        <text class="s" x="46" y="656">documents of the run</text>
+<div class="legend">
+  <div class="key"><span class="shape agent"></span> Claude Code session</div>
+  <div class="key"><span class="shape script"></span> Console or hook code</div>
+  <div class="key"><span class="shape file"></span> File on disk</div>
+  <div class="key"><span class="shape swe"></span> Software Engineer</div>
+  <div class="zoom">
+    Zoom
+    <button type="button" data-zoom="-0.1" aria-label="Zoom out">−</button>
+    <span id="zoom-value">100%</span>
+    <button type="button" data-zoom="0.1" aria-label="Zoom in">+</button>
+  </div>
+</div>
 
-        <!-- server -->
-        <rect class="zone" x="330" y="100" width="480" height="600" rx="10"/>
-        <text class="z" x="348" y="124">Node server · console/server</text>
+<section>
+  <div class="head"><span class="num">00</span><h2>The pieces</h2></div>
+  <p>A Next.js page and a Node server on <code>127.0.0.1:3210</code>, started by <code>impl</code>. The server spawns the real <code>claude</code> binary in a PTY, one session per run, and learns what it does through its hooks. No direct API call and no key. The forge is read with <code>glab</code> or <code>gh</code> by the server itself, without a Claude session. In every diagram, hover a node to see what it does.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="pieces">
+flowchart LR
+  swe("<b>Software Engineer</b><br/>the console page"):::swe
+  page{"<b>Next.js page</b><br/>run view, terminal,<br/>tracking, evidence"}:::script
+  server{"<b>Node server</b><br/>registry, RunSession,<br/>monitor, watchers"}:::script
+  engine{"<b>server/engine</b><br/>the only code that<br/>knows Claude Code"}:::script
+  session["<b>Claude Code session</b><br/>in a PTY,<br/>in the run worktree"]:::agent
+  data[("<b>console/data</b><br/>runs, queue,<br/>repositories")]:::file
+  forge{"<b>glab / gh</b><br/>merge request state,<br/>blocking links"}:::script
 
-        <rect class="box" x="350" y="145" width="180" height="70" rx="8"/>
-        <text class="t" x="364" y="170">registry.ts</text>
-        <text class="s" x="364" y="187">runs and queue</text>
-        <text class="m" x="364" y="203">data/queue.json</text>
+  swe --> page
+  page -- "WebSocket" --> server
+  server -- "run state" --> page
+  server --> engine -- "spawn, keys" --> session
+  session -- "hooks" --> server
+  server --> data
+  server -. "no token" .-> forge
 
-        <rect class="box" x="630" y="145" width="160" height="70" rx="8"/>
-        <text class="t" x="644" y="170">run-worktrees.ts</text>
-        <text class="s" x="644" y="187">creates the worktree,</text>
-        <text class="s" x="644" y="203">brings the dependencies</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips">
+    <div class="chip"><b>Several runs at once</b>Everything a run owns lives on its <code>RunSession</code>, and every message that acts on a run names it by <code>runId</code>.</div>
+    <div class="chip"><b>One boundary</b>Only <code>server/engine</code> knows the binary, the hook vocabulary and the transcript format. Nothing above it imports <code>node-pty</code>.</div>
+    <div class="chip"><b>Local only</b>Every request needs a <code>Host</code> naming the console, the WebSocket an <code>Origin</code> it served.</div>
+  </div>
+</section>
 
-        <rect class="box" x="630" y="240" width="160" height="215" rx="8"/>
-        <text class="t" x="644" y="265">server/engine</text>
-        <text class="s" x="644" y="313">only code that knows</text>
-        <text class="s" x="644" y="328">Claude Code</text>
-        <text class="s" x="644" y="357">translates the hook</text>
-        <text class="s" x="644" y="372">into an EngineEvent</text>
+<section>
+  <div class="head"><span class="num">01</span><h2>The path of a hook</h2></div>
+  <p>Each hook of the session runs <code>emit.mjs</code>. The guard and the stop gate decide first, inside the session, then the event is posted to the server, which turns it into an engine event, applies it to the run and pushes the new state to the pages that opened that run.</p>
+  <div class="canvas"><div class="rows" data-tips="hook" data-links='[{"from":"gate","to":"access","label":"POST /api/hooks"},{"from":"emit","to":"spool","label":"second failure","dotted":true}]'>
+<pre class="mermaid">
+flowchart LR
+  session["<b>Pilot or agent</b><br/>a tool call,<br/>an agent stop"]:::agent
+  emit{"<b>emit.mjs</b><br/>one call<br/>per hook"}:::script
+  guard{"<b>guard.mjs</b><br/>refuses a<br/>dangerous call"}:::script
+  gate{"<b>gate.mjs</b><br/>checks at the stop<br/>of Dev and Senior"}:::script
 
-        <rect class="box" x="350" y="380" width="180" height="70" rx="8"/>
-        <text class="t" x="364" y="405">RunSession</text>
-        <text class="s" x="364" y="422">state, archive, terminal</text>
-        <text class="s" x="364" y="437">hooks.ts applies</text>
+  session --> emit --> guard
+  guard -- "refused" --> session
+  guard --> gate
+  gate -- "fails: back<br/>to work once" --> session
 
-        <rect class="ask" x="350" y="515" width="440" height="70" rx="8"/>
-        <text class="t" x="364" y="541">Question bridge</text>
-        <text class="s" x="364" y="558">the PreToolUse hook waits for your answer (3600 s at most)</text>
-        <text class="s" x="364" y="573">never retried and never spooled to disk</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre>
+<pre class="mermaid">
+flowchart LR
+  spool[("<b>hooks-spool.jsonl</b><br/>kept when the<br/>server is away")]:::file
+  access{"<b>access.ts</b><br/>checks the secret<br/>of the hook URL"}:::script
+  engine{"<b>server/engine</b><br/>raw hook into<br/>EngineEvent"}:::script
+  hooks{"<b>hooks.ts</b><br/>applies it to<br/>the RunSession"}:::script
+  runjson[("<b>run.json</b><br/>one write<br/>at a time")]:::file
+  ws{"<b>context.ts</b><br/>WebSocket to the<br/>pages of that run"}:::script
 
-        <rect class="docbox" x="350" y="620" width="440" height="64" rx="8"/>
-        <text class="t" x="364" y="645">artifacts.ts, watch and copy</text>
-        <text class="md" x="364" y="665">data/runs/&lt;run-id&gt;/artifacts/</text>
+  spool -. "replayed" .-> access
+  access --> engine --> hooks
+  hooks --> runjson
+  hooks --> ws
 
-        <!-- run worktree, with the session inside -->
-        <rect class="docbox" x="900" y="130" width="230" height="570" rx="10"/>
-        <text class="t" x="914" y="156">Run worktree</text>
-        <text class="md" x="914" y="174">.claude/worktrees/&lt;run-id&gt;</text>
-        <text class="s" x="914" y="192">in the target repo, detached HEAD</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre>
+<svg class="xlinks" aria-hidden="true"></svg>
+</div></div>
+  <div class="chips">
+    <div class="chip"><b>What the guard refuses</b>A workflow agent under its bare name, a Dev on a model other than Sonnet or Opus, a reviewer started while a task has no report, a session trailer in a commit or a publication, a publication that shows a credential, a git command that destroys work.</div>
+    <div class="chip"><b>What the stop gate runs</b>Per package the edited files belong to: the type-check, then the lint and the related tests of those files. A failure sends the agent back once. Every verdict is a line of <code>gate-log.jsonl</code>.</div>
+    <div class="chip"><b>Lost hooks</b><code>emit.mjs</code> retries once, then spools the event. The spool is replayed before the next hook and on every monitor tick, and <code>hookId</code> drops the duplicates.</div>
+    <div class="chip warn"><b>Fails open</b>A guard that cannot read what it checks lets the call through, and so does a gate that cannot run a check. <code>IMPL_STOP_GATE=off</code> disables the gate.</div>
+  </div>
+</section>
 
-        <rect class="term" x="912" y="210" width="206" height="380" rx="8"/>
-        <text class="t" x="927" y="238">Claude Code session</text>
-        <text class="s" x="927" y="255">in a PTY, started here</text>
-        <text class="m" x="927" y="296">claude --plugin-dir …</text>
-        <text class="m" x="927" y="312">/…:implement &lt;ticket&gt;</text>
-        <text class="m" x="927" y="336">IMPL_RUN_ID</text>
-        <text class="m" x="927" y="352">IMPL_RUN_WORKTREE</text>
+<section>
+  <div class="head"><span class="num">02</span><h2>Questions and decisions</h2></div>
+  <p>A question from the workflow blocks the session until the engineer answers in the console. The folder trust dialog Claude Code draws before any hook is read off the terminal and shown the same way, but it is never answered on the engineer's behalf.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="questions">
+flowchart LR
+  pilot["<b>Pilot</b><br/>AskUserQuestion"]:::agent
+  hook{"<b>PreToolUse hook</b><br/>waits for the answer,<br/>3600 s at most"}:::script
+  run{"<b>RunSession</b><br/>pending question,<br/>dated when asked"}:::script
+  swe("<b>Software Engineer</b><br/>answers in the<br/>conversation"):::swe
+  pty["<b>Claude Code</b><br/>folder trust dialog,<br/>before any hook"]:::agent
+  trust{"<b>trust-prompt.ts</b><br/>reads the dialog<br/>off the PTY"}:::script
 
-        <rect class="box" x="927" y="385" width="176" height="60" rx="8"/>
-        <text class="t" x="940" y="409">hooks/emit.mjs</text>
-        <text class="s" x="940" y="427">on each hook of the session</text>
+  pilot --> hook -- "question" --> run -- "question card" --> swe
+  swe -- "answer" --> run -- "updatedInput" --> hook --> pilot
+  pty -- "screen text" --> trust -- "decision" --> swe
+  swe -. "accept or refuse:<br/>the engine types the keys" .-> pty
 
-        <rect class="ask" x="927" y="520" width="176" height="62" rx="8"/>
-        <text class="t" x="940" y="544">AskUserQuestion</text>
-        <text class="s" x="940" y="562">blocking question</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips">
+    <div class="chip"><b>Never retried, never spooled</b>A question only makes sense while its session waits. Claude Code replays the hook with the answers; the engine ignores that second pass.</div>
+    <div class="chip warn"><b>Refusing the trust dialog</b>The run ends <code>stopped</code> with its reason, not <code>failed</code>, and its worktree is settled like that of any stopped run. An unknown wording shows nothing.</div>
+  </div>
+</section>
 
-        <rect class="box" x="912" y="620" width="206" height="64" rx="8"/>
-        <text class="t" x="927" y="645">Workflow documents</text>
-        <text class="md" x="927" y="665">.claude/tasks/</text>
+<section>
+  <div class="head"><span class="num">03</span><h2>The run worktree</h2></div>
+  <p>Every ticket run works in a git worktree of its own, created before the session and settled after it. The main checkout is never touched, and a worktree that may still hold work is kept with its reasons.</p>
+  <div class="canvas"><div class="rows" data-tips="worktree" data-links='[{"from":"session","to":"settle","label":"session gone"}]'>
+<pre class="mermaid">
+flowchart LR
+  registry{"<b>registry.ts</b><br/>main checkout,<br/>one run per ticket"}:::script
+  add{"<b>git worktree add</b><br/>.claude/worktrees/#lt;run-id#gt;<br/>detached HEAD"}:::script
+  nope(("no run"))
+  provision{"<b>provisionWorktree</b><br/>dependencies, ignored<br/>config, git hooks"}:::script
+  stale{"<b>staleDependencies</b><br/>node_modules against<br/>package-lock.json"}:::script
+  session["<b>Session</b><br/>in the worktree,<br/>reinstalls when stale"]:::agent
 
-        <!-- run flow -->
-        <path class="a" d="M250 180H348"/>
-        <text class="l" x="299" y="172">run.start</text>
-        <path class="a" d="M530 180H628"/>
-        <text class="l lz" x="580" y="172">1. prepares</text>
-        <path class="a" d="M790 180H898"/>
-        <text class="l" x="852" y="172">git worktree add</text>
-        <path class="a" d="M440 215V275H628"/>
-        <text class="l lz" x="534" y="267">2. starts the session</text>
-        <path class="a" d="M790 275H910"/>
-        <text class="l" x="850" y="267">opens the PTY</text>
-        <path class="a" d="M927 415H792"/>
-        <text class="l" x="855" y="407">hook POST</text>
-        <path class="a" d="M630 415H532"/>
-        <text class="l lz" x="581" y="407">EngineEvent</text>
-        <path class="a" d="M350 415H252"/>
-        <text class="l" x="300" y="407">run state</text>
-        <text class="l" x="300" y="433">WebSocket</text>
+  registry --> add
+  add -. "fails" .-> nope
+  add --> provision --> stale --> session
 
-        <!-- question loop -->
-        <path class="aq" d="M927 537H792"/>
-        <text class="l" x="855" y="529">question</text>
-        <path class="aq" d="M790 565H925"/>
-        <text class="l" x="855" y="583">updatedInput</text>
-        <path class="aq" d="M350 537H252"/>
-        <text class="l" x="300" y="529">question</text>
-        <path class="aq" d="M250 565H348"/>
-        <text class="l" x="300" y="583">answer</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre>
+<pre class="mermaid">
+flowchart LR
+  settle{"<b>settleRunWorktree</b><br/>applies the<br/>removal rules"}:::script
+  removed(("removed"))
+  kept[("<b>kept</b><br/>with its reasons")]:::file
+  swe("<b>Software Engineer</b><br/>removes it after<br/>seeing the risks"):::swe
 
-        <!-- documents -->
-        <path class="ad" d="M1015 590V618"/>
-        <path class="ad" d="M912 652H792"/>
-        <text class="l" x="855" y="644">documents</text>
-        <path class="ad" d="M350 652H252"/>
-        <text class="l" x="300" y="644">documents</text>
-      </svg>
-    </figure>
-    <div class="legend">
-      <span><svg viewBox="0 0 34 10"><path class="a" d="M1 5H31"/></svg>run flow (hooks, events, state)</span>
-      <span><svg viewBox="0 0 34 10"><path class="aq" d="M1 5H31"/></svg>question, answer or decision, your turn</span>
-      <span><svg viewBox="0 0 34 10"><path class="ad" d="M1 5H31"/></svg>documents produced by a session</span>
-      <span><svg viewBox="0 0 34 10"><path class="an" d="M1 5H31"/></svg>plain sequence</span>
-    </div>
-    <div class="chips">
-      <div class="chip"><b>What the worktree receives</b>The dependency directories Git ignores, copied or linked from the main checkout, and the <span class="mono">.env*</span> files. Build outputs are not provided.</div>
-      <div class="chip"><b>If the worktree cannot be created</b>The run does not start. The server never falls back on the main checkout.</div>
-      <div class="chip"><b>After the session</b>Removed when the run is over, the MR is open and not a draft, the evidence is archived, the tree is clean and the branch is pushed. Otherwise kept with its reason. The branch is never deleted.</div>
-    </div>
-  </section>
+  settle -- "MR open and not a draft,<br/>archive synced, tree clean,<br/>HEAD pushed" --> removed
+  settle -- "otherwise" --> kept --> swe
 
-  <section>
-    <h2>2. The <span class="mono">/implementation-harness:implement</span> workflow</h2>
-    <p class="caption">Ten steps, run by a pilot that delegates to specialised agents. The only interactive step is the second. Each step leaves files in <code>.claude/tasks/</code>, which the console archives and shows.</p>
-    <ol class="steps">
-      <li><span class="n">01</span><h3>Read the ticket</h3><p>The ticket and every linked document.</p></li>
-      <li class="you"><span class="n">02 · your turn</span><h3>Questions</h3><p>The only interactive step. The pilot then writes the register of criteria, with stable identifiers AC1, AC2…</p><span class="f">acceptance-criteria.json</span></li>
-      <li><span class="n">03</span><h3>Dedicated branch</h3><p>Created in the run worktree, from the chosen base branch.</p></li>
-      <li><span class="n">04</span><h3>Plan and breakdown</h3><p><span class="mono">ticket-planner</span> on a complex ticket, the pilot alone on a simple one. Each task cites its criteria.</p><span class="f">planner-output.json</span></li>
-      <li><span class="n">05</span><h3>Implementation</h3><p>One task at a time, by <span class="mono">developer</span> agents, then their reports are merged and checked off against the plan.</p><span class="f">developer-report-&lt;id&gt;.md, dev-evidence.json</span></li>
-      <li><span class="n">06</span><h3>Reachable app and measurements</h3><p>The change is measured in the running application, on frozen code.</p><span class="f">state.json, captures</span></li>
-      <li><span class="n">07</span><h3>Challenge</h3><p>Independent reviews, sized from the diff (detail below).</p><span class="f">senior-review.md, qa-report.md, designer-review.md</span></li>
-      <li><span class="n">08</span><h3>Merge request</h3><p>Description prepared from the evidence summary. Failed or unverified criteria stay visible in it.</p><span class="f">acceptance-summary.md</span></li>
-      <li><span class="n">09</span><h3>Consolidated review</h3><p>One review comment posted on the MR, with the captures.</p><span class="f">review-summary.md (tier 2)</span></li>
-      <li><span class="n">10</span><h3>Final report</h3><p>Summary in the terminal, end declared, archive synced, then cleanup.</p><span class="f">workflow-state.json</span></li>
-    </ol>
-    <figure>
-      <svg viewBox="0 0 1100 176" role="img" aria-label="Order of the reviews at step 7">
-        <text class="z" x="10" y="18">Step 7, order of the reviews</text>
-        <rect class="box" x="10" y="34" width="200" height="104" rx="8"/>
-        <text class="t" x="24" y="58">senior-reviewer</text>
-        <text class="s" x="24" y="76">independent diagnosis,</text>
-        <text class="s" x="24" y="91">then justified fixes</text>
-        <text class="md" x="24" y="118">senior-review.md</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre>
+<svg class="xlinks" aria-hidden="true"></svg>
+</div></div>
+  <div class="chips">
+    <div class="chip"><b>What the worktree receives</b>The ignored dependency directories (<code>node_modules</code> by default), copied copy-on-write or linked when the copy fails, the <code>.env*</code> files and <code>.claude/settings.local.json</code>, and the ignored git hooks helper (husky's <code>.husky/_</code>). Build outputs are not provided.</div>
+    <div class="chip"><b>What the session is told</b><code>IMPL_RUN_WORKTREE</code>, <code>IMPL_SOURCE_REPOSITORY</code>, <code>IMPL_SOURCE_BRANCH</code>, how the dependencies came over, and <code>IMPL_WORKTREE_DEPENDENCIES_STALE</code> when they lag behind the lockfile.</div>
+    <div class="chip err"><b>If the worktree cannot be created</b>The launch is aborted. The server never falls back on the main checkout.</div>
+    <div class="chip warn"><b>Shutdown and restart</b>A shutdown marks the worktree kept; the same rules run again on boot. Only a path directly under <code>.claude/worktrees/</code> is ever removed, and the branch never is.</div>
+  </div>
+</section>
 
-        <rect class="box" x="300" y="34" width="240" height="104" rx="8"/>
-        <text class="t" x="314" y="58">designer-reviewer</text>
-        <text class="s" x="314" y="76">if the change is visible in the UI</text>
-        <text class="md" x="314" y="102">1. design-inventory.md</text>
-        <text class="md" x="314" y="118">2. designer-review.md</text>
+<section>
+  <div class="head"><span class="num">04</span><h2>Run health</h2></div>
+  <p>The server does not read silence as a failure. It pairs the tool calls, tells the pilot from its subagents and reads the step the workflow declares, evaluates all of it at each tick and opens an incident only when a decision is needed. The decision on an incident is written before it takes effect.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="health">
+flowchart LR
+  signals[("<b>RunSession.signals</b><br/>turn ends, paired calls,<br/>background calls")]:::file
+  state[("<b>workflow-state.json</b><br/>the declared step")]:::file
+  monitor{"<b>run-monitor.ts</b><br/>one tick per run,<br/>serialised"}:::script
+  health{"<b>run-health.ts</b><br/>evaluateRunHealth,<br/>pure, injected clock"}:::script
+  incidents{"<b>run-incidents.ts</b><br/>deduplicated,<br/>lifted by its event"}:::script
+  swe("<b>Software Engineer</b><br/>picks an action<br/>on the banner"):::swe
+  action{"<b>incident.action</b><br/>decision persisted<br/>before the effect"}:::script
+  archive[("<b>/api/archive</b><br/>runs left with<br/>an open incident")]:::file
 
-        <rect class="box" x="630" y="34" width="220" height="104" rx="8"/>
-        <text class="t" x="644" y="58">qa-reviewer</text>
-        <text class="s" x="644" y="76">looks for defects in the final code</text>
-        <text class="md" x="644" y="98">1. qa-plan.md</text>
-        <text class="md" x="644" y="113">2. qa-report.md</text>
-        <text class="md" x="663" y="128">qa-evidence.json</text>
+  signals --> monitor
+  state --> monitor
+  monitor --> health -- "stalled, interrupted" --> incidents -- "banner" --> swe
+  swe --> action --> incidents
+  incidents -. "after a restart" .-> archive
 
-        <rect class="docbox" x="924" y="34" width="166" height="104" rx="8"/>
-        <text class="t" x="938" y="58">Evidence</text>
-        <text class="s" x="938" y="76">status per criterion</text>
-        <text class="s" x="938" y="91">AC1 … ACn</text>
-        <text class="md" x="938" y="118">acceptance-summary.md</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips">
+    <div class="chip"><b>Five readings</b><code>healthy</code>, <code>waiting</code> (on the engineer, dated from the question), <code>suspected_stall</code> (silence alone, never an incident), <code>stalled</code>, <code>interrupted</code>.</div>
+    <div class="chip err"><b>Four incidents</b><code>no_next_action</code>, <code>lost_session</code> (the session exited before a result: the run is <code>failed</code>), <code>missing_result</code>, <code>unresolvable_dependency</code>.</div>
+    <div class="chip"><b>Actions</b>Answer, open the terminal, view the diagnostic, ask the pilot to continue, stop the run, dismiss.</div>
+    <div class="chip warn"><b>File contracts</b>An agent that ends without the file its contract requires (<code>planner-output.json</code>, the QA and design reports with their plan and evidence, <code>review-summary.md</code>), with nobody taking over, raises an incident.</div>
+  </div>
+</section>
 
-        <path class="an" d="M210 86H298"/>
-        <text class="l" x="255" y="78">fixed code</text>
-        <path class="an" d="M540 86H628"/>
-        <text class="l" x="585" y="78">to check</text>
-        <path class="ad" d="M850 86H922"/>
-        <text class="l" x="886" y="78">evidence</text>
-        <text class="s" x="10" y="166">Each reviewer writes its expectations (plan, inventory) before reading the author's conclusions. Tier 0: senior alone. Tier 1: one pass each. Tier 2: review-orchestrator runs the loop.</text>
-      </svg>
-    </figure>
-  </section>
+<section>
+  <div class="head"><span class="num">05</span><h2>The evidence chain</h2></div>
+  <p>Each acceptance criterion gets a status the console derives itself from the evidence files, never from what an agent says about its own work. The same derivation feeds the "Evidence" tab and the summary the merge request quotes.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="evidence">
+flowchart LR
+  pilot["<b>Pilot</b><br/>acceptance-criteria.json<br/>AC1 … ACn"]:::agent
+  agents["<b>Dev, Senior,<br/>Designer, QA</b><br/>evidence files"]:::agent
+  ingest{"<b>acceptance-runtime.ts</b><br/>ingests, identifies<br/>the code version"}:::script
+  versions[("<b>data/runs/#lt;id#gt;/evidence</b><br/>every version<br/>and capture")]:::file
+  derive{"<b>acceptance.ts</b><br/>failed, blocked,<br/>unverified, verified"}:::script
+  qa{"<b>qaVerdictConsistency</b><br/>QA's verdict against<br/>what QA observed"}:::script
+  tab{"<b>Evidence tab</b><br/>in the console,<br/>in English"}:::script
+  summary[("<b>acceptance-summary.md</b><br/>in IMPL_LANGUAGE")]:::file
+  mr["<b>Pilot</b><br/>merge request<br/>description"]:::agent
 
-  <section>
-    <h2>3. Run health</h2>
-    <p class="caption">The server does not rely on silence. It reads precise signals, evaluates them at each tick and opens an incident when something needs a decision. An action on an incident is recorded before it is executed.</p>
-    <figure>
-      <svg viewBox="0 0 1100 196" role="img" aria-label="From the signals of the run to the incident banner">
-        <rect class="box" x="10" y="20" width="230" height="130" rx="8"/>
-        <text class="t" x="24" y="44">Signals of the run</text>
-        <text class="s" x="24" y="64">end of the pilot's turn</text>
-        <text class="s" x="24" y="80">paired tool calls</text>
-        <text class="s" x="24" y="96">subagent or pilot, background calls</text>
-        <text class="m" x="24" y="122">RunSession.signals</text>
-        <text class="m" x="24" y="138">workflow-state.json</text>
+  pilot --> ingest
+  agents --> ingest --> versions
+  ingest --> derive
+  derive --> qa
+  derive --> tab
+  qa --> summary --> mr
+  derive --> summary
 
-        <rect class="box" x="330" y="20" width="200" height="130" rx="8"/>
-        <text class="t" x="344" y="44">run-health.ts</text>
-        <text class="m" x="344" y="64">evaluateRunHealth</text>
-        <text class="s" x="344" y="84">pure logic, injected clock</text>
-        <text class="s" x="344" y="116">called by run-monitor.ts,</text>
-        <text class="s" x="344" y="131">the only scheduler, at each tick</text>
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips">
+    <div class="chip"><b>Which status wins</b>Failed over blocked, then unverified, then verified. Stale, unversioned or replaced evidence never counts as verified, and a <code>fail</code> is never read as a confirmation.</div>
+    <div class="chip"><b>Break attempts</b>A QA item of kind <code>attempt</code> that fails counts against its criterion; any other is listed under it and verifies nothing.</div>
+    <div class="chip warn"><b>QA verdict checked</b>A <code>PASS</code> over a criterion QA did not observe raises a warning in the tab and in the summary, except <code>PASS_WITH_WARNINGS</code> over a criterion only a deployed environment can show.</div>
+    <div class="chip"><b>Coverage frozen at delivery</b>The code is identified until the workflow's end is archived. A rebase or an edit made afterwards, outside a reopening, leaves the delivered coverage as it was.</div>
+  </div>
+</section>
 
-        <rect class="box" x="620" y="20" width="200" height="130" rx="8"/>
-        <text class="t" x="634" y="44">run-incidents.ts</text>
-        <text class="s" x="634" y="64">deduplicated by fingerprint</text>
-        <text class="s" x="634" y="80">resolved by the event that lifts it</text>
-        <text class="s" x="634" y="116">runs with an open incident:</text>
-        <text class="m" x="634" y="132">/api/archive/*</text>
+<section>
+  <div class="head"><span class="num">06</span><h2>What stays on disk</h2></div>
+  <p>Everything the console keeps is under <code>console/data/</code>, ignored by git. It holds ticket content: it never goes into tracked files, commits or docs.</p>
+  <div class="chips wide">
+    <div class="chip"><b><code>data/runs/&lt;run-id&gt;/</code></b><code>run.json</code> (the state, one write at a time), <code>terminal.log</code>, <code>artifacts/</code> (the workflow documents), <code>evidence/</code>, <code>metrics.json</code> (tokens, durations, diff), <code>gate-log.jsonl</code>, <code>hooks-spool.jsonl</code> while hooks wait.</div>
+    <div class="chip"><b><code>data/queue.json</code></b>The launch queue and the schedule: tickets, conflict edges and merge request watches. Written whole, then renamed.</div>
+    <div class="chip"><b><code>data/repositories/&lt;checkout&gt;-&lt;digest&gt;/</code></b>Per repository: <code>runtime-recipe.md</code> (how the app is started and driven) and <code>review-findings.json</code> (the defects the reviews keep finding), both handed to the next run.</div>
+    <div class="chip"><b><code>data/ticket-proposals.json</code></b>The file the outside watcher writes, read every 5 seconds, and <code>ticket-proposals-handled.json</code> for the tickets already queued or dismissed.</div>
+    <div class="chip"><b>Batch analyses</b>In <code>implementation-harness-&lt;user&gt;/schedule/</code> of the system's temporary directory, removed once read, kept with <code>session.log</code> on a failure, wiped on boot.</div>
+    <div class="chip warn"><b>Unreadable is not absent</b>A persisted file that cannot be read is renamed <code>*.unreadable-&lt;time&gt;</code> and reported before the console starts from nothing.</div>
+  </div>
+</section>
 
-        <rect class="ask" x="910" y="20" width="180" height="130" rx="8"/>
-        <text class="t" x="924" y="44">Incident banner</text>
-        <text class="s" x="924" y="64">cause in one sentence</text>
-        <text class="s" x="924" y="80">next action expected</text>
-        <text class="s" x="924" y="96">possible actions</text>
+<div class="tip" id="tip" role="tooltip"></div>
 
-        <path class="a" d="M240 70H328"/>
-        <text class="l" x="285" y="62">signals</text>
-        <path class="a" d="M530 70H618"/>
-        <text class="l" x="575" y="62">finding</text>
-        <path class="a" d="M820 70H908"/>
-        <text class="l" x="865" y="62">incident</text>
-        <path class="aq" d="M910 118H822"/>
-        <text class="l" x="865" y="138">incident.action</text>
-        <text class="s" x="10" y="182">File contracts: an agent that ends without the file its contract requires (planner-output.json, qa-report.md, designer-review.md, review-summary.md…) raises an incident.</text>
-      </svg>
-    </figure>
-    <div class="chips">
-      <div class="chip warn"><b class="mono">suspected_stall</b>Silence alone is only a doubt. A turn that ends in the middle of the workflow is no longer enough to ask for your attention.</div>
-      <div class="chip err"><b class="mono">failed + lost_session</b>The session stops before declaring a result. The run is interrupted, which is not a workflow error.</div>
-      <div class="chip"><b>Lost hooks</b><span class="mono">emit.mjs</span> retries once, then spools the event to <span class="mono">hooks-spool.jsonl</span>, replayed at the next hook and at each tick.</div>
-    </div>
-  </section>
+<footer>
+  Drawn on 9 October 2026 from the <code>implementation-harness</code> repository; every section describes the code in place. The <a href="agent-map.html">agent map</a> covers the roles, the models, the intake and scheduling of tickets, the workflow of a run and the self-improvement loop. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
+</footer>
 
-  <section>
-    <h2>4. The self-improvement loop</h2>
-    <p class="caption">The harness also works on its own repository, one improvement at a time. Nothing is pushed or merged on its own: the merge button of the interface is the only way to promote a change. A merge that touches <code>console/</code> or <code>bin/</code> needs an <code>impl restart</code>.</p>
-    <figure>
-      <svg viewBox="0 0 1100 130" role="img" aria-label="Self-improvement loop">
-        <rect class="box" x="10" y="20" width="168" height="90" rx="8"/>
-        <text class="t" x="22" y="44">Feedback, self-audit</text>
-        <text class="s" x="22" y="64">your feedback, or a</text>
-        <text class="s" x="22" y="79">self-audit after a run</text>
-        <text class="s" x="22" y="97">audits are queued</text>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "loose",
+    theme: "base",
+    themeVariables: {
+      darkMode: true,
+      background: "#10121a",
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontSize: "14px",
+      lineColor: "#5b6178",
+      primaryColor: "#171a25",
+      primaryBorderColor: "#5b6178",
+      primaryTextColor: "#eceef4",
+      clusterBkg: "#141722",
+      clusterBorder: "#2a2f40",
+      edgeLabelBackground: "#10121a",
+    },
+    flowchart: { useMaxWidth: false, htmlLabels: true, curve: "basis", nodeSpacing: 40, rankSpacing: 56, padding: 10 },
+  });
 
-        <rect class="box" x="238" y="20" width="168" height="90" rx="8"/>
-        <text class="t" x="250" y="44">Worktree</text>
-        <text class="m" x="250" y="64">self-improvement-&lt;id&gt;</text>
-        <text class="s" x="250" y="82">improve and review</text>
-        <text class="s" x="250" y="97">commands</text>
+  const element = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
 
-        <rect class="box" x="466" y="20" width="168" height="90" rx="8"/>
-        <text class="t" x="478" y="44">Automatic rebase</text>
-        <text class="s" x="478" y="64">when HEAD moves</text>
-        <text class="s" x="478" y="82">rebase command</text>
+  await document.fonts.ready;
+  // Each diagram gets an id of its own: the ones Mermaid draws from the clock can collide,
+  // and two diagrams sharing an id are drawn into the same frame.
+  const decode = (html) => html.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+  for (const [index, pre] of [...document.querySelectorAll("pre.mermaid")].entries()) {
+    const { svg } = await mermaid.render(`diagram-${index}`, decode(pre.innerHTML).trim());
+    pre.innerHTML = svg;
+    pre.setAttribute("data-processed", "true");
+  }
 
-        <rect class="box" x="694" y="20" width="168" height="90" rx="8"/>
-        <text class="t" x="706" y="44">Merge simulation</text>
-        <text class="m" x="706" y="64">git merge-tree</text>
-        <text class="m" x="706" y="79">--write-tree</text>
-        <text class="s" x="706" y="97">without touching the repo</text>
+  const nodeName = (node) => /^flowchart-(.+)-\d+$/.exec(node.id)?.[1];
 
-        <rect class="term" x="922" y="20" width="168" height="90" rx="8"/>
-        <text class="t" x="934" y="44">Merge button</text>
-        <text class="s" x="934" y="64">in the interface,</text>
-        <text class="s" x="934" y="79">you decide</text>
+  for (const svg of document.querySelectorAll(".mermaid svg")) {
+    const nodes = [...svg.querySelectorAll("g.node")];
 
-        <path class="an" d="M178 65H236"/><text class="l" x="208" y="57">starts</text>
-        <path class="an" d="M406 65H464"/><text class="l" x="436" y="57">follows</text>
-        <path class="an" d="M634 65H692"/><text class="l" x="664" y="57">checks</text>
-        <path class="an" d="M862 65H920"/><text class="l" x="892" y="57">offers</text>
-      </svg>
-    </figure>
-  </section>
+    // Mermaid's rounded node has a 5px corner, too close to an agent's rectangle.
+    for (const rect of svg.querySelectorAll("g.node.swe rect")) {
+      rect.setAttribute("rx", 22);
+      rect.setAttribute("ry", 22);
+    }
 
-  <section>
-    <h2>5. A batch of tickets</h2>
-    <p class="caption">You paste several URLs at once, or you launch tickets an outside watcher proposed. For each repository, an analysis session predicts what each ticket would touch and links the ones that cannot run together. The server starts what conflicts with nothing, 3 runs at a time at most, and holds the others until the awaited MR is merged.</p>
-    <figure>
-      <svg viewBox="0 0 1100 310" role="img" aria-label="From the pasted or proposed batch to the runs: analysis, conflict graph, scheduler, held tickets, merge request watch and override">
-        <rect class="box" x="10" y="30" width="160" height="90" rx="8"/>
-        <text class="t" x="22" y="54">Batch of tickets</text>
-        <text class="s" x="22" y="72">several pasted URLs</text>
-        <text class="m" x="22" y="103">batch.submit</text>
+    // Entrance order: top of the diagram first.
+    const byHeight = nodes
+      .map((node) => ({ node, top: node.getBoundingClientRect().top }))
+      .sort((a, b) => a.top - b.top);
+    byHeight.forEach(({ node }, index) => node.style.setProperty("--i", index));
+    svg.style.setProperty("--n", nodes.length);
 
-        <rect class="term" x="240" y="30" width="200" height="90" rx="8"/>
-        <text class="t" x="252" y="54">Analysis session</text>
-        <text class="m" x="252" y="72">claude -p, Sonnet</text>
-        <text class="s" x="252" y="89">ticket-scheduler agent,</text>
-        <text class="s" x="252" y="104">read-only, one per repository</text>
+    // Which links touch which node, read off the ids Mermaid gives them (L_<from>_<to>_<n>).
+    const names = nodes.map(nodeName).filter(Boolean);
+    const links = [...svg.querySelectorAll("path.flowchart-link")].map((path) => {
+      const body = path.id.replace(/^L_/, "").replace(/_\d+$/, "");
+      const from = names.find((name) => body.startsWith(name + "_") && names.includes(body.slice(name.length + 1)));
+      return from ? { path, from, to: body.slice(from.length + 1) } : null;
+    }).filter(Boolean);
 
-        <rect class="docbox" x="510" y="30" width="180" height="90" rx="8"/>
-        <text class="t" x="522" y="54">Conflict graph</text>
-        <text class="s" x="522" y="72">common files, or a</text>
-        <text class="s" x="522" y="87">dependency, with the reason</text>
-        <text class="md" x="522" y="106">output.json</text>
+    for (const node of nodes) {
+      const name = nodeName(node);
+      const touching = links.filter((link) => link.from === name || link.to === name);
+      if (!touching.length) continue;
+      const neighbours = new Set([name, ...touching.flatMap((link) => [link.from, link.to])]);
+      node.addEventListener("mouseenter", () => {
+        svg.classList.add("focus");
+        for (const other of nodes) other.classList.toggle("hot", neighbours.has(nodeName(other)));
+        for (const link of links) link.path.classList.toggle("hot", touching.includes(link));
+      });
+      node.addEventListener("mouseleave", () => {
+        svg.classList.remove("focus");
+        for (const hot of svg.querySelectorAll(".hot")) hot.classList.remove("hot");
+      });
+    }
+  }
 
-        <rect class="box" x="760" y="30" width="170" height="90" rx="8"/>
-        <text class="t" x="772" y="54">Scheduler</text>
-        <text class="s" x="772" y="72">domain.ts, pure logic</text>
-        <text class="s" x="772" y="87">3 runs at a time at most</text>
+  // Pointing at a node opens a card with its name, its kind and what it does.
+  const TIPS = {
+    pieces: {
+      page: ["Next.js page", "Interface", "Shows the runs, their terminal, the agents at work, the questions and the evidence. Holds no state of its own about a run."],
+      server: ["Node server", "console/server", "Holds every run, the launch queue and the watchers. Started in the background by impl, output in server.log."],
+      engine: ["server/engine", "Boundary", "Spawns claude in a PTY, reads its transcripts and translates its hooks. Nothing above it knows the agent is Claude Code."],
+      session: ["Claude Code session", "PTY", "The pilot and its agents, started on /implementation-harness:implement in the run worktree."],
+      data: ["console/data", "Files", "Runs, queue and per-repository memory. Ignored by git, holds ticket content."],
+      forge: ["glab / gh", "Forge CLI", "Called by the server to read a merge request's state or a ticket's blocking links. No Claude session, no token."],
+    },
+    hook: {
+      session: ["Pilot or agent", "Claude Code", "Every tool call and every agent stop fires a hook before the console hears of it."],
+      emit: ["emit.mjs", "Hook script", "Runs the guard, then the stop gate, then posts the event with the run id. Retries once, then spools."],
+      guard: ["guard.mjs", "Hook script", "Refuses six kinds of call during a run, decided from the tool input, never from a prompt."],
+      gate: ["gate.mjs", "Hook script", "At the stop of a Dev or the Senior, type-checks, lints and tests the files it edited, including through the shell."],
+      access: ["access.ts, hook-bridge.ts", "Server", "Accepts a hook only with the secret drawn at start and carried in the hook URL."],
+      engine: ["server/engine", "Server", "Turns the raw Claude Code payload into an EngineEvent the rest of the server understands."],
+      hooks: ["hooks.ts", "Server", "Applies the events to the RunSession the hook names, then publishes the new state."],
+      runjson: ["run.json", "File", "The run's state, written one write at a time; what changed meanwhile is one more write."],
+      ws: ["context.ts", "Server", "Sends a run's state and terminal only to the pages that opened that run."],
+      spool: ["hooks-spool.jsonl", "File", "Events the server did not take, replayed before the next hook and on every monitor tick."],
+    },
+    questions: {
+      pilot: ["Pilot", "Claude Code", "Asks the engineer through AskUserQuestion, the only interactive step of the workflow."],
+      hook: ["PreToolUse hook", "Hook", "Holds the call until the console returns the answer, up to an hour."],
+      run: ["RunSession", "Server", "Keeps the pending question with the time it was asked, so a wait on the engineer is never read as a stall."],
+      pty: ["Folder trust dialog", "Claude Code", "Drawn before any hook or transcript, so no hook can report it."],
+      trust: ["trust-prompt.ts", "Engine", "Recognises the dialog in the terminal output and raises a decision. Never answers it alone."],
+    },
+    worktree: {
+      registry: ["registry.ts", "Server", "Resolves a launch to the main checkout and holds one run per repository and ticket."],
+      add: ["git worktree add", "Git", "Creates the run's worktree at the checkout's HEAD, excluded through .git/info/exclude."],
+      provision: ["provisionWorktree", "Server", "Brings over the ignored dependencies, config files and git hooks helper. A failure is only a warning."],
+      stale: ["staleDependencies", "Server", "Compares each node_modules with its lockfile. A drift tells the pilot to reinstall before the first agent."],
+      session: ["Session", "Claude Code", "Works in the worktree: its .claude/tasks is the run's own, never the checkout's."],
+      settle: ["settleRunWorktree", "Server", "Removes the worktree only when nothing in it can be lost. Same rules on boot."],
+      kept: ["Kept worktree", "Directory", "Listed with its reasons in the run, until the engineer removes it."],
+    },
+    health: {
+      signals: ["RunSession.signals", "State", "Pilot turn ends, tool calls paired by id, subagent or pilot, background calls, notification causes."],
+      state: ["workflow-state.json", "File", "The step the pilot declares, which is the run's phase."],
+      monitor: ["run-monitor.ts", "Server", "The only scheduler: a tick per run, serialised with the incident actions."],
+      health: ["run-health.ts", "Server", "Pure evaluation of the signals with an injected clock and policy."],
+      incidents: ["run-incidents.ts", "Server", "Keeps incidents, deduplicated by fingerprint and resolved by the event that lifts them."],
+      action: ["incident.action", "Message", "Carries a revision and a request id; the decision is persisted before its effect."],
+      archive: ["Run archive", "Read only", "Runs left with an open incident or a kept worktree, read back after a restart and never registered again."],
+    },
+    evidence: {
+      pilot: ["Pilot", "Claude Code", "Writes the register of criteria with stable AC ids after the questions."],
+      agents: ["Dev, Senior, Designer, QA", "Claude Code", "Write evidence files following contracts/evidence.md, each item citing its criteria."],
+      ingest: ["acceptance-runtime.ts", "Server", "Ingests each file, identifies the code with code-snapshot.mjs and answers the archive sync before cleanup."],
+      versions: ["evidence/", "Files", "Every version of every evidence file and its captures, with the code snapshots, so a restart derives the same coverage."],
+      derive: ["acceptance.ts", "Server", "Pure derivation of each criterion's status from the evidence it names."],
+      qa: ["qaVerdictConsistency", "Server", "Compares QA's declared status with what QA itself observed on the current code."],
+      tab: ["Evidence tab", "Interface", "The full view, served by /api/runs/<id>/acceptance."],
+      summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request."],
+      mr: ["Pilot", "Claude Code", "Prepares the description from the summary: failed or unverified criteria stay visible."],
+    },
+  };
+  const tip = document.getElementById("tip");
+  const hideTip = () => tip.classList.remove("open");
+  for (const node of document.querySelectorAll("[data-tips] g.node")) {
+    const entry = TIPS[node.closest("[data-tips]").dataset.tips]?.[nodeName(node)];
+    if (!entry) continue;
+    const [name, model, does] = entry;
+    const kind = ["agent", "script", "file", "swe"].find((candidate) => node.classList.contains(candidate));
+    node.addEventListener("mouseenter", () => {
+      tip.className = `tip ${kind}`;
+      tip.replaceChildren(element("div", "tip-head"), element("p", "", does));
+      tip.firstChild.append(element("strong", "", name), element("span", "", model));
+      // Under the node when there is room, above it otherwise, never off the sides.
+      const box = node.getBoundingClientRect();
+      const width = tip.offsetWidth, height = tip.offsetHeight;
+      const left = Math.max(12, Math.min(innerWidth - width - 12, box.left + box.width / 2 - width / 2));
+      const below = box.bottom + 12 + height <= innerHeight;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${below ? box.bottom + 12 : box.top - 12 - height}px`;
+      tip.classList.add("open");
+    });
+    node.addEventListener("mouseleave", hideTip);
+  }
+  addEventListener("scroll", hideTip, { passive: true, capture: true });
 
-        <rect class="box" x="975" y="30" width="115" height="90" rx="8"/>
-        <text class="t" x="987" y="54">Runs</text>
-        <text class="s" x="987" y="72">one worktree</text>
-        <text class="s" x="987" y="87">each</text>
+  // The overview is two diagrams, one per line. The links that go from one line to the
+  // other are drawn here, through the space between them, one lane each.
+  for (const [index, rows] of [...document.querySelectorAll(".rows")].entries()) {
+    const overlay = rows.querySelector(".xlinks");
+    const origin = rows.getBoundingClientRect();
+    const place = (name) => {
+      const node = [...rows.querySelectorAll("g.node")].find((candidate) => nodeName(candidate) === name);
+      const box = node.getBoundingClientRect();
+      return { x: box.left - origin.left + box.width / 2, top: box.top - origin.top, bottom: box.bottom - origin.top, upper: box.top < origin.top + origin.height / 2 };
+    };
+    const gutter = rows.querySelector("pre.mermaid").getBoundingClientRect().bottom - origin.top;
+    const crossings = JSON.parse(rows.dataset.links).map((link, lane) => ({ ...link, lane: lane + 1 }));
+    const radius = 14;
+    let drawn = `<defs><marker id="xlink-arrow-${index}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z"/></marker></defs>`;
+    for (const { from, to, label, lane, dotted } of crossings) {
+      const a = place(from), b = place(to);
+      const y1 = a.upper ? a.bottom : a.top, y2 = b.upper ? b.bottom : b.top;
+      const lineY = gutter + lane * 33;
+      const sx = Math.sign(b.x - a.x) || 1, s1 = Math.sign(lineY - y1), s2 = Math.sign(y2 - lineY);
+      const d = `M${a.x} ${y1} L${a.x} ${lineY - s1 * radius} Q${a.x} ${lineY} ${a.x + sx * radius} ${lineY} `
+        + `L${b.x - sx * radius} ${lineY} Q${b.x} ${lineY} ${b.x} ${lineY + s2 * radius} L${b.x} ${y2 - s2 * 3}`;
+      drawn += `<path class="link${dotted ? " dotted" : ""}" d="${d}" marker-end="url(#xlink-arrow-${index})"/>`
+        + `<text x="${(a.x + b.x) / 2}" y="${lineY + 4}">${label}</text>`;
+    }
+    overlay.innerHTML = drawn;
+  }
 
-        <rect class="box" x="760" y="200" width="170" height="90" rx="8"/>
-        <text class="t" x="772" y="224">Held ticket</text>
-        <text class="s" x="772" y="242">waits for the other</text>
-        <text class="s" x="772" y="257">MR to be merged,</text>
-        <text class="s" x="772" y="272">taking no slot</text>
+  // A diagram wider than its frame is scaled down to fit, as long as it stays readable.
+  for (const diagram of document.querySelectorAll(".canvas > .mermaid, .canvas > .rows")) {
+    const room = diagram.parentElement.clientWidth - 58;
+    diagram.dataset.fit = Math.max(0.62, Math.min(1, room / diagram.getBoundingClientRect().width)).toFixed(3);
+    diagram.style.zoom = diagram.dataset.fit;
+  }
 
-        <rect class="box" x="510" y="200" width="180" height="90" rx="8"/>
-        <text class="t" x="522" y="224">MR watch</text>
-        <text class="m" x="522" y="242">glab / gh api, every minute</text>
-        <text class="s" x="522" y="259">a call by the Node server,</text>
-        <text class="s" x="522" y="274">no Claude session, no token</text>
+  // Sections come in when they reach the viewport, once.
+  document.body.classList.add("anim");
+  const seen = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add("in");
+      seen.unobserve(entry.target);
+    }
+  }, { threshold: 0, rootMargin: "0px 0px -12% 0px" });
+  // Links and pulses only move in the diagrams on screen.
+  const live = new IntersectionObserver((entries) => {
+    for (const entry of entries) entry.target.classList.toggle("live", entry.isIntersecting);
+  });
+  for (const section of document.querySelectorAll("section")) {
+    seen.observe(section);
+    live.observe(section);
+  }
 
-        <rect class="box" x="240" y="200" width="200" height="90" rx="8"/>
-        <text class="t" x="252" y="224">Forge</text>
-        <text class="s" x="252" y="242">state of the merge request</text>
-        <text class="m" x="252" y="262">merged · closed · opened</text>
-
-        <rect class="ask" x="975" y="200" width="115" height="90" rx="8"/>
-        <text class="t" x="987" y="224">Override</text>
-        <text class="s" x="987" y="242">stacked start,</text>
-        <text class="s" x="987" y="257">or from the base</text>
-        <text class="s" x="987" y="272">your decision</text>
-
-        <rect class="box" x="10" y="200" width="160" height="90" rx="8"/>
-        <text class="t" x="22" y="224">Outside watcher</text>
-        <text class="s" x="22" y="242">label, assignee, status</text>
-        <text class="m" x="22" y="272">ticket-proposals.json</text>
-
-        <path class="an" d="M170 75H238"/><text class="l" x="204" y="67">per repo</text>
-        <path class="ad" d="M440 75H508"/><text class="l" x="474" y="67">JSON</text>
-        <path class="an" d="M690 75H758"/><text class="l" x="724" y="67">edges</text>
-        <path class="a" d="M930 75H973"/><text class="l" x="952" y="67">starts</text>
-        <path class="an" d="M800 120V198"/><text class="l" x="756" y="163">in conflict</text>
-        <path class="an" d="M890 200V122"/><text class="l" x="926" y="163">resumes</text>
-        <path class="an" d="M690 245H758"/><text class="l" x="724" y="237">MR merged</text>
-        <path class="an" d="M510 245H442"/><text class="l" x="476" y="237">asks</text>
-        <path class="aq" d="M975 245H932"/><text class="l" x="954" y="237">force</text>
-        <path class="aq" d="M90 200V122"/><text class="l" x="134" y="163">you launch</text>
-      </svg>
-    </figure>
-    <div class="chips">
-      <div class="chip"><b>What the analysis costs</b>One Claude Code session on Sonnet per repository and per batch, 5 minutes at most by default. It takes none of the 3 slots.</div>
-      <div class="chip"><b>The watch uses no tokens</b>The server calls <span class="mono">glab api</span> or <span class="mono">gh api</span>, only while a ticket waits for an MR or a PR. If the forge does not answer, the ticket stays held.</div>
-      <div class="chip warn"><b>Failed or unreliable analysis</b>Missing or refused file, timeout exceeded, ticket too vague: the tickets of that repository run one at a time.</div>
-      <div class="chip warn"><b>Override</b>From the base: the second MR will probably have to be reworked by hand. Stacked: the MR targets the other ticket's branch and is merged after it.</div>
-      <div class="chip"><b>Limit</b>Tried once on a real GitLab project, with three tickets. The stacked start and the start from the base only ran against the stand-ins the tests use for <span class="mono">claude</span> and <span class="mono">glab</span>.</div>
-    </div>
-  </section>
-
-  <section>
-    <h2>6. Tickets proposed by a watcher</h2>
-    <p class="caption">The console does not ask the forge which tickets to take. An outside tool does, and the two share one file.</p>
-    <div class="latercard">
-      <h3>One file between the watcher and the console</h3>
-      <ul>
-        <li>The watcher looks for tickets, for example by label, assignee and status, and writes everything that matches to <span class="mono">ticket-proposals.json</span>. It opens no Claude session and uses no tokens.</li>
-        <li>The file sits in the console's data directory, <span class="mono">console/data/ticket-proposals.json</span> by default, or wherever <span class="mono">IMPL_TICKET_PROPOSALS_FILE</span> points. The console reads it again every 5 seconds (<span class="mono">IMPL_PROPOSALS_POLL_MS</span>), so a change the watcher writes shows without a restart.</li>
-        <li>The console reads the file and lists the tickets under "Proposed". Nothing starts until you launch one. A ticket launched or dismissed is not proposed again while it stays in the file.</li>
-        <li><span class="mono">ticket-source.ts</span> resolves a launched proposal to its checkout, as it does for a pasted URL, and the queue is the same. Without the file the console works as before.</li>
-        <li>Not started: launching proposed tickets without the user.</li>
-      </ul>
-    </div>
-  </section>
-
-  <footer>Diagram drawn on 3 October 2026 from the <span class="mono">implementation-harness</span> repository. Every section describes the code in place.</footer>
-</main>
+  let zoom = 1;
+  const label = document.getElementById("zoom-value");
+  for (const button of document.querySelectorAll("[data-zoom]")) {
+    button.addEventListener("click", () => {
+      zoom = Math.min(2, Math.max(0.4, +(zoom + Number(button.dataset.zoom)).toFixed(2)));
+      for (const diagram of document.querySelectorAll(".canvas > .mermaid, .canvas > .rows")) diagram.style.zoom = zoom * Number(diagram.dataset.fit ?? 1);
+      label.textContent = Math.round(zoom * 100) + "%";
+    });
+  }
+</script>
 </body>
 </html>

@@ -238,7 +238,7 @@
     .agent-card dd { margin-bottom: 10px; }
   }
 
-  /* Overview: the card that opens on a node. */
+  /* The card that opens on an agent or a script. */
   .tip {
     --tone: var(--agent);
     position: fixed; z-index: 20; top: 0; left: 0; width: 300px; padding: 14px 16px;
@@ -258,7 +258,7 @@
     border: 1px solid var(--panel-edge); background: rgba(255, 255, 255, .05);
   }
   .tip p { margin: 0; font-size: 13.5px; line-height: 1.5; color: #c9cddb; }
-  .rows[data-tips] g.node { cursor: help; }
+  [data-tips] g.node.agent, [data-tips] g.node.script { cursor: help; }
 
   footer { padding: 40px 40px 72px; color: var(--muted); font-size: 13px; max-width: 90ch; }
   code { font: 12px "JetBrains Mono", ui-monospace, Menlo, monospace; color: #b9bfd3; background: rgba(255, 255, 255, .05); padding: 1px 5px; border-radius: 5px; }
@@ -304,8 +304,8 @@
 
 <section>
   <div class="head"><span class="num">00</span><h2>Overview</h2></div>
-  <p>The whole harness in one graph: a ticket comes in, a merge request comes out, and the harness corrects itself when a run went wrong. It reads left to right on two lines, and each arrow says what goes from one node to the next. Hover a node to see what it does. The views below detail each part.</p>
-  <div class="canvas"><div class="rows" data-tips data-links='[{"from":"oQa","to":"oAccept","label":"evidence"}]'>
+  <p>The whole harness in one graph: a ticket comes in, a merge request comes out, and the harness corrects itself when a run went wrong. It reads left to right on two lines, and each arrow says what goes from one node to the next. In every diagram, hover an agent or a script to see what it does. The views below detail each part.</p>
+  <div class="canvas"><div class="rows" data-tips="overview" data-links='[{"from":"oQa","to":"oAccept","label":"evidence"}]'>
 <pre class="mermaid">
 flowchart LR
   oSwe1("<b>Software Engineer</b><br/>pastes the ticket URLs"):::swe
@@ -381,7 +381,7 @@ flowchart LR
 <section>
   <div class="head"><span class="num">02</span><h2>Intake and scheduling</h2></div>
   <p>A ticket arrives through pasted URLs or through the file vigie keeps up to date. The console decides when it may start, then opens a Claude Code session in a dedicated worktree.</p>
-  <div class="canvas"><div class="rows" data-links='[{"from":"order","to":"worktree","label":"free slot, no conflict"}]'>
+  <div class="canvas"><div class="rows" data-tips="intake" data-links='[{"from":"order","to":"worktree","label":"free slot, no conflict"}]'>
 <pre class="mermaid">
 flowchart LR
   sweA("<b>Software Engineer</b><br/>pastes one or more ticket URLs"):::swe
@@ -436,7 +436,7 @@ flowchart LR
 <section>
   <div class="head"><span class="num">03</span><h2>The run of a ticket</h2></div>
   <p>The pilot owns git and the dialogue with the engineer, and never writes the ticket's code. The review is sized to the diff: three tiers, only one with an orchestrator.</p>
-  <div class="canvas"><pre class="mermaid">
+  <div class="canvas"><pre class="mermaid" data-tips="run">
 flowchart TD
   p1["<b>Pilot</b> · Opus<br/>1. reads the ticket, Figma,<br/>attachments, lists the gaps"]:::agent
   swe2("<b>Software Engineer</b><br/>picks the base branch,<br/>answers the blocking questions"):::swe
@@ -524,7 +524,7 @@ flowchart TD
 <section>
   <div class="head"><span class="num">04</span><h2>What runs during the whole run</h2></div>
   <p>Every tool call of the session goes through the hooks before it reaches the console. The safety rules are decided there, not in a prompt.</p>
-  <div class="canvas"><pre class="mermaid">
+  <div class="canvas"><pre class="mermaid" data-tips="live">
 flowchart LR
   session["<b>Pilot and its agents</b><br/>a tool call,<br/>an agent stop"]:::agent
   emit{"<b>emit.mjs</b><br/>receives every hook,<br/>sends it to the console"}:::script
@@ -558,7 +558,7 @@ flowchart LR
 <section>
   <div class="head"><span class="num">05</span><h2>After the final report</h2></div>
   <p>The MR waits for the engineer's review, the queue is released at the merge, and the harness audits itself only when it observed something going wrong.</p>
-  <div class="canvas"><pre class="mermaid">
+  <div class="canvas"><pre class="mermaid" data-tips="after">
 flowchart LR
   done["<b>Pilot</b> · Opus<br/>MR open, final report"]:::agent
   metrics{"<b>run-metrics-runtime.ts</b><br/>tokens, durations, diff<br/>in metrics.json"}:::script
@@ -771,34 +771,99 @@ flowchart LR
     }
   }
 
-  // Overview: pointing at a node opens a card with its name, its model and what it does.
+  // Pointing at an agent or a script opens a card with its name, its model and what it does.
   const TIPS = {
-    oSwe1: ["Software Engineer", "Human", "Pastes one or more ticket URLs into the console. Everything starts there."],
-    oVigie: ["vigie", "Script", "Watches the forge and proposes the tickets that match its filter. The console queues them with no click."],
-    oConsole: ["registry.ts", "Script", "Holds the queue. Decides when a ticket may start, then creates its worktree and opens the session."],
-    oSched: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch, so two tickets that step on each other never start together."],
-    oGuard: ["guard.mjs", "Script", "Checks every tool call before it runs. Refuses what is dangerous: destructive git, a published secret, a wrong model."],
-    oPilot: ["Pilot", "Opus", "Conducts the ticket. Reads, asks, delegates, commits and opens the merge request. Never writes the code itself."],
-    oSwe2: ["Software Engineer", "Human", "Answers the blocking questions and picks the base branch. It is the only planned interruption of the run."],
-    oPlanner: ["Planner", "Opus", "Splits the ticket into precise tasks, with their files and their dependencies."],
-    oDev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the large tasks of the plan, which run on Opus."],
-    oGate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
-    oOrch: ["Review orchestrator", "Sonnet", "On large diffs, sequences the reviews and sends the blocking defects back to a Dev, twice at most."],
-    oSenior: ["Senior reviewer", "Opus or Sonnet", "Reads the code with a critical eye and corrects the justified defects."],
-    oDesigner: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations."],
-    oQa: ["QA", "Opus or Sonnet", "Tests the final result with its own scenarios and reports what it observes. Fixes nothing."],
-    oAccept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria and says which ones are really verified."],
-    oMr: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes the consolidated review. As a draft when something still blocks."],
-    oSwe3: ["Software Engineer", "Human", "Reviews the merge request, then merges it or asks for a change."],
-    oWatch: ["merge-watch.ts", "Script", "Watches the merge request. Once it is merged, releases the tickets that were waiting behind it."],
-    oAudit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when something went wrong."],
-    oImprove: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
-    oSwe4: ["Software Engineer", "Human", "Reads the improvement diff, then merges or rejects it. Nothing is merged automatically."],
+    overview: {
+      oVigie: ["vigie", "Script", "Watches the forge and proposes the tickets that match its filter. The console queues them with no click."],
+      oConsole: ["registry.ts", "Script", "Holds the queue. Decides when a ticket may start, then creates its worktree and opens the session."],
+      oSched: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch, so two tickets that step on each other never start together."],
+      oGuard: ["guard.mjs", "Script", "Checks every tool call before it runs. Refuses what is dangerous: destructive git, a published secret, a wrong model."],
+      oPilot: ["Pilot", "Opus", "Conducts the ticket. Reads, asks, delegates, commits and opens the merge request. Never writes the code itself."],
+      oPlanner: ["Planner", "Opus", "Splits the ticket into precise tasks, with their files and their dependencies."],
+      oDev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the large tasks of the plan, which run on Opus."],
+      oGate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
+      oOrch: ["Review orchestrator", "Sonnet", "On large diffs, sequences the reviews and sends the blocking defects back to a Dev, twice at most."],
+      oSenior: ["Senior reviewer", "Opus or Sonnet", "Reads the code with a critical eye and corrects the justified defects."],
+      oDesigner: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations."],
+      oQa: ["QA", "Opus or Sonnet", "Tests the final result with its own scenarios and reports what it observes. Fixes nothing."],
+      oAccept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria and says which ones are really verified."],
+      oMr: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes the consolidated review. As a draft when something still blocks."],
+      oWatch: ["merge-watch.ts", "Script", "Watches the merge request. Once it is merged, releases the tickets that were waiting behind it."],
+      oAudit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when something went wrong."],
+      oImprove: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
+    },
+    intake: {
+      vigie: ["vigie", "Script", "An outside tool that watches the forge. It keeps a file listing the tickets that match its filter."],
+      impl: ["impl", "Script", "The command that starts the console in the background, restarts it or stops it."],
+      proposals: ["ticket-proposals.ts", "Script", "Reads vigie's file every 5 seconds and queues the new tickets, with no click."],
+      source: ["ticket-source.ts", "Script", "Finds, for each ticket URL, the local repository the code will be written in."],
+      registry: ["registry.ts", "Script", "Holds the queue. One run per ticket, and a limited number of runs at once."],
+      analysis: ["schedule-analysis.ts", "Script", "Starts the analysis of a batch of tickets and checks the answer is well formed before using it."],
+      scheduler: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch and spots the ones that overlap or depend on each other."],
+      links: ["ticket.ts", "Script", "Reads the \"blocks\" and \"is blocked by\" links between tickets on the forge. No Claude session, no tokens."],
+      order: ["domain.ts", "Script", "Decides the start order: two conflicting tickets never run together, and a dependency goes first."],
+      worktree: ["run-worktrees.ts", "Script", "Creates an isolated working directory for the run and copies the dependencies and config files into it."],
+      seed: ["runtime-recipe.ts, review-findings.ts", "Script", "Hands the run what earlier ones learned about the repository: how to start the app, and the defects that keep coming back."],
+      engine: ["engine/claude-code.ts", "Script", "Starts the real claude binary in a terminal. It is the only code that knows the agent is Claude Code."],
+      pilot: ["Pilot", "Opus", "The main session, which drives the ticket to its merge request."],
+    },
+    run: {
+      p1: ["Pilot", "Opus", "Reads the ticket, the designs and the attachments, then lists what the ticket does not say."],
+      p3: ["Pilot", "Opus", "Writes the list of acceptance criteria, the reference for the whole run, and creates the branch."],
+      planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size."],
+      p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself."],
+      dev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the tasks sized L, which run on Opus."],
+      gate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
+      p5: ["Pilot", "Opus", "Reads the verdict of the checks, runs the repository-wide ones and makes one commit per task."],
+      p6: ["Pilot", "Opus", "Starts the application and measures the change in a browser, on frozen code."],
+      snap: ["code-snapshot.mjs", "Script", "Gives a fingerprint of the code at one moment. Evidence taken on code that changed since no longer counts."],
+      tier: ["Pilot", "Opus", "Looks at the size of the diff and picks the review tier. A four-line fix does not get the review of a feature."],
+      s0: ["Senior reviewer", "Sonnet", "One focused pass on the correctness of the fix. Reports blocking defects only."],
+      q0: ["QA", "Sonnet", "Runs only when the senior changed the code, to check that correction independently."],
+      s1: ["Senior reviewer", "Sonnet", "Reads the code with a critical eye and corrects the justified defects."],
+      d1: ["Designer", "Sonnet", "Compares the live screen with the mockups. Runs only when the change shows in the interface."],
+      q1: ["QA", "Sonnet", "Tests the final result with its own scenarios and reports what it observes."],
+      r1: ["Dev rework", "Sonnet", "Fixes the blocking defects (P0 and P1) the review raised. Minor remarks are only listed."],
+      orch: ["Review orchestrator", "Sonnet", "Sequences the reviews, sends the blocking defects back to a Dev and returns the final verdict."],
+      s2: ["Senior reviewer", "Opus", "Reads the code with a critical eye and corrects the justified defects. On Opus, since a missed defect costs more here."],
+      d2: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations, without reading the code."],
+      q2: ["QA", "Opus", "Tests the final result with its own scenarios. Always runs last, on the final code."],
+      r2: ["Dev rework", "Sonnet", "Fixes the blocking defects the review raised. Two rework rounds at most, then the run stops."],
+      accept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria and writes the summary the merge request quotes."],
+      p8: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes a review comment. As a draft when something still blocks."],
+      p10: ["Pilot", "Opus", "Sums up the run, says what could not be verified, then empties its working directory."],
+      archive: ["evidence-archive.ts", "Script", "Puts the evidence and the captures away in the run archive before the working directory is emptied."],
+    },
+    live: {
+      session: ["Pilot and its agents", "Opus and Sonnet", "Every action of an agent goes through a tool. That passage is what the hooks observe."],
+      emit: ["emit.mjs", "Script", "The entry point of every hook. It calls the guard, then forwards the event to the console."],
+      guard: ["guard.mjs", "Script", "Blocks a dangerous call before it runs. A safety rule is decided here, never by a sentence in a prompt."],
+      gate: ["gate.mjs", "Script", "When the Dev or the Senior stops, runs the typecheck, the lint and the tests of what it edited."],
+      bridge: ["hook-bridge.ts, hooks.ts", "Script", "Receives the event on the console side and updates the state of the run it names."],
+      monitor: ["run-monitor.ts, run-health.ts", "Script", "Spots a run that stopped moving or a lost session, and opens an incident."],
+      artifacts: ["artifacts.ts", "Script", "Watches the run's working directory and copies each document it produces into the archive."],
+      usage: ["engine/usage.ts", "Script", "Reads the Claude Code transcripts to count the tokens of the pilot and of each agent."],
+      ui: ["Next.js console", "Interface", "The local page that shows the steps, the agents, the questions and the evidence of the run, live."],
+    },
+    after: {
+      done: ["Pilot", "Opus", "The merge request is open. The session stays available for a question or a retouch."],
+      metrics: ["run-metrics-runtime.ts", "Script", "Records what the run cost: tokens, durations, diff size. Used to compare runs with each other."],
+      settle: ["run-worktrees.ts", "Script", "Removes the run's working directory, only when nothing would be lost. Otherwise it keeps it and says why."],
+      reopen: ["Pilot", "Opus", "A change asked after the report reopens the run. The rules stay the same: it does not code itself."],
+      devR: ["Dev rework", "Sonnet", "Applies the change asked after the final report."],
+      review: ["Review", "Depends on the tier", "The retouch is reviewed like the rest, at the tier the size of its diff calls for."],
+      watch: ["merge-watch.ts", "Script", "Asks the forge, once a minute, whether the merge request is merged. No Claude session, no tokens."],
+      queue: ["registry.ts", "Script", "Once the merge request is merged, starts the tickets that were waiting behind it."],
+      audit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when it observed a defect or received feedback."],
+      improve: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
+      rebase: ["Session /rebase", "Sonnet", "If the harness moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
+      restart: ["impl restart", "Script", "Restarts the console when the merged improvement touched its code."],
+    },
   };
   const tip = document.getElementById("tip");
   const hideTip = () => tip.classList.remove("open");
-  for (const node of document.querySelectorAll(".rows[data-tips] g.node")) {
-    const entry = TIPS[nodeName(node)];
+  for (const node of document.querySelectorAll("[data-tips] g.node")) {
+    const entry = TIPS[node.closest("[data-tips]").dataset.tips]?.[nodeName(node)];
     if (!entry) continue;
     const [name, model, does] = entry;
     const kind = ["agent", "script", "swe"].find((candidate) => node.classList.contains(candidate));

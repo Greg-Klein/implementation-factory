@@ -48,5 +48,10 @@
     "jest": "^30.5.1",
     "yaml": "^2.8.1"
   },
-  "description": "Local console that drives Claude Code workflows"
+  "description": "Local console that drives Claude Code workflows",
+  "overrides": {
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "^4.1.0"
+    }
+  }
 }

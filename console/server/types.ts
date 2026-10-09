@@ -490,7 +490,9 @@ export type ServerMessage =
   /** A batch queued nothing because these tickets have no checkout: the page asks where their merge requests go, then sends it again with `targets`. */
   | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
-  | { type: "error"; message: string; runId?: string; requestId?: string }
+  | { type: "error"; message: string; runId?: string; requestId?: string; ackId?: string }
+  /** A message that carried an `ackId` was handled without a refusal. Whatever it answers on its own was sent before. */
+  | { type: "ack"; ackId: string }
   /** What became of a worktree removal, answered to the page that asked. `risks`: what a forced removal would lose. */
   | { type: "worktree.result"; runId: string; outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] }
   /** Answered to the page that asked to forget a recipe. `forgotten` is false when there was none. */

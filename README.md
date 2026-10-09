@@ -129,6 +129,60 @@ impl restart
 
 The browser opens on <http://127.0.0.1:3210>.
 
+### From the terminal, without the browser
+
+Everything the interface does is also a command of `impl`. The commands are a second client of the same server, over the socket and the routes the page uses: a run started in the browser is followed from a terminal and the other way round, and both can be open at once.
+
+```bash
+impl run https://gitlab.example.com/acme/shop/-/issues/12 -f   # starts the run and follows it
+impl runs                                                       # runs, queue, kept worktrees
+impl watch 12                                                   # follows the run of ticket 12
+impl answer 12 2 "keep the critical alerts"                     # answers its decision
+```
+
+| Command | Effect |
+|---|---|
+| `impl run <ticket-url>... [-r <checkout>]... [-m <instruction>] [-f]` | starts a run; several tickets are queued as a batch and compared first; `-f` follows the run; `--demo [workflow\|incident\|batch]` plays a simulated one |
+| `impl runs` | lists the runs, the queue, the kept worktrees and the watcher's tickets |
+| `impl show <run>` | one run: step, agents at work, plan, decision waiting, incident |
+| `impl watch [<run>]` | follows a run until its workflow ends, or every run when none is named |
+| `impl attach <run>` | the terminal of the run's session, `Ctrl-]` leaves it running |
+| `impl answer <run> [<answer>...]` | answers the decision a run waits on |
+| `impl trust <run> accept\|refuse` | answers the folder trust dialog |
+| `impl tell <run> <instruction>` | sends an instruction to the session |
+| `impl abort <run>`, `impl close <run>` | stops a run and its session, removes an ended run from the list |
+| `impl queue [cancel\|force\|move] ...` | shows the queue; removes a launch, starts it anyway (`--stacked`, `--onto <ticket-url>`), moves it (`--before <id>`, `--end`) |
+| `impl incident <run> [continue\|stop\|dismiss]` | shows the open incident of a run, or acts on it (`--reason <text>`) |
+| `impl worktree rm <run> [--force]` | removes the worktree an ended run left |
+| `impl docs <run> [<document>]`, `impl evidence <run>` | the documents of a run, its acceptance criteria and what verifies each |
+| `impl metrics` | what each run cost and delivered |
+| `impl recipe [<checkout>]`, `impl findings [<checkout>]` | what is kept for a repository, `--forget` drops it |
+| `impl proposals [dismiss\|launch] ...` | the watcher's tickets that were not queued |
+| `impl improvements [diff\|report\|approve\|reject\|revert <branch>]` | the improvement branches |
+| `impl repos [<ticket-url>]` | the checkouts found, and the one a ticket goes to |
+| `impl feedback <run> <text>` | leaves feedback on a run for the improvement loop |
+
+A run is named by its id, the end of its id as the lists show it, its ticket number (`#12` or `12`) or its ticket address. A name that fits several runs is refused with the list. `--json` on the reading commands prints the data the interface is fed, and `impl <command> --help` gives the arguments of one command.
+
+`impl answer` takes one answer per question, in the order asked: the number of a suggested choice, several numbers separated by commas when the question takes several, or your own words. With nothing after the run, it asks at the terminal. `impl watch` and `impl run -f` ask the decisions the same way when a person is at the terminal, and print the command that answers them otherwise; they end `0` on a completed run and `1` on any other end.
+
+Exit codes: `0` done, `1` refused by the console or failed, `2` a command written wrong, `3` no console answers.
+
+`impl run` starts the server when none is listening, without opening the browser. The other commands start nothing: a server that starts also starts whatever its queue held, which a reading should not do.
+
+### On a remote machine
+
+The server and the sessions run on the machine that holds the checkouts, and the commands above work in a plain SSH session there: nothing needs a browser. Claude Code, `glab` or `gh` have to be signed in on that machine.
+
+To use the interface or the commands from another machine, forward the port instead of exposing it. The console only answers to the address it listens on, so the tunnel keeps the same port on both sides:
+
+```bash
+ssh -N -L 3210:127.0.0.1:3210 user@remote     # then http://127.0.0.1:3210 in the browser
+IMPL_CONSOLE_URL=http://127.0.0.1:3210 impl runs
+```
+
+`IMPL_CONSOLE_URL` names the console the commands talk to, and with it `impl run` never starts a local server. The paths given to `-r` are paths on the machine the console runs on.
+
 ## Driving runs
 
 In the console:
@@ -496,6 +550,7 @@ commands/     the commands /implementation-harness:implement, /implementation-ha
 hooks/        events sent to the local harness, the guard that refuses a few tool calls during a run, and the stop gate that checks an agent's edits when it hands back
 bin/          the impl launcher and the impl config command
 console/      Next.js interface and PTY server
+console/cli/  the commands that drive the console from a terminal
 console/server/engine/  the layer that isolates the driven agent, one implementation: claude-code
 contracts/    output formats of the agents and evidence rules
 principles/   decision rules common to the agents

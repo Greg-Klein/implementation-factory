@@ -56,6 +56,39 @@ describe("implementation-harness launcher", () => {
     }
   });
 
+  it("should document the commands that drive the runs from the terminal", () => {
+    const { stdout } = launch(["help"]);
+    for (const subcommand of ["run", "runs", "show", "watch", "attach", "answer", "trust", "tell", "abort", "close", "feedback", "queue", "incident", "worktree", "docs", "evidence", "metrics", "recipe", "findings", "proposals", "improvements", "repos"]) {
+      expect(stdout).toMatch(new RegExp(`^  ${subcommand} `, "m"));
+    }
+  });
+
+  it("should hand a terminal command to the client, which lists the same commands", () => {
+    const { code, stdout } = launch(["runs", "--help"]);
+    expect(code).toBe(0);
+    expect(stdout).toContain("runs [--json]");
+  });
+
+  it("should say no console answers, with the exit code of a stopped server, instead of starting one to read from", async () => {
+    const port = await freePort();
+    const { code, stderr } = launch(["runs"], { IMPL_PORT: String(port), IMPL_CONSOLE_URL: "" });
+    expect(code).toBe(3);
+    expect(stderr).toContain(`No Implementation Harness console answers at http://127.0.0.1:${port}`);
+  });
+
+  it("should reach the console IMPL_CONSOLE_URL names rather than the local port", async () => {
+    const port = await freePort();
+    const { code, stderr } = launch(["runs"], { IMPL_PORT: "3210", IMPL_CONSOLE_URL: `http://127.0.0.1:${port}` });
+    expect(code).toBe(3);
+    expect(stderr).toContain(`http://127.0.0.1:${port}`);
+  });
+
+  it("should refuse a terminal command written wrong with the exit code of a usage error", () => {
+    const { code, stderr } = launch(["queue", "--nope"]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("--nope");
+  });
+
   it("should print the usage on --help and -h as well", () => {
     for (const flag of ["--help", "-h"]) {
       const { code, stdout } = launch([flag]);

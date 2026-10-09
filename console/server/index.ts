@@ -54,6 +54,16 @@ function targetPaths(targets: unknown): Record<string, string[]> {
   return Object.fromEntries(Object.entries(targets).map(([issueUrl, paths]) => [issueUrl, Array.isArray(paths) ? paths.filter((target): target is string => typeof target === "string" && Boolean(target.trim())) : []]));
 }
 
+/**
+ * The id a client gave a message it wants acknowledged: `ack` once the message
+ * was handled, or the `error` that refuses it. The terminal client exits on it,
+ * most messages having no answer of their own.
+ */
+function ackIdOf(message: unknown): { ackId?: string } {
+  const ackId = message && typeof message === "object" ? (message as { ackId?: unknown }).ackId : undefined;
+  return typeof ackId === "string" && ackId.length <= 80 ? { ackId } : {};
+}
+
 /** The id a page gave its request, sent back with whatever answers it. */
 function requestIdOf(message: unknown): { requestId?: string } {
   const requestId = message && typeof message === "object" ? (message as { requestId?: unknown }).requestId : undefined;
@@ -406,12 +416,14 @@ wss.on("connection", (socket) => {
       if (!parsed || typeof parsed !== "object" || typeof (parsed as { type?: unknown }).type !== "string") throw new Error("Unreadable message.");
       message = parsed as ClientMessage;
       await handleClientMessage(socket, message);
+      const { ackId } = ackIdOf(message);
+      if (ackId) send(socket, { type: "ack", ackId });
     } catch (error) {
       const text = error instanceof Error ? error.message : "Unable to run this action.";
       // Answered to the page that asked, never written into a run's state: a
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
-      send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message) });
+      send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message), ...ackIdOf(message) });
       if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
     }
   });

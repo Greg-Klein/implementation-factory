@@ -35,7 +35,6 @@ CI (`.github/workflows/ci.yml`) runs typecheck, unit, build, integration. `npm r
 - Before a push: `npm run verify` once, on the tree that is pushed. When the diff only touches documentation, prompts (`agents/`, `commands/`, `skills/`, `contracts/`, `principles/`) or `hooks/`, the unit suite is enough: it is what reads them, and the integration suite does not.
 - Run these yourself and report their real output, including when a subagent already said the work passes.
 - After a change under `console/` or `bin/`, run `impl restart`, otherwise the running console still serves the old build.
-- After `git push` on `main`, run `gh run watch --exit-status` in the background and report the result. Do not end the turn on a red or unknown CI.
 
 `impl demo` (or the demo mode in the UI) replays a simulated run from `server/demo.ts` / `demo-data.ts` without touching any repo or GitLab. Integration tests lean on it. `/?demo=incident` plays a pilot that hands back with nothing next, `/?demo=batch` a batch of three invented tickets with one conflict (`DEMO_BATCH`, canned analysis, merge request merged by a timer).
 

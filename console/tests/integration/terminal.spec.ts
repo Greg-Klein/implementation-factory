@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun } from "./helpers";
+import { resetRun, startDemoRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -17,6 +17,20 @@ test("should keep what it has printed while the run keeps publishing", async ({ 
   await expect(screen).toContainText("Reading the simulated GitLab ticket");
   await expect(screen).toContainText("Acceptance criteria and edge cases extracted.");
   await expect(screen).toContainText("Reading the simulated GitLab ticket");
+});
+
+/**
+ * A page opening a run that already printed gets the replay before React has
+ * mounted the terminal, and strict mode builds that terminal twice. A slow
+ * browser is what puts the replay first, so the CPU is slowed down here.
+ */
+test("should show what the run printed before the page opened it", async ({ page }) => {
+  await startDemoRun(page);
+  const browser = await page.context().newCDPSession(page);
+  await browser.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Terminal" }).click();
+  await expect(page.locator(".xterm-rows")).toContainText("Reading the simulated GitLab ticket", { timeout: 20_000 });
 });
 
 /**

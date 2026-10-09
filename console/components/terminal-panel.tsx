@@ -61,7 +61,10 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
     terminal.loadAddon(fit);
     terminal.open(containerRef.current);
     terminalRef.current = terminal;
-    if (pendingRef.current) { terminal.write(pendingRef.current); pendingRef.current = ""; }
+    // Strict mode disposes this terminal and builds another within the same task:
+    // the replay is kept until a terminal outlives it, or the second one opens blank.
+    if (pendingRef.current) terminal.write(pendingRef.current);
+    queueMicrotask(() => { if (terminalRef.current === terminal) pendingRef.current = ""; });
     const inputDisposable = terminal.onData((data) => callbacks.current.onInput(data));
     // A hidden tab has no box to measure: fitting there keeps the default 80x24
     // and would shrink the agent's pseudo-terminal away from the size it runs at.

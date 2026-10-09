@@ -57,12 +57,12 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
           onBlur={() => setOpen(false)}
           onChange={(event) => { onChange(event.target.value); setOpen(true); }}
           onKeyDown={(event) => {
+            if (event.key === "Escape") { setOpen(false); return; }
             if (!listOpen || suggestions.length === 0) return;
             if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => (index + 1) % suggestions.length); }
             if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
             const active = suggestions[activeIndex];
             if (event.key === "Enter") { event.preventDefault(); if (active) select(active); }
-            if (event.key === "Escape") setOpen(false);
           }}
           placeholder="Detected from the ticket, or start typing…"
           className="field !pl-10 !pr-9 font-mono text-xs"

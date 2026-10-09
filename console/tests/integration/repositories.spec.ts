@@ -25,3 +25,18 @@ test("should detect a repository from the work item form of the ticket URL", asy
   await expect(page.getByLabel(/Project directory/)).toHaveValue(sampleCheckout);
   await expect(page.getByText(`Project · ${sampleProject}`)).toBeVisible();
 });
+
+test("should close the repository list on Escape while the list of repositories is still loading", async ({ page }) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route(/\/api\/repositories$/, async (route) => { await held; await route.continue(); });
+  await page.goto("/");
+
+  const field = page.getByLabel("Project directory");
+  await field.fill(sampleCheckout);
+  await expect(field).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(field).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: "Runtime recipe" })).toBeVisible();
+  release();
+});

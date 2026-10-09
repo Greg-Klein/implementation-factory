@@ -5,10 +5,10 @@ import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 import { isMissingFile, now, reportFailure } from "./context.js";
-import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, storageRoot } from "./config.js";
+import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, selfImprovementAutorun, storageRoot } from "./config.js";
 import { isImprovementWorktree, mergeNeedsRestart, positiveDuration, withoutBundlerVariables } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { autoMergeBlockers, autoMergeDecision, autoMergeMode, changedFiles, judgeVerdict, latestDecisions, recentAutoMerges, type AutoMergeDecision } from "./auto-merge-policy.js";
+import { autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, latestDecisions, recentAutoMerges, type AutoMergeDecision } from "./auto-merge-policy.js";
 import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, setHeldImprovements, type PromotionResult } from "./self-improvement.js";
 import { branchIsRebasedOn, changedPaths, headCommit, listWorktrees, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean, type Worktree } from "./worktree.js";
 import { improvementReportName } from "./domain.js";
@@ -16,11 +16,12 @@ import { improvementReportName } from "./domain.js";
 const exec = promisify(execFile);
 
 /**
- * Read here and not in config.ts: this file is a protected path, so a branch
- * merged without the user cannot change how the next one is decided.
+ * Every finished branch is decided here, never left to a review: the user only
+ * sees what a rule, a check or the judge held. Off with the rest of the loop
+ * when IMPL_SELF_IMPROVEMENT_AUTORUN is false, since the judge is a session the
+ * console starts on its own.
  */
-const mode = autoMergeMode(process.env.IMPL_SELF_IMPROVEMENT_AUTOMERGE);
-export function autoMergeOn() { return mode === "judged"; }
+function autoMergeOn() { return selfImprovementAutorun(); }
 
 const decisionsFile = path.join(storageRoot, "self-improvement-decisions.jsonl");
 /** Beside the scheduling files, outside the plugin, where the judge may write. */
@@ -264,7 +265,7 @@ async function restartConsole() {
   child.unref();
 }
 
-/** What follows a merge that changed the console: a restart once idle when the automatic merge is on, the user's otherwise. */
+/** What follows a merge that changed the console: a restart once idle, or the user's when the loop is turned off. */
 export function afterPromotion(worktreeName: string, result: Pick<PromotionResult, "restart">) {
   if (!result.restart) return;
   if (!autoMergeOn()) {
@@ -303,7 +304,7 @@ async function tick() {
   }
 }
 
-/** Starts the watch of finished improvement branches, unless `IMPL_SELF_IMPROVEMENT_AUTOMERGE` is `off`. */
+/** Starts the watch of finished improvement branches, unless the improvement loop is turned off. */
 export async function startAutoMerge(options: { isIdle: () => boolean }) {
   if (!autoMergeOn()) return;
   isIdle = options.isIdle;

@@ -1,19 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { addedLines, autoMergeBlockers, autoMergeDecision, autoMergeMode, changedFiles, judgeVerdict, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
+import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
 
 const repoRoot = path.resolve(process.cwd(), "..");
 const file = (changed: Partial<ChangedFile> & { path: string }): ChangedFile => ({ status: "M", added: 3, removed: 1, ...changed });
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
-
-describe("the automatic merge setting", () => {
-  it("should be on unless explicitly turned off", () => {
-    for (const value of [undefined, "", "judged", " judged "]) expect(autoMergeMode(value)).toBe("judged");
-    expect(autoMergeMode("off")).toBe("off");
-    expect(autoMergeMode(" off ")).toBe("off");
-  });
-});
 
 describe("what keeps a branch from merging without the user", () => {
   it("should let a small change of an agent prompt through", () => {

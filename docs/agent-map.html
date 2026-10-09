@@ -875,9 +875,9 @@ flowchart LR
       audit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when it observed a defect or received feedback."],
       improve: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
       rebase: ["Session /rebase", "Sonnet", "If the harness moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
-      auto: ["auto-merge.ts", "Script", "With IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged, holds a branch on a mechanical rule or a failed check, otherwise asks the judge, and merges on its word."],
+      auto: ["auto-merge.ts", "Script", "Holds a branch on a mechanical rule or a failed check, otherwise asks the judge, and merges on its word."],
       judge: ["Session /judge-improvement", "Opus", "Independent of the author: forms its expectation from the evidence first, holds on any doubt, writes only its verdict."],
-      restart: ["impl restart", "Script", "Rebuilds and restarts the console when the merged improvement touched its code: by itself once no run works when the automatic merge is on, by hand otherwise."],
+      restart: ["impl restart", "Script", "Rebuilds and restarts the console when the merged improvement touched its code: by itself, once no run works."],
     },
   };
   const tip = document.getElementById("tip");

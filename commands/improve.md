@@ -96,7 +96,7 @@ Review the final diff against the improvement plan. Reject scope creep and any r
 
 When validation passes, commit the source changes with a conventional `fix:`, `feat:` or `refactor:` message. Never push and never open a pull request.
 
-Always leave the commit on its improvement branch. Never merge it into the primary checkout, never force, rebase or discard work: the console decides. With `IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged` it reruns the checks itself, asks an independent judge and merges the branch or holds it for the user; a branch that touches a protected file (the guard, the stop gate, this command, the reviewers, the CI), removes or skips a test, or exceeds 15 files or 400 lines is always held. Otherwise the user approves or discards it. Promoting the branch yourself would bypass both and leave nothing to revert.
+Always leave the commit on its improvement branch. Never merge it into the primary checkout, never force, rebase or discard work: the console decides, with no review step. It reruns the checks itself, asks an independent judge and merges the branch or holds it for the user; a branch that touches a protected file (the guard, the stop gate, this command, the reviewers, the CI), removes or skips a test, or exceeds 15 files or 400 lines is always held. Promoting the branch yourself would bypass both and leave nothing to revert.
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 

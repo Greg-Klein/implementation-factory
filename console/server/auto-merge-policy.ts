@@ -5,13 +5,6 @@
  * the rules it is judged by.
  */
 
-export type AutoMergeMode = "off" | "judged";
-
-/** On unless explicitly turned off. */
-export function autoMergeMode(value: string | undefined): AutoMergeMode {
-  return value?.trim() === "off" ? "off" : "judged";
-}
-
 /**
  * Files a branch merged without the user may not touch: the guard and the stop
  * gate, the loop's own prompts and code, the judge, the independent reviewers,

@@ -252,7 +252,7 @@ Two headless sessions that are not runs have rules of their own, and only those.
 
 ## Promoting a self-improvement
 
-With `IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged`, the default, an improvement branch reaches the harness without the user only when three independent locks agree, each one able to hold it alone:
+An improvement branch is never left to a review: it reaches the harness on its own when three independent locks agree, and each one can hold it alone for the user:
 
 1. Mechanical rules decided on the diff (`console/server/auto-merge-policy.ts`): no protected file (the guard, the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the CI), no test deleted or skipped, at most 15 files and 400 lines. The policy file is itself protected, so a branch cannot loosen the rules it is judged by.
 2. The checks, rerun by the console on the tree it would merge. The improvement session's own report is a claim.

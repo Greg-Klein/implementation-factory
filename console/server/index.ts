@@ -201,7 +201,7 @@ await registry.restoreQueue();
 await registry.archive.load(dataRoot);
 // Runs archived before they were measured, or cut short by a restart: figures from what is still on disk.
 backfillRunMetrics(dataRoot).catch(reportFailure("Archived runs not measured"));
-// Finished improvement branches merged without the user, when IMPL_SELF_IMPROVEMENT_AUTOMERGE asks for it.
+// Finished improvement branches merged or held without a review, unless the improvement loop is turned off.
 startAutoMerge({ isIdle: () => registry.all().every((session) => !runTakesSlot(session.state)) }).catch(reportFailure("Automatic merge not started"));
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();

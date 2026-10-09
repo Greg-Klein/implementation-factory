@@ -35,7 +35,7 @@ QA writes its test plan to `qa-plan.md` before opening the author's reports, the
 
 The design review works without Figma. With Figma frames, it runs as soon as the change is visible in the interface. Without Figma, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design not verified" (design not verified), with the reason.
 
-See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [architecture diagram](docs/architecture.html) shows on one page the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML file, to open in a browser from the checkout.
+See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [architecture diagram](docs/architecture.html) shows on one page the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML file, to open in a browser from the checkout. The [agent map](docs/agent-map.html) shows who does what on which model, agents, scripts and the engineer's own steps; it loads its diagram library from a CDN.
 
 ## One-command installation
 
@@ -492,7 +492,7 @@ console/server/engine/  the layer that isolates the driven agent, one implementa
 contracts/    output formats of the agents and evidence rules
 principles/   decision rules common to the agents
 skills/       methods loaded when needed
-docs/         how agents, skills and review are organised, architecture diagram (architecture.html)
+docs/         how agents, skills and review are organised, architecture diagram (architecture.html), agent map (agent-map.html)
 install.sh    installation and creation of the global commands
 install-remote.sh  clone or update from the curl command
 ```

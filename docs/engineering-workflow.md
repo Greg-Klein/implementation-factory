@@ -2,7 +2,7 @@
 
 The harness separates the responsibilities of the agents, the reusable methods and the formats the console consumes. The `commands/`, `agents/`, `skills/` and `hooks/` directories stay at the root of the plugin.
 
-The [architecture diagram](architecture.html) shows the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML page, to open in a browser.
+The [architecture diagram](architecture.html) shows the path of a run, the workflow, run health, batch scheduling and the self-improvement loop. It is a standalone HTML page, to open in a browser. The [agent map](agent-map.html) draws the same run as agents, scripts and the engineer's own steps, with the model each agent runs on; it loads its diagram library from a CDN.
 
 The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
 

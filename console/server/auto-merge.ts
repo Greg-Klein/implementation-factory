@@ -147,8 +147,7 @@ async function npm(directory: string, name: string, args: string[]): Promise<Che
 
 /**
  * The checks of the branch, run by the console itself on the tree it would
- * merge: what the improvement session says it ran is a claim. The build
- * rewrites a tracked file, put back after.
+ * merge: what the improvement session says it ran is a claim.
  */
 async function runChecks(worktree: Worktree, integration: boolean) {
   const directory = path.join(worktree.path, "console");
@@ -160,14 +159,10 @@ async function runChecks(worktree: Worktree, integration: boolean) {
     ["build", ["run", "build"]],
     ...(integration ? [["integration tests", ["run", "test:integration"]] as [string, string[]]] : []),
   ];
-  try {
-    for (const [name, args] of steps) {
-      const check = await npm(directory, name, args);
-      checks.push(check);
-      if (!check.ok) break;
-    }
-  } finally {
-    await exec("git", ["checkout", "--", "console/next-env.d.ts"], { cwd: worktree.path }).catch(reportFailure("next-env.d.ts not restored", worktree.path));
+  for (const [name, args] of steps) {
+    const check = await npm(directory, name, args);
+    checks.push(check);
+    if (!check.ok) break;
   }
   return checks;
 }
@@ -290,11 +285,9 @@ async function restartConsole() {
     const check = await npm(consoleDirectory, name, args);
     if (!check.ok) {
       notice("attention", "Console not restarted", `The ${name} of the merged code failed: fix it, then run impl restart. ${check.output.split("\n").slice(-2).join(" ")}`);
-      await exec("git", ["checkout", "--", "console/next-env.d.ts"], { cwd: pluginRoot }).catch(reportFailure("next-env.d.ts not restored", pluginRoot));
       return;
     }
   }
-  await exec("git", ["checkout", "--", "console/next-env.d.ts"], { cwd: pluginRoot }).catch(reportFailure("next-env.d.ts not restored", pluginRoot));
   const child = spawn(path.join(pluginRoot, "bin", "implementation-harness"), ["restart"], {
     cwd: pluginRoot, detached: true, stdio: "ignore", env: { ...withoutBundlerVariables(process.env), IMPL_NO_OPEN: "1" },
   });

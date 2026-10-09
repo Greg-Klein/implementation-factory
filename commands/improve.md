@@ -84,10 +84,6 @@ npm run build --prefix console
 bash -n install.sh install-remote.sh bin/implementation-harness
 ```
 
-One thing this sequence does that is not your change, and that you must not report as one:
-
-- **`npm run build` rewrites `console/next-env.d.ts`.** Next generates that tracked file, and it points at `.next/dev/types` after a dev server and at `.next/types` after a production build. Restore it (`git checkout -- console/next-env.d.ts`) and never commit it. It is also not an uncommitted change you failed to understand in step 2: it is your own build.
-
 If the UI changed, launch it and inspect the affected state in a browser. If any required check fails, fix the cause or leave the branch uncommitted with an honest report.
 
 Review the final diff against the improvement plan. Reject scope creep and any rule that merely overfits one run.

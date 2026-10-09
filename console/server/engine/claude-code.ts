@@ -9,7 +9,8 @@ import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import { createTrustPromptWatcher, trustAnswerKeys } from "./trust-prompt.js";
 import { readSessionUsage } from "./usage.js";
-import type { Engine, EngineEvent, EngineSession, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
+import { judgeArguments, judgeEnvironment } from "./improvement-judge.js";
+import type { Engine, EngineEvent, EngineSession, JudgeOptions, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
 
 /** Long enough for the paste to be read before the submission keystroke arrives. */
 const SUBMIT_DELAY_MS = 150;
@@ -346,23 +347,32 @@ export function scheduleEnvironment<T extends Record<string, string | undefined>
 
 const SCHEDULE_LOG = 20_000;
 
-function startSchedule(options: ScheduleOptions): ScheduleSession | undefined {
+/** A session without a terminal, killed after `timeoutMs`: only its output file says whether it succeeded. */
+function startHeadless(args: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): ScheduleSession | undefined {
   const executable = findExecutable("claude");
   if (!executable) return undefined;
   // Standard input closed: an open one is read as the prompt.
-  const child = spawnChild(executable, scheduleArguments(options), { cwd: options.repository, env: scheduleEnvironment(sessionEnvironment(), options.outputPath), stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawnChild(executable, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
   let timedOut = false;
   const keep = (chunk: Buffer) => { log = (log + chunk.toString()).slice(-SCHEDULE_LOG); };
   child.stdout.on("data", keep);
   child.stderr.on("data", keep);
   const finished = new Promise<{ timedOut: boolean; log: string }>((resolve) => {
-    const timeout = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, options.timeoutMs);
+    const timeout = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
     const done = () => { clearTimeout(timeout); resolve({ timedOut, log }); };
     child.once("close", done);
     child.once("error", (error) => { log += `\n${error.message}`; done(); });
   });
   return { finished, kill: () => { child.kill("SIGKILL"); } };
+}
+
+function startSchedule(options: ScheduleOptions): ScheduleSession | undefined {
+  return startHeadless(scheduleArguments(options), options.repository, scheduleEnvironment(sessionEnvironment(), options.outputPath), options.timeoutMs);
+}
+
+function startImprovementJudge(options: JudgeOptions): ScheduleSession | undefined {
+  return startHeadless(judgeArguments(options), path.dirname(options.inputPath), judgeEnvironment(sessionEnvironment(), options.outputPath), options.timeoutMs);
 }
 
 export const claudeCode: Engine = {
@@ -384,6 +394,7 @@ export const claudeCode: Engine = {
     hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { ...input, answers } },
   }),
   startSchedule,
+  startImprovementJudge,
   startSelfImprovement: ({ worktreeName, feedbackDirectory, runId }) => {
     const executable = findExecutable("claude");
     if (!executable) return undefined;

@@ -75,6 +75,20 @@ export type ScheduleOptions = {
  * gone, however it went: its exit code says nothing about success, only the
  * output file does. `log` is the end of what it printed, kept for a diagnosis.
  */
+/**
+ * One headless session judging an improvement branch. It runs in the directory
+ * of its input file, never in the branch's worktree: the project settings and
+ * the CLAUDE.md a session loads from its directory would be the branch's own.
+ */
+export type JudgeOptions = {
+  pluginDir: string;
+  inputPath: string;
+  outputPath: string;
+  /** The branch's worktree, the feedback and the run archives, read only. */
+  readDirectories: string[];
+  timeoutMs: number;
+};
+
 export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: string }>; kill(): void };
 
 /**
@@ -170,6 +184,8 @@ export type Engine = {
    * Undefined when the agent is not installed.
    */
   startSchedule(options: ScheduleOptions): ScheduleSession | undefined;
+  /** Judges, without a terminal, whether an improvement branch may be merged without the user. Undefined when the agent is not installed. */
+  startImprovementJudge(options: JudgeOptions): ScheduleSession | undefined;
   /** Runs the self-improvement workflow on its own, detached from any run. Undefined when the agent is not installed. */
   startSelfImprovement(options: { worktreeName: string; feedbackDirectory: string; runId: string }): BackgroundProcess | undefined;
   /** Replays an improvement branch git alone could not, inside the worktree it already lives in. Undefined when the agent is not installed. */

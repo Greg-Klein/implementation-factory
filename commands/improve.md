@@ -69,7 +69,7 @@ Implement only changes directly supported by the feedback and run evidence. Pref
 
 For instruction changes, read `docs/engineering-workflow.md` first. Put reusable procedures in the responsible skill or its conditional reference, role decisions in the agent, formats in `contracts/`, and scheduling in the command. Do not paste a skill body back into agent briefs. Preserve the separation between developer self-checks and independent review; shared measurement mechanics must not become a shared verdict or scenario checklist.
 
-Update documentation when installation, configuration, behavior or data storage changes.
+Keep the documentation true in the same commit: whenever `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md` or `CLAUDE.md` describes something you change (installation, configuration, behavior, an agent, a command, data storage), update that passage. A branch that leaves them stale is held for the user instead of being merged.
 
 ## 4. Validate independently
 
@@ -96,11 +96,11 @@ Review the final diff against the improvement plan. Reject scope creep and any r
 
 When validation passes, commit the source changes with a conventional `fix:`, `feat:` or `refactor:` message. Never push and never open a pull request.
 
-Always leave the commit on its improvement branch. Never merge it into the primary checkout, never force, rebase or discard work: the console shows the diff and the user approves or discards it there. Promoting the branch yourself would present an already-merged change for approval, and the reject button would then revert nothing.
+Always leave the commit on its improvement branch. Never merge it into the primary checkout, never force, rebase or discard work: the console decides. With `IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged` it reruns the checks itself, asks an independent judge and merges the branch or holds it for the user; a branch that touches a protected file (the guard, the stop gate, this command, the reviewers, the CI), removes or skips a test, or exceeds 15 files or 400 lines is always held. Otherwise the user approves or discards it. Promoting the branch yourself would bypass both and leave nothing to revert.
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 
-Write `$ARGUMENTS/improvement-report-<slug>.md` with `implementation-harness:unslop`, with the same slug as the plan, containing:
+Write `$ARGUMENTS/improvement-report-<slug>.md` last, after the commit and the move of the feedback files: the console reads its presence as the sign that you are done. Write it with `implementation-harness:unslop`, with the same slug as the plan, containing:
 
 - branch and commit;
 - feedback accepted, combined or rejected;

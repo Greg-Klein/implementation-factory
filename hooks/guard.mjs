@@ -277,11 +277,31 @@ function scheduleRefusal(payload, output) {
   return undefined;
 }
 
+/**
+ * Why a call of the headless session that judges an improvement branch is
+ * refused. It reads run archives that hold ticket text and decides what lands
+ * in the harness without the user: it writes its verdict file and does nothing
+ * else, whatever its list of allowed tools says.
+ */
+function judgeRefusal(payload, output) {
+  const input = payload.tool_input ?? {};
+  const tool = payload.tool_name;
+  const target = path.resolve(output);
+  if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(tool)) {
+    const file = typeof input.file_path === "string" ? path.resolve(payload.cwd || ".", input.file_path) : undefined;
+    if (tool !== "Write" || file !== target) return `The improvement judge writes its verdict file and nothing else: ${target}.`;
+  }
+  if (tool === "Agent" || tool === "Task") return "The improvement judge starts no agent: it decides alone.";
+  if (tool === "Bash") return "The improvement judge runs no command: the console gave it the diff and the checks in its input file.";
+  return undefined;
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
   // The scheduling session is not a run of the workflow: it has rules of its own, and only those.
   if (env.IMPL_SCHEDULE_OUTPUT) return scheduleRefusal(payload, env.IMPL_SCHEDULE_OUTPUT);
+  if (env.IMPL_JUDGE_OUTPUT) return judgeRefusal(payload, env.IMPL_JUDGE_OUTPUT);
   const tasks = taskDirectory(payload.cwd);
   if (!inWorkflow(env, tasks)) return undefined;
   const input = payload.tool_input ?? {};

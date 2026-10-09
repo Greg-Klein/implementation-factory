@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { ArrowCounterClockwiseIcon, CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import type { PendingSelfImprovementReview } from "@/lib/types";
+import type { AutomaticMerge, PendingSelfImprovementReview } from "@/lib/types";
 
 type ShownDocument = { worktreeName: string; kind: "diff" | "report" };
 
@@ -90,14 +90,52 @@ function FinishedRow({ review, onClean, onViewReport }: { review: PendingSelfImp
   );
 }
 
+function CheckingRow({ review }: { review: PendingSelfImprovementReview }) {
+  return (
+    <Strip tone="muted">
+      <p className="flex min-w-0 items-center gap-2 text-[11px]">
+        <CircleNotchIcon size={12} className="shrink-0 animate-spin text-[var(--muted)]" />
+        <span className="font-semibold text-[var(--muted)]">Improvements being checked before an automatic merge</span>
+        <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
+      </p>
+    </Strip>
+  );
+}
+
+function MergedRow({ merge, onRevert, onViewReport }: { merge: AutomaticMerge; onRevert: () => void; onViewReport: () => void }) {
+  return (
+    <Strip tone="muted">
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="flex min-w-0 items-center gap-2 text-[11px]">
+          <CheckIcon size={12} weight="bold" className="shrink-0 text-[var(--accent)]" />
+          <span className="font-semibold text-[var(--ink)]">Improvements merged automatically</span>
+          <Name>{merge.worktreeName}</Name>
+        </p>
+        {merge.reasons[0] && <p className="text-[10px] leading-4 text-[var(--muted)]">{merge.reasons[0]}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onViewReport} className={ACTION}><FileTextIcon size={12} /> View the report</button>
+        <button type="button" onClick={onRevert} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><ArrowCounterClockwiseIcon size={12} /> Revert</button>
+      </div>
+    </Strip>
+  );
+}
+
 function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
+  const held = review.autoMerge?.state === "held" ? review.autoMerge.reasons : undefined;
   return (
     <Strip tone="accent">
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="font-semibold text-[var(--accent)]">Improvements ready</span>
+          <span className="font-semibold text-[var(--accent)]">{held ? "Improvements held for your review" : "Improvements ready"}</span>
           <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
         </p>
+        {held?.map((reason, index) => (
+          <p key={index} className="flex items-start gap-1.5 text-[10px] leading-4 text-[var(--muted)]">
+            {index === 0 && <WarningIcon size={12} className="mt-px shrink-0" />}
+            <span className={index === 0 ? "" : "pl-[18px]"}>{reason}</span>
+          </p>
+        ))}
         {review.mergesCleanly === false && (
           <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
             <WarningIcon size={12} className="mt-px shrink-0" />
@@ -114,15 +152,18 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
   );
 }
 
-export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { reviews: PendingSelfImprovementReview[]; onApprove: (worktreeName: string) => void; onReject: (worktreeName: string) => void }) {
+export function SelfImprovementReviewPanel({ reviews, merged = [], onApprove, onReject, onRevert }: { reviews: PendingSelfImprovementReview[]; merged?: AutomaticMerge[]; onApprove: (worktreeName: string) => void; onReject: (worktreeName: string) => void; onRevert: (worktreeName: string) => void }) {
   const [shown, setShown] = useState<ShownDocument | null>(null);
 
-  if (reviews.length === 0) return null;
+  if (reviews.length === 0 && merged.length === 0) return null;
 
   return (
     <>
+      {merged.map((merge) => <MergedRow key={`merged-${merge.worktreeName}`} merge={merge} onRevert={() => onRevert(merge.worktreeName)} onViewReport={() => setShown({ worktreeName: merge.worktreeName, kind: "report" })} />)}
       {reviews.map((review) => review.status === "analyzing"
         ? <AnalyzingRow key={review.worktreeName} review={review} />
+        : review.status === "ready" && review.autoMerge?.state === "checking"
+        ? <CheckingRow key={review.worktreeName} review={review} />
         : review.status === "finished"
         ? <FinishedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} onViewReport={() => setShown({ worktreeName: review.worktreeName, kind: "report" })} />
         : <ReviewRow key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setShown({ worktreeName: review.worktreeName, kind: "diff" })} />)}

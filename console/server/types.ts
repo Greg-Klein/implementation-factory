@@ -21,7 +21,10 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
  * after the automatic replay, which means a conflict git cannot resolve on its own:
  * the promotion is not one click.
  */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished" };
+/** `autoMerge`: where the automatic merge stands on a branch, `held` with the reasons it is left to the user. */
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "held"; reasons: string[] } };
+/** A branch merged without the user in the last day, which the page offers to revert. */
+export type AutomaticMerge = { worktreeName: string; at: string; reasons: string[] };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 /** One task of `planner-output.json`, placed on the "Tracking" board by what the run has done with it. */
 export type PlanTaskStatus = "todo" | "in_progress" | "done";
@@ -457,6 +460,7 @@ export type ClientMessage =
   | { type: "sessionPrompt.answer"; runId: string; promptId: string; decision: "accept" | "refuse" }
   | { type: "selfImprovement.approve"; worktreeName: string }
   | { type: "selfImprovement.reject"; worktreeName: string }
+  | { type: "selfImprovement.revert"; worktreeName: string }
   /**
    * An action on an incident, taken on the state the page was shown: the server
    * refuses it when `expectedRevision` is no longer the incident's, and a

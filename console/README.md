@@ -245,6 +245,8 @@ The unit tests inject the answers, and the integration suite replaces `claude`, 
 | `server/run-archive.ts` | runs of an earlier process left with an incident or a worktree on disk, read-only, apart from removing the worktree |
 | `server/workflow-state.ts` | reading of `workflow-state.json` and check of a declared end |
 | `server/self-improvement.ts` | feedback, self-audit and improvement loop |
+| `server/auto-merge.ts` | automatic merge of finished improvement branches: checks, judge, decisions, revert, restart once idle |
+| `server/auto-merge-policy.ts` | pure rules of the automatic merge: protected paths, size, tests, verdict and decision validation |
 | `server/domain.ts` | pure logic, with no agent and no filesystem |
 
 `server/domain.ts` and `server/engine/` are the two places testable without starting anything, and most of the logic is there.

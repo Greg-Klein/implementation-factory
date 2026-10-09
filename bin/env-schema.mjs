@@ -99,6 +99,17 @@ export const schema = [
     validate: validateEnum(["true", "false"]),
   },
   {
+    key: "IMPL_SELF_IMPROVEMENT_AUTOMERGE",
+    label: "Merge self-improvements without review",
+    comment: "'judged' merges a finished self-improvement branch on its own once mechanical rules, the checks rerun by the console and an independent judge (Opus) agree; 'off' leaves every branch to you.",
+    help: "'judged': a finished improvement branch is merged without you when it touches no protected file, stays small, passes the checks the console reruns and convinces an independent judge. Anything else is held for you. The console restarts itself once no run is working when the merge changes its code. 'off': every branch waits for your click.",
+    fallback: "judged",
+    kind: "choice",
+    options: ["off", "judged"],
+    readBy: "console",
+    validate: validateEnum(["off", "judged"]),
+  },
+  {
     key: "IMPL_REMOTE_CONTROL",
     label: "Remote Control on the terminal of a run",
     comment: "Set to 'false' to start a run without Remote Control, which makes its terminal reachable from claude.ai on your own account.",

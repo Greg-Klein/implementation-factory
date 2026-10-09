@@ -353,14 +353,18 @@ flowchart LR
   oWatch{"<b>merge-watch.ts</b><br/>frees the queue:<br/>next ticket"}:::script
   oAudit{"<b>self-improvement.ts</b><br/>self-audit<br/>of the run"}:::script
   oImprove["<b>Session</b> /improve<br/>Opus"]:::agent
-  oSwe4("<b>Software Engineer</b><br/>merges or rejects"):::swe
+  oAuto{"<b>auto-merge.ts</b><br/>rules and checks"}:::script
+  oJudge["<b>Session</b> /judge-improvement<br/>Opus"]:::agent
+  oSwe4("<b>Software Engineer</b><br/>decides what is held"):::swe
 
   oAccept -- "coverage" --> oMr
   oMr -- "merge request" --> oSwe3
   oSwe3 -- "merge" --> oWatch
   oMr -- "run ends" --> oAudit
   oAudit -- "defect observed" --> oImprove
-  oImprove -- "diff" --> oSwe4
+  oImprove -- "branch" --> oAuto -- "passes" --> oJudge
+  oAuto -- "held" --> oSwe4
+  oJudge -- "held" --> oSwe4
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
   classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
@@ -575,8 +579,10 @@ flowchart LR
   sweF("<b>Software Engineer</b><br/>leaves feedback<br/>on the run"):::swe
   improve["<b>Session</b> /improve<br/>Opus"]:::agent
   rebase["<b>Session</b> /rebase<br/>Sonnet"]:::agent
-  sweM("<b>Software Engineer</b><br/>reads the improvement diff,<br/>merges or rejects it"):::swe
-  restart{"<b>impl restart</b><br/>reloads the console<br/>when console/ or bin/ changed"}:::script
+  auto{"<b>auto-merge.ts</b><br/>protected files, size, tests,<br/>checks rerun by the console"}:::script
+  judge["<b>Session</b> /judge-improvement<br/>Opus, read-only"]:::agent
+  sweM("<b>Software Engineer</b><br/>reads a held branch,<br/>merges or rejects it"):::swe
+  restart{"<b>impl restart</b><br/>rebuilds and reloads the console<br/>once no run works"}:::script
 
   done --> metrics --> settle
   done --> sweR
@@ -586,8 +592,12 @@ flowchart LR
   sweF --> audit
   audit -- "incident, failed criterion,<br/>abnormal cost, feedback" --> improve
   audit -. "nothing observed:<br/>no session" .-> stop(("end"))
-  improve -- "main moved,<br/>git alone cannot rebase" --> rebase --> sweM
-  improve --> sweM
+  improve -- "main moved,<br/>git alone cannot rebase" --> rebase --> auto
+  improve --> auto
+  auto -- "passes" --> judge
+  auto -- "held" --> sweM
+  judge -- "held" --> sweM
+  judge -- "merge,<br/>console/ or bin/ changed" --> restart
   sweM -- "merge" --> restart
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
@@ -669,7 +679,12 @@ flowchart LR
     {
       name: "Session /improve", short: "Opus", kind: "Session · /improve", models: ["Opus"],
       does: "It improves the harness itself from the engineer's feedback and from what the console observed going wrong during a run. It validates its change and returns it as one reversible commit, in a worktree of its own.",
-      facts: [["Started by", "the console, only on proof of a defect or on feedback"], ["Writes", "an improvement branch the engineer merges or rejects"]],
+      facts: [["Started by", "the console, only on proof of a defect or on feedback"], ["Writes", "an improvement branch, merged automatically or held for the engineer"]],
+    },
+    {
+      name: "Session /judge-improvement", short: "Opus", kind: "Session · /judge-improvement", models: ["Opus"],
+      does: "It decides whether a finished improvement branch is merged without the engineer. It reads the run evidence first and writes what a correct fix should change, then reads the plan, the report and the diff, and holds on any doubt.",
+      facts: [["Started by", "the console, once the branch passed the mechanical rules and the checks"], ["Writes", "its verdict file only: no command, no agent, no edit"]],
     },
     {
       name: "Session /rebase", short: "Sonnet", kind: "Session · /rebase", models: ["Sonnet"],
@@ -792,6 +807,8 @@ flowchart LR
       oWatch: ["merge-watch.ts", "Script", "Watches the merge request. Once it is merged, releases the tickets that were waiting behind it."],
       oAudit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when something went wrong."],
       oImprove: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
+      oAuto: ["auto-merge.ts", "Script", "With the automatic merge on, holds a branch that touches a protected file, removes or skips a test, or is too large, then reruns the checks itself."],
+      oJudge: ["Session /judge-improvement", "Opus", "Reads the run evidence, then the plan and the diff, and decides whether the branch is merged without the engineer."],
     },
     intake: {
       vigie: ["vigie", "Script", "An outside tool that watches the forge. It keeps a file listing the tickets that match its filter."],
@@ -858,7 +875,9 @@ flowchart LR
       audit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when it observed a defect or received feedback."],
       improve: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
       rebase: ["Session /rebase", "Sonnet", "If the harness moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
-      restart: ["impl restart", "Script", "Restarts the console when the merged improvement touched its code."],
+      auto: ["auto-merge.ts", "Script", "With IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged, holds a branch on a mechanical rule or a failed check, otherwise asks the judge, and merges on its word."],
+      judge: ["Session /judge-improvement", "Opus", "Independent of the author: forms its expectation from the evidence first, holds on any doubt, writes only its verdict."],
+      restart: ["impl restart", "Script", "Rebuilds and restarts the console when the merged improvement touched its code: by itself once no run works when the automatic merge is on, by hand otherwise."],
     },
   };
   const tip = document.getElementById("tip");

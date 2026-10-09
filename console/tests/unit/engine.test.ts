@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { backgroundArguments, claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
 import { engine } from "../../server/engine/index";
+import { judgeArguments, judgeEnvironment } from "../../server/engine/improvement-judge";
 
 describe("engine contract", () => {
   it("should expose claude-code as the active engine", () => {
@@ -223,5 +224,39 @@ describe("the headless scheduling session", () => {
     expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1" }, "/data/schedule/call-1/output.json"))
       .toEqual({ PATH: "/usr/bin", IMPL_SCHEDULE_OUTPUT: "/data/schedule/call-1/output.json" });
     expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_SCHEDULE_OUTPUT: "/data/schedule/call-0/output.json" })).toEqual({ PATH: "/usr/bin" });
+  });
+});
+
+describe("the headless improvement judge session", () => {
+  const options = { pluginDir: "/opt/harness", inputPath: "/tmp/judge/call-1/input.json", outputPath: "/tmp/judge/call-1/verdict.json", readDirectories: ["/opt/harness/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"] };
+  const args = judgeArguments(options);
+  const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
+
+  it("should run without a terminal, on Opus, asking nothing, without the user's settings", () => {
+    expect(args[0]).toBe("-p");
+    expect(valueOf("--model")).toBe("opus");
+    expect(valueOf("--permission-mode")).toBe("dontAsk");
+    expect(valueOf("--permission-prompts")).toBe("none");
+    expect(valueOf("--setting-sources")).toBe("project,local");
+  });
+
+  it("should load the checkout's plugin and reach the branch and the evidence", () => {
+    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : []))
+      .toEqual(["/opt/harness", "/tmp/judge/call-1", "/opt/harness/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"]);
+  });
+
+  it("should allow reading and writing, and no command, agent or edit", () => {
+    expect(valueOf("--allowedTools").split(",")).toEqual(["Read", "Glob", "Grep", "Write"]);
+  });
+
+  it("should end with the judge command and its two paths", () => {
+    expect(args.at(-2)).toBe("--");
+    expect(args.at(-1)).toBe("/implementation-harness:judge-improvement /tmp/judge/call-1/input.json /tmp/judge/call-1/verdict.json");
+  });
+
+  it("should name its verdict file to the guard and drop the variables of a run or a schedule", () => {
+    expect(judgeEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HARNESS_HOOK_URL: "http://h", IMPL_HOOK_SPOOL: "/s", IMPL_SCHEDULE_OUTPUT: "/o", IMPL_JUDGE_OUTPUT: "/old" }, "/tmp/judge/call-1/verdict.json"))
+      .toEqual({ PATH: "/usr/bin", IMPL_JUDGE_OUTPUT: "/tmp/judge/call-1/verdict.json" });
   });
 });

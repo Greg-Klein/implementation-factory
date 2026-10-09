@@ -4,16 +4,82 @@ import path from "node:path";
 import { broadcast, isMissingFile, now, reportFailure } from "./context.js";
 import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
-import { auditReasons, commitlessImprovementStatus, hasAuditableEvidence, improvementCause, pendingEntry, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText, sourceRepository } from "./domain.js";
+import { auditReasons, commitlessImprovementStatus, hasAuditableEvidence, improvementCause, pendingEntry, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, isImprovementWorktreeName, mergeNeedsRestart, normalizeText, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { metricsBaseline, metricsFindings } from "./run-metrics.js";
 import { recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
-import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
+import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, changedPaths, findWorktree, headCommit, listWorktrees, mergeBranch, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { RunSession } from "./run-session.js";
 import type { PendingSelfImprovementReview, RunState } from "./types.js";
 import type { PendingEntry } from "./domain.js";
 
 const auditedRuns = new Set<string>();
+
+/**
+ * The improvement branches the automatic merge put on hold for the user. They
+ * no longer stop the loop: the next iteration reads them as pending work and
+ * steers clear of their files. Set by auto-merge.ts, empty while it is off.
+ */
+let heldImprovements: () => ReadonlySet<string> = () => new Set();
+export function setHeldImprovements(provider: () => ReadonlySet<string>) { heldImprovements = provider; }
+
+export type PromotionResult = { merged: boolean; restart: boolean; mergeCommit?: string };
+
+/**
+ * Merges an improvement branch into the harness, or drops it, then removes its
+ * worktree. The one promotion path, whether the user clicked or the automatic
+ * merge decided. Restarting the console is left to the caller.
+ */
+export async function applySelfImprovementReview(worktreeName: string, merge: boolean, automatic = false): Promise<PromotionResult> {
+  // Asked over the socket, where nothing else checked the name the page sends.
+  if (!isImprovementWorktreeName(worktreeName)) throw new Error("Invalid worktree name.");
+  if (worktreeName.startsWith("demo-")) {
+    demoState.pendingImprovement = undefined;
+    notice("info", merge ? "Improvements merged (demo)" : "Improvements ignored (demo)", worktreeName);
+    return { merged: false, restart: false };
+  }
+  const worktree = await findWorktree(worktreeName);
+  if (!worktree) throw new Error(`No self-improvement worktree "${worktreeName}" to process.`);
+  let result: PromotionResult = { merged: false, restart: false };
+  if (merge) {
+    if (!worktree.branch) throw new Error(`The worktree "${worktreeName}" is on no branch.`);
+    // The harness may have moved since the branch was cut, by an earlier promotion
+    // or by hand. Replaying it here is what keeps the promise the button makes:
+    // without it, a merge that conflicts is aborted and handed back to the user.
+    await realignPendingImprovements();
+    // A worktree is destroyed just below, so nothing may be announced as merged
+    // before the checkout actually moved.
+    const before = await headCommit(pluginRoot);
+    const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
+      .catch((error) => { throw new Error(`The merge of ${worktreeName} failed and was rolled back, the worktree is kept: ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
+    // Git brings nothing in two cases its exit code cannot tell apart: a branch
+    // whose commits the harness already contains, and one that holds no commit at
+    // all. The first is work landed by hand, and refusing to clean it up left no
+    // honest way out: merging said nothing was merged, discarding recorded as
+    // ignored what had in fact been kept. The second may still be an agent
+    // mid-write, so the worktree only goes when it has nothing uncommitted either.
+    const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
+    if (!merged && !spent)
+      throw new Error(`${worktreeName} brings no commit to merge. Nothing was merged, the worktree is kept.`);
+    // Prompts apply to the next run on their own; the console's code only after a restart.
+    const restart = merged && mergeNeedsRestart(await changedPaths(pluginRoot, before, "HEAD").catch(() => []));
+    notice("info", merged ? (automatic ? "Improvements merged automatically" : "Improvements merged") : "Improvements already present", worktreeName);
+    result = { merged, restart, ...(merged ? { mergeCommit: await headCommit(pluginRoot) } : {}) };
+  } else {
+    // Merging already refuses to destroy a worktree with something uncommitted
+    // on disk (see worktreeIsClean's own contract): ignoring must refuse the same
+    // way, or "Ignorer" becomes the one button that can erase a diagnosis the
+    // validation step deliberately left uncommitted after a failed check.
+    if (!(await worktreeIsClean(worktree)))
+      throw new Error(`${worktreeName} holds uncommitted changes: ignoring them would destroy them. Nothing was touched.`);
+    notice("info", "Improvements ignored", worktreeName);
+  }
+  await removeWorktree(pluginRoot, worktree);
+  // The checkout just moved under every branch still waiting, which is exactly what
+  // left the previous improvement of a series unmergeable.
+  if (result.merged) await realignPendingImprovements();
+  return result;
+}
 
 /**
  * The improvement loop belongs to the harness, not to any one run: it is read
@@ -214,7 +280,7 @@ function startAutonomousImprovement(session: RunSession) {
   return new Promise<void>((resolve) => {
     if (!selfImprovementAutorun()) return resolve();
     void listWorktrees().catch(() => []).then((worktrees) => {
-      const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
+      const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path), heldImprovements());
       if (inFlight) {
         notice("info", "Self-improvement waiting", `${path.basename(inFlight)} has not been decided yet. Merge it or ignore it to free the loop.`);
         return resolve();

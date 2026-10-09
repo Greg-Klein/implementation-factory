@@ -10,7 +10,7 @@ import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sou
 import { appendTerminalOutput } from "@/lib/terminal-output";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
-import type { HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
+import type { AutomaticMerge, HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
@@ -49,6 +49,7 @@ export function Harness() {
   const singleTicket = parsedTickets.tickets.length + parsedTickets.invalid.length <= 1;
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
+  const [automaticMerges, setAutomaticMerges] = useState<AutomaticMerge[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
   /** The project of the single ticket in the field when no checkout of it was found: the user then chooses where its merge requests go. */
@@ -240,7 +241,7 @@ export function Harness() {
   const refreshPendingImprovements = useCallback(() => {
     fetch("/api/self-improvement/pending")
       .then((response) => response.json() as Promise<PendingImprovementsResponse>)
-      .then((result) => setPendingImprovements(result.items ?? []))
+      .then((result) => { setPendingImprovements(result.items ?? []); setAutomaticMerges(result.merged ?? []); })
       .catch(() => undefined);
   }, []);
 
@@ -382,6 +383,9 @@ export function Harness() {
   const rejectImprovement = useCallback((worktreeName: string) => {
     if (command({ type: "selfImprovement.reject", worktreeName })) setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
   }, [command]);
+  const revertImprovement = useCallback((worktreeName: string) => {
+    if (command({ type: "selfImprovement.revert", worktreeName })) setAutomaticMerges((items) => items.filter((item) => item.worktreeName !== worktreeName));
+  }, [command]);
 
   const changeCwd = useCallback((value: string, project?: string) => {
     cwdRef.current = value;
@@ -486,7 +490,7 @@ export function Harness() {
               </div>
             )}
             <NoticeStrip notice={notice} onDismiss={() => setNotice(undefined)} />
-            <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
+            <SelfImprovementReviewPanel reviews={pendingImprovements} merged={automaticMerges} onApprove={approveImprovement} onReject={rejectImprovement} onRevert={revertImprovement} />
           </div>
 
           {showMetrics && <MetricsPanel />}

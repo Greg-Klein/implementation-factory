@@ -64,6 +64,7 @@ config accepts its own subcommands: $program config help
 Configuration ($env_file):
   IMPL_SEARCH_ROOTS              roots searched for the checkouts
   IMPL_SELF_IMPROVEMENT_AUTORUN  self-audit at the end of each run
+  IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged  merge checked improvements without review
   IMPL_REMOTE_CONTROL=false      run without Remote Control
   IMPL_PORT                      listening port (in effect: $app_port)
   IMPL_HOST                      listening interface (in effect: $app_host)

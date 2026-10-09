@@ -40,6 +40,8 @@ export default defineConfig({
       // The self-audit is on by default, and a run finishing under test must not
       // start a real improvement session on this checkout.
       IMPL_SELF_IMPROVEMENT_AUTORUN: "false",
+      // On by default too, and it acts on the improvement worktrees of this checkout.
+      IMPL_SELF_IMPROVEMENT_AUTOMERGE: "off",
       IMPL_HOOK_TOKEN: hookToken,
       // Runs the suite starts for real land here, not in the developer's own history.
       IMPL_DATA_DIR: dataDirectory,

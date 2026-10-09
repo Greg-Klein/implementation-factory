@@ -7,7 +7,7 @@ import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send } from "./context.js";
-import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
+import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
 import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
@@ -16,70 +16,18 @@ import { answerSessionPrompt } from "./session-prompt.js";
 import { drainHookSpool, receiveHook } from "./hook-bridge.js";
 import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
-import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { listPendingImprovements, notice, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
+import { applySelfImprovementReview, listPendingImprovements, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
+import { afterPromotion, autoMergeView, recentAutomaticMerges, revertAutomaticMerge, startAutoMerge } from "./auto-merge.js";
 import { detectProjectDirectory, discoverRepositories } from "./repository.js";
-import { isImprovementWorktreeName, mergeNeedsRestart } from "./domain.js";
-import { branchIsMerged, changedPaths, findWorktree, headCommit, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
+import { isImprovementWorktreeName, runTakesSlot } from "./domain.js";
+import { findWorktree, worktreeDiff } from "./worktree.js";
 import { registry } from "./registry.js";
 import { resolvePastedTickets } from "./ticket-source.js";
 import { reconcileRunWorktrees } from "./run-worktrees.js";
 import { backfillRunMetrics } from "./run-metrics-runtime.js";
 import { engine } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
-
-async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
-  // Asked over the socket, where nothing else checked the name the page sends.
-  if (!isImprovementWorktreeName(worktreeName)) throw new Error("Invalid worktree name.");
-  if (worktreeName.startsWith("demo-")) {
-    demoState.pendingImprovement = undefined;
-    notice("info", merge ? "Improvements merged (demo)" : "Improvements ignored (demo)", worktreeName);
-    return;
-  }
-  const worktree = await findWorktree(worktreeName);
-  if (!worktree) throw new Error(`No self-improvement worktree "${worktreeName}" to process.`);
-  let harnessMoved = false;
-  if (merge) {
-    if (!worktree.branch) throw new Error(`The worktree "${worktreeName}" is on no branch.`);
-    // The harness may have moved since the branch was cut, by an earlier promotion
-    // or by hand. Replaying it here is what keeps the promise the button makes:
-    // without it, a merge that conflicts is aborted and handed back to the user.
-    await realignPendingImprovements();
-    // A worktree is destroyed just below, so nothing may be announced as merged
-    // before the checkout actually moved.
-    const before = await headCommit(pluginRoot);
-    const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
-      .catch((error) => { throw new Error(`The merge of ${worktreeName} failed and was rolled back, the worktree is kept: ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
-    // Git brings nothing in two cases its exit code cannot tell apart: a branch
-    // whose commits the harness already contains, and one that holds no commit at
-    // all. The first is work landed by hand, and refusing to clean it up left no
-    // honest way out — merging said nothing was merged, discarding recorded as
-    // ignored what had in fact been kept. The second may still be an agent
-    // mid-write, so the worktree only goes when it has nothing uncommitted either.
-    const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
-    if (!merged && !spent)
-      throw new Error(`${worktreeName} brings no commit to merge. Nothing was merged, the worktree is kept.`);
-    // Prompts apply to the next run on their own; the console's code only after
-    // a restart, which it cannot do itself while sessions may be running under it.
-    const restart = merged && mergeNeedsRestart(await changedPaths(pluginRoot, before, "HEAD").catch(() => []));
-    if (restart) notice("attention", "Improvements merged, restart needed", `${worktreeName} changes the console: run impl restart to apply it.`);
-    else notice("info", merged ? "Improvements merged" : "Improvements already present", worktreeName);
-    harnessMoved = merged;
-  } else {
-    // Merging already refuses to destroy a worktree with something uncommitted
-    // on disk (see worktreeIsClean's own contract): ignoring must refuse the same
-    // way, or "Ignorer" becomes the one button that can erase a diagnosis the
-    // validation step deliberately left uncommitted after a failed check.
-    if (!(await worktreeIsClean(worktree)))
-      throw new Error(`${worktreeName} holds uncommitted changes: ignoring them would destroy them. Nothing was touched.`);
-    notice("info", "Improvements ignored", worktreeName);
-  }
-  await removeWorktree(pluginRoot, worktree);
-  // The checkout just moved under every branch still waiting, which is exactly what
-  // left the previous improvement of a series unmergeable.
-  if (harnessMoved) await realignPendingImprovements();
-}
 
 /** Read at each request: port zero binds a free port, only known after listening. */
 function consoleHosts() {
@@ -230,8 +178,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "incident.result", runId: message.runId, incidentId: message.incidentId, requestId: message.requestId, ...result });
     return;
   }
-  if (message.type === "selfImprovement.approve") { await applySelfImprovementReview(message.worktreeName, true); return; }
+  if (message.type === "selfImprovement.approve") { afterPromotion(message.worktreeName, await applySelfImprovementReview(message.worktreeName, true)); return; }
   if (message.type === "selfImprovement.reject") { await applySelfImprovementReview(message.worktreeName, false); return; }
+  if (message.type === "selfImprovement.revert") {
+    if (!isImprovementWorktreeName(message.worktreeName)) throw new Error("Invalid worktree name.");
+    await revertAutomaticMerge(message.worktreeName);
+    return;
+  }
   // Answered, like any refusal: a page from a newer build would otherwise wait on a message nothing read.
   throw new Error(`Unknown message type: ${String((message as { type: unknown }).type).slice(0, 60)}.`);
 }
@@ -248,6 +201,8 @@ await registry.restoreQueue();
 await registry.archive.load(dataRoot);
 // Runs archived before they were measured, or cut short by a restart: figures from what is still on disk.
 backfillRunMetrics(dataRoot).catch(reportFailure("Archived runs not measured"));
+// Finished improvement branches merged without the user, when IMPL_SELF_IMPROVEMENT_AUTOMERGE asks for it.
+startAutoMerge({ isIdle: () => registry.all().every((session) => !runTakesSlot(session.state)) }).catch(reportFailure("Automatic merge not started"));
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();
@@ -387,7 +342,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (request.method === "GET" && request.url === "/api/self-improvement/pending") {
-    try { respond(response, 200, { items: await listPendingImprovements() }); }
+    try {
+      const items = (await listPendingImprovements()).map((item) => {
+        const autoMerge = autoMergeView(item.worktreeName);
+        return autoMerge ? { ...item, autoMerge } : item;
+      });
+      respond(response, 200, { items, merged: recentAutomaticMerges() });
+    }
     catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : "Git error." }); }
     return;
   }

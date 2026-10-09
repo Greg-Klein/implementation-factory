@@ -219,6 +219,34 @@ describe("the hook guard", () => {
     });
   });
 
+  describe("in the headless improvement judge session", () => {
+    const output = "/tmp/improvement-judge/call-1/verdict.json";
+    const session = { IMPL_JUDGE_OUTPUT: output };
+    const writes = `The improvement judge writes its verdict file and nothing else: ${output}.`;
+
+    it("should let it write its verdict file and nothing else", () => {
+      expect(refusal("Write", { file_path: output, content: "{}" }, session)).toBeUndefined();
+      expect(refusal("Write", { file_path: "hooks/guard.mjs", content: "x" }, session)).toBe(writes);
+      expect(refusal("Write", { file_path: "/tmp/improvement-judge/call-1/../../queue.json", content: "[]" }, session)).toBe(writes);
+      expect(refusal("Edit", { file_path: output, old_string: "a", new_string: "b" }, session)).toBe(writes);
+      expect(refusal("NotebookEdit", { notebook_path: "a.ipynb" }, session)).toBe(writes);
+    });
+
+    it("should refuse every command, read-only ones included", () => {
+      for (const command of ["git log --oneline", "ls", `rm ${output}`, "/usr/bin/git merge main"])
+        expect(refusal("Bash", { command }, session)).toBe("The improvement judge runs no command: the console gave it the diff and the checks in its input file.");
+    });
+
+    it("should refuse every agent", () => {
+      expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer", prompt: "p" }, session)).toBe("The improvement judge starts no agent: it decides alone.");
+    });
+
+    it("should let it read", () => {
+      expect(refusal("Read", { file_path: "/data/runs/run-1/run.json" }, session)).toBeUndefined();
+      expect(refusal("Grep", { pattern: "x" }, session)).toBeUndefined();
+    });
+  });
+
   it("should let through the git commands the workflow needs", () => {
     for (const command of [
       "git reset --soft HEAD~1",

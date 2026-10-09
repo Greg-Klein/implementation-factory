@@ -248,6 +248,18 @@ The git rules read the commands typed on the line, word by word. A forbidden com
 
 A refused call is not forwarded to the console. A guard that cannot read what it checks lets the call through. `commands/improve.md` asks for a mechanism before a new sentence whenever one can carry the rule.
 
+Two headless sessions that are not runs have rules of their own, and only those. The scheduling session writes its output file, starts `ticket-scheduler` and reads tickets. The judge of an improvement branch (`IMPL_JUDGE_OUTPUT` set) writes its verdict file and nothing else: no command, no agent, no edit.
+
+## Promoting a self-improvement
+
+With `IMPL_SELF_IMPROVEMENT_AUTOMERGE=judged`, the default, an improvement branch reaches the harness without the user only when three independent locks agree, each one able to hold it alone:
+
+1. Mechanical rules decided on the diff (`console/server/auto-merge-policy.ts`): no protected file (the guard, the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the CI), no test deleted or skipped, at most 15 files and 400 lines. The policy file is itself protected, so a branch cannot loosen the rules it is judged by.
+2. The checks, rerun by the console on the tree it would merge. The improvement session's own report is a claim.
+3. A judge on Opus (`commands/judge-improvement.md`), which forms its expectation from the run evidence before reading the author's plan, report and diff, as QA writes `qa-plan.md` before reading the developer's report. It holds a change whose cause is not established, that overfits one run, weakens a gate or leaves the documentation stale.
+
+A held branch waits for the user without stopping the loop. A merged one can be reverted from the console for a day. Each decision is logged in `<data dir>/self-improvement-decisions.jsonl`.
+
 ## The stop gate
 
 A developer report says its checks pass, and nothing verified that sentence. When `developer` or `senior-reviewer` stops during a run of the workflow, `hooks/gate.mjs`, called by `hooks/emit.mjs`, runs the checks its edits call for and writes each verdict to `.claude/tasks/gate-log.jsonl`. The pilot and the review orchestrator take the verdict from that file.

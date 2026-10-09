@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 
-const launcherPath = path.resolve(process.cwd(), "..", "bin", "implementation-harness");
+const launcherPath = path.resolve(process.cwd(), "..", "bin", "implementation-factory");
 const source = readFileSync(launcherPath, "utf8");
 
 function launch(args: string[], env: Record<string, string> = {}) {
@@ -43,7 +43,7 @@ function waitForExit(child: ChildProcess, timeoutMs: number) {
   });
 }
 
-describe("implementation-harness launcher", () => {
+describe("implementation-factory launcher", () => {
   it("should be valid bash", () => {
     expect(() => execFileSync("bash", ["-n", launcherPath])).not.toThrow();
   });
@@ -73,7 +73,7 @@ describe("implementation-harness launcher", () => {
     const port = await freePort();
     const { code, stderr } = launch(["runs"], { IMPL_PORT: String(port), IMPL_CONSOLE_URL: "" });
     expect(code).toBe(3);
-    expect(stderr).toContain(`No Implementation Harness console answers at http://127.0.0.1:${port}`);
+    expect(stderr).toContain(`No Implementation Factory console answers at http://127.0.0.1:${port}`);
   });
 
   it("should reach the console IMPL_CONSOLE_URL names rather than the local port", async () => {
@@ -115,7 +115,7 @@ describe("implementation-harness launcher", () => {
     const port = await freePort();
     const { code, stdout } = launch(["stop"], { IMPL_PORT: String(port) });
     expect(code).toBe(0);
-    expect(stdout).toContain("No Implementation Harness server");
+    expect(stdout).toContain("No Implementation Factory server");
   });
 
   it("should report a stopped server with its own exit code", async () => {
@@ -128,7 +128,7 @@ describe("implementation-harness launcher", () => {
 
   const canInspectPorts = available("lsof");
 
-  (canInspectPorts ? it : it.skip)("should fail the status when the port answers but the harness does not", async () => {
+  (canInspectPorts ? it : it.skip)("should fail the status when the port answers but the factory does not", async () => {
     const port = await freePort();
     const child = listenInChildProcess(port);
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -163,7 +163,7 @@ describe("implementation-harness launcher", () => {
     try {
       const { code, stdout } = launch(["stop"], { IMPL_PORT: String(port) });
       expect(code).toBe(0);
-      expect(stdout).toContain("Stopping the Implementation Harness server");
+      expect(stdout).toContain("Stopping the Implementation Factory server");
       // Le contrat de restart : un serveur en cours sert le manifeste Next.js de
       // son propre build, donc il doit disparaitre avant qu'un autre demarre.
       expect(await waitForExit(child, 5_000)).toBe(true);

@@ -70,7 +70,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
             <dt className="text-[10px] font-semibold text-[var(--muted)]">Repository</dt>
             <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={repository}>{repository}</dd>
             {/* A recipe belongs to a real checkout: the demonstration has none. */}
-            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="What the harness keeps to start the application of this repository" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button></dd>}
+            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="What the factory keeps to start the application of this repository" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button></dd>}
           </div>
           {run.baseBranch && (
             <div>

@@ -1,5 +1,5 @@
 {
-  "name": "implementation-harness",
+  "name": "implementation-factory",
   "version": "0.1.0",
   "description": "End-to-end GitLab and GitHub ticket implementation workflow with observable hooks",
   "author": {

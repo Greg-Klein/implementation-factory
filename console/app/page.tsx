@@ -1,5 +1,5 @@
-import { Harness } from "@/components/harness";
+import { Factory } from "@/components/factory";
 
 export default function Page() {
-  return <Harness />;
+  return <Factory />;
 }

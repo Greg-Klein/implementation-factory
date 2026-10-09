@@ -137,7 +137,7 @@ export function withDecision(incident: RunIncident, decision: IncidentDecision):
  * resumes where the workflow stands, it never restarts it.
  */
 export const CONTINUATION_INSTRUCTION = [
-  "The harness no longer observes any action in progress on this run. Resume the workflow where it stands:",
+  "The factory no longer observes any action in progress on this run. Resume the workflow where it stands:",
   "read again the current context, the plan, the reports and evidence already written in .claude/tasks, and the Git state (branch, commits, modified files),",
   "then take the next action still needed. Keep the existing working files and commits.",
   "Do not rerun the initial command and do not start again from step 1. Update workflow-state.json before acting.",
@@ -195,7 +195,7 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     // What the run's figures are measured from: a restart rewrites the archive from this state.
     ...(Array.isArray(state.userWaits) ? { userWaits: state.userWaits } : {}), ...(state.phaseArrivals ? { phaseArrivals: state.phaseArrivals } : {}),
     ...(Array.isArray(state.reopenings) ? { reopenings: state.reopenings } : {}), ...(state.reviewTier !== undefined ? { reviewTier: state.reviewTier } : {}),
-    ...(state.harness ? { harness: state.harness } : {}), ...(state.baseCommit ? { baseCommit: state.baseCommit } : {}),
+    ...(state.factory ? { factory: state.factory } : {}), ...(state.baseCommit ? { baseCommit: state.baseCommit } : {}),
     ...(state.baseBranch ? { baseBranch: state.baseBranch } : {}), ...(state.ticketBaseBranch ? { ticketBaseBranch: state.ticketBaseBranch } : {}),
     ...(state.transcriptPath ? { transcriptPath: state.transcriptPath } : {}),
     // A question whose session is gone cannot be answered: its text stays, in the incident, as context.
@@ -218,7 +218,7 @@ export function interruptRun(state: RunState, now: string): RunState {
     id: `incident-${crypto.randomUUID().slice(0, 8)}`, runId: state.id ?? "", kind: "lost_session", status: "open", revision: 1,
     detectedAt: now, updatedAt: now, fingerprint: "lost_session:restart",
     title: "Session interrupted",
-    reason: "The harness server stopped while this run was in progress: the Claude Code session went away with it, and its real outcome was never recorded.",
+    reason: "The factory server stopped while this run was in progress: the Claude Code session went away with it, and its real outcome was never recorded.",
     observations: [
       { kind: "restart", at: now, detail: "Run found in progress when the console restarted." },
       { kind: "phase", detail: `Last phase reached: ${state.phase}/10.` },
@@ -238,7 +238,7 @@ export function interruptRun(state: RunState, now: string): RunState {
     sessionPrompt: undefined,
     action: undefined,
     agents: closeAbandonedAgents(state.agents ?? [], now).agents,
-    error: state.error ?? "The harness server restarted or stopped while this run was in progress; its real outcome was never recorded.",
+    error: state.error ?? "The factory server restarted or stopped while this run was in progress; its real outcome was never recorded.",
     health: { health: "interrupted", title: "Session interrupted", detail: incident.reason, evaluatedAt: now },
     incidents: hasInterruption ? incidents : [...incidents, incident],
     schemaVersion: RUN_SCHEMA_VERSION,

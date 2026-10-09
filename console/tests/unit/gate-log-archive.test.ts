@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { RunSession } from "../../server/run-session";
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-gate-log-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-gate-log-"));
 process.env.IMPL_DATA_DIR = storage;
 let runtime: typeof import("../../server/run-metrics-runtime");
 

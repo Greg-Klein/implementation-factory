@@ -1,8 +1,8 @@
 # Agents, skills and independent review
 
-The harness separates the responsibilities of the agents, the reusable methods and the formats the console consumes. The `commands/`, `agents/`, `skills/` and `hooks/` directories stay at the root of the plugin.
+The factory separates the responsibilities of the agents, the reusable methods and the formats the console consumes. The `commands/`, `agents/`, `skills/` and `hooks/` directories stay at the root of the plugin.
 
-The [agent map](https://greg-klein.github.io/implementation-harness/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-harness/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
+The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
 
 The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
 
@@ -19,7 +19,7 @@ The console's interface is in English. The language of what the workflow writes 
 | `hooks/gate.mjs` | The checks an editing agent's own files call for, run again when it stops. |
 | `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
-The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the harness; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
+The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the factory; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
 
 ## Capabilities and triggers
 
@@ -39,7 +39,7 @@ The principles and contracts are read explicitly from the plugin path. The `CLAU
 
 `gitlab-tickets` keeps its Synapse conventions. These conventions do not become universal engineering principles.
 
-Skills are called under their qualified name in the plugin, for example `implementation-harness:how`. The technical agents have dynamic skill discovery. The designer, which has no `Skill` tool, preloads only `implementation-harness:figma-review` and reads the references that skill cites. If the preload is missing, it first reads the entry of the skill. This documentary reading does not allow it to read the product code.
+Skills are called under their qualified name in the plugin, for example `implementation-factory:how`. The technical agents have dynamic skill discovery. The designer, which has no `Skill` tool, preloads only `implementation-factory:figma-review` and reads the references that skill cites. If the preload is missing, it first reads the entry of the skill. This documentary reading does not allow it to read the product code.
 
 The native `skills:` field preloads the body of the skill. Putting it on every capability would move the text without reducing the context. The other methods and their references stay conditional. The agent's rights still bound any method loaded.
 
@@ -252,7 +252,7 @@ Two headless sessions that are not runs have rules of their own, and only those.
 
 ## Promoting a self-improvement
 
-An improvement branch is never left to a review: it reaches the harness on its own when three independent locks agree, and each one can reject it alone:
+An improvement branch is never left to a review: it reaches the factory on its own when three independent locks agree, and each one can reject it alone:
 
 1. Mechanical rules decided on the diff (`console/server/auto-merge-policy.ts`): no protected file (the guard, the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the CI), no test deleted or skipped, at most 15 files and 400 lines. The policy file is itself protected, so a branch cannot loosen the rules it is judged by.
 2. The checks, rerun by the console on the tree it would merge. The improvement session's own report is a claim.
@@ -332,7 +332,7 @@ The full loop has an initial round and at most two reworks, QA last, within the 
 
 Typecheck, build, 395 unit tests and 54 integration tests pass. The ten skills pass the structure validator. Claude Code discovers the six agents and the fourteen commands and skills of the plugin.
 
-A real trial of `review-change` on an isolated fixture detects a `> 18` threshold contrary to the `>= 18` specification. The reviewer loads the method reference, establishes the counterexample before looking at the reassuring author's report, then distinguishes its static finding from an executed test. This trial uses the `auto` mode of the harness, with no hooks and no MCP connections.
+A real trial of `review-change` on an isolated fixture detects a `> 18` threshold contrary to the `>= 18` specification. The reviewer loads the method reference, establishes the counterexample before looking at the reassuring author's report, then distinguishes its static finding from an executed test. This trial uses the `auto` mode of the factory, with no hooks and no MCP connections.
 
 In a restrictive mode such as `dontAsk`, a reference of the plugin located outside the target repository can be refused for lack of read permission. Loading the catalogue therefore does not prove on its own that the ancillary files are reachable. Respect the refusal and report the method as unavailable; the host's permissions still apply. See the [Claude Code permissions documentation](https://code.claude.com/docs/en/permissions).
 
@@ -342,13 +342,13 @@ Typecheck, build, 443 unit tests and 59 integration tests pass on the `feat/revi
 
 ### Check of the scheduling command, 3 October 2026
 
-A real trial of `/implementation-harness:schedule` with `claude -p` (Claude Code 2.1.288), from a disposable git repository, on an empty batch. The plugin's command is resolved in non-interactive mode, the output file contains `{ "tickets": [], "edges": [] }` and the process exits with code 0 in 9 to 12 seconds.
+A real trial of `/implementation-factory:schedule` with `claude -p` (Claude Code 2.1.288), from a disposable git repository, on an empty batch. The plugin's command is resolved in non-interactive mode, the output file contains `{ "tickets": [], "edges": [] }` and the process exits with code 0 in 9 to 12 seconds.
 
 ```bash
 claude -p --setting-sources project,local --plugin-dir <plugin> --add-dir <plugin> --add-dir <output directory> \
   --model sonnet --permission-mode dontAsk --permission-prompts none \
   --allowedTools "Read,Write,Glob,Grep,Agent,Skill,Bash(glab issue view *),Bash(glab api *),Bash(gh issue view *),Bash(gh api *),Bash(git log *),Bash(git show *),Bash(git grep *),Bash(git ls-files *),Bash(git rev-parse *),Bash(ls *),Bash(rm <output directory>/*)" \
-  --output-format json -- "/implementation-harness:schedule <input> <output>"
+  --output-format json -- "/implementation-factory:schedule <input> <output>"
 ```
 
 - `--permission-mode auto` works too, with no tool list.

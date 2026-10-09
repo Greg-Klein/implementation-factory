@@ -10,7 +10,7 @@ let tasks: string;
 
 /** The reason the hook refused the call with, or undefined when it let it through. */
 function refusal(toolName: string, toolInput: object, env: Record<string, string> = { IMPL_RUN_ID: "run" }) {
-  const { IMPL_RUN_ID: _run, IMPL_HARNESS_HOOK_URL: _url, ...inherited } = process.env;
+  const { IMPL_RUN_ID: _run, IMPL_HOOK_URL: _url, ...inherited } = process.env;
   const payload = { hook_event_name: "PreToolUse", tool_name: toolName, tool_input: toolInput, cwd };
   const { stdout } = spawnSync(process.execPath, [emitter], { input: JSON.stringify(payload), encoding: "utf8", env: { ...inherited, ...env } });
   if (!stdout) return undefined;
@@ -28,45 +28,45 @@ afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
 describe("the hook guard", () => {
   it("should refuse a workflow agent under its bare name and let the qualified one through", () => {
-    expect(refusal("Agent", { subagent_type: "developer" })).toContain("implementation-harness:developer");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "developer" })).toContain("implementation-factory:developer");
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer" })).toBeUndefined();
     expect(refusal("Agent", { subagent_type: "Explore" })).toBeUndefined();
   });
 
   it("should refuse a developer on another model than Sonnet or Opus and let those two through", () => {
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" })).toContain("without a model override");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "fable" })).toContain("Sonnet");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "sonnet" })).toBeUndefined();
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "opus" })).toBeUndefined();
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer" })).toBeUndefined();
-    expect(refusal("Agent", { subagent_type: "implementation-harness:qa-reviewer", model: "sonnet" })).toBeUndefined();
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer", model: "haiku" }, {})).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "haiku" })).toContain("without a model override");
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "fable" })).toContain("Sonnet");
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "sonnet" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "opus" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer", model: "sonnet" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "haiku" }, {})).toBeUndefined();
   });
 
   it("should refuse a reviewer while a planned task has no report, naming the task", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }] }));
     writeFileSync(path.join(tasks, "developer-report-T1.md"), "# Rapport");
     writeFileSync(path.join(tasks, "developer-report-T10.md"), "# Rapport");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:qa-reviewer" })).toMatch(/T2 of planner-output\.json has no/);
-    expect(refusal("Agent", { subagent_type: "implementation-harness:developer" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer" })).toMatch(/T2 of planner-output\.json has no/);
+    expect(refusal("Agent", { subagent_type: "implementation-factory:developer" })).toBeUndefined();
   });
 
   it("should start the review once every task is reported or named in the merged report", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }] }));
     writeFileSync(path.join(tasks, "developer-report-T1.md"), "# Rapport");
     writeFileSync(path.join(tasks, "developer-report.md"), "## T1\n\nFait.\n\n## T2\n\nNon lancée : couverte par T1.\n");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:review-orchestrator" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:review-orchestrator" })).toBeUndefined();
   });
 
   it("should not take T1 named in the merged report for T10", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }] }));
     writeFileSync(path.join(tasks, "developer-report.md"), "## T10\n");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer" })).toContain("T1 ");
+    expect(refusal("Agent", { subagent_type: "implementation-factory:senior-reviewer" })).toContain("T1 ");
   });
 
   it("should start the review when the plan cannot be read", () => {
     writeFileSync(path.join(tasks, "planner-output.json"), "{ not json");
-    expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer" })).toBeUndefined();
+    expect(refusal("Agent", { subagent_type: "implementation-factory:senior-reviewer" })).toBeUndefined();
   });
 
   it("should refuse a commit or a publication that carries a trace of the session", () => {
@@ -213,8 +213,8 @@ describe("the hook guard", () => {
     });
 
     it("should let it start its agent and no other", () => {
-      expect(refusal("Agent", { subagent_type: "implementation-harness:ticket-scheduler", prompt: "p" }, session)).toBeUndefined();
-      expect(refusal("Agent", { subagent_type: "general-purpose", prompt: "p" }, session)).toBe("The scheduling session starts `implementation-harness:ticket-scheduler` and no other agent.");
+      expect(refusal("Agent", { subagent_type: "implementation-factory:ticket-scheduler", prompt: "p" }, session)).toBeUndefined();
+      expect(refusal("Agent", { subagent_type: "general-purpose", prompt: "p" }, session)).toBe("The scheduling session starts `implementation-factory:ticket-scheduler` and no other agent.");
       expect(refusal("Agent", { prompt: "p" }, session)).toContain("and no other agent");
     });
   });
@@ -238,7 +238,7 @@ describe("the hook guard", () => {
     });
 
     it("should refuse every agent", () => {
-      expect(refusal("Agent", { subagent_type: "implementation-harness:senior-reviewer", prompt: "p" }, session)).toBe("The improvement judge starts no agent: it decides alone.");
+      expect(refusal("Agent", { subagent_type: "implementation-factory:senior-reviewer", prompt: "p" }, session)).toBe("The improvement judge starts no agent: it decides alone.");
     });
 
     it("should let it read", () => {
@@ -258,7 +258,7 @@ describe("the hook guard", () => {
       "git push --force-with-lease origin feat-1-x",
       "git worktree add --detach /tmp/qa-1 HEAD",
       "git worktree remove --force /tmp/qa-1",
-      "git stash push -u -m implementation-harness-1",
+      "git stash push -u -m implementation-factory-1",
       "git commit -m 'docs: never run git reset --hard'",
       "git log --grep 'clean -fd'",
       "git commit -F - <<EOF\nfix: x\n\ngit reset --hard was the cause\nEOF",
@@ -294,6 +294,6 @@ describe("the hook guard", () => {
     expect(refusal("Agent", { subagent_type: "developer" }, {})).toBeUndefined();
     expect(refusal("Bash", { command: "git commit -m 'x\n\nCo-Authored-By: someone'" }, {})).toBeUndefined();
     writeFileSync(path.join(tasks, "workflow-state.json"), "{}");
-    expect(refusal("Agent", { subagent_type: "developer" }, {})).toContain("implementation-harness:developer");
+    expect(refusal("Agent", { subagent_type: "developer" }, {})).toContain("implementation-factory:developer");
   });
 });

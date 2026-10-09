@@ -53,7 +53,7 @@ describe("reconciling runs orphaned by a server restart", () => {
 
   it("should close the agents the interrupted run left running", async () => {
     writeRun("run-agents", { status: "running", agents: [
-      { id: "a1", name: "implementation-harness:developer", status: "running", startedAt: "2026-09-09T08:20:00.000Z" },
+      { id: "a1", name: "implementation-factory:developer", status: "running", startedAt: "2026-09-09T08:20:00.000Z" },
       { id: "a2", name: "Explore", status: "completed", startedAt: "2026-09-09T08:19:00.000Z", endedAt: "2026-09-09T08:19:40.000Z" },
     ] });
     await reconcileInterruptedRuns(runsDirectory);

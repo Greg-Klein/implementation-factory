@@ -9,7 +9,7 @@ import type { RunState } from "../../server/types";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-publishing-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-publishing-"));
 process.env.IMPL_DATA_DIR = storage;
 
 let context: typeof import("../../server/context");
@@ -61,13 +61,13 @@ describe("the list of runs sent to every page", () => {
       registry.monitor.stop();
       registry.publishSnapshot();
       registry.publishSnapshot();
-      expect(received.filter((message) => message.type === "harness")).toHaveLength(1);
+      expect(received.filter((message) => message.type === "factory")).toHaveLength(1);
 
       const session = new RunSession("run-listed", { status: "running", phase: 1, cwd: "/work/run-listed", startedAt: "2026-10-06T10:00:00.000Z" });
       (registry as unknown as { register(session: unknown): unknown }).register(session);
       registry.publishSnapshot();
       registry.publishSnapshot();
-      const lists = received.filter((message) => message.type === "harness") as { type: string; snapshot: { runs: { id: string }[] } }[];
+      const lists = received.filter((message) => message.type === "factory") as { type: string; snapshot: { runs: { id: string }[] } }[];
       expect(lists.map((message) => message.snapshot.runs.map((run) => run.id))).toEqual([[], ["run-listed"]]);
     } finally {
       context.clients.delete(page);

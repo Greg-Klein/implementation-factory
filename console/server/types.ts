@@ -17,7 +17,7 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
 /**
  * One worktree the improvement loop left for a verdict, independent of any run: it is
  * discovered by listing worktrees, never tied to the run that happened to spawn it.
- * `mergesCleanly` is false when the branch no longer merges into the harness even
+ * `mergesCleanly` is false when the branch no longer merges into the factory even
  * after the automatic replay, which means a conflict git cannot resolve on its own:
  * the promotion is not one click.
  */
@@ -205,10 +205,10 @@ export type ReviewTier = 0 | 1 | 2;
 /** A stretch of the run spent waiting on the user: a decision to take, the agent's own prompt, or the terminal. Open while `to` is absent. */
 export type UserWait = { reason: "question" | "session_prompt" | "terminal"; from: string; to?: string };
 export type Reopening = { from: string; to?: string };
-/** The harness a run was driven by: the plugin's version and the commit of its checkout when the run started. */
+/** The factory a run was driven by: the plugin's version and the commit of its checkout when the run started. */
 /** `total` counts every token read or written, cache included; `pilotCalls` is how many times the pilot's context was read again. */
 export type RunUsage = { total: number; output: number; pilot: number; pilotCalls: number; agents: number };
-export type HarnessVersion = { version?: string; commit?: string };
+export type FactoryVersion = { version?: string; commit?: string };
 /** A developer handed plan tasks, paired with the agent it became once that agent starts. */
 export type PlanDelegation = { agentType: string; taskIds: string[]; agentId?: string };
 /**
@@ -272,7 +272,7 @@ export type RunState = {
   reopenings?: Reopening[];
   /** The review tier the workflow declared, kept once a later state omits it. */
   reviewTier?: ReviewTier;
-  harness?: HarnessVersion;
+  factory?: FactoryVersion;
   /** Tokens consumed so far, read from the transcripts while the run goes. */
   usage?: RunUsage;
   /** The commit the run worktree was cut at, which the size of the change is measured from. */
@@ -406,7 +406,7 @@ export type TicketProposal = { issueUrl: string; title?: string; source?: string
 
 /** Everything every open page is told about, whichever run it has opened. */
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[]; proposals: TicketProposal[] };
+export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[]; proposals: TicketProposal[] };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
@@ -470,14 +470,14 @@ export type ClientMessage =
 
 export type ServerMessage =
   /** The list of runs and the queue, sent to every page on every change. */
-  | { type: "harness"; snapshot: HarnessSnapshot }
+  | { type: "factory"; snapshot: FactorySnapshot }
   /** The full state of one run, sent only to the pages that opened it. */
   | { type: "run"; state: RunState }
   /** The run a `run.start` or a `demo.start` created, answered to the page that asked, before the state of that run. */
   | { type: "run.started"; runId: string; requestId?: string }
   | { type: "terminal.output"; runId: string; data: string }
   /**
-   * Something the harness did that belongs to no run: the improvement loop
+   * Something the factory did that belongs to no run: the improvement loop
    * replaying a branch, a queued launch that could not start. It used to land in
    * the activity feed of whichever run happened to be current, which with
    * several runs means a feed picked at random. `queuedId` names the waiting
@@ -526,7 +526,7 @@ export type RunMetrics = {
   computedAt: string;
   /** The session is gone: these figures will not move any more. */
   final: boolean;
-  harness?: HarnessVersion;
+  factory?: FactoryVersion;
   ticket: { issueUrl: string; title?: string; repository: string };
   outcome: {
     status: RunStatus;

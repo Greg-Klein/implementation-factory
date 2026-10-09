@@ -86,15 +86,15 @@ describe("run notifications", () => {
   });
 
   it("should say in the tab what the whole console would show", () => {
-    expect(documentTitle([run(waiting)])).toBe("● Claude is waiting for an answer · Implementation Harness");
-    expect(documentTitle([run({ id: "a", ...waiting }), run({ id: "b", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Harness");
-    expect(documentTitle([run({ status: "attention" })])).toBe("● Needs attention · Implementation Harness");
-    expect(documentTitle([run({ id: "a", status: "attention" }), run({ id: "b", status: "attention" })])).toBe("● Needs attention (2) · Implementation Harness");
-    expect(documentTitle([run({ status: "completed" })])).toBe("✓ Completed · Implementation Harness");
-    expect(documentTitle([run({ status: "failed" })])).toBe("✗ Failed · Implementation Harness");
-    expect(documentTitle([run()])).toBe("1 run in progress · Implementation Harness");
-    expect(documentTitle([run({ id: "a" }), run({ id: "b" })])).toBe("2 runs in progress · Implementation Harness");
-    expect(documentTitle([])).toBe("Implementation Harness");
+    expect(documentTitle([run(waiting)])).toBe("● Claude is waiting for an answer · Implementation Factory");
+    expect(documentTitle([run({ id: "a", ...waiting }), run({ id: "b", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Factory");
+    expect(documentTitle([run({ status: "attention" })])).toBe("● Needs attention · Implementation Factory");
+    expect(documentTitle([run({ id: "a", status: "attention" }), run({ id: "b", status: "attention" })])).toBe("● Needs attention (2) · Implementation Factory");
+    expect(documentTitle([run({ status: "completed" })])).toBe("✓ Completed · Implementation Factory");
+    expect(documentTitle([run({ status: "failed" })])).toBe("✗ Failed · Implementation Factory");
+    expect(documentTitle([run()])).toBe("1 run in progress · Implementation Factory");
+    expect(documentTitle([run({ id: "a" }), run({ id: "b" })])).toBe("2 runs in progress · Implementation Factory");
+    expect(documentTitle([])).toBe("Implementation Factory");
   });
 
   /** The favicon speaks for the console, so the most demanding run wins. */
@@ -122,8 +122,8 @@ describe("the folder trust prompt in notifications", () => {
   });
 
   it("should count the prompt as a decision in the tab title and the favicon", () => {
-    expect(documentTitle([run(prompted)])).toBe("● Claude is waiting for an answer · Implementation Harness");
-    expect(documentTitle([run(prompted), run({ id: "run-2", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Harness");
+    expect(documentTitle([run(prompted)])).toBe("● Claude is waiting for an answer · Implementation Factory");
+    expect(documentTitle([run(prompted), run({ id: "run-2", ...waiting })])).toBe("● 2 runs are waiting for an answer · Implementation Factory");
     expect(faviconColor([run({ sessionPromptId: "p1" })])).toBe("#d97706");
   });
 

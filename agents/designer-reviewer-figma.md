@@ -5,7 +5,7 @@ model: sonnet
 color: pink
 tools: mcp__playwright__*, mcp__plugin_figma_figma__*, Write, Read
 skills:
-  - implementation-harness:figma-review
+  - implementation-factory:figma-review
 ---
 
 # Designer reviewer

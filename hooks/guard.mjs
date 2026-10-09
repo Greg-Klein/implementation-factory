@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-const NAMESPACE = "implementation-harness";
+const NAMESPACE = "implementation-factory";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
 const REVIEWERS = ["senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator"];
 // The model the developer declares, and the one the pilot may pass for a task the plan sizes `L`.
@@ -280,7 +280,7 @@ function scheduleRefusal(payload, output) {
 /**
  * Why a call of the headless session that judges an improvement branch is
  * refused. It reads run archives that hold ticket text and decides what lands
- * in the harness without the user: it writes its verdict file and does nothing
+ * in the factory without the user: it writes its verdict file and does nothing
  * else, whatever its list of allowed tools says.
  */
 function judgeRefusal(payload, output) {

@@ -31,8 +31,8 @@ import { pilotActs } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
 import { discardRunWorktree, prepareRunWorktree, removeWorktreeOnRequest, settleRunWorktree, type WorktreeRemovalResult } from "./run-worktrees.js";
 import { currentBranch, headCommit, mainCheckout } from "./worktree.js";
-import { harnessVersion, recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
-import type { HarnessSnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, RunMetrics, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
+import { factoryVersion, recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
+import type { FactorySnapshot, IncidentAction, MergeWatch, QueuedRun, QueuedRunView, ResolvedTicket, RunIncident, RunMetrics, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
 
 export type IncidentActionRequest = { runId: string; incidentId: string; expectedRevision: number; requestId: string; action: IncidentAction; reason?: string };
 export type IncidentActionResult = { outcome: "done" | "refused" | "duplicate"; message: string };
@@ -225,7 +225,7 @@ export class RunRegistry {
     return [...live, ...(await storedMetrics()).filter((metrics) => !held.has(metrics.runId))].sort((left, right) => (right.time.startedAt ?? "").localeCompare(left.time.startedAt ?? ""));
   }
 
-  snapshot(): HarnessSnapshot {
+  snapshot(): FactorySnapshot {
     return {
       // Newest first, the order the side list reads in.
       runs: [...this.sessions.values()].map((session) => session.summary()).sort((left, right) => (right.startedAt ?? "").localeCompare(left.startedAt ?? "")),
@@ -249,7 +249,7 @@ export class RunRegistry {
     const serialized = JSON.stringify(snapshot);
     if (serialized === this.publishedSnapshot) return;
     this.publishedSnapshot = serialized;
-    broadcast({ type: "harness", snapshot });
+    broadcast({ type: "factory", snapshot });
   }
 
   /**
@@ -448,7 +448,7 @@ export class RunRegistry {
     if (this.shuttingDown) throw new Error("The application is shutting down.");
     const launch = demoLaunchState(scenario);
     if (this.holders().has(runLockKey(launch))) throw new Error("A demo is already running.");
-    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`The harness already holds ${maxConcurrentRuns} runs. Free a slot before starting the demo.`);
+    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`The factory already holds ${maxConcurrentRuns} runs. Free a slot before starting the demo.`);
     const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, launch));
     if (scenario === "incident") startIncidentDemoRun(session);
     else startDemoRun(session);
@@ -567,8 +567,8 @@ export class RunRegistry {
       session.publish();
     });
     const sourceBranch = await currentBranch(repository);
-    // What the run is measured against later: the harness that drove it and the commit it started from.
-    session.state.harness = await harnessVersion();
+    // What the run is measured against later: the factory that drove it and the commit it started from.
+    session.state.factory = await factoryVersion();
     session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
     if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Runtime recipe restored", "Kept from a previous run of this repository.");

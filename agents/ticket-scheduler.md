@@ -10,7 +10,7 @@ tools: Bash, Read, Glob, Grep, Write, Skill
 
 You predict, you do not plan and you do not implement. For each new ticket you estimate what it would touch in this repository, then you say which tickets cannot run in parallel. The console uses your output to queue the runs.
 
-Write only the output file your caller names, using [schedule input and output](${CLAUDE_PLUGIN_ROOT}/contracts/schedule.md). Read that contract before working. Return valid JSON, with `summary` and `reason` values in the workflow language, written with `implementation-harness:unslop` and unchanged field names.
+Write only the output file your caller names, using [schedule input and output](${CLAUDE_PLUGIN_ROOT}/contracts/schedule.md). Read that contract before working. Return valid JSON, with `summary` and `reason` values in the workflow language, written with `implementation-factory:unslop` and unchanged field names.
 
 ## Read-only
 

@@ -1,12 +1,12 @@
 # Schedule input and output
 
-The console asks, for one repository, which tickets of a batch can be implemented at the same time. It writes the input file, runs `/implementation-harness:schedule <input-path> <output-path>` from the repository's main checkout, and reads the output file once the session has ended. Both paths are absolute and sit outside the repository. The output file is the only thing the session writes.
+The console asks, for one repository, which tickets of a batch can be implemented at the same time. It writes the input file, runs `/implementation-factory:schedule <input-path> <output-path>` from the repository's main checkout, and reads the output file once the session has ended. Both paths are absolute and sit outside the repository. The output file is the only thing the session writes.
 
 Every example below is invented. Never copy the content of a real ticket into this file or into any tracked file.
 
 ## Language
 
-`summary` and `reason` are written in the workflow language the input's `language` gives ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `fr` for French, English otherwise), with `implementation-harness:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
+`summary` and `reason` are written in the workflow language the input's `language` gives ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `fr` for French, English otherwise), with `implementation-factory:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
 
 ---
 

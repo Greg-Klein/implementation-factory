@@ -1,6 +1,6 @@
 # Improvement verdict
 
-Files of the headless session that decides whether a self-improvement branch is merged into the harness without the user (`/implementation-harness:judge-improvement`). The console writes the input, the judge writes the verdict, and the console validates it with `judgeVerdict` in `console/server/auto-merge-policy.ts`. Every value the judge writes is in English: it is shown in the console.
+Files of the headless session that decides whether a self-improvement branch is merged into the factory without the user (`/implementation-factory:judge-improvement`). The console writes the input, the judge writes the verdict, and the console validates it with `judgeVerdict` in `console/server/auto-merge-policy.ts`. Every value the judge writes is in English: it is shown in the console.
 
 ## Input (written by the console)
 
@@ -9,7 +9,7 @@ Files of the headless session that decides whether a self-improvement branch is 
   "worktreeName": "self-improvement-1a2b3c4d",
   "branch": "worktree-self-improvement-1a2b3c4d",
   "worktreePath": "/abs/.claude/worktrees/self-improvement-1a2b3c4d",
-  "base": "<commit of the harness the branch sits on>",
+  "base": "<commit of the factory the branch sits on>",
   "diffPath": "/abs/diff.patch",
   "changedFiles": [{ "status": "M", "path": "agents/developer.md", "added": 4, "removed": 1 }],
   "checks": [{ "name": "unit tests", "command": "npm run test:unit", "ok": true }],

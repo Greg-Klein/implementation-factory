@@ -32,7 +32,7 @@ function answerTo(raw: string) {
     socket.on("message", (data) => {
       const message = JSON.parse(data.toString()) as { type: string; message?: string };
       // The list of runs is sent to every page that connects: the answer is what follows it.
-      if (message.type === "harness") return;
+      if (message.type === "factory") return;
       socket.close();
       resolve(message);
     });

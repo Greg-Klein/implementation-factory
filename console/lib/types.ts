@@ -104,11 +104,11 @@ export type TicketProposal = { issueUrl: string; title?: string; source?: string
 /** Mirrors UnresolvedTicket in server/types.ts: a ticket of a batch no checkout was found for. */
 export type UnresolvedTicket = { issueUrl: string; project?: string };
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
-export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
+export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
 export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; dismissAfterMs?: number };
 export type ServerMessage =
-  | { type: "harness"; snapshot: HarnessSnapshot }
+  | { type: "factory"; snapshot: FactorySnapshot }
   | { type: "run"; state: RunState }
   /** The run a launch of this page created, named by the `requestId` the page gave that launch. */
   | { type: "run.started"; runId: string; requestId?: string }
@@ -201,7 +201,7 @@ export type RunMetrics = {
   runId: string;
   computedAt: string;
   final: boolean;
-  harness?: { version?: string; commit?: string };
+  factory?: { version?: string; commit?: string };
   ticket: { issueUrl: string; title?: string; repository: string };
   outcome: { status: Status; phase: number; delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; questions: number; incidents: string[]; acceptance?: AcceptanceCounts; qaStatus?: string; worktree?: string };
   time: { startedAt: string | null; endedAt: string | null; elapsedMs: number; reopened?: { count: number; ms: number }; userWaitMs: number; waits: { reason: "question" | "session_prompt" | "terminal"; count: number; ms: number }[]; activeMs: number; incidentMs: number; phases: { phase: number; enteredAt: string; ms: number }[]; gate?: { ms: number; steps: { step: string; runs: number; ms: number }[] } };

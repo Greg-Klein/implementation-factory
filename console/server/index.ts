@@ -201,7 +201,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
 
 await mkdir(dataRoot, { recursive: true });
 await reconcileInterruptedRuns(dataRoot);
-// Commits landed by hand while the console was down move the harness just as a
+// Commits landed by hand while the console was down move the factory just as a
 // promotion does, and nothing would replay the waiting branches onto them.
 await realignPendingImprovements().catch(reportFailure("Pending improvements not realigned"));
 // Worktrees left by the runs of an earlier process: pruned, removed or kept with their reason.
@@ -407,7 +407,7 @@ server.on("upgrade", (request, socket, head) => {
 });
 wss.on("connection", (socket) => {
   clients.set(socket, {});
-  send(socket, { type: "harness", snapshot: registry.snapshot() });
+  send(socket, { type: "factory", snapshot: registry.snapshot() });
   socket.on("message", async (raw) => {
     let message: ClientMessage | undefined;
     try {
@@ -438,7 +438,7 @@ const address = server.address();
 if (!address || typeof address === "string") throw new Error("The server has no TCP port.");
 setListeningPort(address.port);
 const url = `http://${hostname}:${port}`;
-console.log(`Implementation Harness: ${url}`);
+console.log(`Implementation Factory: ${url}`);
 if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. Anyone who reaches it can drive the ${engine.label} sessions in progress.`);
 // A rejection nothing handles is a defect: it is logged with what it says and
 // shown once, instead of resting on whatever handler a dependency happens to install.

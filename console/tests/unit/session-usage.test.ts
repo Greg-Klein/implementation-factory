@@ -55,7 +55,7 @@ describe("sessions of a run", () => {
     mkdirSync(path.join(directory, "session-a", "subagents"), { recursive: true });
     writeFileSync(path.join(directory, "session-a.jsonl"), call("msg_1", { output_tokens: 100 }));
     writeFileSync(path.join(directory, "session-a", "subagents", "agent-a1.jsonl"), call("msg_2", { output_tokens: 40 }, { isSidechain: true }));
-    writeFileSync(path.join(directory, "session-a", "subagents", "agent-a1.meta.json"), JSON.stringify({ agentType: "implementation-harness:developer" }));
+    writeFileSync(path.join(directory, "session-a", "subagents", "agent-a1.meta.json"), JSON.stringify({ agentType: "implementation-factory:developer" }));
     return directory;
   };
 
@@ -64,7 +64,7 @@ describe("sessions of a run", () => {
     const sessions = await readSessionUsage({ transcriptPath: path.join(directory, "session-a.jsonl"), cwd: "/elsewhere", isolated: false });
     expect(sessions).toEqual([
       expect.objectContaining({ sessionId: "session-a", outputTokens: 100 }),
-      expect.objectContaining({ sessionId: "session-a", agentId: "a1", agentType: "implementation-harness:developer", outputTokens: 40 }),
+      expect.objectContaining({ sessionId: "session-a", agentId: "a1", agentType: "implementation-factory:developer", outputTokens: 40 }),
     ]);
     expect(sessions[0]!.agentId).toBeUndefined();
   });

@@ -22,7 +22,7 @@ async function standIn(answer: (message: Received, send: (reply: object) => void
     if (!accept(request.headers.origin)) { socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); return; }
     sockets.handleUpgrade(request, socket, head, (websocket) => {
       const send = (reply: object) => websocket.send(JSON.stringify(reply));
-      send({ type: "harness", snapshot });
+      send({ type: "factory", snapshot });
       websocket.on("message", (raw) => answer(JSON.parse(raw.toString()) as Received, send));
     });
   });

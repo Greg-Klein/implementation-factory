@@ -68,9 +68,9 @@ describe("Claude Code plugin metadata", () => {
     expect(improve.match(/git merge [^\n`]*/g)).toEqual(["git merge --ff-only main"]);
   });
 
-  it("should publish its commands under the implementation-harness namespace", () => {
+  it("should publish its commands under the implementation-factory namespace", () => {
     const manifest = JSON.parse(readFileSync(path.join(pluginRoot, ".claude-plugin/plugin.json"), "utf8"));
-    expect(manifest.name).toBe("implementation-harness");
+    expect(manifest.name).toBe("implementation-factory");
     const names = definitions("commands").map((file) => frontmatter(file).name);
     expect(names.sort()).toEqual(["implement", "improve", "judge-improvement", "rebase", "review", "schedule"]);
   });

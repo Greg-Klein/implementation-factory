@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-<title>Implementation Harness, agent map</title>
+<title>Implementation Factory, agent map</title>
 <style>
   :root {
     --bg: #0a0b0f;
@@ -287,7 +287,7 @@
 
 <header>
   <span class="eyebrow"><i></i>Claude Code plugin + local console</span>
-  <h1>Implementation Harness</h1>
+  <h1>Implementation Factory</h1>
   <p>From the ticket to the merge request: who does what, on which model, and where the engineer steps in. One overview in a single graph, the agents one by one, then four detailed views in the order of a run.</p>
 </header>
 
@@ -305,7 +305,7 @@
 
 <section>
   <div class="head"><span class="num">00</span><h2>Overview</h2></div>
-  <p>The whole harness in one graph: a ticket comes in, a merge request comes out, and the harness corrects itself when a run went wrong. It reads left to right on two lines, and each arrow says what goes from one node to the next. In every diagram, hover an agent or a script to see what it does. The views below detail each part.</p>
+  <p>The whole factory in one graph: a ticket comes in, a merge request comes out, and the factory corrects itself when a run went wrong. It reads left to right on two lines, and each arrow says what goes from one node to the next. In every diagram, hover an agent or a script to see what it does. The views below detail each part.</p>
   <div class="canvas"><div class="rows" data-tips="overview" data-links='[{"from":"oQa","to":"oAccept","label":"evidence"},{"from":"oWatch","to":"oConsole","label":"next ticket"}]'>
 <pre class="mermaid">
 flowchart LR
@@ -379,7 +379,7 @@ flowchart LR
   <div class="head"><span class="num">01</span><h2>The agents</h2></div>
   <p>Ten roles, all played by Claude Code. Click an agent to see its model and what it does.</p>
   <div class="canvas"><div class="agents">
-    <div class="agent-list" role="tablist" aria-orientation="vertical" aria-label="Agents of the harness"></div>
+    <div class="agent-list" role="tablist" aria-orientation="vertical" aria-label="Agents of the factory"></div>
     <article class="agent-card" role="tabpanel" id="agent-card" tabindex="0"></article>
   </div></div>
 </section>
@@ -563,7 +563,7 @@ flowchart LR
 
 <section>
   <div class="head"><span class="num">05</span><h2>After the final report</h2></div>
-  <p>The MR waits for the engineer's review, the queue is released at the merge, and the harness audits itself only when it observed something going wrong.</p>
+  <p>The MR waits for the engineer's review, the queue is released at the merge, and the factory audits itself only when it observed something going wrong.</p>
   <div class="canvas"><pre class="mermaid" data-tips="after">
 flowchart LR
   done["<b>Pilot</b> · Opus<br/>MR open, final report"]:::agent
@@ -635,7 +635,7 @@ flowchart LR
     flowchart: { useMaxWidth: false, htmlLabels: true, curve: "basis", nodeSpacing: 40, rankSpacing: 56, padding: 10 },
   });
 
-  // The agents of the harness, in the order they come into a run.
+  // The agents of the factory, in the order they come into a run.
   const AGENTS = [
     {
       name: "Ticket scheduler", short: "Sonnet", kind: "Agent · ticket-scheduler", models: ["Sonnet"],
@@ -679,7 +679,7 @@ flowchart LR
     },
     {
       name: "Session /improve", short: "Opus", kind: "Session · /improve", models: ["Opus"],
-      does: "It improves the harness itself from the engineer's feedback and from what the console observed going wrong during a run. It validates its change and returns it as one reversible commit, in a worktree of its own.",
+      does: "It improves the factory itself from the engineer's feedback and from what the console observed going wrong during a run. It validates its change and returns it as one reversible commit, in a worktree of its own.",
       facts: [["Started by", "the console, only on proof of a defect or on feedback"], ["Writes", "an improvement branch, merged automatically or discarded and tried again"]],
     },
     {
@@ -689,7 +689,7 @@ flowchart LR
     },
     {
       name: "Session /rebase", short: "Sonnet", kind: "Session · /rebase", models: ["Sonnet"],
-      does: "When the harness moved while an improvement was waiting, it replays the pending branch on top of it and resolves the conflicts without losing either side.",
+      does: "When the factory moved while an improvement was waiting, it replays the pending branch on top of it and resolves the conflicts without losing either side.",
       facts: [["Started by", "the console, when git alone cannot rebase"], ["Writes", "the improvement branch, brought up to date"]],
     },
   ];
@@ -807,7 +807,7 @@ flowchart LR
       oMr: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes the consolidated review. As a draft when something still blocks."],
       oWatch: ["merge-watch.ts", "Script", "Watches the merge request. Once it is merged, releases the tickets that were waiting behind it."],
       oAudit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when something went wrong."],
-      oImprove: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
+      oImprove: ["Session /improve", "Opus", "Fixes the factory itself from what went wrong, in a branch of its own."],
       oAuto: ["auto-merge.ts", "Script", "Rejects a branch that touches a protected file, removes or skips a test, or is too large, then reruns the checks itself."],
       oJudge: ["Session /judge-improvement", "Opus", "Reads the run evidence, then the plan and the diff, and decides whether the branch is merged without the engineer."],
       oRetry: ["pending/", "Feedback", "A rejected branch is discarded and its feedback goes back here with the reasons, for the next improvement session."],
@@ -875,8 +875,8 @@ flowchart LR
       watch: ["merge-watch.ts", "Script", "Asks the forge, once a minute, whether the merge request is merged. No Claude session, no tokens."],
       queue: ["registry.ts", "Script", "Once the merge request is merged, starts the tickets that were waiting behind it."],
       audit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when it observed a defect or received feedback."],
-      improve: ["Session /improve", "Opus", "Fixes the harness itself from what went wrong, in a branch of its own."],
-      rebase: ["Session /rebase", "Sonnet", "If the harness moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
+      improve: ["Session /improve", "Opus", "Fixes the factory itself from what went wrong, in a branch of its own."],
+      rebase: ["Session /rebase", "Sonnet", "If the factory moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
       auto: ["auto-merge.ts", "Script", "Rejects a branch on a mechanical rule or a failed check, otherwise asks the judge, and merges on its word."],
       judge: ["Session /judge-improvement", "Opus", "Independent of the author: forms its expectation from the evidence first, refuses on any doubt, writes only its verdict."],
       retry: ["auto-merge.ts", "Script", "Discards a rejected branch, keeps an uncommitted change as a patch, and puts its feedback back in pending/ with the reasons. Two attempts at most."],

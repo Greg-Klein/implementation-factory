@@ -11,7 +11,7 @@ const exec = promisify(execFile);
 
 export type Worktree = { path: string; branch?: string };
 
-/** Every worktree registered against a checkout, the primary one included. The harness checkout unless another is named. */
+/** Every worktree registered against a checkout, the primary one included. The factory checkout unless another is named. */
 export async function listWorktrees(repository: string = pluginRoot): Promise<Worktree[]> {
   const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: repository });
   return stdout.split("\n\n").flatMap((block) => {
@@ -25,20 +25,20 @@ export async function listWorktrees(repository: string = pluginRoot): Promise<Wo
 /**
  * The agent is free to rename the branch it creates for a worktree, and Claude
  * Code does exactly that by prefixing it with "worktree-". The directory name
- * is the only handle that stays what the harness asked for, whichever engine
+ * is the only handle that stays what the factory asked for, whichever engine
  * created it.
  */
 export async function findWorktree(name: string, repository: string = pluginRoot): Promise<Worktree | undefined> {
   return (await listWorktrees(repository)).find((worktree) => path.basename(worktree.path) === name);
 }
 
-/** The point where the worktree left the branch the harness itself runs on. */
+/** The point where the worktree left the branch the factory itself runs on. */
 async function mergeBase(worktree: Worktree) {
   const branch = (await exec("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: pluginRoot })).stdout.trim();
   return (await exec("git", ["merge-base", "HEAD", branch], { cwd: worktree.path })).stdout.trim();
 }
 
-/** Committed and uncommitted work, measured from the point where the worktree left the harness branch. */
+/** Committed and uncommitted work, measured from the point where the worktree left the factory branch. */
 export async function worktreeDiff(worktree: Worktree) {
   const base = await mergeBase(worktree);
   const { stdout } = await exec("git", ["diff", base], { cwd: worktree.path, maxBuffer: 2 * 1024 * 1024 });
@@ -46,8 +46,8 @@ export async function worktreeDiff(worktree: Worktree) {
 }
 
 /**
- * Commits the worktree added on top of the harness branch. Uncommitted work is
- * deliberately not counted: /implementation-harness:improve leaves the branch
+ * Commits the worktree added on top of the factory branch. Uncommitted work is
+ * deliberately not counted: /implementation-factory:improve leaves the branch
  * uncommitted when its own validation fails, and that state must never be
  * offered for promotion.
  */
@@ -68,7 +68,7 @@ export async function branchIsMerged(repository: string, branch: string) {
 }
 
 /**
- * No uncommitted change in the worktree. /implementation-harness:improve leaves
+ * No uncommitted change in the worktree. /implementation-factory:improve leaves
  * its branch uncommitted when its own validation fails, and that diagnosis is the
  * only copy: nothing may be removed while it is still on disk.
  */

@@ -1,9 +1,9 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
-type HarnessSnapshot = { runs: { id: string; holdsRepository: boolean }[]; queued: { id: string }[] };
+type FactorySnapshot = { runs: { id: string; holdsRepository: boolean }[]; queued: { id: string }[] };
 
 /**
- * Hands the console back empty. The harness holds several runs at once and
+ * Hands the console back empty. The factory holds several runs at once and
  * keeps a finished one on screen until it is closed, so a suite that only reset
  * "the" run left the previous test's run in the side list and, worse, holding
  * the checkout the next one wanted.
@@ -16,8 +16,8 @@ export async function resetRun(page: Page) {
     const timeout = window.setTimeout(() => { socket.close(); reject(new Error("Reset timeout")); }, 8_000);
     const finish = () => { window.clearTimeout(timeout); socket.close(); resolve(); };
     socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data) as { type: string; snapshot?: HarnessSnapshot };
-      if (message.type !== "harness" || !message.snapshot) return;
+      const message = JSON.parse(event.data) as { type: string; snapshot?: FactorySnapshot };
+      if (message.type !== "factory" || !message.snapshot) return;
       const { runs, queued } = message.snapshot;
       if (runs.length === 0 && queued.length === 0) return finish();
       for (const entry of queued) socket.send(JSON.stringify({ type: "queue.cancel", queuedId: entry.id }));
@@ -44,8 +44,8 @@ export async function startDemoRun(page: Page) {
     const timeout = window.setTimeout(() => { socket.close(); reject(new Error("demo.start timeout")); }, 4_000);
     socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "demo.start" })));
     socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data) as { type: string; snapshot?: HarnessSnapshot };
-      if (message.type === "harness" && (message.snapshot?.runs.length ?? 0) > 0) {
+      const message = JSON.parse(event.data) as { type: string; snapshot?: FactorySnapshot };
+      if (message.type === "factory" && (message.snapshot?.runs.length ?? 0) > 0) {
         window.clearTimeout(timeout);
         socket.close();
         resolve();
@@ -60,7 +60,7 @@ export async function startDemoRun(page: Page) {
  * whichever tab of the run is on screen, which the dialogue does not.
  */
 export async function expectDemoCompleted(page: Page) {
-  await expect(page).toHaveTitle("✓ Completed · Implementation Harness");
+  await expect(page).toHaveTitle("✓ Completed · Implementation Factory");
 }
 
 export async function runDemoToCompletion(page: Page) {

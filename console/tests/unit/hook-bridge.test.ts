@@ -9,7 +9,7 @@ import { spooledHooks } from "../../server/domain";
 // The transcript follower is never reached here, and its watcher ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-hook-bridge-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-hook-bridge-"));
 process.env.IMPL_DATA_DIR = storage;
 let bridge: typeof import("../../server/hook-bridge");
 let RunSession: typeof import("../../server/run-session").RunSession;
@@ -22,11 +22,11 @@ afterAll(() => rmSync(storage, { recursive: true, force: true }));
 
 const start = (id: string, agentId: string, hookId?: string) => ({
   runId: "run", ...(hookId ? { hookId } : {}),
-  payload: { hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: agentId },
+  payload: { hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: agentId },
 });
 const stop = (agentId: string, hookId?: string) => ({
   runId: "run", ...(hookId ? { hookId } : {}),
-  payload: { hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer", agent_id: agentId },
+  payload: { hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: agentId },
 });
 
 describe("hooks a session could not post", () => {
@@ -60,14 +60,14 @@ describe("hooks a session could not post", () => {
 describe("the hook emitter", () => {
   const emitter = path.resolve(__dirname, "../../../hooks/emit.mjs");
   const emit = (url: string, spool: string, payload: object) => new Promise<string>((resolve) => {
-    const child = spawn(process.execPath, [emitter], { env: { ...process.env, IMPL_HARNESS_HOOK_URL: url, IMPL_HOOK_SPOOL: spool, IMPL_RUN_ID: "run" }, stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawn(process.execPath, [emitter], { env: { ...process.env, IMPL_HOOK_URL: url, IMPL_HOOK_SPOOL: spool, IMPL_RUN_ID: "run" }, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
     child.stdout.on("data", (chunk) => { output += chunk; });
     child.on("exit", () => resolve(output));
     child.stdin.end(JSON.stringify(payload));
   });
 
-  it("should spool an event the harness could not take, and only then", async () => {
+  it("should spool an event the factory could not take, and only then", async () => {
     const spool = path.join(storage, "emit-spool.jsonl");
     const received: string[] = [];
     const server = createServer((request, response) => {

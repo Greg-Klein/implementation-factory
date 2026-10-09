@@ -6,7 +6,7 @@ import path from "node:path";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-artifacts-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-artifacts-"));
 process.env.IMPL_DATA_DIR = storage;
 
 let readArtifact: typeof import("../../server/artifacts").readArtifact;

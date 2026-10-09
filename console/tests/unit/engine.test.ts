@@ -13,9 +13,9 @@ describe("engine contract", () => {
 
   it("should build the workflow command with and without an instruction", () => {
     expect(claudeCode.command("https://gitlab.com/acme/app/-/issues/258", ""))
-      .toBe("/implementation-harness:implement https://gitlab.com/acme/app/-/issues/258");
+      .toBe("/implementation-factory:implement https://gitlab.com/acme/app/-/issues/258");
     expect(claudeCode.command("https://gitlab.com/acme/app/-/issues/258", "reste sur desktop"))
-      .toBe("/implementation-harness:implement https://gitlab.com/acme/app/-/issues/258 reste sur desktop");
+      .toBe("/implementation-factory:implement https://gitlab.com/acme/app/-/issues/258 reste sur desktop");
   });
 
   it("should keep the documents of a run inside the project", () => {
@@ -31,10 +31,10 @@ describe("engine contract", () => {
 
 describe("engine event translation", () => {
   it("should turn subagent hooks into agent events", () => {
-    expect(claudeCode.event({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" }))
-      .toEqual({ kind: "agent.start", agentId: "a1", agentName: "implementation-harness:developer" });
-    expect(claudeCode.event({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer", agent_id: "a1" }))
-      .toEqual({ kind: "agent.stop", agentId: "a1", agentName: "implementation-harness:developer" });
+    expect(claudeCode.event({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" }))
+      .toEqual({ kind: "agent.start", agentId: "a1", agentName: "implementation-factory:developer" });
+    expect(claudeCode.event({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "a1" }))
+      .toEqual({ kind: "agent.stop", agentId: "a1", agentName: "implementation-factory:developer" });
   });
 
   it("should read a stopped background task as a killed agent", () => {
@@ -81,14 +81,14 @@ describe("engine event translation", () => {
     expect(event && "questions" in event && event.questions).toHaveLength(1);
   });
 
-  it("should not raise the question again on the call the harness already answered", () => {
+  it("should not raise the question again on the call the factory already answered", () => {
     expect(claudeCode.event({
       hook_event_name: "PreToolUse", tool_name: "AskUserQuestion",
       tool_input: { questions: [{ question: "Quelle base ?", header: "Branche", options: [] }], answers: { "Quelle base ?": "develop" } },
     })).toBeUndefined();
   });
 
-  it("should ignore an event the harness has no use for", () => {
+  it("should ignore an event the factory has no use for", () => {
     expect(claudeCode.event({ hook_event_name: "SessionStart" })).toBeUndefined();
     expect(claudeCode.event({})).toBeUndefined();
   });
@@ -145,13 +145,13 @@ describe("signals the health monitor reads from Claude Code", () => {
 });
 
 describe("the pilot's session", () => {
-  const args = sessionArguments({ pluginDir: "/opt/harness", sessionName: "implementation-harness run-1", command: "/implementation-harness:implement https://gitlab.com/g/p/-/issues/1" });
+  const args = sessionArguments({ pluginDir: "/opt/factory", sessionName: "implementation-factory run-1", command: "/implementation-factory:implement https://gitlab.com/g/p/-/issues/1" });
   const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
   it("should load the plugin on Opus and end with the command", () => {
-    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(valueOf("--plugin-dir")).toBe("/opt/factory");
     expect(valueOf("--model")).toBe("opus");
-    expect(args.at(-1)).toBe("/implementation-harness:implement https://gitlab.com/g/p/-/issues/1");
+    expect(args.at(-1)).toBe("/implementation-factory:implement https://gitlab.com/g/p/-/issues/1");
   });
 
   it("should replace the user's output style with the concise one", () => {
@@ -159,22 +159,22 @@ describe("the pilot's session", () => {
   });
 });
 
-describe("a session that works on the harness", () => {
-  const args = backgroundArguments({ pluginDir: "/opt/harness", worktreeName: "self-improvement-1", sessionName: "implementation-harness rebase 1", model: "sonnet", command: "/implementation-harness:rebase abc123" });
+describe("a session that works on the factory", () => {
+  const args = backgroundArguments({ pluginDir: "/opt/factory", worktreeName: "self-improvement-1", sessionName: "implementation-factory rebase 1", model: "sonnet", command: "/implementation-factory:rebase abc123" });
   const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
   it("should run detached in its worktree, on the model it is given, and end with the command", () => {
     expect(args[0]).toBe("--background");
     expect(valueOf("--worktree")).toBe("self-improvement-1");
-    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(valueOf("--plugin-dir")).toBe("/opt/factory");
     expect(valueOf("--model")).toBe("sonnet");
     expect(valueOf("--permission-mode")).toBe("auto");
-    expect(args.at(-1)).toBe("/implementation-harness:rebase abc123");
+    expect(args.at(-1)).toBe("/implementation-factory:rebase abc123");
   });
 });
 
 describe("the headless scheduling session", () => {
-  const options = { pluginDir: "/opt/harness", inputPath: "/data/schedule/call-1/input.json", outputPath: "/data/schedule/call-1/output.json" };
+  const options = { pluginDir: "/opt/factory", inputPath: "/data/schedule/call-1/input.json", outputPath: "/data/schedule/call-1/output.json" };
   const args = scheduleArguments(options);
   const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
@@ -191,8 +191,8 @@ describe("the headless scheduling session", () => {
   });
 
   it("should load the plugin and reach the plugin and the output directory", () => {
-    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
-    expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : [])).toEqual(["/opt/harness", "/data/schedule/call-1"]);
+    expect(valueOf("--plugin-dir")).toBe("/opt/factory");
+    expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : [])).toEqual(["/opt/factory", "/data/schedule/call-1"]);
   });
 
   it("should pass the allowed tools as one argument, so the variadic flag cannot swallow the prompt", () => {
@@ -212,11 +212,11 @@ describe("the headless scheduling session", () => {
 
   it("should close the options before the prompt, which is the schedule command with its two paths", () => {
     expect(args.at(-2)).toBe("--");
-    expect(args.at(-1)).toBe("/implementation-harness:schedule /data/schedule/call-1/input.json /data/schedule/call-1/output.json");
+    expect(args.at(-1)).toBe("/implementation-factory:schedule /data/schedule/call-1/input.json /data/schedule/call-1/output.json");
   });
 
   it("should keep the plugin hooks silent: no run identifier, no hook address, no spool", () => {
-    expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HARNESS_HOOK_URL: "http://127.0.0.1:3210/api/hooks?token=x", IMPL_HOOK_SPOOL: "/data/runs/run-1/hooks-spool.jsonl" }))
+    expect(scheduleEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HOOK_URL: "http://127.0.0.1:3210/api/hooks?token=x", IMPL_HOOK_SPOOL: "/data/runs/run-1/hooks-spool.jsonl" }))
       .toEqual({ PATH: "/usr/bin" });
   });
 
@@ -228,7 +228,7 @@ describe("the headless scheduling session", () => {
 });
 
 describe("the headless improvement judge session", () => {
-  const options = { pluginDir: "/opt/harness", inputPath: "/tmp/judge/call-1/input.json", outputPath: "/tmp/judge/call-1/verdict.json", readDirectories: ["/opt/harness/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"] };
+  const options = { pluginDir: "/opt/factory", inputPath: "/tmp/judge/call-1/input.json", outputPath: "/tmp/judge/call-1/verdict.json", readDirectories: ["/opt/factory/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"] };
   const args = judgeArguments(options);
   const valueOf = (flag: string) => args[args.indexOf(flag) + 1]!;
 
@@ -241,9 +241,9 @@ describe("the headless improvement judge session", () => {
   });
 
   it("should load the checkout's plugin and reach the branch and the evidence", () => {
-    expect(valueOf("--plugin-dir")).toBe("/opt/harness");
+    expect(valueOf("--plugin-dir")).toBe("/opt/factory");
     expect(args.flatMap((arg, index) => arg === "--add-dir" ? [args[index + 1]] : []))
-      .toEqual(["/opt/harness", "/tmp/judge/call-1", "/opt/harness/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"]);
+      .toEqual(["/opt/factory", "/tmp/judge/call-1", "/opt/factory/.claude/worktrees/self-improvement-1", "/data/feedback", "/data/runs"]);
   });
 
   it("should allow reading and writing, and no command, agent or edit", () => {
@@ -252,11 +252,11 @@ describe("the headless improvement judge session", () => {
 
   it("should end with the judge command and its two paths", () => {
     expect(args.at(-2)).toBe("--");
-    expect(args.at(-1)).toBe("/implementation-harness:judge-improvement /tmp/judge/call-1/input.json /tmp/judge/call-1/verdict.json");
+    expect(args.at(-1)).toBe("/implementation-factory:judge-improvement /tmp/judge/call-1/input.json /tmp/judge/call-1/verdict.json");
   });
 
   it("should name its verdict file to the guard and drop the variables of a run or a schedule", () => {
-    expect(judgeEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HARNESS_HOOK_URL: "http://h", IMPL_HOOK_SPOOL: "/s", IMPL_SCHEDULE_OUTPUT: "/o", IMPL_JUDGE_OUTPUT: "/old" }, "/tmp/judge/call-1/verdict.json"))
+    expect(judgeEnvironment({ PATH: "/usr/bin", IMPL_RUN_ID: "run-1", IMPL_HOOK_URL: "http://h", IMPL_HOOK_SPOOL: "/s", IMPL_SCHEDULE_OUTPUT: "/o", IMPL_JUDGE_OUTPUT: "/old" }, "/tmp/judge/call-1/verdict.json"))
       .toEqual({ PATH: "/usr/bin", IMPL_JUDGE_OUTPUT: "/tmp/judge/call-1/verdict.json" });
   });
 });

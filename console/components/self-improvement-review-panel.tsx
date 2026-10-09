@@ -133,7 +133,7 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
         {review.mergesCleanly === false && (
           <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
             <WarningIcon size={12} className="mt-px shrink-0" />
-            The automatic rebase on the harness was not enough: this branch has a real conflict. To be reworked by hand.
+            The automatic rebase on the factory was not enough: this branch has a real conflict. To be reworked by hand.
           </p>
         )}
       </div>

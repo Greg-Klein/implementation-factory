@@ -6,7 +6,7 @@ import { belongsToRun, FINDING_CATEGORIES, type KeptFinding, mergeReviewFindings
 
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-findings-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-findings-"));
 process.env.IMPL_DATA_DIR = storage;
 let findings: typeof import("../../server/review-findings");
 let RunSession: typeof import("../../server/run-session").RunSession;

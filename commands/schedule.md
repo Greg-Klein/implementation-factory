@@ -26,7 +26,7 @@ Read the input file. Stop with the failure line of step 4, and write nothing, wh
 
 ## 2. Predict
 
-Invoke the `implementation-harness:ticket-scheduler` agent, under that qualified name, once for the whole batch: the edges come from comparing the tickets with each other, so splitting the batch loses them. Pass it the two paths and nothing copied from the input. It reads the tickets, searches the repository and writes the output file.
+Invoke the `implementation-factory:ticket-scheduler` agent, under that qualified name, once for the whole batch: the edges come from comparing the tickets with each other, so splitting the batch loses them. Pass it the two paths and nothing copied from the input. It reads the tickets, searches the repository and writes the output file.
 
 It is read-only, and so are you: no edit in the repository, no branch switch, no stash, no fetch, no install, no build. The output file is the only thing this session writes, and ticket content goes nowhere else.
 

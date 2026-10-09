@@ -39,9 +39,9 @@ fi
 node "$repo_root/bin/config.mjs" check --quiet || true
 
 mkdir -p "$bin_dir"
-chmod +x "$repo_root/bin/implementation-harness"
-ln -sfn "$repo_root/bin/implementation-harness" "$bin_dir/implementation-harness"
-ln -sfn "$repo_root/bin/implementation-harness" "$bin_dir/impl"
+chmod +x "$repo_root/bin/implementation-factory"
+ln -sfn "$repo_root/bin/implementation-factory" "$bin_dir/implementation-factory"
+ln -sfn "$repo_root/bin/implementation-factory" "$bin_dir/impl"
 
 printf '\nInstallation complete.\n'
 printf 'Configure: impl config\n'

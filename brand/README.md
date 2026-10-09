@@ -1,4 +1,4 @@
-# Implementation Harness brand book
+# Implementation Factory brand book
 
 This document describes the visual identity and the tone of the application: web console and icon. It describes what exists in the code. When a screen departs from it, fix the screen or update this document in the same commit, never one without the other.
 

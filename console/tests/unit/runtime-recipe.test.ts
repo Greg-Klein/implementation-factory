@@ -6,7 +6,7 @@ import { belongsToRun, runtimeRecipeStore } from "../../server/domain";
 
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-recipe-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-recipe-"));
 process.env.IMPL_DATA_DIR = storage;
 let recipes: typeof import("../../server/runtime-recipe");
 let RunSession: typeof import("../../server/run-session").RunSession;

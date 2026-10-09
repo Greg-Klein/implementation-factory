@@ -26,13 +26,13 @@ export function judgeArguments({ pluginDir, inputPath, outputPath, readDirectori
     "--permission-prompts", "none",
     "--allowedTools", JUDGE_TOOLS.join(","),
     "--output-format", "json",
-    "--", `/implementation-harness:judge-improvement ${inputPath} ${outputPath}`,
+    "--", `/implementation-factory:judge-improvement ${inputPath} ${outputPath}`,
   ];
 }
 
 /** Without the variables of a run, so the plugin hooks post nothing, and with the one that makes the guard apply the judge's rules. */
 export function judgeEnvironment<T extends Record<string, string | undefined>>(environment: T, outputPath: string): T & { IMPL_JUDGE_OUTPUT: string } {
   const cleaned: Record<string, string | undefined> = { ...environment };
-  for (const key of ["IMPL_RUN_ID", "IMPL_HARNESS_HOOK_URL", "IMPL_HOOK_SPOOL", "IMPL_SCHEDULE_OUTPUT", "IMPL_JUDGE_OUTPUT"]) delete cleaned[key];
+  for (const key of ["IMPL_RUN_ID", "IMPL_HOOK_URL", "IMPL_HOOK_SPOOL", "IMPL_SCHEDULE_OUTPUT", "IMPL_JUDGE_OUTPUT"]) delete cleaned[key];
   return { ...cleaned, IMPL_JUDGE_OUTPUT: outputPath } as T & { IMPL_JUDGE_OUTPUT: string };
 }

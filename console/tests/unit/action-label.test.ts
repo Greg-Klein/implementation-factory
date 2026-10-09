@@ -25,7 +25,7 @@ describe("what the agent is doing right now", () => {
     expect(actionLabel("Bash", "npm ci --no-audit")).toBe("Installing the dependencies");
   });
 
-  it("should read through the wrappers a command reaches the harness under", () => {
+  it("should read through the wrappers a command reaches the factory under", () => {
     // A hook of the user's own rewrites every shell call as `rtk <command>`.
     expect(actionLabel("Bash", "rtk git status")).toBe("Inspecting the repository");
     expect(actionLabel("Bash", "rtk grep actionLabel server")).toBe("Searching the code");

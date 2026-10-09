@@ -34,7 +34,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
-const scheduleCall = argv.includes("-p") ? (argv[argv.indexOf("--") + 1] ?? "").match(/^\/implementation-harness:schedule (\S+) (\S+)$/) : null;
+const scheduleCall = argv.includes("-p") ? (argv[argv.indexOf("--") + 1] ?? "").match(/^\/implementation-factory:schedule (\S+) (\S+)$/) : null;
 if (argv.includes("-p")) {
   // A prompt swallowed by a variadic flag never reaches this point as the schedule command.
   if (!scheduleCall) process.exit(2);
@@ -46,7 +46,7 @@ if (argv.includes("-p")) {
   if (process.env.FAKE_CLAUDE_INPUT_DIR) {
     try {
       appendFileSync(path.join(process.env.FAKE_CLAUDE_INPUT_DIR, "schedule-calls.jsonl"), `${JSON.stringify({
-        cwd: process.cwd(), argv, input, runId: process.env.IMPL_RUN_ID ?? null, hookUrl: process.env.IMPL_HARNESS_HOOK_URL ?? null,
+        cwd: process.cwd(), argv, input, runId: process.env.IMPL_RUN_ID ?? null, hookUrl: process.env.IMPL_HOOK_URL ?? null,
       })}\n`);
     } catch { /* the test reads what it can */ }
   }

@@ -4,7 +4,7 @@ export const demoSelfImprovementDiff = `diff --git a/agents/developer/prompts/sy
 index 3a2f1c8..b7e04d2 100644
 --- a/agents/developer/prompts/system.md
 +++ b/agents/developer/prompts/system.md
-@@ -14,6 +14,9 @@ You are the developer agent of the implementation-harness workflow.
+@@ -14,6 +14,9 @@ You are the developer agent of the implementation-factory workflow.
  ## Rules
 
  - Strictly follow the ticket's acceptance criteria.
@@ -18,7 +18,7 @@ diff --git a/agents/senior-reviewer/prompts/system.md b/agents/senior-reviewer/p
 index 9f8c3e1..c14a07f 100644
 --- a/agents/senior-reviewer/prompts/system.md
 +++ b/agents/senior-reviewer/prompts/system.md
-@@ -22,7 +22,12 @@ You are the senior reviewer of the implementation-harness workflow.
+@@ -22,7 +22,12 @@ You are the senior reviewer of the implementation-factory workflow.
  ## Validation criteria
 
  - Each acceptance criterion of the ticket is covered by a test.

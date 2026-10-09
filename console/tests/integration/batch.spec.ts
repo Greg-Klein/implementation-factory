@@ -89,11 +89,11 @@ test("should take several tickets at once, start those that conflict with nothin
   expect(calls).toHaveLength(1);
   expect(calls[0]).toMatchObject({ cwd: repository, runId: null, hookUrl: null });
   expect(calls[0]!.input).toMatchObject({ repository, tickets: [url(1), url(2), url(3)].map((issueUrl) => ({ issue_url: issueUrl })) });
-  expect(calls[0]!.argv.at(-1)).toMatch(/^\/implementation-harness:schedule \S+input\.json \S+output\.json$/);
+  expect(calls[0]!.argv.at(-1)).toMatch(/^\/implementation-factory:schedule \S+input\.json \S+output\.json$/);
 
   // The instruction went to every ticket of the batch.
   const { runs } = await snapshot(request);
-  for (const run of runs) expect((await sessionOf(run.id)).argv.at(-1)).toBe(`/implementation-harness:implement ${run.issueUrl} reste sur desktop`);
+  for (const run of runs) expect((await sessionOf(run.id)).argv.at(-1)).toBe(`/implementation-factory:implement ${run.issueUrl} reste sur desktop`);
 
   // Stacking needs the branch of the ticket it waits for: offered once that branch exists.
   await expect(queue(page).getByRole("button", { name: /^Stack / })).toHaveCount(0);

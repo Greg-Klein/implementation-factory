@@ -133,7 +133,7 @@ export type AuditEvidence = Pick<RunState, "status" | "incidents" | "acceptance"
 /**
  * What a run proved went wrong, each reason being something the console observed
  * itself. An improvement session is opened on these and on nothing else: asked to
- * find improvements in a run that went well, a session finds some, and the harness
+ * find improvements in a run that went well, a session finds some, and the factory
  * then changes after every ticket. A rework round is not a reason, it is the review
  * doing its work, and a cost counts only against a baseline (`metricsFindings`).
  */
@@ -195,9 +195,9 @@ export function isImprovementWorktree(worktreePath: string) {
 
 /**
  * The improvement worktree already in flight, out of every worktree registered
- * against the harness. One undecided branch at a time is the whole point: the
+ * against the factory. One undecided branch at a time is the whole point: the
  * loop opened eleven in a day on 7 September, four of them conflicting with each
- * other, and each rotted as the harness branch moved on. A branch nobody has
+ * other, and each rotted as the factory branch moved on. A branch nobody has
  * ruled on is also the branch the next iteration would be diagnosed against, so
  * the loop waits for a verdict instead of stacking. The automatic merge settles
  * every branch within minutes of its report, so the wait is short.
@@ -206,15 +206,15 @@ export function improvementWorktreeInFlight(worktreePaths: string[]) {
   return worktreePaths.find(isImprovementWorktree);
 }
 
-/** The report /implementation-harness:improve writes last, next to the feedback, named after its branch. */
+/** The report /implementation-factory:improve writes last, next to the feedback, named after its branch. */
 export function improvementReportName(worktreeName: string) {
   return `improvement-report-${worktreeName.slice(IMPROVEMENT_WORKTREE_PREFIX.length)}.md`;
 }
 
 /**
  * What the console says about an improvement worktree holding no commit ahead of
- * the harness. Git cannot tell an agent still reading from one that is done:
- * both leave a clean branch that is an ancestor of the harness, and the agent
+ * the factory. Git cannot tell an agent still reading from one that is done:
+ * both leave a clean branch that is an ancestor of the factory, and the agent
  * writes its diagnosis next to the feedback, never in the worktree. Reading that
  * pair as "already integrated" showed every iteration as spent from its first
  * second, and hid the ones that ended without a commit. The report is what the
@@ -513,7 +513,7 @@ function createdAddress(text: string) {
 
 /**
  * The created merge request only ever names itself in the output of the command
- * that opened it, and that output reaches the harness as a PostToolUse response
+ * that opened it, and that output reaches the factory as a PostToolUse response
  * whose shape depends on the tool. That output also quotes what the description
  * says, and a description cites other merge requests (the parent of a stacked
  * run for one): an API answer is read as the object it is, and a printed output
@@ -1616,5 +1616,5 @@ export function mergeNeedsRestart(changedPaths: string[]) {
 export function scheduleDirectory(storageRoot: string, pluginRoot: string, temporaryRoot: string, user: string) {
   const fromPlugin = path.relative(pluginRoot, storageRoot);
   const inside = fromPlugin === "" || (!fromPlugin.startsWith("..") && !path.isAbsolute(fromPlugin));
-  return inside ? path.join(temporaryRoot, `implementation-harness-${user}`, "schedule") : path.join(storageRoot, "schedule");
+  return inside ? path.join(temporaryRoot, `implementation-factory-${user}`, "schedule") : path.join(storageRoot, "schedule");
 }

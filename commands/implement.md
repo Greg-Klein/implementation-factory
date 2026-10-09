@@ -16,20 +16,20 @@ When there is one, write it verbatim at the top of `.claude/tasks/run-instructio
 
 | Ticket URL | Forge | CLI | Recipes | Delivers |
 |---|---|---|---|---|
-| `https://<host>/<group>/<project>/-/issues/<iid>` or `/-/work_items/<iid>` | GitLab | `glab` | `implementation-harness:glab-gitlab-api` | a merge request |
-| `https://<host>/<owner>/<repo>/issues/<number>`, no `/-/` | GitHub | `gh` | `implementation-harness:gh-github-api` | a pull request |
+| `https://<host>/<group>/<project>/-/issues/<iid>` or `/-/work_items/<iid>` | GitLab | `glab` | `implementation-factory:glab-gitlab-api` | a merge request |
+| `https://<host>/<owner>/<repo>/issues/<number>`, no `/-/` | GitHub | `gh` | `implementation-factory:gh-github-api` | a pull request |
 
 This document is written with GitLab's words: "merge request", "MR", `<iid>`, and the `glab` commands it quotes. **On a GitHub ticket, read "pull request", "PR" and the issue number, and take every forge command from the `gh-github-api` skill, never from the `glab` lines here.** Each place where GitHub differs in more than its commands says so. Three things keep their name on both forges, because the console reads them by it: the files `mr-description.md` and `mr-review-comment.md`, and in `workflow-state.json` the values `merge_request`, `draft_merge_request` and the field `mergeRequestUrl`, which holds the address of the pull request.
 
 Read [engineering principles](${CLAUDE_PLUGIN_ROOT}/principles/engineering.md), [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) and [investigation handoff](${CLAUDE_PLUGIN_ROOT}/contracts/context-handoff.md). These are explicit plugin references, not target-repository files or automatically inherited CLAUDE.md content.
 
-Load `implementation-harness:how` only when the behavior is unfamiliar, and `implementation-harness:why` when an unusual constraint needs historical investigation. Persist useful returned results in `.claude/tasks/investigation-context.md` with scope and source state. Pass its path for later reconciliation, not its conclusions as a reviewer's expected answer. Refresh stale source anchors before reuse.
+Load `implementation-factory:how` only when the behavior is unfamiliar, and `implementation-factory:why` when an unusual constraint needs historical investigation. Persist useful returned results in `.claude/tasks/investigation-context.md` with scope and source state. Pass its path for later reconciliation, not its conclusions as a reviewer's expected answer. Refresh stale source anchors before reuse.
 
 You are the pilot of this workflow. You own all human interaction and all git operations. You delegate the actual work to specialized agents and you never implement the ticket yourself.
 
-**Everything the user reads from you is in the workflow language, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. Read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) now: `IMPL_LANGUAGE` decides it, `fr` for French, English otherwise. Settle it before your first message and state it in every delegation. This document is in English, and when the workflow language is French a long run of tool calls pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-harness:unslop`.
+**Everything the user reads from you is in the workflow language, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. Read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) now: `IMPL_LANGUAGE` decides it, `fr` for French, English otherwise. Settle it before your first message and state it in every delegation. This document is in English, and when the workflow language is French a long run of tool calls pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-factory:unslop`.
 
-**Every agent of this workflow is invoked under its qualified name `implementation-harness:<agent>`**, never under the bare name, which an agent of the same name installed beside this plugin would win. A hook refuses the bare name. The short names used in the rest of this document are shorthand for the qualified ones.
+**Every agent of this workflow is invoked under its qualified name `implementation-factory:<agent>`**, never under the bare name, which an agent of the same name installed beside this plugin would win. A hook refuses the bare name. The short names used in the rest of this document are shorthand for the qualified ones.
 
 This run is **as autonomous as possible**. Step 2 is the only planned interruption. After it, never come back to ask for validation, an opinion or a permission: decide, act, record the decision, and report everything at the end. When something goes wrong, prefer a recovery path over stopping.
 
@@ -59,7 +59,7 @@ Always use the forge's CLI, never WebFetch, for anything on the forge. On GitLab
 glab issue view <iid> --repo <group>/<project> --comments
 ```
 
-On GitHub, load `implementation-harness:gh-github-api` and follow its "Reading a ticket": the issue with its comments, its sub-issues and parent, its dependencies and its attached images.
+On GitHub, load `implementation-factory:gh-github-api` and follow its "Reading a ticket": the issue with its comments, its sub-issues and parent, its dependencies and its attached images.
 
 Collect, from the description AND the comments:
 
@@ -89,7 +89,7 @@ When two sources say different things, resolve the conflict with the shared spec
 
 If a resource is unreachable, record it explicitly in the context file. Never silently drop it.
 
-Use `implementation-harness:clarify-spec` to audit the ticket for gaps: for every acceptance criterion, ask yourself "could I write this line of code without choosing something the ticket never chose?". List every gap in `.claude/tasks/open-questions.md`, split into:
+Use `implementation-factory:clarify-spec` to audit the ticket for gaps: for every acceptance criterion, ask yourself "could I write this line of code without choosing something the ticket never chose?". List every gap in `.claude/tasks/open-questions.md`, split into:
 
 - **Blocking**: the answer changes the code, and neither the codebase, the design, nor an existing pattern settles it. Typical cases: behaviour of an unspecified state, wording of a user facing string, data source or endpoint, sort order, pagination or limit, permissions, what happens on error, scope boundary, target of a navigation, mobile behaviour absent from the design.
 - **Non blocking**: an existing convention, a comparable screen, the Figma file or plain obviousness settles it. Write down the answer you derived and where it comes from.
@@ -128,7 +128,7 @@ You alone write `.claude/tasks/acceptance-criteria.json` using [the registry con
 
 Then, and only then, touch git:
 
-- If the working tree is dirty, do not stop and do not discard anything: `git stash push -u -m "implementation-harness-<iid>"`, note it, and mention the stash name in the final report.
+- If the working tree is dirty, do not stop and do not discard anything: `git stash push -u -m "implementation-factory-<iid>"`, note it, and mention the stash name in the final report.
 - `git checkout <base>` and `git pull`.
 
 In worktree mode, run neither of those two: no stash, no `git checkout <base>`, no `git pull`. Run `git fetch origin` and go to step 3, which creates the branch from the fetched base. The run worktree starts clean, and the uncommitted changes of the main checkout stay there, out of this run.
@@ -253,7 +253,7 @@ The implementation phase is over when every task in `planner-output.json` is acc
 
 ## Step 6 - Make the app reachable and measure the change in it
 
-For a change observable in the running app, use `implementation-harness:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
+For a change observable in the running app, use `implementation-factory:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
 
 In worktree mode, never assume the default port. Another run of the same repository, or the user's own dev server in the main checkout, may already hold it, and an app that answers there serves another checkout's code. Check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started. Build outputs (`.next`, `dist`) are not provisioned in the worktree, so a first build there is expected.
 
@@ -332,7 +332,7 @@ A design verdict `INCONCLUSIVE`, or a design review you decided to run and skipp
 
 ## Step 8 - Merge request
 
-Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-harness:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-harness:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-harness:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. When `IMPL_DELIVERY_PROJECTS` is set, give the recipe its projects (see "Repository resolution"): they change the reference and the keyword. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
+Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-factory:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-factory:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-factory:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. When `IMPL_DELIVERY_PROJECTS` is set, give the recipe its projects (see "Repository resolution"): they change the reference and the keyword. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
 
 Then, on GitLab only, set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
 
@@ -377,7 +377,7 @@ printf '{"requestId":"%s"}\n' "$REQUEST_ID" > .claude/tasks/archive-sync-request
 
 The answer lists the versions kept and any capture still missing. Report a missing one, or an answer that never came, in the final report: the evidence of this run would be lost with the directory. Without `IMPL_RUN_ID` there is no console to archive anything; skip the request.
 
-**Always clean `.claude/tasks/` before ending the run**, whatever the outcome (`READY` or `BLOCKED`) - this is not optional tidiness. Delete every working artifact this run wrote or touched, except anything the user explicitly asked to keep; never commit that directory. In worktree mode the directory is the run worktree's own `.claude/tasks/`, never the main checkout's, and the console removes the worktree only when this cleanup left it clean. Leftover files from a run are not inert: outside a run worktree `.claude/tasks/` is not scoped per ticket, so a stale `ticket-context.md`, `planner-output.json`, or `developer-report-*.md` from an earlier, unrelated run will be sitting there the next time `/implementation-harness:implement` starts, ready to be misread as belonging to the current ticket. Clean at the end of every run, successful or not, so the next one starts from an empty directory rather than inheriting debris.
+**Always clean `.claude/tasks/` before ending the run**, whatever the outcome (`READY` or `BLOCKED`) - this is not optional tidiness. Delete every working artifact this run wrote or touched, except anything the user explicitly asked to keep; never commit that directory. In worktree mode the directory is the run worktree's own `.claude/tasks/`, never the main checkout's, and the console removes the worktree only when this cleanup left it clean. Leftover files from a run are not inert: outside a run worktree `.claude/tasks/` is not scoped per ticket, so a stale `ticket-context.md`, `planner-output.json`, or `developer-report-*.md` from an earlier, unrelated run will be sitting there the next time `/implementation-factory:implement` starts, ready to be misread as belonging to the current ticket. Clean at the end of every run, successful or not, so the next one starts from an empty directory rather than inheriting debris.
 
 **Name the directory by its absolute path, spelled out, in the removal itself.** Resolve the root once (`git rev-parse --show-toplevel`, which answers the run worktree in worktree mode), then write the literal path, for example `rm -rf /abs/path/to/repo/.claude/tasks`: no `cd` chained before the `rm` in the same command, no shell variable, no relative path or relative glob. Claude Code's built-in removal check cannot resolve a relative target behind a `cd` or a variable, so it holds the run on a permission prompt nobody answers, denies it after two minutes, and the directory stays. The same check refuses to remove the shell's working directory or any of its ancestors, and a shell that `cd`ed into `.claude/tasks/` during the run is sitting exactly there. So move it out first, in a Bash call of its own (`cd /abs/path/to/repo`, the working directory carries over to the next call), and run the removal in the next call. If the check still refuses, do not work around it: put the exact command in the final report and leave it to the user.
 
@@ -402,9 +402,9 @@ The session stays open after step 10, and the user often writes again: a questio
 
 Read [evidence](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md) before producing or merging proof files, and [workflow state](${CLAUDE_PLUGIN_ROOT}/contracts/workflow-state.md) before the first transition. Every delegated producer receives these resolved reference paths, not a pasted schema.
 
-Read [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) before collecting requirements. Use `implementation-harness:clarify-spec` for source contradictions and missing decisions. An unresolved product choice is returned to the user; it is not guessed to preserve autonomy.
+Read [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) before collecting requirements. Use `implementation-factory:clarify-spec` for source contradictions and missing decisions. An unresolved product choice is returned to the user; it is not guessed to preserve autonomy.
 
-For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-review/references/read-design.md). For documented gates or runtime measurements, load `implementation-harness:collect-evidence` with only the relevant reference. A red or unexecuted check is never a pass.
+For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-review/references/read-design.md). For documented gates or runtime measurements, load `implementation-factory:collect-evidence` with only the relevant reference. A red or unexecuted check is never a pass.
 
 ---
 
@@ -445,7 +445,7 @@ In worktree mode:
 
 This section is GitLab's. On GitHub there is no status to set and nothing here applies.
 
-You choose the lifecycle transition at step 3 (`In progress`) and step 8 (`In progress - Merge request`). Use `implementation-harness:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
+You choose the lifecycle transition at step 3 (`In progress`) and step 8 (`In progress - Merge request`). Use `implementation-factory:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
 
 ---
 
@@ -483,7 +483,7 @@ You are the only one allowed to touch git, so you are the only one who can break
 
 1. `git status --short --branch` and `git rev-parse --abbrev-ref HEAD`: know where you are before you move.
 2. Confirm out loud, in one line, the branch you are on, the branch you are going to, and what happens to uncommitted changes.
-3. If uncommitted changes would be lost or carried somewhere unintended, stash them under a named stash (`implementation-harness-<iid>`) first, and verify with `git stash list` that it landed. Not in worktree mode, where nothing is ever stashed: see "Run worktree".
+3. If uncommitted changes would be lost or carried somewhere unintended, stash them under a named stash (`implementation-factory-<iid>`) first, and verify with `git stash list` that it landed. Not in worktree mode, where nothing is ever stashed: see "Run worktree".
 4. Before committing, `git diff --cached --stat` and check the staged set is exactly what you meant. Never `git add -A` blindly: never stage `.claude/tasks/`, `.env` files, lockfile churn you did not cause, or unrelated files.
 5. Before pushing, verify the remote branch: push only your feature branch, always with `-u origin <branch>` on the first push.
 

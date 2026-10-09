@@ -96,7 +96,7 @@ describe("the folder trust prompt as a pending decision", () => {
     expect(session.state.activities[0]).toMatchObject({ title: "Folder trusted in the terminal" });
   });
 
-  it("should drop the prompt by itself on the first hook, even one the harness has no event for", () => {
+  it("should drop the prompt by itself on the first hook, even one the factory has no event for", () => {
     prompt();
     processHook(session, { runId: session.id, payload: { hook_event_name: "SessionStart" } });
     expect(session.state.sessionPrompt).toBeUndefined();

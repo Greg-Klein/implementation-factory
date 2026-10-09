@@ -5,10 +5,10 @@ import type { RunSummary } from "./types";
 export type AlertCue = "attention" | "done";
 export type RunAlert = { tag: string; title: string; body: string; cue: AlertCue; runId: string };
 
-const NAME = "Implementation Harness";
+const NAME = "Implementation Factory";
 
 /**
- * A run lasts long enough to be left alone, so the harness has to call the user
+ * A run lasts long enough to be left alone, so the factory has to call the user
  * back. Only transitions raise an alert: a reconnection replays the current
  * state, and replaying it must not ring a second time.
  *
@@ -54,7 +54,7 @@ export function runAlerts(previous: RunSummary[], next: RunSummary[]): RunAlert[
 }
 
 /**
- * The tab is the only thing left of the harness once the window is behind
+ * The tab is the only thing left of the factory once the window is behind
  * another one, and it now stands for every run at once: what it has to say is
  * the most demanding state across all of them, and how many runs are in it.
  */

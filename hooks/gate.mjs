@@ -7,7 +7,7 @@ import { inWorkflow, taskDirectory } from "./guard.mjs";
 
 /**
  * The stop gate: when an agent that edits code tries to hand back, the checks
- * its edits call for are run again here, by the harness, and a failure sends
+ * its edits call for are run again here, by the factory, and a failure sends
  * the agent back once with the output. Every verdict goes to
  * `.claude/tasks/gate-log.jsonl`, which the pilot reads instead of the report.
  *
@@ -24,7 +24,7 @@ import { inWorkflow, taskDirectory } from "./guard.mjs";
  * from the state it was in when the agent started.
  */
 
-const GATED = ["implementation-harness:developer", "implementation-harness:senior-reviewer"];
+const GATED = ["implementation-factory:developer", "implementation-factory:senior-reviewer"];
 const EDITING_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 const SCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 // Prose and pipeline files: no compiler, linter or test runner reads them, so they open no package check.
@@ -52,7 +52,7 @@ export function gateDisabled(env) {
 
 /** Where one session keeps what its agents edited: outside the repository, so nothing lands in a diff or a snapshot. */
 function stateDirectory(payload, env) {
-  const base = env.IMPL_GATE_STATE_DIR || path.join(os.tmpdir(), `implementation-harness-gate-${os.userInfo().username}`);
+  const base = env.IMPL_GATE_STATE_DIR || path.join(os.tmpdir(), `implementation-factory-gate-${os.userInfo().username}`);
   const session = createHash("sha256").update(String(payload.session_id ?? payload.cwd ?? "")).digest("hex").slice(0, 16);
   return path.join(base, session);
 }
@@ -403,7 +403,7 @@ export async function gateStop(payload, env = process.env, now = Date.now()) {
     mkdirSync(directory, { recursive: true });
     writeFileSync(sentBack, "");
     return [
-      "implementation-harness stop gate. These are the results of your own checks, which the harness ran again on the files you edited. Act on them as on a command you ran yourself.",
+      "implementation-factory stop gate. These are the results of your own checks, which the factory ran again on the files you edited. Act on them as on a command you ran yourself.",
       ...failures,
       "Fix what your change caused, run the check again, then finish. A failure that is already there on the base branch, or that comes from a file outside your scope, is not yours to fix: name it in your report as non conclusive, with the path, and finish.",
     ].join("\n\n");

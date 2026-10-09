@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { issueEndpoint, ticketProjectPath, gitRemoteProjects, listSetting, permissionMode, positiveDuration } from "../../server/domain";
 
-describe("harness configuration", () => {
+describe("factory configuration", () => {
   it("should use positive durations and reject invalid overrides", () => {
     expect(positiveDuration("500", 5_000)).toBe(500);
     expect(positiveDuration("0", 5_000)).toBe(5_000);

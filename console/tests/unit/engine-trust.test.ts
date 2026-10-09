@@ -34,7 +34,7 @@ function start(cwd: string) {
   let output = "";
   let exitCode: number | undefined;
   live = claudeCode.start({
-    cwd, sessionLabel: "engine-trust", runId: "engine-trust", command: "/implementation-harness:implement https://gitlab.com/group/repo/-/issues/1", pluginDir: root,
+    cwd, sessionLabel: "engine-trust", runId: "engine-trust", command: "/implementation-factory:implement https://gitlab.com/group/repo/-/issues/1", pluginDir: root,
     hookUrl: "http://127.0.0.1:9/api/hooks?token=none", hookSpool: path.join(root, "spool.jsonl"),
     onData: (data) => { output += data; }, onExit: (code) => { exitCode = code; }, onEvent: (event) => events.push(event),
   });

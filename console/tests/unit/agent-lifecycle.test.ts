@@ -3,7 +3,7 @@ import { closeAbandonedAgents } from "../../server/domain";
 import { activeAgents } from "../../lib/run-state";
 import type { AgentState } from "../../server/types";
 
-const agent = (overrides: Partial<AgentState>): AgentState => ({ id: "a1", name: "implementation-harness:developer", status: "running", startedAt: "2026-09-11T06:24:46.939Z", ...overrides });
+const agent = (overrides: Partial<AgentState>): AgentState => ({ id: "a1", name: "implementation-factory:developer", status: "running", startedAt: "2026-09-11T06:24:46.939Z", ...overrides });
 
 describe("agents left behind by a finished run", () => {
   it("should close an agent that never reported its end, without inventing an outcome", () => {
@@ -24,7 +24,7 @@ describe("agents left behind by a finished run", () => {
 
   it("should close each abandoned agent of a run that ended with several in flight", () => {
     const { abandoned } = closeAbandonedAgents([agent({ id: "a1" }), agent({ id: "a2", name: "Explore" }), agent({ id: "a3", status: "completed", endedAt: "2026-09-11T06:31:41.666Z" })], "2026-09-11T07:05:40.040Z");
-    expect(abandoned.map((entry) => entry.name)).toEqual(["implementation-harness:developer", "Explore"]);
+    expect(abandoned.map((entry) => entry.name)).toEqual(["implementation-factory:developer", "Explore"]);
   });
 
   it("should stop counting an abandoned agent as active, so the console drops its live timer", () => {

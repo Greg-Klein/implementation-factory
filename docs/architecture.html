@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-<title>Implementation Harness, architecture</title>
+<title>Implementation Factory, architecture</title>
 <style>
   :root {
     --bg: #0a0b0f;
@@ -562,7 +562,7 @@ flowchart LR
     <div class="chip"><b><code>data/queue.json</code></b>The launch queue and the schedule: tickets, conflict edges and merge request watches. Written whole, then renamed.</div>
     <div class="chip"><b><code>data/repositories/&lt;checkout&gt;-&lt;digest&gt;/</code></b>Per repository: <code>runtime-recipe.md</code> (how the app is started and driven) and <code>review-findings.json</code> (the defects the reviews keep finding), both handed to the next run.</div>
     <div class="chip"><b><code>data/ticket-proposals.json</code></b>The file the outside watcher writes, read every 5 seconds, and <code>ticket-proposals-handled.json</code> for the tickets already queued or dismissed.</div>
-    <div class="chip"><b>Batch analyses</b>In <code>implementation-harness-&lt;user&gt;/schedule/</code> of the system's temporary directory, removed once read, kept with <code>session.log</code> on a failure, wiped on boot.</div>
+    <div class="chip"><b>Batch analyses</b>In <code>implementation-factory-&lt;user&gt;/schedule/</code> of the system's temporary directory, removed once read, kept with <code>session.log</code> on a failure, wiped on boot.</div>
     <div class="chip"><b><code>data/feedback/</code> and <code>data/self-improvement-decisions.jsonl</code></b>The feedback and self-audits the improvement loop reads, its plans and reports, and one line per decision of the automatic merge (merged, rejected with its reasons, reverted), with the duration and tokens of each judge session on the branch. The judge's files sit beside the batch analyses, in <code>improvement-judge/</code>, removed once read and kept on a failure.</div>
     <div class="chip warn"><b>Unreadable is not absent</b>A persisted file that cannot be read is renamed <code>*.unreadable-&lt;time&gt;</code> and reported before the console starts from nothing.</div>
   </div>
@@ -571,7 +571,7 @@ flowchart LR
 <div class="tip" id="tip" role="tooltip"></div>
 
 <footer>
-  Drawn on 9 October 2026 from the <code>implementation-harness</code> repository; every section describes the code in place. The <a href="agent-map.html">agent map</a> covers the roles, the models, the intake and scheduling of tickets, the workflow of a run and the self-improvement loop. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
+  Drawn on 9 October 2026 from the <code>implementation-factory</code> repository; every section describes the code in place. The <a href="agent-map.html">agent map</a> covers the roles, the models, the intake and scheduling of tickets, the workflow of a run and the self-improvement loop. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
 </footer>
 
 <script type="module">
@@ -662,7 +662,7 @@ flowchart LR
       page: ["Next.js page", "Interface", "Shows the runs, their terminal, the agents at work, the questions and the evidence. Holds no state of its own about a run."],
       server: ["Node server", "console/server", "Holds every run, the launch queue and the watchers. Started in the background by impl, output in server.log."],
       engine: ["server/engine", "Boundary", "Spawns claude in a PTY, reads its transcripts and translates its hooks. Nothing above it knows the agent is Claude Code."],
-      session: ["Claude Code session", "PTY", "The pilot and its agents, started on /implementation-harness:implement in the run worktree."],
+      session: ["Claude Code session", "PTY", "The pilot and its agents, started on /implementation-factory:implement in the run worktree."],
       data: ["console/data", "Files", "Runs, queue and per-repository memory. Ignored by git, holds ticket content."],
       forge: ["glab / gh", "Forge CLI", "Called by the server to read a merge request's state or a ticket's blocking links. No Claude session, no token."],
     },

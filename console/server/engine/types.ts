@@ -7,8 +7,8 @@ import type { ConversationMessage } from "../types.js";
 export type BackgroundProcess = ChildProcessByStdio<null, Readable, Readable>;
 
 /**
- * Everything the harness needs from the coding agent it drives, and nothing
- * else. The harness above this line knows about runs, phases, agents and
+ * Everything the factory needs from the coding agent it drives, and nothing
+ * else. The factory above this line knows about runs, phases, agents and
  * documents; only an implementation below it knows about a particular agent's
  * executable, its hook vocabulary and its transcript format.
  *
@@ -44,11 +44,11 @@ export type StartOptions = {
   runId: string;
   /** The workflow entry point, already built by the engine and logged by the caller. */
   command: string;
-  /** The plugin the session loads: the harness checkout itself. */
+  /** The plugin the session loads: the factory checkout itself. */
   pluginDir: string;
   /** Where the agent posts its events, secret included. */
   hookUrl: string;
-  /** The file an event goes to when posting it failed, replayed by the harness later. */
+  /** The file an event goes to when posting it failed, replayed by the factory later. */
   hookSpool: string;
   /** Variables the workflow reads, set in the agent's environment as they are. */
   environment?: Record<string, string>;
@@ -100,8 +100,8 @@ export type HeadlessUsage = {
 export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: string; usage?: HeadlessUsage }>; kill(): void };
 
 /**
- * One thing the agent reported, said in the harness's own words. Whatever
- * shape the agent uses for hooks, events or notifications reaches the harness
+ * One thing the agent reported, said in the factory's own words. Whatever
+ * shape the agent uses for hooks, events or notifications reaches the factory
  * as one of these.
  */
 export type EngineEvent =
@@ -110,7 +110,7 @@ export type EngineEvent =
   /** The agent was stopped from the outside, which reports no outcome of its own. */
   | { kind: "agent.kill"; agentId: string }
   /**
-   * What the harness reads from a tool call: the command it may recognise, and
+   * What the factory reads from a tool call: the command it may recognise, and
    * the name of the tool with a neutral `target` (a file, a pattern, an agent,
    * a host) for the interface to say what the agent is doing right now.
    * `planTaskIds`: the tasks of the plan a delegation was handed, if any.
@@ -188,7 +188,7 @@ export type Engine = {
   questionAnswer(input: Record<string, unknown>, answers: Record<string, string>): unknown;
   /**
    * Predicts, without a terminal, which tickets of a batch conflict in one
-   * repository. Reports nothing to the harness while it runs: no run owns it.
+   * repository. Reports nothing to the factory while it runs: no run owns it.
    * Undefined when the agent is not installed.
    */
   startSchedule(options: ScheduleOptions): ScheduleSession | undefined;

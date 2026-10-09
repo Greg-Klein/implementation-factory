@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { incidentWords, renderHarness, renderQuestion, renderRun, table } from "../../cli/format";
-import type { HarnessSnapshot, RunIncident, RunState, RunSummary } from "../../server/types";
+import { incidentWords, renderFactory, renderQuestion, renderRun, table } from "../../cli/format";
+import type { FactorySnapshot, RunIncident, RunState, RunSummary } from "../../server/types";
 
 const now = Date.parse("2026-10-09T08:05:00.000Z");
 const issueUrl = "https://gitlab.example.com/acme/shop/-/issues/12";
@@ -22,20 +22,20 @@ describe("the lists the command line prints", () => {
   });
 
   it("should name a run by the end of its id, its repository and ticket, its step and how long it has run", () => {
-    const snapshot: HarnessSnapshot = { runs: [summary()], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
-    const text = renderHarness(snapshot, now);
+    const snapshot: FactorySnapshot = { runs: [summary()], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
+    const text = renderFactory(snapshot, now);
     expect(text).toContain("Runs (1/3 slots taken)");
     expect(text).toMatch(/aaaa1111 {2}shop #12 {2}Running {2}4\/10 Plan {2}5m 00s/);
   });
 
   it("should say on its row that a run waits on decisions", () => {
-    const snapshot: HarnessSnapshot = { runs: [summary({ status: "attention", pendingQuestionCount: 2 })], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
-    expect(renderHarness(snapshot, now)).toContain("Your turn (2 decisions)");
+    const snapshot: FactorySnapshot = { runs: [summary({ status: "attention", pendingQuestionCount: 2 })], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
+    expect(renderFactory(snapshot, now)).toContain("Your turn (2 decisions)");
   });
 
   it("should list the queue with what each launch waits for, and leave out the sections that are empty", () => {
     const queued = { id: "queued-bbbb2222", cwd: "/work/shop", repository: "/work/shop", issueUrl: "https://gitlab.example.com/acme/shop/-/issues/13", instruction: "", queuedAt: "", reason: "conflict" as const, blocking: { issueUrl } };
-    const text = renderHarness({ runs: [], queued: [queued], maxConcurrentRuns: 3, archived: [], proposals: [] }, now);
+    const text = renderFactory({ runs: [], queued: [queued], maxConcurrentRuns: 3, archived: [], proposals: [] }, now);
     expect(text).toContain("No run.");
     expect(text).toMatch(/bbbb2222 {2}shop #13 {2}Waiting, conflict with #12, which is running/);
     expect(text).not.toContain("Kept worktrees");
@@ -61,9 +61,9 @@ describe("a decision printed on the command line", () => {
 
 describe("one run printed in full", () => {
   it("should give the command that answers the decision it waits on, under the name the launcher was called by", () => {
-    const text = renderRun(state({ status: "attention", pendingQuestion: { id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [] }] } }), now, "harness");
+    const text = renderRun(state({ status: "attention", pendingQuestion: { id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [] }] } }), now, "factory");
     expect(text).toContain("Status      Your turn, session open");
-    expect(text).toContain("Answer: harness answer aaaa1111");
+    expect(text).toContain("Answer: factory answer aaaa1111");
   });
 
   it("should give the trust command for the folder trust dialog", () => {

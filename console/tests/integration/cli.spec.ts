@@ -5,7 +5,7 @@ import { resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
-const launcher = path.resolve(process.cwd(), "..", "bin", "implementation-harness");
+const launcher = path.resolve(process.cwd(), "..", "bin", "implementation-factory");
 
 /** One command of the launcher against the console under test, as a terminal with nobody at it runs it. */
 function impl(baseURL: string | undefined, ...args: string[]) {

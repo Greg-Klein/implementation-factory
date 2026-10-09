@@ -9,7 +9,7 @@ import { fetchIssueLinks, fetchMergeRequestStatus } from "../../server/ticket";
  * `glab` and `gh` of tests/fake-claude: the right CLI for the address, and the
  * answer of each read the way that forge writes it. No real forge is reached.
  */
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-forge-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-forge-"));
 const glabDirectory = path.join(storage, "glab");
 const ghDirectory = path.join(storage, "gh");
 const savedPath = process.env.PATH;

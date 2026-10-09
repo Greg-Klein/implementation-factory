@@ -117,7 +117,7 @@ function Improvements({ improvements }: { improvements: ImprovementMetrics }) {
               <tr>
                 <th className="py-2 pl-5 pr-2 font-medium md:pl-7">Branch</th>
                 <th className="px-2 py-2 font-medium">Decision</th>
-                <th className="px-2 py-2 text-right font-medium" title="Judge sessions on this branch: one more each time the harness or the branch moved under it">Passes</th>
+                <th className="px-2 py-2 text-right font-medium" title="Judge sessions on this branch: one more each time the factory or the branch moved under it">Passes</th>
                 <th className="px-2 py-2 text-right font-medium">Time</th>
                 <th className="px-2 py-2 text-right font-medium" title="All tokens read and written, cache included">Tokens</th>
                 <th className="py-2 pl-2 pr-5 text-right font-medium md:pr-7">Cost</th>
@@ -173,7 +173,7 @@ export function MetricsPanel() {
     <section aria-label="Run metrics" className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="border-b border-[var(--line)] px-5 py-5 md:px-7">
         <h2 className="flex items-center gap-2 text-sm font-medium"><ChartBarIcon size={15} />Metrics</h2>
-        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--muted)]">What each run used and delivered. The plan sizes and the review tier are estimates by the harness; the diff is what the ticket really took.</p>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--muted)]">What each run used and delivered. The plan sizes and the review tier are estimates by the factory; the diff is what the ticket really took.</p>
         {summary && (
           <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Figure label="Tokens" value={summary.tokens !== undefined ? formatTokens(summary.tokens) : "n/a"} help={`Median of the ${summary.runs} delivered runs, cache included`} />
@@ -192,7 +192,7 @@ export function MetricsPanel() {
             <thead className="border-b border-[var(--line)] text-[10px] text-[var(--muted)]">
               <tr>
                 <th className="py-2 pl-5 pr-2 font-medium md:pl-7">Run</th>
-                <th className="px-2 py-2 font-medium" title="Commit of the harness when the run started">Harness</th>
+                <th className="px-2 py-2 font-medium" title="Commit of the factory when the run started">Factory</th>
                 <th className="px-2 py-2 font-medium" title="Review tier chosen by the pilot, and sizes of the plan tasks">Planned</th>
                 <th className="px-2 py-2 font-medium" title="Actual size of the change: files, lines added and removed">Diff</th>
                 <th className="px-2 py-2 text-right font-medium" title="All tokens read and written, cache included">Tokens</th>
@@ -221,7 +221,7 @@ export function MetricsPanel() {
                           </span>
                         </button>
                       </td>
-                      <td className="px-2 py-2 font-mono text-[10px] text-[var(--muted)]">{run.harness?.commit ?? ""}</td>
+                      <td className="px-2 py-2 font-mono text-[10px] text-[var(--muted)]">{run.factory?.commit ?? ""}</td>
                       <td className="px-2 py-2 font-mono text-[10px]">{[run.complexity.reviewTier !== undefined ? `tier ${run.complexity.reviewTier}` : "", planSizes(run)].filter(Boolean).join(" · ")}</td>
                       <td className="whitespace-nowrap px-2 py-2 font-mono text-[10px]">{diff ? `${diff.files} f · +${diff.insertions} −${diff.deletions}` : ""}</td>
                       <td className="px-2 py-2 text-right font-mono text-[10px] text-[var(--ink)]">{run.tokens ? formatTokens(run.tokens.total.total) : ""}</td>

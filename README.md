@@ -1,10 +1,10 @@
-![Implementation Harness](docs/cover.webp)
+![Implementation Factory](docs/cover.webp)
 
-Implementation Harness is a local interface for driving Claude Code while it implements a GitLab ticket or a GitHub issue. You paste the ticket URL, the harness finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the harness queues them and holds back the ones that would touch the same code.
+Implementation Factory is a local software factory built on Claude Code: tickets go in, merge requests come out. You paste the URL of a GitLab ticket or a GitHub issue, the factory finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the factory queues them and holds back the ones that would touch the same code. You stay at the gates: it asks its questions before it plans, and the merge request waits for your review.
 
-The repository contains a Claude Code plugin whose `/implementation-harness:implement` command orchestrates the work: reading the ticket, clarification questions, planning, implementation, tests, specialised reviews and preparing the merge request. The harness is the visual layer of that command. It uses the Claude Code login already present on the machine and makes no direct call to the Anthropic API.
+The repository contains a Claude Code plugin whose `/implementation-factory:implement` command orchestrates the work: reading the ticket, clarification questions, planning, implementation, tests, specialised reviews and preparing the merge request. The console is what runs that command and makes it visible. It uses the Claude Code login already present on the machine and makes no direct call to the Anthropic API.
 
-The interface opens in the browser with the `impl` command, which serves the compiled version of the checkout. There is no desktop application. The harness runs from its own repository, so the self-improvement loop can modify the code that is running.
+The interface opens in the browser with the `impl` command, which serves the compiled version of the checkout. There is no desktop application. The factory runs from its own repository, so the self-improvement loop can modify the code that is running.
 
 The console's interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
 
@@ -35,7 +35,7 @@ QA writes its test plan to `qa-plan.md` before opening the author's reports, the
 
 The design review works without Figma. With Figma frames, it runs as soon as the change is visible in the interface. Without Figma, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design not verified" (design not verified), with the reason.
 
-See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [agent map](https://greg-klein.github.io/implementation-harness/agent-map.html) shows who does what on which model, agents, scripts and the engineer's own steps, from the intake of a ticket to the self-improvement loop. The [architecture page](https://greg-klein.github.io/implementation-harness/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both pages are served by GitHub Pages from `docs/`; from a checkout, open `docs/agent-map.html` or `docs/architecture.html` in a browser (they load their diagram library from a CDN).
+See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) shows who does what on which model, agents, scripts and the engineer's own steps, from the intake of a ticket to the self-improvement loop. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both pages are served by GitHub Pages from `docs/`; from a checkout, open `docs/agent-map.html` or `docs/architecture.html` in a browser (they load their diagram library from a CDN).
 
 ## One-command installation
 
@@ -49,7 +49,7 @@ Requirements:
 Run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-factory/main/install-remote.sh | bash
 ```
 
 The same command updates an existing installation with a `git pull --ff-only`. The installation compiles the Next.js interface, then `impl` starts that production build.
@@ -57,26 +57,26 @@ The same command updates an existing installation with a `git pull --ff-only`. T
 The installer downloads the dependencies and creates two commands in `~/.local/bin`:
 
 - `impl`, the short alias;
-- `implementation-harness`, the explicit name.
+- `implementation-factory`, the explicit name.
 
 If `~/.local/bin` is not in `PATH` yet, the installer prints the line to add to your shell configuration.
 
 ### With an agent
 
-Paste this prompt into a coding agent (Claude Code, Codex, opencode). It installs the harness and whatever it needs that is missing.
+Paste this prompt into a coding agent (Claude Code, Codex, opencode). It installs the factory and whatever it needs that is missing.
 
 ```text
-Install Implementation Harness from https://github.com/Greg-Klein/implementation-harness on this machine (macOS or Linux).
+Install Implementation Factory from https://github.com/Greg-Klein/implementation-factory on this machine (macOS or Linux).
 
-1. Read the README of the repository to know what the harness needs.
+1. Read the README of the repository to know what the factory needs.
 2. Check for Node.js 22.12 or later (`node --version`). If it is missing or older, install it with the version manager already on this machine (nvm, fnm, volta), otherwise with the package manager of this system (Homebrew on macOS).
 3. The console builds a native module (node-pty). Check for a C++ toolchain: the Xcode command line tools on macOS (`xcode-select -p`), `build-essential` and `python3` on Linux. Install what is missing.
 4. Check for Claude Code (`claude --version`). If it is missing, install it following https://docs.anthropic.com/en/docs/claude-code. Do not log in for me: tell me to run `claude` once and log in.
 5. Ask me whether my tickets are on GitLab, GitHub or both. For GitLab, check for glab (`glab --version`), install it following https://gitlab.com/gitlab-org/cli if it is missing, and run `glab auth status`. For GitHub, check for gh (`gh --version`), install it following https://cli.github.com if it is missing, and run `gh auth status`. If a CLI is not logged in, do not log in for me: tell me to run `glab auth login` or `gh auth login`.
-6. Run `curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash`.
+6. Run `curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-factory/main/install-remote.sh | bash`.
 7. Check that `impl help` answers. If the command is not found, tell me how to add `~/.local/bin` to my PATH, without editing my shell files yourself.
 
-Do not use sudo without asking me first. Do not start the harness and do not change its configuration: finish by telling me what you installed, what was already there, and that the next steps are `impl config`, then `impl demo` to look around or `impl` to start.
+Do not use sudo without asking me first. Do not start the factory and do not change its configuration: finish by telling me what you installed, what was already there, and that the next steps are `impl config`, then `impl demo` to look around or `impl` to start.
 ```
 
 ## Usage
@@ -125,7 +125,7 @@ To restart a server that is already running:
 impl restart
 ```
 
-`impl` detects a harness that is already listening and only opens the browser. After the interface is rebuilt, the running server still serves the old Next.js manifest, the stylesheets return an error and the page shows without styles. `impl restart` stops the server on the current port, waits for the port to be free and starts the compiled version again. It combines with demo mode (`impl restart demo`) and stops nothing if its argument is invalid.
+`impl` detects a factory that is already listening and only opens the browser. After the interface is rebuilt, the running server still serves the old Next.js manifest, the stylesheets return an error and the page shows without styles. `impl restart` stops the server on the current port, waits for the port to be free and starts the compiled version again. It combines with demo mode (`impl restart demo`) and stops nothing if its argument is invalid.
 
 The browser opens on <http://127.0.0.1:3210>.
 
@@ -194,7 +194,7 @@ In the console:
 
 ### Several runs in parallel
 
-The harness holds several runs at once. The left column lists them, newest first, and the selected run shows on the right. Each row gives the repository and the ticket, the step reached, what the agent is doing right now, and an orange badge when a decision is waiting for an answer. The **+** button at the top of the list goes back to the launch form without interrupting the runs in progress.
+The factory holds several runs at once. The left column lists them, newest first, and the selected run shows on the right. Each row gives the repository and the ticket, the step reached, what the agent is doing right now, and an orange badge when a decision is waiting for an answer. The **+** button at the top of the list goes back to the launch form without interrupting the runs in progress.
 
 Several tickets of the same repository can run at the same time, because each run works in its own worktree (see [One worktree per run](#one-worktree-per-run)). Two limits bound the parallelism, and batch scheduling adds a third, described below:
 
@@ -203,7 +203,7 @@ Several tickets of the same repository can run at the same time, because each ru
 
 A launch that hits either limit goes to the queue, shown under the list with the reason it waits, "ticket already running" or "every slot is taken". It starts on its own as soon as the ticket or a slot is free. The queue is saved in `queue.json`, under the [data directory](#configuration), with the schedule that holds it, and survives a restart. The requests that were only waiting for a slot start as soon as the server listens again, without anyone launching them again. The ones waiting for a merge request keep waiting for it. A cross removes a request from the queue.
 
-A run frees its slot as soon as its workflow is finished, even while its session stays open at its prompt: only working runs count against `IMPL_MAX_CONCURRENT_RUNS`. The open session still holds its ticket. The **Close the session** button closes it, and when a queued launch is waiting for that ticket, the harness closes it itself. Once the session is closed, the bin icon on its row, or the **Close** button of the view, removes the run from the list. Its documents, its conversation and its log stay archived in `runs/<id>/`, under the data directory.
+A run frees its slot as soon as its workflow is finished, even while its session stays open at its prompt: only working runs count against `IMPL_MAX_CONCURRENT_RUNS`. The open session still holds its ticket. The **Close the session** button closes it, and when a queued launch is waiting for that ticket, the factory closes it itself. Once the session is closed, the bin icon on its row, or the **Close** button of the view, removes the run from the list. Its documents, its conversation and its log stay archived in `runs/<id>/`, under the data directory.
 
 The notifications, the tab title and the tab icon cover every run at once, because the run that needs an answer is rarely the one you are looking at. Messages that concern no run in particular (a request put in the queue, an improvement rebased) show in a banner under the header.
 
@@ -219,9 +219,9 @@ A run takes a long time and does not need watching. The tab title and its icon f
 
 The speaker button in the header adds a sound to the same three moments: a two-note rise when something is expected from you, a three-note resolution when the run is over. It is **off by default** and the setting is remembered in the browser. Turning it on plays the sound at once, to check the setting without waiting for a run.
 
-The interface plays the sound at the moment the question becomes blocking. A sound requested from the model arrived early and could be forgotten. Two caveats: a browser forbids a page to play sound before an interaction, so the very first signal of a session opened without a click stays silent, and two tabs open on the harness sound twice.
+The interface plays the sound at the moment the question becomes blocking. A sound requested from the model arrived early and could be forgotten. Two caveats: a browser forbids a page to play sound before an interaction, so the very first signal of a session opened without a click stays silent, and two tabs open on the factory sound twice.
 
-The harness runs Claude Code in the worktree of the run with the plugin of this repository. No plugin file is copied to `~/.claude`.
+The factory runs Claude Code in the worktree of the run with the plugin of this repository. No plugin file is copied to `~/.claude`.
 
 ### Launch several tickets at once
 
@@ -229,11 +229,11 @@ The **Ticket** field accepts several URLs, one per line, GitLab and GitHub mixed
 
 From two tickets on, the directory field disappears: the repository of each ticket is detected from its URL, in the roots of `IMPL_SEARCH_ROOTS`. The specific instruction applies to every ticket of the batch. The button becomes **Start N tickets**.
 
-The batch is accepted or refused as a whole. If a single ticket has no checkout, nothing is queued and the banner says which one. A ticket the harness already has, queued, running or behind a merge request it watches, is left out, and the banner gives the count.
+The batch is accepted or refused as a whole. If a single ticket has no checkout, nothing is queued and the banner says which one. A ticket the factory already has, queued, running or behind a merge request it watches, is left out, and the banner gives the count.
 
 #### Batch analysis
 
-Before starting, the harness compares the tickets of one repository. To do so it opens a Claude Code session with no terminal (`claude -p`, Sonnet model) in the main checkout, on the `/implementation-harness:schedule` command. The `ticket-scheduler` agent reads each ticket with `glab` or `gh`, looks in the repository for the files the ticket would touch and links the tickets that cannot run together: those that would modify the same files, and those where one needs the result of the other. This session modifies nothing in the repository.
+Before starting, the factory compares the tickets of one repository. To do so it opens a Claude Code session with no terminal (`claude -p`, Sonnet model) in the main checkout, on the `/implementation-factory:schedule` command. The `ticket-scheduler` agent reads each ticket with `glab` or `gh`, looks in the repository for the files the ticket would touch and links the tickets that cannot run together: those that would modify the same files, and those where one needs the result of the other. This session modifies nothing in the repository.
 
 - There is one session per repository and per batch. It does not count against `IMPL_MAX_CONCURRENT_RUNS`.
 - A ticket alone in its repository, with no other known ticket to compare with, starts without analysis.
@@ -277,17 +277,17 @@ The disclosure offers two forced starts. A forced ticket still waits for a free 
 
 - The scheduling ran once on a real GitLab project: three tickets of a small test repository, with the real Claude Code. The analysis took about 30 seconds, the tickets held behind a merge request were released within seconds of the merge, and the ticket started after it contained the merged code. One trial does not measure the quality of the predictions. Never tried for real: the stacked start, the forced start from the base, and a conflict found between two tickets that were both analysed without failure. The automated tests replace `claude` and `glab` with stand-ins.
 - A prediction is an estimate made before the code is written. Two tickets judged independent can still conflict at merge time.
-- The harness does not pull tickets from GitLab by label or assignee itself: you paste the URLs, or an outside watcher finds them (next section).
+- The factory does not pull tickets from GitLab by label or assignee itself: you paste the URLs, or an outside watcher finds them (next section).
 
 ### Tickets found by a watcher
 
-The harness can show tickets found by an outside tool, for example a script that asks GitLab for a label, an assignee and a status. That tool writes the list of tickets it found to `console/data/ticket-proposals.json`, and the harness reads the file again every five seconds. The two share nothing else: either can be stopped without affecting the other, and without the file the harness works as before.
+The factory can show tickets found by an outside tool, for example a script that asks GitLab for a label, an assignee and a status. That tool writes the list of tickets it found to `console/data/ticket-proposals.json`, and the factory reads the file again every five seconds. The two share nothing else: either can be stopped without affecting the other, and without the file the factory works as before.
 
-Every new ticket of the file is queued as soon as the harness reads it, without a click. The tickets read together form one batch, so the tickets of one repository are compared before they start, and the queue holds them like pasted URLs: the slots of `IMPL_MAX_CONCURRENT_RUNS`, the conflicts and the merges still decide when each one runs. Each run costs tokens, so the watcher's filter is what decides how much the harness spends.
+Every new ticket of the file is queued as soon as the factory reads it, without a click. The tickets read together form one batch, so the tickets of one repository are compared before they start, and the queue holds them like pasted URLs: the slots of `IMPL_MAX_CONCURRENT_RUNS`, the conflicts and the merges still decide when each one runs. Each run costs tokens, so the watcher's filter is what decides how much the factory spends.
 
 The watcher can name the branch a ticket starts from with `baseBranch`, typically the feature branch of its epic. The run then cuts its branch from it and its merge request targets it, without asking. Without it, the run asks for the base when there is more than one candidate.
 
-A ticket the harness cannot launch, for example because it has no checkout under `IMPL_SEARCH_ROOTS`, stays in the left list under **From the watcher** with the reason. It is not tried again until it leaves the file or the console restarts. **Dismiss** removes it from the list.
+A ticket the factory cannot launch, for example because it has no checkout under `IMPL_SEARCH_ROOTS`, stays in the left list under **From the watcher** with the reason. It is not tried again until it leaves the file or the console restarts. **Dismiss** removes it from the list.
 
 A ticket queued or dismissed is not queued again while it stays in the file. If it leaves the file and comes back, it is queued again. A ticket already queued, running or waiting for its merge is left alone. A ticket cancelled in the queue is not queued again while it stays in the file.
 
@@ -295,7 +295,7 @@ The `IMPL_TICKET_PROPOSALS_FILE` setting names another file by its absolute path
 
 ### One worktree per run
 
-Before opening the session, the harness creates a git worktree of the project in `<project>/.claude/worktrees/<run id>`, detached at the current commit of the main checkout. Claude Code starts in that directory and does all its work there: the ticket's branch, the commits, the `.claude/tasks` directory and the development server. The main checkout is not touched. Its branch, its uncommitted changes and its stash stay as they are, and you can keep working in it during the run.
+Before opening the session, the factory creates a git worktree of the project in `<project>/.claude/worktrees/<run id>`, detached at the current commit of the main checkout. Claude Code starts in that directory and does all its work there: the ticket's branch, the commits, the `.claude/tasks` directory and the development server. The main checkout is not touched. Its branch, its uncommitted changes and its stash stay as they are, and you can keep working in it during the run.
 
 What the worktree takes from the main checkout:
 
@@ -305,11 +305,11 @@ What the worktree takes from the main checkout:
 
 The `.claude/worktrees/` directory and the links are written to the repository's `.git/info/exclude`. They do not show in `git status` and enter no commit, and the tracked `.gitignore` is not modified. Build outputs (`.next`, `dist`) are not provided, so the first build of a run is a full one. When a ticket changes the dependencies and `node_modules` is a link, the workflow first replaces it with a real install in the worktree, so it modifies neither the main checkout nor the other runs.
 
-If the worktree cannot be created, the run does not start: the harness never falls back on the main checkout. If the dependencies cannot be brought over, the run starts and the activity feed says so.
+If the worktree cannot be created, the run does not start: the factory never falls back on the main checkout. If the dependencies cannot be brought over, the run starts and the activity feed says so.
 
 Two runs of the same project may want the same port for their development server. The workflow starts its own on a free port.
 
-Once the session is closed, the harness removes the worktree itself when all these conditions hold:
+Once the session is closed, the factory removes the worktree itself when all these conditions hold:
 
 - the run is over and the workflow is not blocked;
 - the merge request exists and is not a draft;
@@ -319,13 +319,13 @@ Once the session is closed, the harness removes the worktree itself when all the
 
 The ticket's branch is never deleted, and the merge request stays.
 
-In every other case the worktree is kept, so the work can be resumed, and the activity feed gives the reason, for example "no merge request" or "unpushed changes". As soon as its session is closed, the run view offers the **Remove the worktree** button. If the worktree holds uncommitted or unpushed work, the harness says what would be lost and asks for confirmation. What is not committed is then lost, the branch and its commits stay in the repository.
+In every other case the worktree is kept, so the work can be resumed, and the activity feed gives the reason, for example "no merge request" or "unpushed changes". As soon as its session is closed, the run view offers the **Remove the worktree** button. If the worktree holds uncommitted or unpushed work, the factory says what would be lost and asks for confirmation. What is not committed is then lost, the branch and its commits stay in the repository.
 
-A run removed from the list with **Close**, or left by a stop of the console, stays reachable while its worktree is on disk: it appears in the **Kept worktrees** group of the left column, or under **Interrupted** if it also carries an open incident. On start, the harness applies the same rules to the worktrees of earlier runs: it removes the ones that meet the conditions, forgets the ones whose directory is gone and keeps the others with their reason.
+A run removed from the list with **Close**, or left by a stop of the console, stays reachable while its worktree is on disk: it appears in the **Kept worktrees** group of the left column, or under **Interrupted** if it also carries an open incident. On start, the factory applies the same rules to the worktrees of earlier runs: it removes the ones that meet the conditions, forgets the ones whose directory is gone and keeps the others with their reason.
 
 Launched without the console, the plugin works as before, directly in the checkout.
 
-When Claude Code uses `AskUserQuestion`, the harness shows the decisions in a dedicated panel: the suggested choices can fill in the answer, which stays editable in a text field before it is sent. The answer goes back to Claude Code through the waiting hook. The built-in terminal stays visible and interactive during the whole run, for free exchanges and for the commands that do not go through this panel.
+When Claude Code uses `AskUserQuestion`, the factory shows the decisions in a dedicated panel: the suggested choices can fill in the answer, which stays editable in a text field before it is sent. The answer goes back to Claude Code through the waiting hook. The built-in terminal stays visible and interactive during the whole run, for free exchanges and for the commands that do not go through this panel.
 
 ## Configuration
 
@@ -390,21 +390,21 @@ A few variables are read from the environment only and are not in `impl config`.
 | `IMPL_STOP_GATE` | `off` disables the stop gate | on |
 | `IMPL_HOOK_TOKEN` | fixes the secret the hooks present, which is otherwise drawn at each start; meant for the test suite | drawn |
 
-The installers read three more: `IMPL_BIN_DIR` (where `install.sh` links `impl`, `~/.local/bin` by default), and for `install-remote.sh`, `IMPL_INSTALL_DIR` (where the checkout goes, `~/.local/share/implementation-harness`) and `IMPL_REPOSITORY` (the repository to clone).
+The installers read three more: `IMPL_BIN_DIR` (where `install.sh` links `impl`, `~/.local/bin` by default), and for `install-remote.sh`, `IMPL_INSTALL_DIR` (where the checkout goes, `~/.local/share/implementation-factory`) and `IMPL_REPOSITORY` (the repository to clone).
 
-The runs, the queue and the feedback are kept in `console/data/`. `IMPL_ENV_FILE` and `IMPL_DATA_DIR`, set in the launch environment, choose other absolute paths, and `IMPL_PLUGIN_ROOT` names a checkout of the harness other than the one serving the console.
+The runs, the queue and the feedback are kept in `console/data/`. `IMPL_ENV_FILE` and `IMPL_DATA_DIR`, set in the launch environment, choose other absolute paths, and `IMPL_PLUGIN_ROOT` names a checkout of the factory other than the one serving the console.
 
 ### Session permissions
 
-A run has to reach its end unattended. It therefore starts with an explicit permission mode instead of the one configured on the machine that opens it. The default is `auto`, the same as the background sessions of the harness. `manual` hands control back before each tool, at the cost of a run that stops at the first question. `bypassPermissions` checks nothing any more. The `plan` mode is not offered, because it answers with a plan and never opens a merge request.
+A run has to reach its end unattended. It therefore starts with an explicit permission mode instead of the one configured on the machine that opens it. The default is `auto`, the same as the background sessions of the factory. `manual` hands control back before each tool, at the cost of a run that stops at the first question. `bypassPermissions` checks nothing any more. The `plan` mode is not offered, because it answers with a plan and never opens a merge request.
 
 ### Terminal reachable remotely
 
-A run starts with Remote Control on. The session shows its `claude.ai/code/session_…` link from the first second, and the terminal can be picked up from a phone or another machine without waiting for the harness to offer anything. The session stays tied to the account already authenticated in Claude Code and is not exposed to a third party. `IMPL_REMOTE_CONTROL=false` starts it without. The self-improvement session is never concerned, because it runs in the background and is not interactive.
+A run starts with Remote Control on. The session shows its `claude.ai/code/session_…` link from the first second, and the terminal can be picked up from a phone or another machine without waiting for the factory to offer anything. The session stays tied to the account already authenticated in Claude Code and is not exposed to a third party. `IMPL_REMOTE_CONTROL=false` starts it without. The self-improvement session is never concerned, because it runs in the background and is not interactive.
 
 ### Project detection
 
-The harness walks the search roots two levels deep, reads the `.git/config` of each directory and derives the GitLab project or the GitHub repository from it. After a ticket is pasted, the detected path fills the project field if it is empty. The field stays editable and suggests the checkouts found while you type. For a repository located elsewhere, add its parent directory to `IMPL_SEARCH_ROOTS`.
+The factory walks the search roots two levels deep, reads the `.git/config` of each directory and derives the GitLab project or the GitHub repository from it. After a ticket is pasted, the detected path fills the project field if it is empty. The field stays editable and suggests the checkouts found while you type. For a repository located elsewhere, add its parent directory to `IMPL_SEARCH_ROOTS`.
 
 ## Self-improvement loop
 
@@ -414,17 +414,17 @@ At the end of a run, the right panel lets you record concrete feedback. It is ke
 impl improve
 ```
 
-This command starts Claude Code on `/implementation-harness:improve`. It groups the pending feedback, checks the evidence of the run, creates a `self-improvement-*` branch, applies the smallest lasting improvement, runs the checks and creates a local commit. It pushes nothing and merges nothing, so the result stays inspectable and reversible.
+This command starts Claude Code on `/implementation-factory:improve`. It groups the pending feedback, checks the evidence of the run, creates a `self-improvement-*` branch, applies the smallest lasting improvement, runs the checks and creates a local commit. It pushes nothing and merges nothing, so the result stays inspectable and reversible.
 
-Its worktree is cut from the last pushed commit, and the loop never pushes. The iteration therefore begins by bringing its own branch up to the harness, with `--ff-only`, so it does not diagnose a tree that lacks the improvements already accepted. A branch that already carries a commit makes the command refuse and does not move.
+Its worktree is cut from the last pushed commit, and the loop never pushes. The iteration therefore begins by bringing its own branch up to the factory, with `--ff-only`, so it does not diagnose a tree that lacks the improvements already accepted. A branch that already carries a commit makes the command refuse and does not move.
 
 Before choosing what to fix, it also reads the `self-improvement-*` branches the user has not yet accepted or dismissed, and the worktrees in progress. When a pending branch already contains a fix, it does not implement it again and names that branch in its report. Since several iterations can run in parallel, its diagnosis and its report carry the name of its own branch, `improvement-plan-<slug>.md` and `improvement-report-<slug>.md`, so no iteration overwrites the work of another.
 
 The tickets, logs and raw feedback stay under `console/data/` and are never added to the improvement commit.
 
-The harness can also criticise itself without human feedback. At the end of each workflow, including after a failure or a manual stop, it records a self-audit covering the failures, interventions, review loops, missing documents and incomplete checks. The decision is taken once per run, and only if the run left something to analyse: a delegated agent, a document produced or an unexpected exit. A session stopped before that is dismissed, with a line in the activity feed.
+The factory can also criticise itself without human feedback. At the end of each workflow, including after a failure or a manual stop, it records a self-audit covering the failures, interventions, review loops, missing documents and incomplete checks. The decision is taken once per run, and only if the run left something to analyse: a delegated agent, a document produced or an unexpected exit. A session stopped before that is dismissed, with a line in the activity feed.
 
-Recording an audit does not open an improvement session. In autonomous mode, Claude Code processes the evidence in an isolated worktree only when the harness observed something that went wrong in the run:
+Recording an audit does not open an improvement session. In autonomous mode, Claude Code processes the evidence in an isolated worktree only when the factory observed something that went wrong in the run:
 
 - the run failed, or an incident was raised;
 - an acceptance criterion ended failed or blocked, or QA declared a pass over a criterion it did not observe;
@@ -444,36 +444,36 @@ It starts the analysis in the background at the end of such a run. The option is
 
 The agent works in an isolated worktree and always leaves its commit on its `self-improvement-*` branch. Nothing is pushed to GitHub. The console decides on its own whether the branch is merged (see [Automatic merge](#automatic-merge)); there is no review step. A refused branch is discarded and its feedback tried again. A merge lands in the checkout that serves the console. Each new session reads the commands, agents, skills and hooks again, so they apply from the next run, with no restart. When the merge touches `console/` or `bin/`, the console rebuilds and restarts itself as soon as no run is working.
 
-**One improvement is in progress at a time.** While a `self-improvement-*` worktree exists, the end of a run does not open a second one. The automatic merge settles each branch within minutes of its report. The activity feed names the one that blocks and the self-audit stays in `pending/`, where the next iteration will read it. The harness destroys nothing to free the slot: the automatic merge frees it once the branch is merged or rejected. The rule comes from a measurement: the loop opened eleven branches in one day, four of them in conflict with each other, and none was promoted. They were all reworked by hand. A branch nobody has decided on is also the one the next branch diagnoses itself against.
+**One improvement is in progress at a time.** While a `self-improvement-*` worktree exists, the end of a run does not open a second one. The automatic merge settles each branch within minutes of its report. The activity feed names the one that blocks and the self-audit stays in `pending/`, where the next iteration will read it. The factory destroys nothing to free the slot: the automatic merge frees it once the branch is merged or rejected. The rule comes from a measurement: the loop opened eleven branches in one day, four of them in conflict with each other, and none was promoted. They were all reworked by hand. A branch nobody has decided on is also the one the next branch diagnoses itself against.
 
-A branch is decided only once its agent wrote its report and an improvement commit is on it. The launcher returns as soon as the work detaches, so its exit code only tells about the start. For its part, `/implementation-harness:improve` leaves its branch uncommitted when its own validation fails, a state that is never merged: the automatic merge rejects it and keeps its change as a patch beside the report.
+A branch is decided only once its agent wrote its report and an improvement commit is on it. The launcher returns as soon as the work detaches, so its exit code only tells about the start. For its part, `/implementation-factory:improve` leaves its branch uncommitted when its own validation fails, a state that is never merged: the automatic merge rejects it and keeps its change as a patch beside the report.
 
 ### Automatic merge
 
 The console checks every minute for improvement branches whose agent is done (its report is written) and whose worktree is clean. A branch with no commit is removed, its report stays beside the feedback. A branch with commits goes through three locks, in this order, and is merged only when all three agree:
 
-1. **Mechanical rules** (`console/server/auto-merge-policy.ts`). The branch is replayed on the harness by git alone, and is rejected when it touches a protected file (the guard and the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the plugin manifest, the CI), deletes or skips a test, or exceeds 15 files or 400 changed lines.
+1. **Mechanical rules** (`console/server/auto-merge-policy.ts`). The branch is replayed on the factory by git alone, and is rejected when it touches a protected file (the guard and the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the plugin manifest, the CI), deletes or skips a test, or exceeds 15 files or 400 changed lines.
 2. **Checks rerun by the console** in the branch's worktree: typecheck, unit tests and build, plus the integration suite when the branch touches `console/` or `bin/`. What the improvement session says it ran is not taken on trust.
-3. **An independent judge**, a headless Opus session on `/implementation-harness:judge-improvement` (`contracts/improvement-verdict.md`). It reads the run evidence first and writes what a correct fix should change, then reads the plan, the report and the diff. It refuses a branch whose cause is not established, that treats a symptom, overfits one run, weakens a quality gate, goes beyond its plan or leaves `docs/`, `README.md` or `CLAUDE.md` stale. It can read but writes only its verdict file: the guard refuses it any command, agent or edit. It runs from its own directory and loads the checkout's plugin, so the branch cannot change the prompt or the settings that judge it.
+3. **An independent judge**, a headless Opus session on `/implementation-factory:judge-improvement` (`contracts/improvement-verdict.md`). It reads the run evidence first and writes what a correct fix should change, then reads the plan, the report and the diff. It refuses a branch whose cause is not established, that treats a symptom, overfits one run, weakens a quality gate, goes beyond its plan or leaves `docs/`, `README.md` or `CLAUDE.md` stale. It can read but writes only its verdict file: the guard refuses it any command, agent or edit. It runs from its own directory and loads the checkout's plugin, so the branch cannot change the prompt or the settings that judge it.
 
-When the harness moved during the checks, nothing is decided and the next tick starts again. A rejected branch is discarded, never handed to you: a change left uncommitted is kept as `improvement-uncommitted-<slug>.patch` beside the report, and the feedback the branch was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged one is shown for a day as "Improvements merged automatically", with its report and a "Revert" button that adds a revert commit. Every decision is a line of `<data dir>/self-improvement-decisions.jsonl`, with the duration and the tokens of each judge session on the branch. A rejection shows no notice, and the other notices of the loop close on their own after five seconds; the **Metrics** panel counts the branches merged and rejected and lists what the judge took on each one. Nothing is ever pushed.
+When the factory moved during the checks, nothing is decided and the next tick starts again. A rejected branch is discarded, never handed to you: a change left uncommitted is kept as `improvement-uncommitted-<slug>.patch` beside the report, and the feedback the branch was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged one is shown for a day as "Improvements merged automatically", with its report and a "Revert" button that adds a revert commit. Every decision is a line of `<data dir>/self-improvement-decisions.jsonl`, with the duration and the tokens of each judge session on the branch. A rejection shows no notice, and the other notices of the loop close on their own after five seconds; the **Metrics** panel counts the branches merged and rejected and lists what the judge took on each one. Nothing is ever pushed.
 
 ### Automatic rebase
 
-The improvement branches all start from the same base and are merged one after the other. The first promotion leaves all the following ones behind the harness, and the gap grows with each merge. The harness therefore replays the pending branches onto its own `HEAD` every time it moves, that is when the console starts and after each merge. A branch one commit behind almost always replays on its own; the same branch ten commits behind never does.
+The improvement branches all start from the same base and are merged one after the other. The first promotion leaves all the following ones behind the factory, and the gap grows with each merge. The factory therefore replays the pending branches onto its own `HEAD` every time it moves, that is when the console starts and after each merge. A branch one commit behind almost always replays on its own; the same branch ten commits behind never does.
 
-The harness leaves three states untouched: a branch with no commit, because an agent may still be writing there, a branch already contained in the harness, which has nothing left to replay, and a worktree with uncommitted changes, which holds the diagnosis left by a failed validation and which a rebase would take away.
+The factory leaves three states untouched: a branch with no commit, because an agent may still be writing there, a branch already contained in the factory, which has nothing left to replay, and a worktree with uncommitted changes, which holds the diagnosis left by a failed validation and which a rebase would take away.
 
-When git stops on a conflict, the harness aborts the rebase and the branch stays where it was. In autonomous mode (`IMPL_SELF_IMPROVEMENT_AUTORUN=true`), the harness then hands the rebase to a background agent started in the worktree of the branch, on `/implementation-harness:rebase`. That agent replays, resolves by keeping both intentions instead of one side, runs the checks again and merges nothing: the automatic merge then decides the replayed branch. Outside autonomous mode, the panel flags the conflict, to be handled by hand.
+When git stops on a conflict, the factory aborts the rebase and the branch stays where it was. In autonomous mode (`IMPL_SELF_IMPROVEMENT_AUTORUN=true`), the factory then hands the rebase to a background agent started in the worktree of the branch, on `/implementation-factory:rebase`. That agent replays, resolves by keeping both intentions instead of one side, runs the checks again and merges nothing: the automatic merge then decides the replayed branch. Outside autonomous mode, the panel flags the conflict, to be handled by hand.
 
-The harness announces the merge only if it moved its branch. Git answers "Already up to date" with a zero exit code, and a conflict leaves the repository half merged. In that second case, the harness aborts the merge and keeps the worktree. When git brings nothing, the harness tells apart two situations the exit code does not distinguish:
+The factory announces the merge only if it moved its branch. Git answers "Already up to date" with a zero exit code, and a conflict leaves the repository half merged. In that second case, the factory aborts the merge and keeps the worktree. When git brings nothing, the factory tells apart two situations the exit code does not distinguish:
 
-- **the commits of the branch are already contained in the harness**, because the work was redone by hand. The worktree is no longer of use. The harness removes it with its branch and logs "Improvements already present". Refusing this case left no exact way out, since "Merge" said nothing had been merged and "Dismiss" recorded as dismissed work that had in fact been kept;
+- **the commits of the branch are already contained in the factory**, because the work was redone by hand. The worktree is no longer of use. The factory removes it with its branch and logs "Improvements already present". Refusing this case left no exact way out, since "Merge" said nothing had been merged and "Dismiss" recorded as dismissed work that had in fact been kept;
 - **the branch carries no commit**, and the agent may still be writing. The worktree is kept. The cleanup happens only if the worktree also has nothing uncommitted, because the diagnosis a failed validation leaves there exists nowhere else.
 
 ## How it works
 
-Claude Code remains the engine of the workflow. The harness adds:
+Claude Code remains the engine of the workflow. The factory adds:
 
 - a run registry (`console/server/registry.ts`) that starts, queues and releases the sessions, each isolated in its `RunSession` with its state, its terminal, its file watchers and its pending question;
 - batch scheduling: an analysis session per repository predicts what each ticket would touch, the server holds back the tickets in conflict and reads the state of the awaited merge requests and pull requests with `glab` and `gh`, with no Claude session (see `console/README.md`);
@@ -487,11 +487,11 @@ Claude Code remains the engine of the workflow. The harness adds:
 
 Everything specific to Claude Code, the executable, the hook vocabulary, the transcript format, how an instruction is submitted, lives in `console/server/engine/`. The rest of the server reasons in runs, phases, agents and documents, without knowing which agent runs underneath.
 
-There is a single implementation today, `claude-code`, and that is deliberate. The boundary exists so that a second implementation means writing one file, without rewriting the server. The most specific mechanism of the harness, the question that blocks the agent until the user answers, was proven portable before this layer was written.
+There is a single implementation today, `claude-code`, and that is deliberate. The boundary exists so that a second implementation means writing one file, without rewriting the server. The most specific mechanism of the factory, the question that blocks the agent until the user answers, was proven portable before this layer was written.
 
 `console/server/engine/README.md` documents the contract member by member, the full path of a blocking question, and what stays coupled outside the server.
 
-The queue and its schedule are in `queue.json`. The files of a batch analysis are not in that directory while it sits inside the plugin, because Claude Code refuses a session any write in the directory of the plugin it loaded: they go to `implementation-harness-<user>/schedule/<id>/`, under the system's temporary directory, private to your user. With a data directory outside the plugin (`IMPL_DATA_DIR`), they stay in `schedule/<id>/`. They are deleted once the answer is read, kept after a failure for the diagnosis, and wiped on the next start.
+The queue and its schedule are in `queue.json`. The files of a batch analysis are not in that directory while it sits inside the plugin, because Claude Code refuses a session any write in the directory of the plugin it loaded: they go to `implementation-factory-<user>/schedule/<id>/`, under the system's temporary directory, private to your user. With a data directory outside the plugin (`IMPL_DATA_DIR`), they stay in `schedule/<id>/`. They are deleted once the answer is read, kept after a failure for the diagnosis, and wiped on the next start.
 
 The data of a run is archived in `runs/<run-id>/`, under the [data directory](#configuration) (`console/data/` from the repository):
 
@@ -546,8 +546,8 @@ The frontend uses Next.js, React, TypeScript, Tailwind CSS and xterm.js. The loc
 
 ```text
 agents/       Claude Code subagents
-commands/     the commands /implementation-harness:implement, /implementation-harness:review, /implementation-harness:improve, /implementation-harness:rebase and /implementation-harness:schedule
-hooks/        events sent to the local harness, the guard that refuses a few tool calls during a run, and the stop gate that checks an agent's edits when it hands back
+commands/     the commands /implementation-factory:implement, /implementation-factory:review, /implementation-factory:improve, /implementation-factory:rebase and /implementation-factory:schedule
+hooks/        events sent to the local factory, the guard that refuses a few tool calls during a run, and the stop gate that checks an agent's edits when it hands back
 bin/          the impl launcher and the impl config command
 console/      Next.js interface and PTY server
 console/cli/  the commands that drive the console from a terminal
@@ -560,7 +560,7 @@ install.sh    installation and creation of the global commands
 install-remote.sh  clone or update from the curl command
 ```
 
-`/implementation-harness:implement` uses two MCP servers. Playwright is used by the developer to measure its work in the browser, then by the design review and QA. Figma is used only if the ticket provides frames. Without Figma, the design review compares the change with the mockups attached to the ticket or with the screens already shipped. A missing MCP reduces the corresponding checks but does not prevent the harness from starting.
+`/implementation-factory:implement` uses two MCP servers. Playwright is used by the developer to measure its work in the browser, then by the design review and QA. Figma is used only if the ticket provides frames. Without Figma, the design review compares the change with the mockups attached to the ticket or with the screens already shipped. A missing MCP reduces the corresponding checks but does not prevent the factory from starting.
 
 A typical run opens several browser sessions: the developer agent measures its own work, then the design review and QA go over it again. Declaring the Playwright MCP server with `--headless` keeps a Chrome window from taking the foreground each time. It also rules out a measurement error: in windowed mode, the browser silently clips a requested viewport wider than the screen, and the measurement is reported against the requested width instead of the width obtained.
 
@@ -573,4 +573,4 @@ The only case that needs the opposite is a journey where the user has to act in 
 
 ## License
 
-Implementation Harness is distributed under the [MIT license](LICENSE). Copyright © 2026 Gregory Klein.
+Implementation Factory is distributed under the [MIT license](LICENSE). Copyright © 2026 Gregory Klein.

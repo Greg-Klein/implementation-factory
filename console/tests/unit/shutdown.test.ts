@@ -7,7 +7,7 @@ import type { RunState } from "../../server/types";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-shutdown-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-shutdown-"));
 process.env.IMPL_DATA_DIR = storage;
 
 let RunSession: typeof import("../../server/run-session").RunSession;

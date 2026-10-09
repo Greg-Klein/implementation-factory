@@ -23,4 +23,4 @@ Use `collect-evidence` only for execution mechanics after independently choosing
 
 Each finding states the violated requirement or contract, concrete trigger, expected and actual behavior, affected consumer, evidence and impact. Distinguish reproduced defects from static findings and unknowns. Do not invent findings to meet a quota; no findings is a valid outcome.
 
-Follow the caller's severity and output contract, and write findings with `implementation-harness:unslop`. Return initial review basis, findings, checks and limits. When the caller is a corrective reviewer, finish this diagnostic phase before it applies fixes under its own role. A correction requires fresh validation; it does not prove its own correctness.
+Follow the caller's severity and output contract, and write findings with `implementation-factory:unslop`. Return initial review basis, findings, checks and limits. When the caller is a corrective reviewer, finish this diagnostic phase before it applies fixes under its own role. A correction requires fresh validation; it does not prove its own correctness.

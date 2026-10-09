@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => resetRun(page));
 test("should offer a simulated feedback field once the demonstration ends", async ({ page, request }) => {
   await runDemoToCompletion(page);
 
-  const field = page.getByLabel("Improve the harness");
+  const field = page.getByLabel("Improve the factory");
   await expect(field).toBeVisible();
 
   // Les cartes de fin de run se logent dans le panneau, qui absorbe le reste en

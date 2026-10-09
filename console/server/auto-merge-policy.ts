@@ -34,7 +34,7 @@ export const PROTECTED_PATHS = [
   "console/server/auto-merge.ts",
   "console/server/auto-merge-policy.ts",
   "console/server/engine/improvement-judge.ts",
-  "bin/implementation-harness",
+  "bin/implementation-factory",
   ".claude-plugin/",
   ".github/",
 ];
@@ -123,7 +123,7 @@ export type AutoMergeDecision = {
   reasons: string[];
   branch?: string;
   mergeCommit?: string;
-  /** Every pass of the judge on the branch before this decision, one more each time the harness or the branch moved under it. */
+  /** Every pass of the judge on the branch before this decision, one more each time the factory or the branch moved under it. */
   judgements?: JudgeRun[];
 };
 

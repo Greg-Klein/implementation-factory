@@ -179,7 +179,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], repositor
   const full = holding >= maxConcurrentRuns;
 
   return (
-    <aside aria-label="Harness runs" className="flex min-h-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
+    <aside aria-label="Factory runs" className="flex min-h-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
       <div className="flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-[var(--line)] px-3.5">
         <div className="min-w-0">
           <h2 className="flex items-center gap-1.5 text-[11px] font-semibold"><StackIcon size={13} weight="bold" />Runs</h2>
@@ -218,7 +218,7 @@ export function RunRail({ runs, queued, archived = [], proposals = [], repositor
           <div className="px-3.5 py-6 text-center">
             <div className="mx-auto grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ClockCounterClockwiseIcon size={14} /></div>
             <p className="mt-2.5 text-[11px] font-medium">No run</p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Paste one or more ticket URLs. The harness runs {maxConcurrentRuns} at a time.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Paste one or more ticket URLs. The factory runs {maxConcurrentRuns} at a time.</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--line)]">

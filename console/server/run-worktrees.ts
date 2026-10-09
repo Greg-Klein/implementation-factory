@@ -149,7 +149,7 @@ export async function removeWorktreeOnRequest(session: RunSession, force: boolea
   if (worktree.state === "removed") return { outcome: "removed", message: REMOVED };
   if (runHoldsRepository(session.state)) return { outcome: "refused", message: "This run still holds its session. Stop it before removing its worktree." };
   const repository = sourceRepository(session.state);
-  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: "This path is not a worktree created by the harness. Nothing was removed." };
+  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: "This path is not a worktree created by the factory. Nothing was removed." };
   const facts = await worktreeFacts(worktree.path);
   const applied = (next: RunWorktree, title: string) => {
     session.state.worktree = next;

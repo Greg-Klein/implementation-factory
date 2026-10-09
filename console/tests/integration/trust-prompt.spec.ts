@@ -48,7 +48,7 @@ test("should show the folder trust dialog as a pending decision and continue the
   expect(worktree).toBe(path.join(realpathSync(checkout.directory), ".claude", "worktrees", runId));
   await expect(decision.getByText(worktree, { exact: true })).toBeVisible();
   // Signalled everywhere a question of the workflow is: the tab title, the badge, the row and the tab.
-  await expect(page).toHaveTitle("● Claude is waiting for an answer · Implementation Harness");
+  await expect(page).toHaveTitle("● Claude is waiting for an answer · Implementation Factory");
   await expect(page.getByLabel("Run progress").getByText("Your turn", { exact: true })).toBeVisible();
   await expect(page.getByTitle("1 pending decision")).toBeVisible();
   await page.getByRole("tab", { name: "Terminal" }).click();
@@ -68,7 +68,7 @@ test("should show the folder trust dialog as a pending decision and continue the
   expect(after).toMatchObject({ status: "running", sessionActive: true });
   expect(after.sessionPrompt).toBeUndefined();
   expect(after.activities.map((activity) => activity.title)).toContain("Folder trusted");
-  await expect(page).toHaveTitle("1 run in progress · Implementation Harness");
+  await expect(page).toHaveTitle("1 run in progress · Implementation Factory");
 });
 
 test("should end the run as stopped, with its reason, when the folder is refused", async ({ page, request }) => {
@@ -92,7 +92,7 @@ test("should end the run as stopped, with its reason, when the folder is refused
   await expect(page.getByLabel("Run progress").getByText("Stopped", { exact: true })).toBeVisible();
   await expect(page.getByText(/The folder was not trusted/)).toBeVisible();
   await expect(page.getByRole("region", { name: "Session interrupted" })).toHaveCount(0);
-  await expect(page).toHaveTitle("○ Stopped · Implementation Harness");
+  await expect(page).toHaveTitle("○ Stopped · Implementation Factory");
   // The worktree created for the run is settled like that of any stopped run: kept, with its reason, and removable from the console.
   await expect.poll(async () => (await state(request, runId)).worktree?.state).toBe("kept");
   const settled = await state(request, runId);

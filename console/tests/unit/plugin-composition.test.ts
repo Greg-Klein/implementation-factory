@@ -62,7 +62,7 @@ describe("plugin composition", () => {
     const missing = new Set<string>();
     const agentNames = new Set(markdown(path.join(root, "agents")).map((file) => `${namespace}:${metadata(file).name}`));
     for (const file of definitions) {
-      for (const match of readFileSync(file, "utf8").matchAll(/`(implementation-harness:[a-z][a-z-]*)`/g)) {
+      for (const match of readFileSync(file, "utf8").matchAll(/`(implementation-factory:[a-z][a-z-]*)`/g)) {
         if (!skills.has(match[1]!) && !agentNames.has(match[1]!)) missing.add(match[1]!);
       }
     }

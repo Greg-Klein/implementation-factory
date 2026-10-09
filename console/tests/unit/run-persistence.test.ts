@@ -39,7 +39,7 @@ describe("run archive persistence", () => {
     const { normalizeArchivedRun } = await import("../../server/run-incidents");
     const measured = {
       userWaits: [{ reason: "question", from: "2026-10-05T10:02:00.000Z", to: "2026-10-05T10:04:00.000Z" }], phaseArrivals: { 1: "2026-10-05T10:00:00.000Z" },
-      reopenings: [{ from: "2026-10-05T11:00:00.000Z" }], reviewTier: 1, harness: { version: "0.10.0", commit: "c89a860" }, baseCommit: "a50714c",
+      reopenings: [{ from: "2026-10-05T11:00:00.000Z" }], reviewTier: 1, factory: { version: "0.10.0", commit: "c89a860" }, baseCommit: "a50714c",
       baseBranch: "feat-1", ticketBaseBranch: "develop", transcriptPath: "/home/.claude/projects/p/s.jsonl",
     };
     expect(normalizeArchivedRun({ status: "running", cwd: "/w", ...measured }, "r")).toMatchObject(measured);

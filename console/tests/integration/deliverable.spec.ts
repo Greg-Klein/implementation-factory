@@ -26,19 +26,19 @@ test("should carry the state of the run into the tab title", async ({ page }) =>
   await page.goto("/?demo=1");
 
   await expect(page.getByText("Decision required")).toBeVisible();
-  await expect(page).toHaveTitle("● Claude is waiting for 2 answers · Implementation Harness");
+  await expect(page).toHaveTitle("● Claude is waiting for 2 answers · Implementation Factory");
 
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Keep critical alerts" }).click();
   await page.getByRole("button", { name: "Send to Claude" }).click();
 
   await expectDemoCompleted(page);
-  await expect(page).toHaveTitle("✓ Completed · Implementation Harness");
+  await expect(page).toHaveTitle("✓ Completed · Implementation Factory");
 });
 
 test("should leave the tab title alone while no run is going on", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("Implementation Harness");
+  await expect(page).toHaveTitle("Implementation Factory");
 });
 
 test("should show no deliverable block before a run starts", async ({ page }) => {

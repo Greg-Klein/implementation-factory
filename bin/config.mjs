@@ -10,7 +10,7 @@ import { applyEdits, readValues, renderExample, unterminatedKeys } from "./env-f
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = process.env.IMPL_ENV_FILE ?? path.join(repoRoot, ".env");
-const launcher = path.join(repoRoot, "bin", "implementation-harness");
+const launcher = path.join(repoRoot, "bin", "implementation-factory");
 const SOURCE_LABELS = { shell: "shell", file: ".env", fallback: "default" };
 
 function readEnvText() {
@@ -59,7 +59,7 @@ function missingKeys() {
 function problems() {
   const found = settings().flatMap(({ descriptor, value }) =>
     descriptor.validate(value).map((entry) => ({ ...entry, key: descriptor.key })));
-  const unknown = unknownKeys().map((key) => ({ severity: "warning", key, message: "unknown key, the harness does not read it" }));
+  const unknown = unknownKeys().map((key) => ({ severity: "warning", key, message: "unknown key, the factory does not read it" }));
   const absent = missingKeys().map((key) => ({ severity: "info", key, message: `missing from the .env, default value applied (${descriptorFor(key).fallback})` }));
   const broken = unterminatedKeys(readEnvText()).map((key) => ({ severity: "error", key, message: "unclosed quote, the line cannot be rewritten" }));
   return [...broken, ...found, ...unknown, ...absent];
@@ -148,7 +148,7 @@ function commandSet(assignment) {
   if (!persist({ [key]: value })) return 1;
   console.log(`${key} written to ${envPath}`);
   console.log(needsRestart(descriptorFor(key))
-    ? "Restart the harness to apply: impl restart"
+    ? "Restart the factory to apply: impl restart"
     : "Applied at the next start: impl");
   return 0;
 }
@@ -199,7 +199,7 @@ function hint(descriptor) {
   return "";
 }
 
-async function harnessIsListening() {
+async function factoryIsListening() {
   const url = `http://${valueOf("IMPL_HOST")}:${valueOf("IMPL_PORT")}/api/state`;
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(800) });
@@ -210,7 +210,7 @@ async function harnessIsListening() {
 }
 
 async function runAssistant() {
-  console.log(`Implementation Harness configuration\nFile: ${envPath}${existsSync(envPath) ? "" : " (it will be created)"}\n`);
+  console.log(`Implementation Factory configuration\nFile: ${envPath}${existsSync(envPath) ? "" : " (it will be created)"}\n`);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const edits = {};
   const previousPort = valueOf("IMPL_PORT");
@@ -259,8 +259,8 @@ async function runAssistant() {
   const status = commandCheck(true);
 
   if (!changed.some((key) => needsRestart(descriptorFor(key)))) return status;
-  if (!(await harnessIsListening())) {
-    console.log("Restart the harness to apply: impl restart");
+  if (!(await factoryIsListening())) {
+    console.log("Restart the factory to apply: impl restart");
     return status;
   }
   const confirm = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -273,7 +273,7 @@ async function runAssistant() {
     confirm.close();
   }
   if (!/^(o|oui|y|yes)$/.test(answer)) {
-    console.log("Restart the harness to apply: impl restart");
+    console.log("Restart the factory to apply: impl restart");
     return status;
   }
   // Stopping needs the port the running server was started with, not the new one.

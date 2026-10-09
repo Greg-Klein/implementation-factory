@@ -1,6 +1,6 @@
 ---
 name: judge-improvement
-description: "Decide whether a self-improvement branch of the harness may be merged without the user, from the run evidence, the plan and the diff, and write the verdict as JSON. Run headless by the console."
+description: "Decide whether a self-improvement branch of the factory may be merged without the user, from the run evidence, the plan and the diff, and write the verdict as JSON. Run headless by the console."
 disable-model-invocation: true
 argument-hint: <input-path> <output-path>
 model: opus

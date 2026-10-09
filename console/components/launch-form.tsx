@@ -69,7 +69,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
         />
         {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
       </div>
-      {!listOpen && value.trim().startsWith("/") && <button type="button" onClick={() => onOpenRecipe(value.trim())} title="What the harness keeps to start the application of this repository" className="mt-1.5 text-[11px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button>}
+      {!listOpen && value.trim().startsWith("/") && <button type="button" onClick={() => onOpenRecipe(value.trim())} title="What the factory keeps to start the application of this repository" className="mt-1.5 text-[11px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button>}
       {listOpen && (
         <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-[var(--raised)] p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
           {suggestions.length > 0 ? suggestions.map((repository, index) => (

@@ -3,9 +3,9 @@ import { createsBranch, phaseForAgent } from "../../server/domain";
 
 describe("workflow progress", () => {
   it("should map running agents to the phase they work on", () => {
-    expect(phaseForAgent("implementation-harness:ticket-planner")).toBe(4);
+    expect(phaseForAgent("implementation-factory:ticket-planner")).toBe(4);
     expect(phaseForAgent("developer")).toBe(5);
-    expect(phaseForAgent("implementation-harness:qa-reviewer")).toBe(6);
+    expect(phaseForAgent("implementation-factory:qa-reviewer")).toBe(6);
     expect(phaseForAgent("review-orchestrator")).toBe(6);
     expect(phaseForAgent("Explore")).toBe(0);
   });

@@ -1,6 +1,6 @@
 import { normalizeTicketUrl, ticketIdentity, ticketReference } from "../lib/ticket-urls";
 import { runLabel } from "../lib/run-state";
-import type { HarnessSnapshot, PendingQuestion, QueuedRunView, RunSummary } from "../server/types.js";
+import type { FactorySnapshot, PendingQuestion, QueuedRunView, RunSummary } from "../server/types.js";
 import { CliError } from "./client";
 
 /** The end of an id, which is what tells two runs apart and what the lists show. */
@@ -25,7 +25,7 @@ function namesId(reference: string, id: string) {
  * then the ones still at work; a reference that still names several is refused
  * with the list, never resolved to the first.
  */
-export function resolveRun(reference: string, snapshot: Pick<HarnessSnapshot, "runs" | "archived">): RunSummary {
+export function resolveRun(reference: string, snapshot: Pick<FactorySnapshot, "runs" | "archived">): RunSummary {
   const all = [...snapshot.runs, ...snapshot.archived.map((run) => ({ ...run, archived: true }))];
   const exact = all.filter((run) => run.id === reference);
   let matches = exact.length > 0 ? exact : all.filter((run) => namesId(reference, run.id));

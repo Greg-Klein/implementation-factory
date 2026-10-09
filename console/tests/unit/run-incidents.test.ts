@@ -7,7 +7,7 @@ import type { RunIncident, RunState } from "../../server/types";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-incidents-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-incidents-"));
 process.env.IMPL_DATA_DIR = storage;
 const runsDirectory = path.join(storage, "runs");
 
@@ -193,7 +193,7 @@ describe("actions on an incident", () => {
     const { session, incident } = await openedRun("run-stale");
     const submitted: string[] = [];
     const registry = registryWith(session, submitted);
-    session.state.agents = [{ id: "a1", name: "implementation-harness:developer", status: "running", startedAt: new Date(T0).toISOString() }];
+    session.state.agents = [{ id: "a1", name: "implementation-factory:developer", status: "running", startedAt: new Date(T0).toISOString() }];
     const result = await registry.incidentAction({ runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "r1", action: "request_continuation" });
     expect(result).toMatchObject({ outcome: "refused" });
     expect(result.message).toMatch(/an agent is active/);

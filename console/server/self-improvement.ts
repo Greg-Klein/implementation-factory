@@ -18,7 +18,7 @@ const auditedRuns = new Set<string>();
 export type PromotionResult = { merged: boolean; restart: boolean; mergeCommit?: string };
 
 /**
- * Merges an improvement branch into the harness, or drops it, then removes its
+ * Merges an improvement branch into the factory, or drops it, then removes its
  * worktree. The one promotion path, whether the user clicked or the automatic
  * merge decided. Restarting the console is left to the caller.
  */
@@ -35,7 +35,7 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
   let result: PromotionResult = { merged: false, restart: false };
   if (merge) {
     if (!worktree.branch) throw new Error(`The worktree "${worktreeName}" is on no branch.`);
-    // The harness may have moved since the branch was cut, by an earlier promotion
+    // The factory may have moved since the branch was cut, by an earlier promotion
     // or by hand. Replaying it here is what keeps the promise the button makes:
     // without it, a merge that conflicts is aborted and handed back to the user.
     await realignPendingImprovements();
@@ -45,7 +45,7 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
       .catch((error) => { throw new Error(`The merge of ${worktreeName} failed and was rolled back, the worktree is kept: ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
     // Git brings nothing in two cases its exit code cannot tell apart: a branch
-    // whose commits the harness already contains, and one that holds no commit at
+    // whose commits the factory already contains, and one that holds no commit at
     // all. The first is work landed by hand, and refusing to clean it up left no
     // honest way out: merging said nothing was merged, discarding recorded as
     // ignored what had in fact been kept. The second may still be an agent
@@ -76,7 +76,7 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
 const SELF_IMPROVEMENT_NOTICE_MS = 5_000;
 
 /**
- * The improvement loop belongs to the harness, not to any one run: it is read
+ * The improvement loop belongs to the factory, not to any one run: it is read
  * from the worktrees on disk and it keeps going after the run that triggered it
  * is closed. What it has to say therefore goes to every open page instead of
  * into the activity feed of a run that may no longer exist.
@@ -94,7 +94,7 @@ export async function readImprovementReport(worktreeName: string) {
  * Every self-improvement worktree, whichever run spawned it and however long ago,
  * including one the background agent has just opened and not committed to yet: the
  * console shows it as "analyzing" rather than staying silent until the first commit
- * lands. A worktree with nothing ahead of the harness whose agent has written its
+ * lands. A worktree with nothing ahead of the factory whose agent has written its
  * report is shown as "finished" instead: the agent is done and the report says why
  * it left nothing to merge.
  * Computed fresh on every call instead of watched: a timer that gives up after
@@ -141,7 +141,7 @@ function startConflictResolution(worktreeName: string, onto: string) {
 }
 
 /**
- * Replays every pending improvement branch on top of the harness as it stands now.
+ * Replays every pending improvement branch on top of the factory as it stands now.
  * Improvement branches are all cut from the same base and land one after another, so
  * the first promotion of a series leaves every branch still waiting behind the
  * checkout, and it only drifts further as the next ones land. Replaying them at every
@@ -152,7 +152,7 @@ function startConflictResolution(worktreeName: string, onto: string) {
  * Three states are left untouched on purpose: a branch without a commit is an agent
  * still writing, a branch the checkout already contains has nothing left to replay,
  * and a worktree with uncommitted work holds the diagnosis
- * /implementation-harness:improve deliberately leaves behind when its own validation
+ * /implementation-factory:improve deliberately leaves behind when its own validation
  * fails, which a rebase would take away.
  */
 export async function realignPendingImprovements() {
@@ -166,13 +166,13 @@ export async function realignPendingImprovements() {
     if (!(await worktreeIsClean(worktree).catch(() => false))) continue;
     const name = path.basename(worktree.path);
     if (await rebaseWorktree(worktree, onto).catch(() => false)) {
-      notice("info", "Improvement rebased on the harness", name);
+      notice("info", "Improvement rebased on the factory", name);
       continue;
     }
     const delegated = startConflictResolution(name, onto);
     notice("attention", delegated ? "Assisted rebase started" : "Rebase not possible",
-      delegated ? `${name} conflicts with the harness, an agent is taking it over in its worktree.`
-        : `${name} conflicts with the harness. The branch is intact, to be taken over by hand.`);
+      delegated ? `${name} conflicts with the factory, an agent is taking it over in its worktree.`
+        : `${name} conflicts with the factory. The branch is intact, to be taken over by hand.`);
   }
 }
 

@@ -9,7 +9,7 @@ import { overridden, type Overrides } from "./overrides";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = realpathSync(mkdtempSync(path.join(os.tmpdir(), "harness-run-worktrees-")));
+const storage = realpathSync(mkdtempSync(path.join(os.tmpdir(), "factory-run-worktrees-")));
 process.env.IMPL_DATA_DIR = path.join(storage, "data");
 const runsDirectory = path.join(storage, "data", "runs");
 
@@ -214,7 +214,7 @@ describe("a removal the user asks for", () => {
     expect(existsSync(worktree)).toBe(true);
   });
 
-  it("should refuse a path the harness did not create, whatever the archive claims", async () => {
+  it("should refuse a path the factory did not create, whatever the archive claims", async () => {
     const { session } = await finishedRun("run-forged", { status: "stopped" });
     session.state.worktree = { path: repository, state: "kept" };
     await expect(lifecycle.removeWorktreeOnRequest(session, true)).resolves.toMatchObject({ outcome: "refused" });

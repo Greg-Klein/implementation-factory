@@ -13,9 +13,9 @@ beforeEach(() => {
 
 describe("workflow signals from Claude Code hooks", () => {
   it("should follow the phase of the agent that starts working", () => {
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:ticket-planner", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:ticket-planner", agent_id: "a1" });
     expect(session.state.phase).toBe(4);
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a2" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a2" });
     expect(session.state.phase).toBe(5);
     hook({ hook_event_name: "SubagentStart", agent_type: "Explore", agent_id: "a3" });
     expect(session.state.phase).toBe(5);
@@ -24,7 +24,7 @@ describe("workflow signals from Claude Code hooks", () => {
   it("should stay on the step the workflow declares when an agent or a merge request points further", () => {
     session.state.phase = 5;
     session.state.workflow = { schemaVersion: 1, revision: 4, state: "waiting", step: "5", receivedAt: "2026-10-04T16:00:00.000Z" };
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:senior-reviewer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:senior-reviewer", agent_id: "a1" });
     expect(session.state.phase).toBe(5);
     expect(session.inferredPhase).toBe(6);
   });
@@ -51,7 +51,7 @@ describe("workflow signals from Claude Code hooks", () => {
   });
 
   it("should stay quiet when the session goes idle while a background agent works", () => {
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
     hook({ hook_event_name: "Stop" });
     const announced = session.state.activities.length;
     hook({ hook_event_name: "Notification", message: "Claude is waiting for your input" });
@@ -68,12 +68,12 @@ describe("workflow signals from Claude Code hooks", () => {
 
   it("should keep the run alive while a background agent works", () => {
     session.state.phase = 9;
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:senior-reviewer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:senior-reviewer", agent_id: "a1" });
     hook({ hook_event_name: "Stop" });
     expect(session.state.status).toBe("running");
     expect(session.state.phase).toBe(9);
 
-    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:senior-reviewer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:senior-reviewer", agent_id: "a1" });
     hook({ hook_event_name: "Stop" });
     expect(session.state).toMatchObject({ status: "completed", phase: 10 });
   });
@@ -107,21 +107,21 @@ describe("workflow signals from Claude Code hooks", () => {
   });
 
   it("should not announce a stop it cannot attribute to a running agent", () => {
-    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "a1" });
     expect(session.state.agents).toEqual([]);
     expect(session.state.activities).toEqual([]);
   });
 
   it("should close an agent that reported no id, by its name", () => {
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer" });
-    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer" });
+    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer" });
     expect(session.state.agents).toHaveLength(1);
-    expect(session.state.agents[0]).toMatchObject({ name: "implementation-harness:developer", status: "completed" });
+    expect(session.state.agents[0]).toMatchObject({ name: "implementation-factory:developer", status: "completed" });
   });
 
   it("should close a background agent that was killed, so the run can end", () => {
     session.state.phase = 9;
-    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
     hook({ hook_event_name: "PostToolUse", tool_name: "TaskStop", tool_input: { task_id: "a1" }, tool_response: {} });
     expect(session.state.agents[0]).toMatchObject({ id: "a1", status: "abandoned" });
     hook({ hook_event_name: "Stop" });

@@ -12,7 +12,7 @@ import { normalizeArchivedRun } from "./run-incidents.js";
 import { buildRunMetrics, diffFromNumstat, gateTimes } from "./run-metrics.js";
 import type { RunSession } from "./run-session.js";
 import { fetchMergeRequestTarget } from "./ticket.js";
-import type { HarnessVersion, RunDiff, RunMetrics, RunState } from "./types.js";
+import type { FactoryVersion, RunDiff, RunMetrics, RunState } from "./types.js";
 
 const exec = promisify(execFile);
 
@@ -22,8 +22,8 @@ export const GATE_LOG_FILE = "gate-log.jsonl";
 /** Reading every transcript of a run again is cheap, not free: the live figure moves at most this often. */
 const USAGE_REFRESH_MS = 5_000;
 
-/** The harness as it stands when a run starts: what a later comparison between two versions is keyed on. */
-export async function harnessVersion(root = pluginRoot): Promise<HarnessVersion> {
+/** The factory as it stands when a run starts: what a later comparison between two versions is keyed on. */
+export async function factoryVersion(root = pluginRoot): Promise<FactoryVersion> {
   const version = await readFile(path.join(root, "console", "package.json"), "utf8").then((content) => (JSON.parse(content) as { version?: unknown }).version).catch(() => undefined);
   const commit = await exec("git", ["-C", root, "rev-parse", "--short", "HEAD"]).then((result) => result.stdout.trim()).catch(() => undefined);
   return { ...(typeof version === "string" ? { version } : {}), ...(commit ? { commit } : {}) };
@@ -130,7 +130,9 @@ export async function storedMetrics(runsDirectory = dataRoot): Promise<RunMetric
   const runIds = await readdir(runsDirectory).catch(() => [] as string[]);
   const all = await Promise.all(runIds.map(async (runId) => {
     try {
-      const metrics = JSON.parse(await readFile(path.join(runsDirectory, runId, METRICS_FILE), "utf8")) as RunMetrics;
+      // Figures written before the rename carry the version under `harness`.
+      const { harness, ...stored } = JSON.parse(await readFile(path.join(runsDirectory, runId, METRICS_FILE), "utf8")) as RunMetrics & { harness?: FactoryVersion };
+      const metrics: RunMetrics = harness && !stored.factory ? { ...stored, factory: harness } : stored;
       return metrics?.schemaVersion === 1 && metrics.runId ? [metrics] : [];
     } catch { return []; }
   }));

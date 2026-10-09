@@ -111,7 +111,7 @@ test("should flag the answer to an instruction that lands while another tab is r
 
   // The composer sits in the Conversation tab: the instruction comes from another window.
   const run = await currentRun(request);
-  await sendAndWait(page, { type: "instruction.send", runId: run.id, text: "reste sur desktop" }, "harness");
+  await sendAndWait(page, { type: "instruction.send", runId: run.id, text: "reste sur desktop" }, "factory");
   await expect(badge).toBeVisible();
 
   await page.getByRole("tab", { name: "Conversation" }).click();

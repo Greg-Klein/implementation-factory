@@ -112,7 +112,7 @@ describe("uncommitted work in an improvement worktree", () => {
     await expect(worktreeIsClean({ path: worktreePath, branch: "improvement" })).resolves.toBe(true);
   });
 
-  // The state /implementation-harness:improve deliberately leaves behind when its
+  // The state /implementation-factory:improve deliberately leaves behind when its
   // own validation fails: the diagnosis exists nowhere else.
   it("should report a worktree holding an uncommitted diagnosis as dirty", async () => {
     writeFileSync(path.join(worktreePath, "fix.ts"), "export const halfDone = true;\n");
@@ -150,7 +150,7 @@ describe("simulating the promotion before the buttons open", () => {
 
 // What unblocks a queue of improvements: they are all cut from the same base, so the
 // first promotion leaves every branch behind it standing on a checkout that moved.
-describe("replaying an improvement branch on top of the harness", () => {
+describe("replaying an improvement branch on top of the factory", () => {
   let worktreePath: string;
 
   function inWorktree(...args: string[]) {
@@ -165,7 +165,7 @@ describe("replaying an improvement branch on top of the harness", () => {
     inWorktree("commit", "-m", "fix: something");
   });
 
-  it("should put a branch the harness outran back on top of it", async () => {
+  it("should put a branch the factory outran back on top of it", async () => {
     commit("CHANGELOG.md", "main moved on\n", "main edit");
     const onto = await headCommit(repository);
     await expect(branchIsRebasedOn(repository, "improvement", onto)).resolves.toBe(false);

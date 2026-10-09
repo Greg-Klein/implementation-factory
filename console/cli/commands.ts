@@ -4,10 +4,10 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import { acceptanceUrl, artifactUrl, generatedDocuments, runLabel } from "../lib/run-state";
 import { normalizeTicketUrl, parseTicketUrls, ticketReference } from "../lib/ticket-urls";
 import type { ImprovementMetrics } from "../lib/types";
-import type { AcceptanceView, HarnessSnapshot, IncidentAction, RunMetrics, RunState, RunSummary } from "../server/types.js";
+import type { AcceptanceView, FactorySnapshot, IncidentAction, RunMetrics, RunState, RunSummary } from "../server/types.js";
 import { answerOf, CliError, connect, getJson, type Link } from "./client";
-import { follow, askQuestions, attach, watchHarness } from "./live";
-import { incidentWords, renderEvidence, renderHarness, renderMetrics, renderProposals, renderQuestion, renderQueue, renderRun, renderSessionPrompt, table } from "./format";
+import { follow, askQuestions, attach, watchFactory } from "./live";
+import { incidentWords, renderEvidence, renderFactory, renderMetrics, renderProposals, renderQuestion, renderQueue, renderRun, renderSessionPrompt, table } from "./format";
 import { answersFromInputs, resolveQueued, resolveRun, shortId } from "./select";
 
 /** Exit code of a command that was not written the way it is used. */
@@ -30,15 +30,15 @@ function json(context: Context, value: unknown) {
   context.print(JSON.stringify(value, null, 2));
 }
 
-async function harness(context: Context) {
-  const snapshot = await getJson(context.base, "/api/runs") as Partial<HarnessSnapshot> | null;
+async function factory(context: Context) {
+  const snapshot = await getJson(context.base, "/api/runs") as Partial<FactorySnapshot> | null;
   if (!snapshot || !Array.isArray(snapshot.runs) || !Array.isArray(snapshot.queued)) throw new CliError(`${context.base} does not answer like the console.`);
-  return { runs: snapshot.runs, queued: snapshot.queued, maxConcurrentRuns: snapshot.maxConcurrentRuns ?? 0, archived: snapshot.archived ?? [], proposals: snapshot.proposals ?? [] } satisfies HarnessSnapshot;
+  return { runs: snapshot.runs, queued: snapshot.queued, maxConcurrentRuns: snapshot.maxConcurrentRuns ?? 0, archived: snapshot.archived ?? [], proposals: snapshot.proposals ?? [] } satisfies FactorySnapshot;
 }
 
 /** A run named on the command line, with its full state: read from its archive when the console no longer holds it. */
 async function runNamed(context: Context, reference: string | undefined) {
-  const summary = resolveRun(required(reference, "the run"), await harness(context));
+  const summary = resolveRun(required(reference, "the run"), await factory(context));
   const { state } = await getJson(context.base, `/api/${summary.archived ? "archive/" : ""}runs/${encodeURIComponent(summary.id)}`) as { state: RunState };
   return { summary, state };
 }
@@ -116,8 +116,8 @@ const JSON_OPTION = { json: { type: "boolean" } } satisfies Options;
 
 async function runs(context: Context, argv: string[]) {
   const { values } = parse(argv, JSON_OPTION);
-  const snapshot = await harness(context);
-  if (values.json) json(context, snapshot); else context.print(renderHarness(snapshot, Date.now()));
+  const snapshot = await factory(context);
+  if (values.json) json(context, snapshot); else context.print(renderFactory(snapshot, Date.now()));
   return 0;
 }
 
@@ -132,7 +132,7 @@ async function watch(context: Context, argv: string[]) {
   const { positionals } = parse(argv, {});
   const link = await connect(context.base);
   try {
-    if (!positionals[0]) return await watchHarness(context, link);
+    if (!positionals[0]) return await watchFactory(context, link);
     const summary = resolveRun(positionals[0], link.snapshot());
     if (summary.archived) throw new CliError(`This run is read from its archive and no longer moves. Read it: ${context.program} show ${shortId(summary.id)}`);
     return await follow(context, link, summary.id);
@@ -189,7 +189,7 @@ function onRun(build: (run: RunSummary, rest: string[]) => Parameters<Link["requ
   return async (context: Context, argv: string[]) => {
     const { positionals } = parse(argv, {});
     const [reference, ...rest] = positionals;
-    const summary = resolveRun(required(reference, "the run"), await harness(context));
+    const summary = resolveRun(required(reference, "the run"), await factory(context));
     await act(context, async (link) => { await link.request(build(summary, rest)); });
     context.print(`${runLabel(summary)}: ${done}`);
     return 0;
@@ -201,7 +201,7 @@ const QUEUE_OPTIONS = { ...JSON_OPTION, stacked: { type: "boolean" }, onto: { ty
 async function queue(context: Context, argv: string[]) {
   const { values, positionals } = parse(argv, QUEUE_OPTIONS);
   const [action, reference] = positionals;
-  const { queued } = await harness(context);
+  const { queued } = await factory(context);
   if (!action) {
     if (values.json) json(context, queued); else context.print(renderQueue(queued));
     return 0;
@@ -231,7 +231,7 @@ async function queue(context: Context, argv: string[]) {
 async function worktree(context: Context, argv: string[]) {
   const { values, positionals } = parse(argv, { force: { type: "boolean" } });
   if (positionals[0] !== "rm") throw new CliError(`Usage: ${context.program} worktree rm <run> [--force]`, USAGE);
-  const summary = resolveRun(required(positionals[1], "the run"), await harness(context));
+  const summary = resolveRun(required(positionals[1], "the run"), await factory(context));
   let code = 0;
   await act(context, async (link) => {
     const result = answerOf(await link.request({ type: "worktree.remove", runId: summary.id, ...(values.force ? { force: true } : {}) }), "worktree.result");
@@ -289,7 +289,7 @@ async function docs(context: Context, argv: string[]) {
 
 async function evidence(context: Context, argv: string[]) {
   const { values, positionals } = parse(argv, JSON_OPTION);
-  const summary = resolveRun(required(positionals[0], "the run"), await harness(context));
+  const summary = resolveRun(required(positionals[0], "the run"), await factory(context));
   const view = await getJson(context.base, acceptanceUrl(summary)) as AcceptanceView;
   if (values.json) json(context, view); else context.print(renderEvidence(view));
   return 0;
@@ -339,7 +339,7 @@ async function proposals(context: Context, argv: string[]) {
   const { values, positionals } = parse(argv, { ...JSON_OPTION, repo: { type: "string", multiple: true, short: "r" } });
   const [action, ...urls] = positionals;
   if (!action) {
-    const snapshot = await harness(context);
+    const snapshot = await factory(context);
     if (values.json) json(context, snapshot.proposals); else context.print(renderProposals(snapshot));
     return 0;
   }

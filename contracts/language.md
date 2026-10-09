@@ -22,7 +22,7 @@ Read it once, at the start (`echo "${IMPL_LANGUAGE:-en}"`), and keep it for the 
 - the strings of the product being built: they follow the ticket and the repository, not this setting
 - `acceptance-summary.md`: the console writes it, already in the workflow language. Quote it as it is
 
-Write prose with `implementation-harness:unslop` in both languages.
+Write prose with `implementation-factory:unslop` in both languages.
 
 ## Templates and fixed phrases
 

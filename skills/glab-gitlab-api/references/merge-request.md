@@ -1,4 +1,4 @@
-The caller must authorize publication and supply the source/target branches, ticket, verdict, artifacts and delivery policy. This recipe does not authorize merging or unrelated ticket updates. References to step numbers below name the Harness caller stages, not additional automatic actions.
+The caller must authorize publication and supply the source/target branches, ticket, verdict, artifacts and delivery policy. This recipe does not authorize merging or unrelated ticket updates. References to step numbers below name the Factory caller stages, not additional automatic actions.
 
 # Authorized merge request delivery
 
@@ -8,7 +8,7 @@ The templates and fixed phrases below are written in French. When the workflow l
 
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
-Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-harness:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one: the relative paths and `:fullpath` resolve from there. Never delete the local branch or remove a worktree after the push; `remove_source_branch` only concerns GitLab, at merge time.
+Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-factory:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one: the relative paths and `:fullpath` resolve from there. Never delete the local branch or remove a worktree after the push; `remove_source_branch` only concerns GitLab, at merge time.
 
 ```bash
 git push -u origin <branch>
@@ -38,7 +38,7 @@ glab api "projects/:fullpath/merge_requests/<iid>"   # read "reviewers" back
 - **The subcommand, not the REST field.** `glab api --method PUT … --field "reviewer_ids[]=<id>"` answers **HTTP 400**: that array form is not accepted here. `glab mr update --reviewer` answers `requested review from "@<username>"` and is the form that works.
 - `glab api` has no `--jq` flag, so read the field out of the JSON response rather than filtering it on the command line.
 - **Read it back, always.** The third call is not a formality. This field is in the same family as the `assignee_ids` that GitLab accepts and ignores, so a call that returns without error proves nothing. The reviewer is set when you have read the name back out of `reviewers`, and a reviewer you could not read back is reported as not set.
-- Reviewer and assignee are two different fields. Setting the first never sets the second, and the Harness delivery policy uses no assignee.
+- Reviewer and assignee are two different fields. Setting the first never sets the second, and the Factory delivery policy uses no assignee.
 
 Rules:
 
@@ -131,7 +131,7 @@ The header depends on how `glab` is logged in. A token obtained through the OAut
 
 The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
 
-Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-harness:review`:
+Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-factory:review`:
 
 ```md
 ## Pré-revue automatisée
@@ -183,7 +183,7 @@ N blocking - N non-blocking - N nitpicks - N praise
 
 Rules for this comment:
 
-- Everything in the workflow language and written with `implementation-harness:unslop`, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
+- Everything in the workflow language and written with `implementation-factory:unslop`, code findings anchored on `file:line`; design findings use visual location and frame/criterion references
 - Only what survived the loop, plus what was fixed. No speculation, no hypothetical future problems
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - `### Validation` gives project commands and their results, never how this machine had to run them (see the machine rule above)

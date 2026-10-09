@@ -7,7 +7,7 @@ import type { WebSocket } from "ws";
 // Watchers are never started here, and chokidar ships as ESM only.
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-failures-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-failures-"));
 process.env.IMPL_DATA_DIR = storage;
 const queueFile = path.join(storage, "queue.json");
 
@@ -41,9 +41,9 @@ describe("a failure nobody awaits", () => {
     failed(new Error("ENOSPC: no space left on device"));
     context.reportFailure("Run not saved in this test", "run-2")("disk gone");
     expect(logged.mock.calls.map(([line]) => line)).toEqual([
-      "[implementation-harness] Run not saved in this test (run-1): ENOSPC: no space left on device",
-      "[implementation-harness] Run not saved in this test (run-1): ENOSPC: no space left on device",
-      "[implementation-harness] Run not saved in this test (run-2): disk gone",
+      "[implementation-factory] Run not saved in this test (run-1): ENOSPC: no space left on device",
+      "[implementation-factory] Run not saved in this test (run-1): ENOSPC: no space left on device",
+      "[implementation-factory] Run not saved in this test (run-2): disk gone",
     ]);
     expect(received).toEqual([expect.objectContaining({ type: "notice", level: "attention", title: "Run not saved in this test", detail: "run-1: ENOSPC: no space left on device" })]);
   });

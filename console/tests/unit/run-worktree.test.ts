@@ -83,7 +83,7 @@ describe("creating the worktree of a run", () => {
     expect(readFileSync(path.join(repository, "app.ts"), "utf8")).toContain("42");
   });
 
-  it("should refuse a path outside the directory the harness owns", async () => {
+  it("should refuse a path outside the directory the factory owns", async () => {
     await expect(createRunWorktree(repository, path.join(root, "elsewhere"))).rejects.toThrow(/Worktree path refused/);
   });
 

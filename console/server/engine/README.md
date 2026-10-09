@@ -1,20 +1,20 @@
 # The engine layer
 
-The harness drives a coding agent. This directory is the only part of the server that knows **which one**.
+The factory drives a coding agent. This directory is the only part of the server that knows **which one**.
 
 There is one implementation today, `claude-code`. The interface exists so that a second one means writing a file, without rewriting the server.
 
 ## Why
 
-The harness is a daily work tool. If the AI provider changes, the tool has to keep working.
+The factory is a daily work tool. If the AI provider changes, the tool has to keep working.
 
 The server depended on Claude Code in only six places, all gathered here since. The main cost of a migration is in `commands/implement.md` and the six agents, written against the tool names and the subagent semantics of Claude Code. This layer handles the server and leaves those prompts as they are. See "What stays coupled" below.
 
-The most specific mechanism of the harness, the blocking question, was proven portable before this layer was written. See the spike in `~/workspace/opencode-question-bridge`.
+The most specific mechanism of the factory, the blocking question, was proven portable before this layer was written. See the spike in `~/workspace/opencode-question-bridge`.
 
 ## The boundary
 
-Above this line, the harness reasons in runs, phases, agents, documents and questions. Below it, an implementation knows an executable, an event vocabulary and a transcript format.
+Above this line, the factory reasons in runs, phases, agents, documents and questions. Below it, an implementation knows an executable, an event vocabulary and a transcript format.
 
 ```text
 index.ts, hooks.ts, artifacts.ts, transcript.ts, self-improvement.ts
@@ -59,7 +59,7 @@ The boundary has known leaks, to count in when a second engine is written:
 
 ### EngineSession
 
-What the harness does with a running session:
+What the factory does with a running session:
 
 - `write(data)`: the raw keystrokes of the built-in terminal;
 - `submit(text)`: an instruction typed in the interface, sent the way the agent expects it. Under Claude Code it is a paste between markers followed by a separate carriage return, because a carriage return **inside** the paste is read as content and the instruction is never submitted;
@@ -68,9 +68,9 @@ What the harness does with a running session:
 
 ### EngineEvent
 
-One event, said in the words of the harness. The engine translates, `hooks.ts` applies.
+One event, said in the words of the factory. The engine translates, `hooks.ts` applies.
 
-| Event | Effect in the harness |
+| Event | Effect in the factory |
 |---|---|
 | `agent.start` / `agent.stop` | updates the list of agents, moves the phase forward |
 | `agent.kill` | closes an agent stopped from outside (Claude Code emits no end for it) |
@@ -87,7 +87,7 @@ These fields are filled only when Claude Code provides them: `tool_use_id` and `
 Two details that matter in the translation:
 
 1. **The command goes through whole.** `tool.start` carries `command` untruncated, because `createsBranch` and `branchFromCommand` have to match on it. For display, it carries the name of the tool and a neutral `target`, since the input key that names it (`file_path`, `pattern`, `subagent_type`, `url`) varies from one tool to another. `actionLabel` in `domain.ts` turns it into the line "what Claude is doing right now". That label never enters the activity log, where two hundred tool calls would make the workflow's milestones unreadable.
-2. **A question already answered is not asked again.** Claude Code replays the hook on the call the harness completed itself, and that second pass carries the answers. `claude-code.ts` recognises it and produces no event.
+2. **A question already answered is not asked again.** Claude Code replays the hook on the call the factory completed itself, and that second pass carries the answers. `claude-code.ts` recognises it and produces no event.
 
 ### The blocking question
 
@@ -137,7 +137,7 @@ Step 3 takes the most work. The first two are mechanical.
 
 ## What stays coupled
 
-This layer makes the server agnostic. The rest of the harness is still tied to Claude Code:
+This layer makes the server agnostic. The rest of the factory is still tied to Claude Code:
 
 - **`commands/` and `agents/`**, about 600 lines plus six agents, written against the tool names of Claude Code. That is most of the migration cost. A possible route: one canonical source and a mapping table of tool names, generated at install time.
 - **The interface labels** in `console/lib/notifications.ts` and `console/lib/run-state.ts`, which say "Claude" in hard-coded text. The client does not know the engine; `engine.label` would have to be passed down into `RunState`.

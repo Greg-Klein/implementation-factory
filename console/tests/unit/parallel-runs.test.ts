@@ -26,7 +26,7 @@ const question = {
 
 describe("two runs driven at the same time", () => {
   it("should apply an event only to the run that emitted it", () => {
-    hook(first, { hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook(first, { hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
     expect(first.state.phase).toBe(5);
     expect(first.state.agents).toHaveLength(1);
     expect(second.state.phase).toBe(1);

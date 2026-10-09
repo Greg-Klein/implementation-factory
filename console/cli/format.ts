@@ -1,6 +1,6 @@
 import { formatDuration, formatShare, formatTokens } from "../lib/metrics";
 import { acceptanceChip, elapsedLabel, generatedDocuments, healthBadge, incidentActions, mergeRequestLabel, pendingDecisions, phaseNames, proposalLabel, queueStatus, runLabel, runStatusBadge, sourceRepository, statusLabel, worktreeLabel } from "../lib/run-state";
-import type { AcceptanceView, Activity, ConversationMessage, HarnessSnapshot, IncidentAction, PendingQuestion, QueuedRunView, RunMetrics, RunState, RunSummary, SessionPrompt } from "../server/types.js";
+import type { AcceptanceView, Activity, ConversationMessage, FactorySnapshot, IncidentAction, PendingQuestion, QueuedRunView, RunMetrics, RunState, RunSummary, SessionPrompt } from "../server/types.js";
 import { shortId } from "./select";
 
 /** Rows as aligned columns, two spaces apart. The last column is left as long as it is. */
@@ -51,7 +51,7 @@ export function renderQueue(queued: QueuedRunView[]) {
 }
 
 /** Everything the side list of the interface shows: runs, queue, runs read back from their archive, watcher tickets not queued. */
-export function renderHarness(snapshot: HarnessSnapshot, now: number) {
+export function renderFactory(snapshot: FactorySnapshot, now: number) {
   const taken = snapshot.runs.filter((run) => run.takesSlot).length;
   const sections = [`Runs (${taken}/${snapshot.maxConcurrentRuns} slots taken)`];
   sections.push(snapshot.runs.length > 0 ? table([RUN_HEADER, ...snapshot.runs.map((run) => runRow(run, now))]) : "No run.");
@@ -61,7 +61,7 @@ export function renderHarness(snapshot: HarnessSnapshot, now: number) {
   return sections.join("\n");
 }
 
-export function renderProposals(snapshot: Pick<HarnessSnapshot, "proposals">) {
+export function renderProposals(snapshot: Pick<FactorySnapshot, "proposals">) {
   if (snapshot.proposals.length === 0) return "No ticket waits for a decision.";
   return table(snapshot.proposals.map((proposal) => [proposalLabel(proposal.issueUrl), proposal.title ?? "", proposal.refusal ?? "", proposal.issueUrl]));
 }

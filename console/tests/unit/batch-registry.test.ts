@@ -13,7 +13,7 @@ jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: 
  * `start` is replaced, so what is checked is which entry starts, and when.
  * Every ticket and every repository here is invented.
  */
-const storage = mkdtempSync(path.join(os.tmpdir(), "harness-batch-"));
+const storage = mkdtempSync(path.join(os.tmpdir(), "factory-batch-"));
 const fixtureFile = path.join(storage, "schedule-fixture.json");
 process.env.IMPL_DATA_DIR = path.join(storage, "data");
 process.env.IMPL_ENV_FILE = path.join(storage, "absent.env");
@@ -57,7 +57,7 @@ const url = (iid: number, project = "shop") => `https://gitlab.com/acme/${projec
 const tickets = (directory: string, ...iids: number[]) => iids.map((iid) => ({ repository: directory, issueUrl: url(iid) }));
 
 /** A registry whose runs are sessions without a process, started in the order the queue lets them go. */
-function harness() {
+function factory() {
   const registry = new RunRegistry();
   registry.monitor.stop();
   registries.push(registry);
@@ -109,7 +109,7 @@ describe("a batch of tickets", () => {
   it("should analyse the batch, start what conflicts with nothing and hold the rest with the agent's reason", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Les deux tickets modifient le panier." }] });
     const shop = repository("shop");
-    const { registry, numbers, queued, waiting } = harness();
+    const { registry, numbers, queued, waiting } = factory();
     const outcome = await registry.enqueueBatch(tickets(shop, 101, 102, 103), { instruction: "  desktop uniquement " });
     expect(outcome.entries).toHaveLength(3);
     expect(outcome.entries.every((entry) => entry.instruction === "desktop uniquement" && entry.batchId === outcome.batchId)).toBe(true);
@@ -128,7 +128,7 @@ describe("a batch of tickets", () => {
   });
 
   it("should not analyse a single ticket with nothing to compare it to", async () => {
-    const { registry, numbers } = harness();
+    const { registry, numbers } = factory();
     const outcome = await registry.enqueueBatch(tickets(repository("shop"), 101));
     expect(outcome.started).toHaveLength(1);
     expect(numbers()).toEqual([101]);
@@ -137,7 +137,7 @@ describe("a batch of tickets", () => {
 
   it("should hold a single ticket behind the running one the forge says blocks it, without a session", async () => {
     const shop = repository("shop");
-    const { registry, numbers, queued, waiting } = harness();
+    const { registry, numbers, queued, waiting } = factory();
     await registry.enqueueBatch(tickets(shop, 101));
     // GitLab names the blocking ticket by its work item address, the console by the issue one.
     mkdirSync(glabDirectory, { recursive: true });
@@ -154,7 +154,7 @@ describe("a batch of tickets", () => {
 
   it("should start a single ticket beside a running one when the forge links them by nothing, or does not answer", async () => {
     const shop = repository("shop");
-    const { registry, numbers } = harness();
+    const { registry, numbers } = factory();
     await registry.enqueueBatch(tickets(shop, 101));
     mkdirSync(glabDirectory, { recursive: true });
     writeFileSync(path.join(glabDirectory, "issue-links-102"), "[]");
@@ -168,7 +168,7 @@ describe("a batch of tickets", () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     mkdirSync(glabDirectory, { recursive: true });
     writeFileSync(path.join(glabDirectory, "issue-links-102"), JSON.stringify([{ iid: 101, link_type: "blocks", web_url: url(101) }]));
-    const { registry, numbers, waiting } = harness();
+    const { registry, numbers, waiting } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     await until(() => numbers().length === 1, "the blocking ticket to start");
     // The order asked was 101 then 102: the link turns it around.
@@ -181,7 +181,7 @@ describe("a batch of tickets", () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
     const api = repository("api");
-    const { registry, started, queued } = harness();
+    const { registry, started, queued } = factory();
     await registry.enqueueBatch([...tickets(shop, 101, 102), ...tickets(api, 101), ...tickets(api, 102)]);
     await until(() => started.length === 2, "one ticket per repository to start");
     expect(calls().map((call) => call.input.repository).sort()).toEqual([api, shop].sort());
@@ -192,7 +192,7 @@ describe("a batch of tickets", () => {
   it("should leave out a ticket it already has, and analyse only the new ones against the known ones", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 104, b: 103, kind: "depends_on", order: [103, 104], reason: "Needs ticket 103." }] });
     const shop = repository("shop");
-    const { registry, numbers, queued, waiting } = harness();
+    const { registry, numbers, queued, waiting } = factory();
     await registry.enqueueBatch(tickets(shop, 101, 102, 103));
     await until(() => numbers().length === 2, "the first batch to start");
     const second = await registry.enqueueBatch([...tickets(shop, 102, 104), { repository: shop, issueUrl: `${url(101)}?tab=notes` }]);
@@ -210,7 +210,7 @@ describe("a batch of tickets", () => {
   it("should wait for the merge request of a finished run, then start from the updated base", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
-    const { registry, numbers, waiting, finish, merge } = harness();
+    const { registry, numbers, waiting, finish, merge } = factory();
     await registry.enqueueBatch(tickets(shop, 101, 102));
     await until(() => numbers().length === 1, "the first ticket to start");
     finish(101, 12);
@@ -232,7 +232,7 @@ describe("a batch of tickets", () => {
 
   it("should release what waits when the merge request is closed, or when the run ends without one", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 102, b: 103, kind: "overlap", reason: "Same file." }] });
-    const { registry, numbers, finish, merge } = harness();
+    const { registry, numbers, finish, merge } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103));
     await until(() => numbers().length === 1, "the first ticket to start");
     finish(101, 12);
@@ -246,7 +246,7 @@ describe("a batch of tickets", () => {
 
   it("should fall back on one ticket at a time when the session writes no file, and say why", async () => {
     fixture({ mode: "fail" });
-    const { registry, numbers, queued, waiting, finish } = harness();
+    const { registry, numbers, queued, waiting, finish } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103));
     await until(() => numbers().length === 1, "the first ticket to start");
     await until(analysed(queued), "the analysis to fail");
@@ -261,13 +261,13 @@ describe("a batch of tickets", () => {
 
   it("should fall back the same way on a file the contract refuses, and on a session that never answers", async () => {
     fixture({ mode: "invalid" });
-    const refused = harness();
+    const refused = factory();
     await refused.registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     await until(() => refused.numbers().length === 1, "the first ticket to start");
     expect(refused.waiting(102)?.analysisFailure).toMatch(/output refused, the tickets or edges array is missing/);
 
     fixture({ mode: "hang" });
-    const hanging = harness();
+    const hanging = factory();
     await hanging.registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     expect(hanging.queued().map((entry) => entry.reason)).toEqual(["analysis", "analysis"]);
     await until(() => hanging.numbers().length === 1, "the timeout");
@@ -277,7 +277,7 @@ describe("a batch of tickets", () => {
   /** Ticket 101 as a batch whose analysis wrote no file left it: failed, run alone, its merge request open, the rest of the batch removed. */
   async function failedAndAwaitingMerge(shop: string) {
     fixture({ mode: "fail" });
-    const context = harness();
+    const context = factory();
     await context.registry.enqueueBatch(tickets(shop, 101, 102, 103));
     await until(() => context.numbers().length === 1, "the first ticket to start");
     await until(analysed(context.queued), "the analysis to fail");
@@ -349,7 +349,7 @@ describe("a batch of tickets", () => {
 
   it("should run a low confidence ticket alone on its repository", async () => {
     fixture({ confidence: { 102: "low" } });
-    const { registry, numbers, waiting } = harness();
+    const { registry, numbers, waiting } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102));
     await until(() => numbers().length === 1, "the first ticket to start");
     expect(waiting(102)).toMatchObject({ reason: "conflict", cause: "low_confidence", confidence: "low" });
@@ -357,7 +357,7 @@ describe("a batch of tickets", () => {
 
   it("should start a held ticket from the base when forced, within the run limit", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }, { a: 101, b: 105, kind: "overlap", reason: "Same file." }] });
-    const { registry, numbers, waiting, started } = harness();
+    const { registry, numbers, waiting, started } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103, 104, 105));
     await until(() => numbers().length === 3, "three tickets to start");
     expect(numbers()).toEqual([101, 103, 104]);
@@ -374,7 +374,7 @@ describe("a batch of tickets", () => {
 
   it("should stack a held ticket on the branch of the ticket it waits for, once that branch exists", async () => {
     fixture({ edges: [{ a: 102, b: 101, kind: "depends_on", order: [101, 102], reason: "A besoin du ticket 101." }] });
-    const { registry, numbers, waiting, started } = harness();
+    const { registry, numbers, waiting, started } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 102, 101));
     await until(() => numbers().length === 1, "the dependency to start first");
     expect(numbers()).toEqual([101]);
@@ -387,7 +387,7 @@ describe("a batch of tickets", () => {
 
   it("should move and remove waiting tickets", async () => {
     fixture({ mode: "hang" });
-    const { registry, queued } = harness();
+    const { registry, queued } = factory();
     await registry.enqueueBatch(tickets(repository("shop"), 101, 102, 103));
     const [first, second, third] = queued().map((entry) => entry.id);
     registry.moveQueued(third!, first!);
@@ -407,7 +407,7 @@ describe("the queue across a restart", () => {
   it("should write the queue with its schedule, and nothing of a run that left", async () => {
     fixture({ edges: [{ a: 101, b: 102, kind: "overlap", reason: "Same file." }] });
     const shop = repository("shop");
-    const { registry, numbers } = harness();
+    const { registry, numbers } = factory();
     await registry.enqueueBatch(tickets(shop, 101, 102));
     await until(() => numbers().length === 1, "the first ticket to start");
     await registry.drain();
@@ -428,7 +428,7 @@ describe("the queue across a restart", () => {
       tickets: [], edges: [{ repository: shop, a: url(98), b: url(101), kind: "overlap", reason: "Same file." }],
       watches: [{ issueUrl: url(98), repository: shop, mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/9", branch: "feat/98", state: "open", since: new Date().toISOString() }],
     }));
-    const { registry, numbers, waiting, merge } = harness();
+    const { registry, numbers, waiting, merge } = factory();
     await registry.restoreQueue();
     await registry.drain();
     // 101 waits for the merge it was waiting for. The interrupted batch runs alone on its
@@ -448,7 +448,7 @@ describe("the queue across a restart", () => {
     const shop = repository("shop");
     mkdirSync(path.dirname(queueFile()), { recursive: true });
     writeFileSync(queueFile(), JSON.stringify([{ id: "q1", cwd: shop, issueUrl: url(1), instruction: "", queuedAt: "2026-09-20T10:00:00.000Z" }]));
-    const { registry, numbers } = harness();
+    const { registry, numbers } = factory();
     await registry.restoreQueue();
     expect(registry.snapshot().queued).toEqual([expect.objectContaining({ id: "q1", repository: shop, reason: "slot" })]);
     await registry.drain();

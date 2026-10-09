@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
  * checkout. Committing a nested .git directory would turn the fixture into an
  * embedded repository, so it is built outside the working tree instead.
  */
-export const checkoutsRoot = path.join(os.tmpdir(), "implementation-harness-tests", "checkouts");
+export const checkoutsRoot = path.join(os.tmpdir(), "implementation-factory-tests", "checkouts");
 /** The hook secret the suite's server is started with, so a test can post hooks the way a session does. */
 export const hookToken = "integration-hook-token";
 export const sampleCheckout = path.join(checkoutsRoot, "repo");
@@ -28,7 +28,7 @@ export function createSampleCheckout() {
 export const untrustedRoot = path.join(checkoutsRoot, "untrusted");
 
 /** Where the suite's console keeps its runs, away from the developer's own history. */
-export const dataDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "data");
+export const dataDirectory = path.join(os.tmpdir(), "implementation-factory-tests", "data");
 /** A `claude` that only waits at its prompt, put first on the console's PATH. See tests/fake-claude/claude. */
 export const fakeClaudeDirectory = fileURLToPath(new URL("./fake-claude", import.meta.url));
 
@@ -57,7 +57,7 @@ export function createGitCheckout(name: string, forge: "gitlab" | "github" = "gi
 }
 
 /** Where the stand-in `claude` writes what it receives on its terminal, one file per run. */
-export const fakeClaudeInputDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "claude-input");
+export const fakeClaudeInputDirectory = path.join(os.tmpdir(), "implementation-factory-tests", "claude-input");
 
 /** The run a restart found in progress, seeded before the suite's console boots. */
 export const interruptedRunId = "2026-09-27T08-00-00-000Z-interrupt";
@@ -67,14 +67,14 @@ export const interruptedRunId = "2026-09-27T08-00-00-000Z-interrupt";
  * batch: see the header of tests/fake-claude/claude. Without the file, every
  * ticket is predicted with no edge.
  */
-export const scheduleFixtureFile = path.join(os.tmpdir(), "implementation-harness-tests", "schedule-fixture.json");
+export const scheduleFixtureFile = path.join(os.tmpdir(), "implementation-factory-tests", "schedule-fixture.json");
 export function scheduleFixture(fixture?: Record<string, unknown>) {
   if (fixture) writeFileSync(scheduleFixtureFile, JSON.stringify(fixture));
   else rmSync(scheduleFixtureFile, { force: true });
 }
 
 /** Where the stand-in `glab` reads the state of a merge request from. See tests/fake-claude/glab. */
-export const fakeGlabDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "glab");
+export const fakeGlabDirectory = path.join(os.tmpdir(), "implementation-factory-tests", "glab");
 /** What GitLab says of a merge request, or nothing at all with `undefined`, as when it cannot be reached. */
 export function mergeRequestState(iid: number, state?: "opened" | "merged" | "closed") {
   const file = path.join(fakeGlabDirectory, `merge-request-${iid}`);
@@ -90,7 +90,7 @@ export function issueLinks(iid: number, links?: { link_type: "blocks" | "is_bloc
 }
 
 /** Where the stand-in `gh` reads the state of a pull request from. See tests/fake-claude/gh. */
-export const fakeGhDirectory = path.join(os.tmpdir(), "implementation-harness-tests", "gh");
+export const fakeGhDirectory = path.join(os.tmpdir(), "implementation-factory-tests", "gh");
 /** What GitHub says of a pull request, or nothing at all with `undefined`, as when it cannot be reached. */
 export function pullRequestState(number: number, state?: "open" | "merged" | "closed") {
   const file = path.join(fakeGhDirectory, `pull-request-${number}`);
@@ -133,7 +133,7 @@ export function prepareDataDirectory() {
   writeFileSync(path.join(runDirectory, "run.json"), JSON.stringify({
     id: interruptedRunId, status: "attention", phase: 6, cwd: path.join(checkoutsRoot, "interrupted"), issueUrl: "https://gitlab.com/group/interrupted/-/issues/7",
     ticketTitle: "Corriger l’export des factures", instruction: "", startedAt: "2026-09-27T08:00:00.000Z", endedAt: null,
-    agents: [{ id: "a1", name: "implementation-harness:qa-reviewer", status: "running", startedAt: "2026-09-27T08:20:00.000Z" }],
+    agents: [{ id: "a1", name: "implementation-factory:qa-reviewer", status: "running", startedAt: "2026-09-27T08:20:00.000Z" }],
     activities: [{ id: "e1", at: "2026-09-27T08:20:00.000Z", kind: "agent", title: "qa-reviewer démarre" }],
     messages: [], artifacts: ["ticket-context.md"], sessionActive: true,
     pendingQuestion: { id: "q1", questions: [{ question: "Faut-il garder l’ancien format ?", header: "Format", options: [{ label: "Oui" }], multiSelect: false }] },

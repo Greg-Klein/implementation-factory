@@ -4,7 +4,7 @@ import { InfoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import type { Notice } from "@/lib/types";
 
 /**
- * What the harness itself did, as opposed to what a run did: a launch put in the
+ * What the factory itself did, as opposed to what a run did: a launch put in the
  * queue, an improvement branch replayed, a queued launch that could not start.
  * These used to land in the activity feed of whichever run happened to be
  * current, which with several runs means a feed picked at random, so they get

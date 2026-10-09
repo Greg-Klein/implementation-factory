@@ -1,6 +1,6 @@
-# Implementation Harness
+# Implementation Factory
 
-Local interface for driving the `/implementation-harness:implement` command with the Claude Code executable installed on the machine. The harness does not use the Anthropic API directly and needs no API key. The [main README](../README.md#one-command-installation) covers installation and day-to-day use with `impl`.
+Local console of the factory: it runs the `/implementation-factory:implement` command with the Claude Code executable installed on the machine, queues the tickets and shows each run. The factory does not use the Anthropic API directly and needs no API key. The [main README](../README.md#one-command-installation) covers installation and day-to-day use with `impl`.
 
 The interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
 
@@ -24,13 +24,13 @@ npm run dev
 
 Then open <http://127.0.0.1:3210>.
 
-Enter the local path of the project and the ticket URL. Several URLs, one per line, start a batch (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)). The harness creates a git worktree of the project for the run (`<project>/.claude/worktrees/<run id>`, see the [main README](../README.md#one-worktree-per-run)) and starts Claude Code in it with the neighbouring plugin:
+Enter the local path of the project and the ticket URL. Several URLs, one per line, start a batch (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)). The factory creates a git worktree of the project for the run (`<project>/.claude/worktrees/<run id>`, see the [main README](../README.md#one-worktree-per-run)) and starts Claude Code in it with the neighbouring plugin:
 
 ```bash
-claude --plugin-dir /path/to/implementation-harness "/implementation-harness:implement <ticket>"
+claude --plugin-dir /path/to/implementation-factory "/implementation-factory:implement <ticket>"
 ```
 
-The command and the agents stay in the `implementation-harness` directory; nothing is installed in `~/.claude`.
+The command and the agents stay in the `implementation-factory` directory; nothing is installed in `~/.claude`.
 
 ## What the panels show
 
@@ -40,7 +40,7 @@ In a directory Claude Code has never opened, the session starts with its trust p
 
 The activity feed keeps only the milestones of the workflow: agents, documents, branch, merge request, pending decisions. The detail of the commands stays in the terminal.
 
-The harness asks for attention only when it is stopped: a pending decision, a permission request, an incident (no action in progress any more, a missing result, an interrupted session), the end or the failure of the run. Silence alone is only a doubt, flagged once.
+The factory asks for attention only when it is stopped: a pending decision, a permission request, an incident (no action in progress any more, a missing result, an interrupted session), the end or the failure of the run. Silence alone is only a doubt, flagged once.
 
 ## Who can move this run forward?
 
@@ -144,7 +144,7 @@ For each repository that has at least two new tickets, or one new ticket beside 
 
 ```bash
 claude -p --plugin-dir <plugin> --model sonnet --permission-mode dontAsk \
-  --allowedTools "<closed list, read-only>" -- "/implementation-harness:schedule <input> <output>"
+  --allowedTools "<closed list, read-only>" -- "/implementation-factory:schedule <input> <output>"
 ```
 
 The full list of arguments is in `scheduleArguments` (`server/engine/claude-code.ts`). The session runs in the main checkout, without the hook variables, so it reports nothing to the console. Its exit code is not read. The server judges the result on `output.json`, validated as a whole against `contracts/schedule.md` (`validateSchedule` in `server/domain.ts`). The analyses of one repository run one after the other, outside `IMPL_MAX_CONCURRENT_RUNS`.
@@ -159,7 +159,7 @@ The full list of arguments is in `scheduleArguments` (`server/engine/claude-code
 
 Tickets whose analysis failed and that are still queued, running or waiting for their merge go into the next analysis of their repository, as tickets to predict and not as `known`. Their prediction is replaced if it succeeds, and they stay failed otherwise. No analysis is opened for them alone.
 
-Each analysis has its `<id>/` directory under `scheduleRoot` (`server/config.ts`). When the data directory is inside the plugin, `scheduleRoot` is `implementation-harness-<user>/schedule/` under the system's temporary directory, private to the user: Claude Code refuses a session any write in the directory of the plugin it loaded. A data directory outside the plugin (`IMPL_DATA_DIR`) keeps them under `schedule/`. After a failure, the analysis directory stays with `session.log`, the end of the session's output. `scheduleRoot` is emptied at each start. These files hold ticket content.
+Each analysis has its `<id>/` directory under `scheduleRoot` (`server/config.ts`). When the data directory is inside the plugin, `scheduleRoot` is `implementation-factory-<user>/schedule/` under the system's temporary directory, private to the user: Claude Code refuses a session any write in the directory of the plugin it loaded. A data directory outside the plugin (`IMPL_DATA_DIR`) keeps them under `schedule/`. After a failure, the analysis directory stays with `session.log`, the end of the session's output. `scheduleRoot` is emptied at each start. These files hold ticket content.
 
 ### Reasons for waiting
 
@@ -253,7 +253,7 @@ The unit tests inject the answers, and the integration suite replaces `claude`, 
 
 ## Copying to another machine
 
-Copy or clone the whole `implementation-harness` directory, then run the install commands above in `implementation-harness/console`. The path of the repository to work on is chosen in the interface, so it can differ on each machine.
+Copy or clone the whole `implementation-factory` directory, then run the install commands above in `implementation-factory/console`. The path of the repository to work on is chosen in the interface, so it can differ on each machine.
 
 ## Local data
 

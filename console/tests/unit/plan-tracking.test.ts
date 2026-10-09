@@ -12,14 +12,14 @@ const plan: PlanTask[] = [
   { id: "T3", title: "Tests", status: "todo" },
 ];
 
-const agent = (id: string, nickname: string): AgentState => ({ id, name: "implementation-harness:developer", nickname, avatar: `/avatars/${nickname.toLowerCase()}.webp`, role: "Developer", status: "running", startedAt: "2026-09-27T10:00:00.000Z" });
+const agent = (id: string, nickname: string): AgentState => ({ id, name: "implementation-factory:developer", nickname, avatar: `/avatars/${nickname.toLowerCase()}.webp`, role: "Developer", status: "running", startedAt: "2026-09-27T10:00:00.000Z" });
 
 describe("plan task ids read from a delegation", () => {
   const delegate = (tool: string, input: Record<string, unknown>) => claudeCode.event({ hook_event_name: "PreToolUse", tool_name: tool, tool_input: input });
 
   it("should read the task id from the report file the developer is told to write", () => {
-    expect(delegate("Agent", { subagent_type: "implementation-harness:developer", description: "Implement T2", prompt: "Task T2. Write .claude/tasks/developer-report-T2.md and dev-evidence-T2.json." }))
-      .toMatchObject({ kind: "tool.start", tool: "Agent", target: "implementation-harness:developer", planTaskIds: ["T2"] });
+    expect(delegate("Agent", { subagent_type: "implementation-factory:developer", description: "Implement T2", prompt: "Task T2. Write .claude/tasks/developer-report-T2.md and dev-evidence-T2.json." }))
+      .toMatchObject({ kind: "tool.start", tool: "Agent", target: "implementation-factory:developer", planTaskIds: ["T2"] });
   });
 
   it("should read it from the legacy Task tool and count a repeated id once", () => {
@@ -72,11 +72,11 @@ describe("agent names and roles", () => {
   });
 
   it("should map every workflow agent type to its role name", () => {
-    expect(agentRole("implementation-harness:developer")).toBe("Developer");
+    expect(agentRole("implementation-factory:developer")).toBe("Developer");
     expect(agentRole("ticket-planner")).toBe("Planner");
-    expect(agentRole("implementation-harness:senior-reviewer")).toBe("Senior reviewer");
+    expect(agentRole("implementation-factory:senior-reviewer")).toBe("Senior reviewer");
     expect(agentRole("qa-reviewer")).toBe("QA reviewer");
-    expect(agentRole("implementation-harness:designer-reviewer")).toBe("Design reviewer");
+    expect(agentRole("implementation-factory:designer-reviewer")).toBe("Design reviewer");
     expect(agentRole("review-orchestrator")).toBe("Review orchestrator");
     expect(agentRole("Explore")).toBe("Explorer");
   });
@@ -86,8 +86,8 @@ describe("agent names and roles", () => {
   });
 
   it("should only count a developer as working a plan task", () => {
-    expect(isDeveloperDelegation("implementation-harness:developer")).toBe(true);
-    expect(isDeveloperDelegation("implementation-harness:senior-reviewer")).toBe(false);
+    expect(isDeveloperDelegation("implementation-factory:developer")).toBe(true);
+    expect(isDeveloperDelegation("implementation-factory:senior-reviewer")).toBe(false);
     expect(isDeveloperDelegation(undefined)).toBe(false);
   });
 });
@@ -109,18 +109,18 @@ describe("the tasks a brief hands over among the reports it names", () => {
 
 describe("pairing a delegation with the agent it started", () => {
   it("should pair each start with the oldest unpaired delegation of its type", () => {
-    let delegations = [{ agentType: "implementation-harness:developer", taskIds: ["T1"] }, { agentType: "implementation-harness:developer", taskIds: ["T2"] }];
-    delegations = pairDelegation(delegations, "implementation-harness:developer", "a1");
-    delegations = pairDelegation(delegations, "implementation-harness:developer", "a2");
+    let delegations = [{ agentType: "implementation-factory:developer", taskIds: ["T1"] }, { agentType: "implementation-factory:developer", taskIds: ["T2"] }];
+    delegations = pairDelegation(delegations, "implementation-factory:developer", "a1");
+    delegations = pairDelegation(delegations, "implementation-factory:developer", "a2");
     expect(delegations).toEqual([
-      { agentType: "implementation-harness:developer", taskIds: ["T1"], agentId: "a1" },
-      { agentType: "implementation-harness:developer", taskIds: ["T2"], agentId: "a2" },
+      { agentType: "implementation-factory:developer", taskIds: ["T1"], agentId: "a1" },
+      { agentType: "implementation-factory:developer", taskIds: ["T2"], agentId: "a2" },
     ]);
   });
 
   it("should leave the delegations alone when another type of agent starts", () => {
     const delegations = [{ agentType: "developer", taskIds: ["T1"] }];
-    expect(pairDelegation(delegations, "implementation-harness:senior-reviewer", "r1")).toBe(delegations);
+    expect(pairDelegation(delegations, "implementation-factory:senior-reviewer", "r1")).toBe(delegations);
   });
 });
 
@@ -154,8 +154,8 @@ describe("the tracking board", () => {
 describe("the tracking board fed by hooks", () => {
   let session: RunSession;
   const hook = (payload: Record<string, unknown>) => processHook(session, { runId: session.id, payload });
-  const launch = (taskId: string) => hook({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "implementation-harness:developer", prompt: `Write developer-report-${taskId}.md` } });
-  const start = (agentId: string, type = "implementation-harness:developer") => hook({ hook_event_name: "SubagentStart", agent_type: type, agent_id: agentId });
+  const launch = (taskId: string) => hook({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "implementation-factory:developer", prompt: `Write developer-report-${taskId}.md` } });
+  const start = (agentId: string, type = "implementation-factory:developer") => hook({ hook_event_name: "SubagentStart", agent_type: type, agent_id: agentId });
 
   beforeEach(() => {
     session = new RunSession("demo-plan", { status: "running", phase: 4, planTasks: plan });
@@ -175,13 +175,13 @@ describe("the tracking board fed by hooks", () => {
 
   it("should not let a reviewer take a developer's task", () => {
     launch("T1");
-    start("r1", "implementation-harness:senior-reviewer");
+    start("r1", "implementation-factory:senior-reviewer");
     start("a1");
     expect(session.state.planTasks?.[0]).toMatchObject({ assignee: { agentId: "a1", nickname: "Tom" } });
   });
 
   it("should not record a reviewer handed the per-task reports as a delegation", () => {
-    hook({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "implementation-harness:senior-reviewer", prompt: "Read developer-report-T3.md" } });
+    hook({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "implementation-factory:senior-reviewer", prompt: "Read developer-report-T3.md" } });
     expect(session.state.planTasks?.[2]?.status).toBe("todo");
   });
 

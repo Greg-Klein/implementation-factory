@@ -5,13 +5,13 @@ import os from "node:os";
 import path from "node:path";
 
 const emitter = path.resolve(process.cwd(), "..", "hooks", "emit.mjs");
-const DEVELOPER = "implementation-harness:developer";
+const DEVELOPER = "implementation-factory:developer";
 let cwd: string;
 let state: string;
 
 /** What the hook printed for one event: the decision that sends the agent back, or undefined when it let the event through. */
 function hook(payload: object, env: Record<string, string> = { IMPL_RUN_ID: "run" }) {
-  const { IMPL_RUN_ID: _run, IMPL_HARNESS_HOOK_URL: _url, IMPL_STOP_GATE: _gate, ...inherited } = process.env;
+  const { IMPL_RUN_ID: _run, IMPL_HOOK_URL: _url, IMPL_STOP_GATE: _gate, ...inherited } = process.env;
   const { stdout } = spawnSync(process.execPath, [emitter], {
     input: JSON.stringify({ session_id: "s1", cwd, ...payload }), encoding: "utf8", env: { ...inherited, IMPL_GATE_STATE_DIR: state, ...env },
   });
@@ -286,7 +286,7 @@ describe("the stop gate", () => {
   it("should leave alone the agents that do not edit code, the sessions outside a run, and a run that turned the gate off", () => {
     fails("tsc", "src/cart.ts(3,1): error TS2322");
     edit("a1", "src/cart.ts");
-    expect(hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:qa-reviewer", agent_id: "a1" })).toBeUndefined();
+    expect(hook({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:qa-reviewer", agent_id: "a1" })).toBeUndefined();
     expect(hook({ hook_event_name: "SubagentStop", agent_type: "developer", agent_id: "a1" })).toBeUndefined();
     edit("a2", "src/cart.ts");
     expect(stop("a2", {}, {})).toBeUndefined();

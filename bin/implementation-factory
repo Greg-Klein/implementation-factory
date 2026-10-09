@@ -145,7 +145,7 @@ fi
 if [[ "$command" == "improve" ]]; then
   mkdir -p "$console_dir/data/feedback/pending"
   cd "$repo_root"
-  exec claude --plugin-dir "$repo_root" --name "implementation-harness self-improvement" "/implementation-harness:improve $console_dir/data/feedback"
+  exec claude --plugin-dir "$repo_root" --name "implementation-factory self-improvement" "/implementation-factory:improve $console_dir/data/feedback"
 fi
 
 listening_pids() {
@@ -160,10 +160,10 @@ stop_server() {
   local pids
   pids="$(listening_pids)"
   if [[ -z "$pids" ]]; then
-    printf 'No Implementation Harness server listening on port %s.\n' "$app_port"
+    printf 'No Implementation Factory server listening on port %s.\n' "$app_port"
     return 0
   fi
-  printf 'Stopping the Implementation Harness server (PID %s)...\n' "$(echo $pids)"
+  printf 'Stopping the Implementation Factory server (PID %s)...\n' "$(echo $pids)"
   kill $pids 2>/dev/null || true
   for _ in {1..40}; do
     if [[ -z "$(listening_pids)" ]]; then
@@ -211,12 +211,12 @@ status_report() {
 
   local runs
   if ! runs="$(curl -fsS "$app_url/api/runs" 2>/dev/null)" || ! printf '%s' "$runs" | grep -q '"runs"'; then
-    printf 'API       : /api/runs does not answer like the harness.\n' >&2
+    printf 'API       : /api/runs does not answer like the factory.\n' >&2
     printf 'Another program may be using port %s.\n' "$app_port" >&2
     return 1
   fi
   printf 'API       : answers\n'
-  # A harness holds several runs: the status says how many hold a slot, how
+  # A factory holds several runs: the status says how many hold a slot, how
   # many wait, and out of how many slots.
   if command -v node >/dev/null 2>&1; then
     printf '%s' "$runs" | node -e '
@@ -284,7 +284,7 @@ open_app() {
   fi
 }
 
-harness_answers() {
+factory_answers() {
   command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/runs" >/dev/null 2>&1
 }
 
@@ -305,9 +305,9 @@ start_server() {
   disown "$server_pid" 2>/dev/null || true
 
   for _ in {1..120}; do
-    if harness_answers; then
+    if factory_answers; then
       open_app
-      printf 'Implementation Harness started at %s\n' "$app_url"
+      printf 'Implementation Factory started at %s\n' "$app_url"
       printf 'Logs: %s\n' "$log_file"
       printf 'Stop it with: %s stop\n' "$program"
       return 0
@@ -335,7 +335,7 @@ if is_client_command "$command"; then
   fi
   # A launch needs a server and says so by starting one. Reading commands start
   # nothing: a server that starts also starts whatever its queue held.
-  if [[ "$command" == "run" && -z "${IMPL_CONSOLE_URL:-}" ]] && ! harness_answers; then
+  if [[ "$command" == "run" && -z "${IMPL_CONSOLE_URL:-}" ]] && ! factory_answers; then
     no_open=1
     start_server >&2 || exit 1
   fi
@@ -343,9 +343,9 @@ if is_client_command "$command"; then
     exec "$console_dir/node_modules/.bin/tsx" --tsconfig "$console_dir/tsconfig.json" "$console_dir/cli/index.ts" "$@"
 fi
 
-if harness_answers; then
+if factory_answers; then
   open_app
-  printf 'Implementation Harness is already available at %s\n' "$app_url"
+  printf 'Implementation Factory is already available at %s\n' "$app_url"
   exit 0
 fi
 

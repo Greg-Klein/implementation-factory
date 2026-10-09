@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
-import type { ClientMessage, HarnessSnapshot, ServerMessage } from "../server/types.js";
+import type { ClientMessage, FactorySnapshot, ServerMessage } from "../server/types.js";
 
 /** A failure the command line says in one sentence, with the exit code it ends on. */
 export class CliError extends Error {
@@ -24,7 +24,7 @@ export function consoleUrl(env: Record<string, string | undefined>) {
 }
 
 function notRunning(base: string) {
-  return new CliError(`No Implementation Harness console answers at ${base}. Start it: impl start`, NOT_RUNNING);
+  return new CliError(`No Implementation Factory console answers at ${base}. Start it: impl start`, NOT_RUNNING);
 }
 
 /** One reading of the HTTP API. A refusal carries the sentence the console gave for it. */
@@ -45,7 +45,7 @@ export type Listener = (message: ServerMessage) => void;
 /** The socket of the console, as the page holds it: the list of runs, and the run this client subscribed to. */
 export type Link = {
   /** The latest list of runs the console sent. */
-  snapshot(): HarnessSnapshot;
+  snapshot(): FactorySnapshot;
   /** Sends without waiting: keystrokes, a resize, a subscription. */
   send(message: ClientMessage): void;
   /**
@@ -77,7 +77,7 @@ export function connect(base: string): Promise<Link> {
     const socket = new WebSocket(`${base.replace(/^http/, "ws")}/ws`, { origin: base });
     const listeners = new Set<Listener>();
     const pending = new Map<string, { received: ServerMessage[]; resolve: (messages: ServerMessage[]) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
-    let snapshot: HarnessSnapshot | undefined;
+    let snapshot: FactorySnapshot | undefined;
     let opened = false;
     let release: () => void = () => undefined;
     const closed = new Promise<void>((done) => { release = done; });
@@ -102,7 +102,7 @@ export function connect(base: string): Promise<Link> {
     socket.on("message", (raw) => {
       const message = readMessage(raw);
       if (!message) return;
-      if (message.type === "harness") snapshot = message.snapshot;
+      if (message.type === "factory") snapshot = message.snapshot;
       if (message.type === "ack" || (message.type === "error" && message.ackId)) {
         const waiting = pending.get(message.ackId!);
         if (waiting) {

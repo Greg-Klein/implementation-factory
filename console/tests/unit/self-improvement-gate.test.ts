@@ -124,20 +124,20 @@ describe("whether an improvement session opens at the end of a run", () => {
 // The defect this guards: the loop opened eleven improvement branches on
 // 7 September, four of them conflicting, none promoted through the console.
 describe("one improvement in flight at a time", () => {
-  const harness = "/Users/x/implementation-harness";
+  const factory = "/Users/x/implementation-factory";
 
-  it("should find nothing in flight when only the harness checkout is registered", () => {
-    expect(improvementWorktreeInFlight([harness])).toBeUndefined();
+  it("should find nothing in flight when only the factory checkout is registered", () => {
+    expect(improvementWorktreeInFlight([factory])).toBeUndefined();
   });
 
   it("should find the undecided improvement worktree", () => {
-    const pending = `${harness}/.claude/worktrees/self-improvement-025063c3`;
-    expect(improvementWorktreeInFlight([harness, pending])).toBe(pending);
+    const pending = `${factory}/.claude/worktrees/self-improvement-025063c3`;
+    expect(improvementWorktreeInFlight([factory, pending])).toBe(pending);
   });
 
   // A branch the user works on themselves is not the loop's business to wait on.
   it("should ignore a worktree that is not an improvement one", () => {
-    expect(improvementWorktreeInFlight([harness, `${harness}/.claude/worktrees/feat-259-composer`])).toBeUndefined();
+    expect(improvementWorktreeInFlight([factory, `${factory}/.claude/worktrees/feat-259-composer`])).toBeUndefined();
   });
 
   it("should name a worktree after the run it audits", () => {
@@ -148,18 +148,18 @@ describe("one improvement in flight at a time", () => {
 // Every self-improvement worktree is a candidate for the pending-review list, whichever
 // run spawned it and however long ago: this is the filter listPendingImprovements uses.
 describe("recognizing an improvement worktree", () => {
-  const harness = "/Users/x/implementation-harness";
+  const factory = "/Users/x/implementation-factory";
 
   it("should recognize a worktree regardless of which run named it or how old it is", () => {
-    expect(isImprovementWorktree(`${harness}/.claude/worktrees/self-improvement-025063c3`)).toBe(true);
+    expect(isImprovementWorktree(`${factory}/.claude/worktrees/self-improvement-025063c3`)).toBe(true);
   });
 
   it("should ignore a worktree the user is working on themselves", () => {
-    expect(isImprovementWorktree(`${harness}/.claude/worktrees/feat-259-composer`)).toBe(false);
+    expect(isImprovementWorktree(`${factory}/.claude/worktrees/feat-259-composer`)).toBe(false);
   });
 
-  it("should ignore the harness checkout itself", () => {
-    expect(isImprovementWorktree(harness)).toBe(false);
+  it("should ignore the factory checkout itself", () => {
+    expect(isImprovementWorktree(factory)).toBe(false);
   });
 });
 
@@ -169,7 +169,7 @@ describe("environment handed to the improvement agent", () => {
     expect(cleaned).toEqual({ PATH: "/usr/bin" });
   });
 
-  it("should leave the harness configuration alone", () => {
+  it("should leave the factory configuration alone", () => {
     const cleaned = withoutBundlerVariables({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
     expect(cleaned).toEqual({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
   });
@@ -178,7 +178,7 @@ describe("environment handed to the improvement agent", () => {
 // On 29 September self-improvement-4824d4ae read "déjà intégrée" from the
 // moment it was opened, and still did once the agent had given up without a
 // commit: nothing had been integrated, and the report saying why went unseen.
-describe("reading a worktree that holds no commit ahead of the harness", () => {
+describe("reading a worktree that holds no commit ahead of the factory", () => {
   it("should call an agent that has not written its report yet analyzing", () => {
     expect(commitlessImprovementStatus({ reported: false })).toBe("analyzing");
   });
@@ -195,7 +195,7 @@ describe("reading a worktree that holds no commit ahead of the harness", () => {
 describe("restart after an improvement merge", () => {
   it("should ask for a restart when the merge touches the console or the launcher", () => {
     expect(mergeNeedsRestart(["commands/implement.md", "console/server/registry.ts"])).toBe(true);
-    expect(mergeNeedsRestart(["bin/implementation-harness"])).toBe(true);
+    expect(mergeNeedsRestart(["bin/implementation-factory"])).toBe(true);
   });
 
   it("should not ask for a restart when only the plugin changed", () => {

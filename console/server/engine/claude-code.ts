@@ -18,7 +18,7 @@ const SUBMIT_DELAY_MS = 150;
 const REFUSAL_EXIT_MS = 2_000;
 
 /**
- * A harness started from inside a Claude Code session inherits markers that make
+ * A factory started from inside a Claude Code session inherits markers that make
  * the spawned session behave like a nested one, transcript saving included, and
  * the conversation is read from that transcript. The bundler variables of the
  * console itself go with them: the agent runs builds of its own.
@@ -39,7 +39,7 @@ const TAGGED_INPUT = /^<[a-z][a-z-]*(?:\s[^>]*)?>/;
 
 /**
  * The idle notification, matched on rather than matched away: should Claude Code
- * ever reword it, the harness falls back to calling the user too often, never to
+ * ever reword it, the factory falls back to calling the user too often, never to
  * leaving a blocked run silent.
  */
 const IDLE_NOTIFICATION = /waiting for your input/i;
@@ -120,7 +120,7 @@ function conversationLine(line: string): ConversationMessage | undefined {
 
 function questionEvent(payload: Record<string, unknown>): EngineEvent | undefined {
   const input = payload.tool_input as Record<string, unknown> | undefined;
-  // The hook fires again on the call the harness itself completed, and that
+  // The hook fires again on the call the factory itself completed, and that
   // second pass carries the answers: it must not raise the question anew.
   if (!input || (input.answers && typeof input.answers === "object")) return undefined;
   const questions = Array.isArray(input.questions)
@@ -231,7 +231,7 @@ export function sessionArguments({ pluginDir, sessionName, command }: { pluginDi
 }
 
 /**
- * The command line of a session that works on the harness itself, detached, in
+ * The command line of a session that works on the factory itself, detached, in
  * a worktree of its own. Each names its model, so the user's default one never
  * decides: Opus to diagnose a run and rewrite what drives the next ones, Sonnet
  * to replay a branch.
@@ -251,10 +251,10 @@ export function backgroundArguments({ pluginDir, worktreeName, sessionName, mode
 function start({ cwd, sessionLabel, runId, command, pluginDir, hookUrl, hookSpool, environment, onData, onExit, onEvent }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code was not found in PATH.");
-  const sessionName = `implementation-harness ${sessionLabel}`;
+  const sessionName = `implementation-factory ${sessionLabel}`;
   const terminal = pty.spawn(executable, sessionArguments({ pluginDir, sessionName, command }), {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
-    env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
+    env: { ...sessionEnvironment(), ...environment, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HOOK_URL: hookUrl, IMPL_HOOK_SPOOL: hookSpool },
   });
   let alive = true;
   // The folder trust dialog comes before any hook: the terminal is where it is read from.
@@ -327,7 +327,7 @@ export function scheduleArguments({ pluginDir, inputPath, outputPath }: Pick<Sch
     "--permission-prompts", "none",
     "--allowedTools", [...SCHEDULE_TOOLS, `Bash(rm ${outputDirectory}/*)`].join(","),
     "--output-format", "json",
-    "--", `/implementation-harness:schedule ${inputPath} ${outputPath}`,
+    "--", `/implementation-factory:schedule ${inputPath} ${outputPath}`,
   ];
 }
 
@@ -338,7 +338,7 @@ export function scheduleArguments({ pluginDir, inputPath, outputPath }: Pick<Sch
  */
 export function scheduleEnvironment<T extends Record<string, string | undefined>>(environment: T, outputPath?: string): T & { IMPL_SCHEDULE_OUTPUT?: string } {
   const cleaned: T & { IMPL_SCHEDULE_OUTPUT?: string } = { ...environment };
-  for (const key of ["IMPL_RUN_ID", "IMPL_HARNESS_HOOK_URL", "IMPL_HOOK_SPOOL", "IMPL_SCHEDULE_OUTPUT"]) delete cleaned[key];
+  for (const key of ["IMPL_RUN_ID", "IMPL_HOOK_URL", "IMPL_HOOK_SPOOL", "IMPL_SCHEDULE_OUTPUT"]) delete cleaned[key];
   // What makes the guard apply the rules of a scheduling session: the allowed tools below
   // match a command by its first words, the guard reads what each call would actually do.
   if (outputPath) cleaned.IMPL_SCHEDULE_OUTPUT = outputPath;
@@ -382,7 +382,7 @@ export const claudeCode: Engine = {
   id: "claude-code",
   label: "Claude Code",
   locate: () => findExecutable("claude"),
-  command: (issueUrl, instruction) => `/implementation-harness:implement ${issueUrl}${instruction ? ` ${instruction}` : ""}`,
+  command: (issueUrl, instruction) => `/implementation-factory:implement ${issueUrl}${instruction ? ` ${instruction}` : ""}`,
   start,
   taskDirectory: (cwd) => path.join(cwd, ".claude", "tasks"),
   transcriptPath: (payload) => {
@@ -403,8 +403,8 @@ export const claudeCode: Engine = {
     if (!executable) return undefined;
     return spawnChild(executable, backgroundArguments({
       pluginDir: pluginRoot, worktreeName, model: "opus",
-      sessionName: `implementation-harness self-improvement ${runId.slice(-8)}`,
-      command: `/implementation-harness:improve ${feedbackDirectory}`,
+      sessionName: `implementation-factory self-improvement ${runId.slice(-8)}`,
+      command: `/implementation-factory:improve ${feedbackDirectory}`,
     }), { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
   startConflictResolution: ({ worktreeName, onto }) => {
@@ -412,8 +412,8 @@ export const claudeCode: Engine = {
     if (!executable) return undefined;
     return spawnChild(executable, backgroundArguments({
       pluginDir: pluginRoot, worktreeName, model: "sonnet",
-      sessionName: `implementation-harness rebase ${worktreeName.slice(-8)}`,
-      command: `/implementation-harness:rebase ${onto}`,
+      sessionName: `implementation-factory rebase ${worktreeName.slice(-8)}`,
+      command: `/implementation-factory:rebase ${onto}`,
     }), { cwd: pluginRoot, env: { ...sessionEnvironment(), CLAUDE_CODE_AUTO_MODE_SERVER: "0" }, stdio: ["ignore", "pipe", "pipe"] });
   },
 };

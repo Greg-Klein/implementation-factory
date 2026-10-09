@@ -149,7 +149,7 @@ test("should read the dialogue from a transcript created after the first hook, i
   // Claude Code keeps the transcripts of a working directory in a directory of
   // its own, created with the first one. A run in a fresh worktree therefore
   // names, in its first hook, a file whose directory is not there yet.
-  const root = path.join(os.tmpdir(), "implementation-harness-tests", "transcripts");
+  const root = path.join(os.tmpdir(), "implementation-factory-tests", "transcripts");
   rmSync(root, { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
   const transcript = path.join(root, "fresh-worktree", "session.jsonl");

@@ -225,7 +225,7 @@ function apply(session: RunSession, event: EngineEvent) {
 export function processHook(session: RunSession, body: Record<string, unknown>) {
   const inProgress = runInProgress(session.state.status);
   if (!inProgress && !session.state.sessionActive) return;
-  // Any hook proves the session runs, the one of its start included, which names no event of the harness.
+  // Any hook proves the session runs, the one of its start included, which names no event of the factory.
   const started = sessionStarted(session);
   const event = engine.event((body.payload ?? {}) as Record<string, unknown>);
   if (!event) {

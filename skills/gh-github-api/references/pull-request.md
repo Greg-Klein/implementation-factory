@@ -1,4 +1,4 @@
-The caller must authorize publication and supply the source and base branches, the ticket, the verdict, the artifacts and the delivery policy. This recipe does not authorize merging or unrelated ticket updates. References to step numbers below name the Harness caller stages, not additional automatic actions.
+The caller must authorize publication and supply the source and base branches, the ticket, the verdict, the artifacts and the delivery policy. This recipe does not authorize merging or unrelated ticket updates. References to step numbers below name the Factory caller stages, not additional automatic actions.
 
 # Authorized pull request delivery
 
@@ -14,7 +14,7 @@ This is the GitHub counterpart of [the GitLab delivery recipe](../../glab-gitlab
 
 ## Open the pull request
 
-Write the description to `.claude/tasks/mr-description.md` first (the file keeps that name on both forges, the console reads it by it), applying `implementation-harness:unslop`, then push the branch and open the pull request, as a normal one targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one. Never delete the local branch or remove a worktree after the push.
+Write the description to `.claude/tasks/mr-description.md` first (the file keeps that name on both forges, the console reads it by it), applying `implementation-factory:unslop`, then push the branch and open the pull request, as a normal one targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one. Never delete the local branch or remove a worktree after the push.
 
 ```bash
 git push -u origin <branch>

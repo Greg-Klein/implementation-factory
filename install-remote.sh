@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository="${IMPL_REPOSITORY:-https://github.com/Greg-Klein/implementation-harness.git}"
-install_dir="${IMPL_INSTALL_DIR:-$HOME/.local/share/implementation-harness}"
+repository="${IMPL_REPOSITORY:-https://github.com/Greg-Klein/implementation-factory.git}"
+install_dir="${IMPL_INSTALL_DIR:-$HOME/.local/share/implementation-factory}"
 
 if ! command -v git >/dev/null 2>&1; then
   printf 'Missing prerequisite: git\n' >&2

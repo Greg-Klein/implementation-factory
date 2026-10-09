@@ -2,7 +2,7 @@
 
 `how` and `why` return findings; neither writes artifacts, starts the application or runs tests. Their own epistemics references remain separate and self-contained.
 
-Load them on demand through the host skill catalog: in this plugin their qualified names are `implementation-harness:how` and `implementation-harness:why`. Do not assume a slash command is a shell program. When using `why`, resolve and load the installed `how` through that catalog; a matching directory alone does not prove availability. If it is missing or unloadable, report the required dependency and stop the historical investigation, without installing or imitating it.
+Load them on demand through the host skill catalog: in this plugin their qualified names are `implementation-factory:how` and `implementation-factory:why`. Do not assume a slash command is a shell program. When using `why`, resolve and load the installed `how` through that catalog; a matching directory alone does not prove availability. If it is missing or unloadable, report the required dependency and stop the historical investigation, without installing or imitating it.
 
 The pilot owns `.claude/tasks/investigation-context.md` when persistence is useful. A planner or worker returns additional findings to the pilot in its existing output; it does not acquire another writable report path. No investigation file is required for a simple, already understood change.
 

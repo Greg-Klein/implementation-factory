@@ -4,12 +4,12 @@ import { artifactWatchRoot, runWorktreePath, belongsToRun, isEvidenceReport, isP
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
-    const root = path.resolve("/tmp/implementation-harness-run/artifacts");
+    const root = path.resolve("/tmp/implementation-factory-run/artifacts");
     expect(resolveArtifactPath(root, "reviews/senior.md")).toBe(path.join(root, "reviews/senior.md"));
   });
 
   it("should reject path traversal and sibling directories", () => {
-    const root = path.resolve("/tmp/implementation-harness-run/artifacts");
+    const root = path.resolve("/tmp/implementation-factory-run/artifacts");
     expect(resolveArtifactPath(root, "../run.json")).toBeUndefined();
     expect(resolveArtifactPath(root, "/tmp/secret.txt")).toBeUndefined();
     expect(resolveArtifactPath(root, "../../artifacts-copy/secret.txt")).toBeUndefined();

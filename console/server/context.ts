@@ -51,7 +51,7 @@ export function reportFailure(what: string, subject?: string) {
   return (error: unknown): undefined => {
     const message = error instanceof Error ? error.message : String(error);
     // With where it was thrown, when it says: a message alone names a failure without locating it.
-    console.error(`[implementation-harness] ${what}${subject ? ` (${subject})` : ""}: ${message}`, ...(error instanceof Error && error.stack ? [`\n${error.stack}`] : []));
+    console.error(`[implementation-factory] ${what}${subject ? ` (${subject})` : ""}: ${message}`, ...(error instanceof Error && error.stack ? [`\n${error.stack}`] : []));
     const shownAt = reportedFailures.get(what);
     if (clients.size === 0 || (shownAt !== undefined && Date.now() - shownAt < FAILURE_NOTICE_INTERVAL_MS)) return;
     reportedFailures.set(what, Date.now());

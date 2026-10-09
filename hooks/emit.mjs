@@ -9,7 +9,7 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 
 // Decided here, with or without a console: a refused call never happened, so
-// the harness is not told about a tool that will never report its end.
+// the factory is not told about a tool that will never report its end.
 try {
   const refused = guardDecision(JSON.parse(input || "{}"));
   if (refused) {
@@ -21,7 +21,7 @@ try {
 }
 
 // Judged here for the same reason: an agent sent back to work has not stopped,
-// and the harness would otherwise close an agent that is still editing.
+// and the factory would otherwise close an agent that is still editing.
 try {
   const payload = JSON.parse(input || "{}");
   gateObserve(payload);
@@ -34,10 +34,10 @@ try {
   // A gate that cannot run lets the agent go.
 }
 
-const endpoint = process.env.IMPL_HARNESS_HOOK_URL;
+const endpoint = process.env.IMPL_HOOK_URL;
 if (!endpoint) process.exit(0);
 
-/** Whether the harness could not take the event, as opposed to having refused it. */
+/** Whether the factory could not take the event, as opposed to having refused it. */
 function undelivered(response) {
   return !response || response.status >= 500;
 }
@@ -64,15 +64,15 @@ function post(body, timeout) {
 
 try {
   const payload = JSON.parse(input || "{}");
-  const waitsForHarnessAnswer = payload.hook_event_name === "PreToolUse" && payload.tool_name === "AskUserQuestion";
-  // One identifier across the retry and the spool, so the harness applies the event once.
+  const waitsForFactoryAnswer = payload.hook_event_name === "PreToolUse" && payload.tool_name === "AskUserQuestion";
+  // One identifier across the retry and the spool, so the factory applies the event once.
   const body = JSON.stringify({
     runId: process.env.IMPL_RUN_ID,
     hookId: randomUUID(),
     receivedAt: new Date().toISOString(),
     payload,
   });
-  if (waitsForHarnessAnswer) {
+  if (waitsForFactoryAnswer) {
     // The question blocks until the user answers, and only the live request can
     // carry that answer back: it is neither retried nor spooled.
     const response = await post(body, 3_600_000);
@@ -88,5 +88,5 @@ try {
     if (undelivered(response) && process.env.IMPL_HOOK_SPOOL) appendFileSync(process.env.IMPL_HOOK_SPOOL, `${body}\n`);
   }
 } catch {
-  // The harness is optional: hooks must never interrupt Claude Code.
+  // The factory is optional: hooks must never interrupt Claude Code.
 }

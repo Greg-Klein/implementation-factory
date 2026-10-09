@@ -96,12 +96,12 @@ test("should not call a question left unanswered, nor a working agent, an incide
   const checkout = createGitCheckout("incident-quiet");
   await page.goto("/");
   const runId = await startRun(page, request, checkout.directory, checkout.issueUrl);
-  await postHook(request, runId, { hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "dev-1" });
+  await postHook(request, runId, { hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "dev-1" });
   await postHook(request, runId, { hook_event_name: "Stop" });
   await page.waitForTimeout(2_500);
   expect(await incidents(request, runId)).toEqual([]);
   // The agent ends, the pilot is woken and asks a question: still nobody stuck.
-  await postHook(request, runId, { hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer", agent_id: "dev-1" });
+  await postHook(request, runId, { hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "dev-1" });
   void request.post(`/api/hooks?token=${hookToken}`, { data: { runId, payload: { hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1", tool_input: { questions: [{ question: "Quelle base ?", header: "Branche", options: [{ label: "develop" }] }] } } } }).catch(() => undefined);
   await page.waitForTimeout(2_500);
   expect(await incidents(request, runId)).toEqual([]);
@@ -141,5 +141,5 @@ test("should play the incident demonstration from the hand-back to the resumed r
   await expect(page.getByRole("button", { name: /Open run acme-exports/ }).getByText("Nothing in progress")).toBeVisible();
   await band.getByRole("button", { name: "Request continuation" }).click();
   await expect(band).toHaveCount(0);
-  await expect(page).toHaveTitle("✓ Completed · Implementation Harness");
+  await expect(page).toHaveTitle("✓ Completed · Implementation Factory");
 });

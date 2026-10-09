@@ -75,8 +75,8 @@ describe("the figures of a run", () => {
 
   it("should split the tokens between the pilot and each agent, and name the agent as the run knows it", () => {
     const metrics = buildRunMetrics({
-      state: run({ agents: [{ id: "a1", name: "implementation-harness:developer", status: "completed", startedAt: at(1), endedAt: at(4) }] }),
-      usage: [session(), session({ agentId: "a1", agentType: "implementation-harness:developer", calls: 4, inputTokens: 0, outputTokens: 119_000, cacheReadTokens: 0, cacheWriteTokens: 0 })],
+      state: run({ agents: [{ id: "a1", name: "implementation-factory:developer", status: "completed", startedAt: at(1), endedAt: at(4) }] }),
+      usage: [session(), session({ agentId: "a1", agentType: "implementation-factory:developer", calls: 4, inputTokens: 0, outputTokens: 119_000, cacheReadTokens: 0, cacheWriteTokens: 0 })],
       at: at(5),
     });
     expect(metrics.tokens?.pilot).toMatchObject({ total: 881_020, calls: 10, firstContext: 70_000, peakContext: 120_000 });
@@ -100,7 +100,7 @@ describe("the figures of a run", () => {
   it("should count the launches by agent type and the developers sent to correct", () => {
     const agent = (id: string, name: string, status: "completed" | "abandoned" = "completed") => ({ id, name, status, startedAt: at(1), endedAt: at(2) });
     const metrics = buildRunMetrics({
-      state: run({ agents: [agent("a", "implementation-harness:senior-reviewer"), agent("b", "senior-reviewer"), agent("c", "developer", "abandoned")], artifacts: ["developer-report-T1.md", "developer-report-rework1.md"] }),
+      state: run({ agents: [agent("a", "implementation-factory:senior-reviewer"), agent("b", "senior-reviewer"), agent("c", "developer", "abandoned")], artifacts: ["developer-report-T1.md", "developer-report-rework1.md"] }),
       usage: [], at: at(3),
     });
     expect(metrics.rework).toEqual({ launches: { "senior-reviewer": 2, developer: 1 }, reworkDevelopers: 1, lostAgents: 1 });

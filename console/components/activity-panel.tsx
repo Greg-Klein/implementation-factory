@@ -38,7 +38,7 @@ export function ActivityPanel({ run, onFeedback, refusedFeedback, onShowQuestion
     <aside className="scrollbar-thin flex min-h-0 flex-col bg-[var(--tint)] lg:overflow-y-auto">
       {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-[var(--raised)] p-4">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Improve the harness</label>
+          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Improve the factory</label>
           {demo && <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-mono text-[9px] text-[var(--accent)]">demo</span>}
         </div>
         <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="What was slow, missing or broken…" className="field mt-2 resize-none text-[11px] leading-4" />

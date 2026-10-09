@@ -224,9 +224,9 @@ async function judge(worktree: Worktree & { branch: string }, worktreeName: stri
 }
 
 /**
- * Decides one finished branch: replayed on the harness, held on a mechanical
+ * Decides one finished branch: replayed on the factory, held on a mechanical
  * rule, on a failed check or on the judge's word, merged otherwise. Returns
- * without a decision when the harness or the branch moved during the checks,
+ * without a decision when the factory or the branch moved during the checks,
  * so the next tick starts again on the tree that would really be merged.
  */
 async function decide(worktree: Worktree, worktreeName: string) {
@@ -235,7 +235,7 @@ async function decide(worktree: Worktree, worktreeName: string) {
   const onto = await headCommit(pluginRoot);
   // Replayed here without the assisted rebase, which a tick a minute would start over and over.
   if (!(await branchIsRebasedOn(pluginRoot, branch, onto)) && !(await rebaseWorktree(worktree, onto)))
-    return reject(worktree, worktreeName, ["The branch conflicts with the harness and git alone could not replay it."]);
+    return reject(worktree, worktreeName, ["The branch conflicts with the factory and git alone could not replay it."]);
   const branchHead = (await git(pluginRoot, ["rev-parse", branch])).trim();
   const [nameStatus, numstat, patch] = await Promise.all([
     git(pluginRoot, ["diff", "-M", "--name-status", onto, branchHead]),
@@ -308,7 +308,7 @@ async function restartConsole() {
       return;
     }
   }
-  const child = spawn(path.join(pluginRoot, "bin", "implementation-harness"), ["restart"], {
+  const child = spawn(path.join(pluginRoot, "bin", "implementation-factory"), ["restart"], {
     cwd: pluginRoot, detached: true, stdio: "ignore", env: { ...withoutBundlerVariables(process.env), IMPL_NO_OPEN: "1" },
   });
   child.on("error", (error) => notice("attention", "Console not restarted", `${error.message}. Run impl restart by hand.`));

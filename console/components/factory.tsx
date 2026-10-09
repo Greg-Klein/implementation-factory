@@ -10,7 +10,7 @@ import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sou
 import { appendTerminalOutput } from "@/lib/terminal-output";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
-import type { AutomaticMerge, HarnessSnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
+import type { AutomaticMerge, FactorySnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
 import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
@@ -35,10 +35,10 @@ function requestIdentifier() {
 /** Said when a command could not leave the page: nothing was sent, so nothing is shown as done. */
 const NOT_CONNECTED = "Not connected to the console. Nothing was sent. Try again in a moment.";
 
-const emptySnapshot: HarnessSnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, archived: [] };
+const emptySnapshot: FactorySnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, archived: [] };
 
-export function Harness() {
-  const [snapshot, setSnapshot] = useState<HarnessSnapshot>(emptySnapshot);
+export function Factory() {
+  const [snapshot, setSnapshot] = useState<FactorySnapshot>(emptySnapshot);
   const [run, setRun] = useState<RunState | null>(null);
   const [connected, setConnected] = useState(false);
   const [cwd, setCwd] = useState("");
@@ -163,7 +163,7 @@ export function Harness() {
       };
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as ServerMessage;
-        if (message.type === "harness") setSnapshot(message.snapshot);
+        if (message.type === "factory") setSnapshot(message.snapshot);
         const answer = launchAnswer(pendingLaunchRef.current, message);
         if (answer) setPendingLaunch(undefined);
         // A refusal is read on the form that has to be corrected. A queued launch is no longer being
@@ -472,8 +472,8 @@ export function Harness() {
             <div className="flex items-center gap-3">
               <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-[var(--on-ink)]"><CodeIcon size={18} weight="bold" /></div>
               <div>
-                <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Harness</h1>
-                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[var(--faint)]">by Gregory Klein</span></p>
+                <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Factory</h1>
+                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Software factory on Claude Code</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[var(--faint)]">by Gregory Klein</span></p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
@@ -483,7 +483,7 @@ export function Harness() {
               <button type="button" role="switch" aria-checked={sound} aria-label="Alert sound" onClick={toggleSound} title={sound ? "Alert sound on, click to mute" : "Alert sound off, click to turn on"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
                 {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
               </button>
-              <span title="Live connection between this page and the local server of the harness" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
+              <span title="Live connection between this page and the local server of the factory" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
               <span className="hidden sm:inline">Local server</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connected" : "reconnecting…"}</span>
             </div>
           </header>

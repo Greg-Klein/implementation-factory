@@ -1,5 +1,5 @@
 {
-  "description": "Forward implementation-harness activity to the local harness when it is running",
+  "description": "Forward implementation-factory activity to the local factory when it is running",
   "hooks": {
     "SessionStart": [
       {

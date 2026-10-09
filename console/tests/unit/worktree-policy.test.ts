@@ -12,7 +12,7 @@ const delivered = (overrides: Overrides<Run> = {}) => overridden<Run>({ status: 
 const safe = { exists: true, clean: true, pushed: true };
 
 describe("where the worktree of a run lives", () => {
-  it("should sit inside the repository, under the directory the harness ignores, named after the run", () => {
+  it("should sit inside the repository, under the directory the factory ignores, named after the run", () => {
     expect(runWorktreePath("/work/repo", "2026-10-03T08-00-00-000Z-abcd1234")).toBe("/work/repo/.claude/worktrees/2026-10-03T08-00-00-000Z-abcd1234");
   });
 

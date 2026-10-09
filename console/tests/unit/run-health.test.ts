@@ -13,7 +13,7 @@ function input(overrides: Partial<Omit<HealthInput, "signals">> = {}, signals: P
   return { status: "running", sessionActive: true, stoppedBy: null, pendingQuestion: false, agents: [], artifacts: [], ...overrides, signals: healthSignalsView(base) };
 }
 
-const agent = (overrides: Partial<AgentState>): AgentState => ({ id: "a1", name: "implementation-harness:developer", status: "running", startedAt: new Date(T0).toISOString(), ...overrides });
+const agent = (overrides: Partial<AgentState>): AgentState => ({ id: "a1", name: "implementation-factory:developer", status: "running", startedAt: new Date(T0).toISOString(), ...overrides });
 
 function workflow(overrides: Partial<WorkflowState>): WorkflowState {
   return { schemaVersion: 1, revision: 1, state: "working", receivedAt: new Date(T0).toISOString(), ...overrides };
@@ -93,7 +93,7 @@ describe("a pilot with nothing next", () => {
   });
 
   it("should give the pilot its whole grace to wake up after the last agent ends", () => {
-    const ended = agent({ status: "completed", endedAt: new Date(T0 + minutes(5)).toISOString(), name: "implementation-harness:senior-reviewer" });
+    const ended = agent({ status: "completed", endedAt: new Date(T0 + minutes(5)).toISOString(), name: "implementation-factory:senior-reviewer" });
     const idle = input({ agents: [ended] }, { pilotIdleSince: T0 });
     expect(evaluateRunHealth(idle, T0 + minutes(5) + seconds(10), policy).incident).toBeUndefined();
     expect(evaluateRunHealth(idle, T0 + minutes(6) + seconds(1), policy).incident?.fingerprint).toBe(`no_next_action:${T0}`);
@@ -130,7 +130,7 @@ describe("a pilot with nothing next", () => {
 
 describe("a result its producer never wrote", () => {
   const ended = new Date(T0).toISOString();
-  const qa = agent({ id: "qa1", name: "implementation-harness:qa-reviewer", status: "completed", endedAt: ended });
+  const qa = agent({ id: "qa1", name: "implementation-factory:qa-reviewer", status: "completed", endedAt: ended });
 
   it("should give the file its archiving grace, then name it", () => {
     const run = input({ agents: [qa] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
@@ -147,24 +147,24 @@ describe("a result its producer never wrote", () => {
   });
 
   it("should require the plan each reviewer writes before its report", () => {
-    expect(requiredFiles({ id: "qa1", name: "implementation-harness:qa-reviewer" }, [])).toEqual(["qa-report.md", "qa-evidence.json", "qa-plan.md"]);
-    expect(requiredFiles({ id: "ds1", name: "implementation-harness:designer-reviewer" }, [])).toEqual(["designer-review.md", "design-evidence.json", "design-inventory.md"]);
+    expect(requiredFiles({ id: "qa1", name: "implementation-factory:qa-reviewer" }, [])).toEqual(["qa-report.md", "qa-evidence.json", "qa-plan.md"]);
+    expect(requiredFiles({ id: "ds1", name: "implementation-factory:designer-reviewer" }, [])).toEqual(["designer-review.md", "design-evidence.json", "design-inventory.md"]);
     const withoutPlan = input({ agents: [qa], artifacts: ["qa-report.md", "qa-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
     expect(evaluateRunHealth(withoutPlan, T0 + seconds(40), policy).incident).toMatchObject({ kind: "missing_result", title: "QA test plan expected", fingerprint: "missing_result:qa1:qa-plan.md" });
-    const designer = agent({ id: "ds1", name: "implementation-harness:designer-reviewer", status: "completed", endedAt: ended });
+    const designer = agent({ id: "ds1", name: "implementation-factory:designer-reviewer", status: "completed", endedAt: ended });
     const withoutInventory = input({ agents: [designer], artifacts: ["designer-review.md", "design-evidence.json"] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - seconds(10) });
     expect(evaluateRunHealth(withoutInventory, T0 + seconds(40), policy).incident?.title).toBe("Design inventory expected");
   });
 
   it("should require nothing of a reviewer that answers in chat", () => {
-    const senior = agent({ id: "s1", name: "implementation-harness:senior-reviewer", status: "completed", endedAt: ended });
+    const senior = agent({ id: "s1", name: "implementation-factory:senior-reviewer", status: "completed", endedAt: ended });
     expect(requiredFiles(senior, [])).toEqual([]);
     const verdict = evaluateRunHealth(input({ agents: [senior] }, { pilotIdleSince: T0, pilotLastActedAt: T0 - 1 }), T0 + seconds(45), policy);
     expect(verdict.incident).toBeUndefined();
   });
 
   it("should expect a developer's report for each task it was handed", () => {
-    expect(requiredFiles({ id: "d1", name: "implementation-harness:developer" }, [{ agentType: "developer", taskIds: ["T2", "T3"], agentId: "d1" }])).toEqual(["developer-report-T2.md", "developer-report-T3.md"]);
+    expect(requiredFiles({ id: "d1", name: "implementation-factory:developer" }, [{ agentType: "developer", taskIds: ["T2", "T3"], agentId: "d1" }])).toEqual(["developer-report-T2.md", "developer-report-T3.md"]);
   });
 });
 

@@ -1,9 +1,9 @@
 import { createInterface } from "node:readline/promises";
 import { phaseNames, runLabel, runStatusBadge, statusLabel } from "../lib/run-state";
-import type { HarnessSnapshot, PendingQuestion, RunState, RunSummary } from "../server/types.js";
+import type { FactorySnapshot, PendingQuestion, RunState, RunSummary } from "../server/types.js";
 import { CliError, type Link } from "./client";
 import type { Context } from "./commands";
-import { activityLine, incidentWords, messageLine, renderHarness, renderQuestion, renderSessionPrompt } from "./format";
+import { activityLine, incidentWords, messageLine, renderFactory, renderQuestion, renderSessionPrompt } from "./format";
 import { answerFromInput, shortId } from "./select";
 
 /** How much of a run already under way is shown before what happens next. */
@@ -157,12 +157,12 @@ function rowState(run: RunSummary) {
 }
 
 /** Follows every run: the list as it stands, then one line each time a run or the queue moves, and the console's notices. Runs until interrupted. */
-export function watchHarness(context: Context, link: Link): Promise<number> {
+export function watchFactory(context: Context, link: Link): Promise<number> {
   return new Promise((resolve, reject) => {
     const clock = () => new Date().toTimeString().slice(0, 8);
     let rows = new Map<string, string>();
     let queued = new Set<string>();
-    const read = (snapshot: HarnessSnapshot, announce: boolean) => {
+    const read = (snapshot: FactorySnapshot, announce: boolean) => {
       const next = new Map(snapshot.runs.map((run) => [run.id, rowState(run)]));
       if (announce) {
         for (const run of snapshot.runs) {
@@ -177,11 +177,11 @@ export function watchHarness(context: Context, link: Link): Promise<number> {
       rows = next;
       queued = new Set(snapshot.queued.map((entry) => entry.id));
     };
-    context.print(renderHarness(link.snapshot(), Date.now()));
+    context.print(renderFactory(link.snapshot(), Date.now()));
     context.print("");
     read(link.snapshot(), false);
     link.listen((message) => {
-      if (message.type === "harness") read(message.snapshot, true);
+      if (message.type === "factory") read(message.snapshot, true);
       if (message.type === "notice") context.print(`${clock()}  ${message.level === "attention" ? "! " : ""}${message.title}${message.detail ? `: ${message.detail}` : ""}`);
     });
     link.closed.then(() => { context.print("The console closed the connection."); resolve(1); }, reject);

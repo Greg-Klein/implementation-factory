@@ -33,7 +33,7 @@ By default carry over the epic's labels. If Greg explicitly asks for specific la
 
 - Functional description, edge cases, a targeted Figma link, and when asked the **full API contract** (endpoints, schemas, error codes) so the ticket is self-sufficient.
 - **Always write ticket description in French**
-- Write the title and description with `implementation-harness:unslop`.
+- Write the title and description with `implementation-factory:unslop`.
 - **Do not list the source files to modify.**
 - **A ticket is a technical specification, not a digest of PRD quotes**: states and transitions, the consumed API contract, client-side validation, interface strings, responsive rules, written in the imperative and in your own words. No PRD blockquote, no Notion section name, no "extracts that justify the ticket". Verbatim is reserved for strings shown to the user and for numeric values. The reader is a front-end developer implementing without opening the PRD.
 - Split a plan into tickets attached to an epic, each independently shippable. Calibrate on the sprint size (for example ~10 days).

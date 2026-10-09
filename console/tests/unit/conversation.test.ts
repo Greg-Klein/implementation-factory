@@ -42,7 +42,7 @@ describe("conversation extraction", () => {
       { type: "assistant", uuid: "t2", message: { content: [{ type: "thinking", thinking: "hmm" }] } },
       { type: "user", uuid: "t3", message: { content: [{ type: "tool_result", content: "ok" }] } },
       { type: "assistant", uuid: "t4", isSidechain: true, message: { content: [{ type: "text", text: "Rapport du sous-agent" }] } },
-      { type: "user", uuid: "t5", message: { content: "<command-name>/implementation-harness:implement</command-name>" } },
+      { type: "user", uuid: "t5", message: { content: "<command-name>/implementation-factory:implement</command-name>" } },
       { type: "user", uuid: "t6", isMeta: true, message: { content: [{ type: "text", text: "Implement ticket: …" }] } },
       { type: "user", uuid: "t7", message: { content: "<task-notification>\n<status>completed</status>\n</task-notification>" } },
       { type: "attachment", uuid: "t8" },

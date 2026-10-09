@@ -1,6 +1,6 @@
 ---
 name: rebase
-description: Replay a pending improvement branch on top of the harness when git alone could not, resolving the conflicts without losing either side.
+description: Replay a pending improvement branch on top of the factory when git alone could not, resolving the conflicts without losing either side.
 disable-model-invocation: true
 argument-hint: <commit-to-replay-onto>
 model: sonnet
@@ -8,7 +8,7 @@ model: sonnet
 
 Replay this worktree's improvement branch on top of: $ARGUMENTS
 
-You are inside the worktree that holds the branch. The harness moved under it, git stopped on a conflict and aborted, so the branch sits exactly where its improvement run left it. Your only job is to bring it up to date. You do not improve anything, you do not review anything, and you never touch the primary checkout.
+You are inside the worktree that holds the branch. The factory moved under it, git stopped on a conflict and aborted, so the branch sits exactly where its improvement run left it. Your only job is to bring it up to date. You do not improve anything, you do not review anything, and you never touch the primary checkout.
 
 ## 1. Refuse the cases that are not yours
 
@@ -34,14 +34,14 @@ If the branch cannot be replayed, `git rebase --abort` and report why. A branch 
 
 ## 3. Prove the branch still works
 
-The improvement was validated before the harness moved, and the replay may have invalidated it. Run at minimum:
+The improvement was validated before the factory moved, and the replay may have invalidated it. Run at minimum:
 
 ```bash
 claude plugin validate .
 npm ci --prefix console --no-audit --no-fund
 npm run typecheck --prefix console
 npm run test:unit --prefix console
-bash -n install.sh install-remote.sh bin/implementation-harness
+bash -n install.sh install-remote.sh bin/implementation-factory
 ```
 
 `npm run build` rewrites the tracked `console/next-env.d.ts`. If you run it, restore that file with `git checkout -- console/next-env.d.ts` and never commit it.
@@ -50,6 +50,6 @@ If a check fails because of the replay, fix the resolution. If it fails for a re
 
 ## 4. Leave it ready, not promoted
 
-Commit nothing new: the rebase already rewrote the branch's own commits. Never merge into the harness, never push, never open a merge request. The console shows the diff and the user decides.
+Commit nothing new: the rebase already rewrote the branch's own commits. Never merge into the factory, never push, never open a merge request. The console shows the diff and the user decides.
 
 End with a short report: the commit replayed onto, the files that conflicted and how you resolved each one, the checks you ran and their results, and anything you deliberately left alone.

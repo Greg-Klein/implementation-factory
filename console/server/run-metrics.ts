@@ -10,9 +10,9 @@ import { declaredCompletion } from "./workflow-state.js";
  * out. The files and git are in run-metrics-runtime.ts.
  *
  * Two figures are predictions and one is a fact. The plan's sizes and the
- * review tier come from the harness itself; the diff is what the ticket turned
+ * review tier come from the factory itself; the diff is what the ticket turned
  * out to be. Comparing a run to others by the first two alone would grade the
- * harness with its own estimate.
+ * factory with its own estimate.
  */
 
 const time = (value: string | null | undefined) => (value ? new Date(value).getTime() : Number.NaN);
@@ -91,7 +91,7 @@ function sumUsage(sessions: SessionUsage[]): SessionMetrics {
   };
 }
 
-/** `implementation-harness:developer` and `developer` are the same agent. */
+/** `implementation-factory:developer` and `developer` are the same agent. */
 function agentType(name: string) {
   return name.slice(name.lastIndexOf(":") + 1);
 }
@@ -187,7 +187,7 @@ export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: Metr
     runId: state.id ?? "",
     computedAt: at,
     final: !state.sessionActive && !runInProgress(state.status),
-    ...(state.harness ? { harness: state.harness } : {}),
+    ...(state.factory ? { factory: state.factory } : {}),
     ticket: { issueUrl: state.issueUrl, ...(state.ticketTitle ? { title: state.ticketTitle } : {}), repository: sourceRepository(state) },
     outcome: {
       status: state.status, phase: state.phase, delivery,

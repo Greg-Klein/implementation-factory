@@ -199,12 +199,11 @@ export function isImprovementWorktree(worktreePath: string) {
  * loop opened eleven in a day on 7 September, four of them conflicting with each
  * other, and each rotted as the harness branch moved on. A branch nobody has
  * ruled on is also the branch the next iteration would be diagnosed against, so
- * the loop waits for a verdict instead of stacking. A branch the automatic merge
- * put on hold has its verdict and only waits on the user: it is in `held` and
- * stops nothing.
+ * the loop waits for a verdict instead of stacking. The automatic merge settles
+ * every branch within minutes of its report, so the wait is short.
  */
-export function improvementWorktreeInFlight(worktreePaths: string[], held: ReadonlySet<string> = new Set()) {
-  return worktreePaths.find((worktreePath) => isImprovementWorktree(worktreePath) && !held.has(path.basename(worktreePath)));
+export function improvementWorktreeInFlight(worktreePaths: string[]) {
+  return worktreePaths.find(isImprovementWorktree);
 }
 
 /** The report /implementation-harness:improve writes last, next to the feedback, named after its branch. */

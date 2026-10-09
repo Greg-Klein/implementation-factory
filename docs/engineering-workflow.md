@@ -252,13 +252,13 @@ Two headless sessions that are not runs have rules of their own, and only those.
 
 ## Promoting a self-improvement
 
-An improvement branch is never left to a review: it reaches the harness on its own when three independent locks agree, and each one can hold it alone for the user:
+An improvement branch is never left to a review: it reaches the harness on its own when three independent locks agree, and each one can reject it alone:
 
 1. Mechanical rules decided on the diff (`console/server/auto-merge-policy.ts`): no protected file (the guard, the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the CI), no test deleted or skipped, at most 15 files and 400 lines. The policy file is itself protected, so a branch cannot loosen the rules it is judged by.
 2. The checks, rerun by the console on the tree it would merge. The improvement session's own report is a claim.
-3. A judge on Opus (`commands/judge-improvement.md`), which forms its expectation from the run evidence before reading the author's plan, report and diff, as QA writes `qa-plan.md` before reading the developer's report. It holds a change whose cause is not established, that overfits one run, weakens a gate or leaves the documentation stale.
+3. A judge on Opus (`commands/judge-improvement.md`), which forms its expectation from the run evidence before reading the author's plan, report and diff, as QA writes `qa-plan.md` before reading the developer's report. It refuses a change whose cause is not established, that overfits one run, weakens a gate or leaves the documentation stale.
 
-A held branch waits for the user without stopping the loop. A merged one can be reverted from the console for a day. Each decision is logged in `<data dir>/self-improvement-decisions.jsonl`.
+A rejected branch is discarded, never handed to the user: its uncommitted work is kept as a patch beside its report, and the feedback it was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged branch can be reverted from the console for a day. Each decision is logged in `<data dir>/self-improvement-decisions.jsonl`.
 
 ## The stop gate
 

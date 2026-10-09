@@ -95,7 +95,7 @@ function CheckingRow({ review }: { review: PendingSelfImprovementReview }) {
     <Strip tone="muted">
       <p className="flex min-w-0 items-center gap-2 text-[11px]">
         <CircleNotchIcon size={12} className="shrink-0 animate-spin text-[var(--muted)]" />
-        <span className="font-semibold text-[var(--muted)]">Improvements being checked before an automatic merge</span>
+        <span className="font-semibold text-[var(--muted)]">{review.autoMerge?.state === "checking" ? "Improvements being checked before an automatic merge" : "Improvements committed, waiting for the session's report"}</span>
         <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
       </p>
     </Strip>
@@ -122,20 +122,14 @@ function MergedRow({ merge, onRevert, onViewReport }: { merge: AutomaticMerge; o
 }
 
 function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
-  const held = review.autoMerge?.state === "held" ? review.autoMerge.reasons : undefined;
   return (
     <Strip tone="accent">
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="font-semibold text-[var(--accent)]">{held ? "Improvements held for your review" : "Improvements ready"}</span>
+          <span className="font-semibold text-[var(--accent)]">Improvements ready</span>
           <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
         </p>
-        {held?.map((reason, index) => (
-          <p key={index} className="flex items-start gap-1.5 text-[10px] leading-4 text-[var(--muted)]">
-            {index === 0 && <WarningIcon size={12} className="mt-px shrink-0" />}
-            <span className={index === 0 ? "" : "pl-[18px]"}>{reason}</span>
-          </p>
-        ))}
+
         {review.mergesCleanly === false && (
           <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
             <WarningIcon size={12} className="mt-px shrink-0" />
@@ -162,7 +156,7 @@ export function SelfImprovementReviewPanel({ reviews, merged = [], onApprove, on
       {merged.map((merge) => <MergedRow key={`merged-${merge.worktreeName}`} merge={merge} onRevert={() => onRevert(merge.worktreeName)} onViewReport={() => setShown({ worktreeName: merge.worktreeName, kind: "report" })} />)}
       {reviews.map((review) => review.status === "analyzing"
         ? <AnalyzingRow key={review.worktreeName} review={review} />
-        : review.status === "ready" && review.autoMerge?.state === "checking"
+        : review.status === "ready" && review.autoMerge
         ? <CheckingRow key={review.worktreeName} review={review} />
         : review.status === "finished"
         ? <FinishedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} onViewReport={() => setShown({ worktreeName: review.worktreeName, kind: "report" })} />

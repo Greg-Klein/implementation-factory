@@ -119,7 +119,7 @@ export function judgeVerdict(raw: unknown): { verdict: JudgeVerdict } | { error:
 export type AutoMergeDecision = {
   worktreeName: string;
   at: string;
-  decision: "merged" | "held" | "reverted";
+  decision: "merged" | "rejected" | "reverted";
   reasons: string[];
   branch?: string;
   mergeCommit?: string;
@@ -130,7 +130,7 @@ export function autoMergeDecision(raw: unknown): AutoMergeDecision | undefined {
   const { worktreeName, at, decision, reasons, branch, mergeCommit } = raw as Record<string, unknown>;
   if (typeof worktreeName !== "string" || !/^[a-z0-9-]+$/i.test(worktreeName)) return undefined;
   if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return undefined;
-  if (decision !== "merged" && decision !== "held" && decision !== "reverted") return undefined;
+  if (decision !== "merged" && decision !== "rejected" && decision !== "reverted") return undefined;
   if (!Array.isArray(reasons) || !reasons.every((reason) => typeof reason === "string")) return undefined;
   if (decision === "merged" && (typeof mergeCommit !== "string" || !/^[0-9a-f]{40}$/.test(mergeCommit))) return undefined;
   return {
@@ -154,4 +154,26 @@ export function recentAutoMerges(decisions: AutoMergeDecision[], now: number) {
   return [...latestDecisions(decisions).values()]
     .filter((decision) => decision.decision === "merged" && now - Date.parse(decision.at) < RECENT_MERGE_MS)
     .sort((left, right) => Date.parse(right.at) - Date.parse(left.at));
+}
+
+/** How many rejected branches one feedback entry may cause before the loop stops trying it. */
+export const MAX_REJECTED_ATTEMPTS = 2;
+
+export type RejectedAttempt = { branch: string; at: string; reasons: string[] };
+
+/**
+ * What becomes of a processed feedback entry once the branch built on it is
+ * rejected: back to `pending/` with the judge's reasons, so the next iteration
+ * tries another way, or left processed after its last allowed attempt.
+ * Undefined when the entry is not one the branch processed.
+ */
+export function rejectedEntry(raw: unknown, branch: string, attempt: RejectedAttempt): { retry: Record<string, unknown> } | { exhausted: Record<string, unknown> } | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const entry = raw as Record<string, unknown>;
+  if (typeof entry.branch !== "string" || (entry.branch !== branch && entry.branch !== `worktree-${branch}` && `worktree-${entry.branch}` !== branch)) return undefined;
+  const earlier = Array.isArray(entry.rejectedAttempts) ? entry.rejectedAttempts.filter((item): item is RejectedAttempt => typeof item === "object" && item !== null) : [];
+  const rejectedAttempts = [...earlier, attempt];
+  if (rejectedAttempts.length >= MAX_REJECTED_ATTEMPTS) return { exhausted: { ...entry, decision: "rejected", rejectedAttempts } };
+  const { branch: _branch, commit: _commit, decision: _decision, processedAt: _processedAt, ...rest } = entry;
+  return { retry: { ...rest, status: "pending", rejectedAttempts } };
 }

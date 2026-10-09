@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
@@ -8,8 +8,8 @@ import { isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, selfImprovementAutorun, storageRoot } from "./config.js";
 import { isImprovementWorktree, mergeNeedsRestart, positiveDuration, withoutBundlerVariables } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, latestDecisions, recentAutoMerges, type AutoMergeDecision } from "./auto-merge-policy.js";
-import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, setHeldImprovements, type PromotionResult } from "./self-improvement.js";
+import { autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type RejectedAttempt } from "./auto-merge-policy.js";
+import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, type PromotionResult } from "./self-improvement.js";
 import { branchIsRebasedOn, changedPaths, headCommit, listWorktrees, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean, type Worktree } from "./worktree.js";
 import { improvementReportName } from "./domain.js";
 
@@ -17,7 +17,7 @@ const exec = promisify(execFile);
 
 /**
  * Every finished branch is decided here, never left to a review: the user only
- * sees what a rule, a check or the judge held. Off with the rest of the loop
+ * sees what was merged, and can revert it. Off with the rest of the loop
  * when IMPL_SELF_IMPROVEMENT_AUTORUN is false, since the judge is a session the
  * console starts on its own.
  */
@@ -38,17 +38,10 @@ let restartPending = false;
 let bootCommit: string | undefined;
 let isIdle: () => boolean = () => false;
 
-/** The branches on hold for the user. They no longer stop the improvement loop. */
-function heldWorktrees() {
-  return new Set([...latestDecisions(decisions).values()].filter((decision) => decision.decision === "held").map((decision) => decision.worktreeName));
-}
-
-/** What the page shows of a pending branch beside its commits. */
+/** What the page shows of a branch with commits: the console decides it, nobody else. */
 export function autoMergeView(worktreeName: string) {
   if (!autoMergeOn()) return undefined;
-  if (checking === worktreeName) return { state: "checking" as const, reasons: [] };
-  const latest = latestDecisions(decisions).get(worktreeName);
-  return latest?.decision === "held" ? { state: "held" as const, reasons: latest.reasons } : undefined;
+  return { state: checking === worktreeName ? "checking" as const : "waiting" as const };
 }
 
 /** The branches merged without the user in the last day, which the page offers to revert. */
@@ -84,9 +77,52 @@ async function record(decision: AutoMergeDecision) {
   decisions.push(decision);
 }
 
-async function hold(worktree: Worktree, worktreeName: string, reasons: string[]) {
-  await record({ worktreeName, at: now(), decision: "held", reasons, ...(worktree.branch ? { branch: worktree.branch } : {}) });
-  notice("attention", "Improvement held for review", `${worktreeName}: ${reasons[0]}`);
+/**
+ * The feedback the rejected branch processed goes back to `pending/` with the
+ * reasons, so the next iteration tries another way; after its last allowed
+ * attempt it stays processed. Returns how many entries go back.
+ */
+async function requeueFeedback(branch: string, attempt: RejectedAttempt) {
+  const processed = path.join(path.dirname(feedbackRoot), "processed");
+  const names = await readdir(processed).catch((error: unknown) => {
+    if (isMissingFile(error)) return [] as string[];
+    throw error;
+  });
+  let retried = 0;
+  for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
+    const file = path.join(processed, name);
+    let raw: unknown;
+    try { raw = JSON.parse(await readFile(file, "utf8")) as unknown; } catch (error) { reportFailure("Processed feedback entry not read", file)(error); continue; }
+    const outcome = rejectedEntry(raw, branch, attempt);
+    if (!outcome) continue;
+    if ("exhausted" in outcome) {
+      await writeFile(file, JSON.stringify(outcome.exhausted, null, 2));
+      continue;
+    }
+    await mkdir(feedbackRoot, { recursive: true });
+    await writeFile(path.join(feedbackRoot, name), JSON.stringify(outcome.retry, null, 2));
+    await rm(file);
+    retried += 1;
+  }
+  return retried;
+}
+
+/**
+ * Discards a branch the rules, the checks or the judge refused: nobody reviews
+ * it. Uncommitted work is kept as a patch beside the report before the
+ * worktree goes, and the feedback is queued again for another attempt.
+ */
+async function reject(worktree: Worktree, worktreeName: string, reasons: string[]) {
+  const at = now();
+  await record({ worktreeName, at, decision: "rejected", reasons, ...(worktree.branch ? { branch: worktree.branch } : {}) });
+  if (!(await worktreeIsClean(worktree))) {
+    const patch = path.join(path.dirname(feedbackRoot), improvementReportName(worktreeName).replace(/^improvement-report-/, "improvement-uncommitted-").replace(/\.md$/, ".patch"));
+    await git(worktree.path, ["add", "--all", "--intent-to-add"]);
+    await writeFile(patch, await git(worktree.path, ["diff", "HEAD"]));
+  }
+  await removeWorktree(pluginRoot, worktree);
+  const retried = worktree.branch ? await requeueFeedback(worktree.branch, { branch: worktree.branch, at, reasons }) : 0;
+  notice("attention", "Improvement rejected", `${worktreeName}: ${reasons[0]} ${retried > 0 ? `Its feedback is queued again for another attempt.` : "Its feedback is not tried again."}`);
 }
 
 /** The environment of the checks: the console's own settings and bundler variables stay out, the suites set theirs. */
@@ -180,11 +216,11 @@ async function judge(worktree: Worktree & { branch: string }, worktreeName: stri
  */
 async function decide(worktree: Worktree, worktreeName: string) {
   const branch = worktree.branch;
-  if (!branch) return hold(worktree, worktreeName, ["The worktree is on no branch."]);
+  if (!branch) return reject(worktree, worktreeName, ["The worktree is on no branch."]);
   const onto = await headCommit(pluginRoot);
   // Replayed here without the assisted rebase, which a tick a minute would start over and over.
   if (!(await branchIsRebasedOn(pluginRoot, branch, onto)) && !(await rebaseWorktree(worktree, onto)))
-    return hold(worktree, worktreeName, ["The branch conflicts with the harness and git alone could not replay it."]);
+    return reject(worktree, worktreeName, ["The branch conflicts with the harness and git alone could not replay it."]);
   const branchHead = (await git(pluginRoot, ["rev-parse", branch])).trim();
   const [nameStatus, numstat, patch] = await Promise.all([
     git(pluginRoot, ["diff", "-M", "--name-status", onto, branchHead]),
@@ -193,18 +229,18 @@ async function decide(worktree: Worktree, worktreeName: string) {
   ]);
   const files = changedFiles(nameStatus, numstat);
   const blockers = autoMergeBlockers(files, patch);
-  if (blockers.length > 0) return hold(worktree, worktreeName, blockers);
+  if (blockers.length > 0) return reject(worktree, worktreeName, blockers);
   const checks = await runChecks(worktree, mergeNeedsRestart(files.flatMap((file) => [file.path, ...(file.oldPath ? [file.oldPath] : [])])));
   const failed = checks.find((check) => !check.ok);
-  if (failed) return hold(worktree, worktreeName, [`The ${failed.name} check failed (${failed.command}).`, failed.output.split("\n").filter(Boolean).slice(-3).join(" ")].filter(Boolean));
+  if (failed) return reject(worktree, worktreeName, [`The ${failed.name} check failed (${failed.command}).`, failed.output.split("\n").filter(Boolean).slice(-3).join(" ")].filter(Boolean));
   const verdict = await judge({ ...worktree, branch }, worktreeName, onto, patch, files, checks);
-  if (verdict.decision !== "merge") return hold(worktree, worktreeName, verdict.reasons);
+  if (verdict.decision !== "merge") return reject(worktree, worktreeName, verdict.reasons);
   if ((await headCommit(pluginRoot)) !== onto || (await git(pluginRoot, ["rev-parse", branch])).trim() !== branchHead) return;
   let result: PromotionResult;
   try {
     result = await applySelfImprovementReview(worktreeName, true, true);
   } catch (error) {
-    return hold(worktree, worktreeName, [error instanceof Error ? error.message : String(error)]);
+    return reject(worktree, worktreeName, [error instanceof Error ? error.message : String(error)]);
   }
   if (!result.mergeCommit) return;
   await record({ worktreeName, at: now(), decision: "merged", reasons: verdict.reasons, branch, mergeCommit: result.mergeCommit });
@@ -213,14 +249,15 @@ async function decide(worktree: Worktree, worktreeName: string) {
 
 /** Every improvement worktree whose agent is done and whose fate nobody has settled yet. */
 async function settleImprovements() {
-  const held = heldWorktrees();
   for (const worktree of (await listWorktrees()).filter((candidate) => isImprovementWorktree(candidate.path))) {
     const worktreeName = path.basename(worktree.path);
-    if (held.has(worktreeName)) continue;
     // The report is what the improvement session writes last: without it, the agent is still at work.
     if ((await readImprovementReport(worktreeName)) === undefined) continue;
-    // Uncommitted work is the diagnosis a failed validation leaves behind: the user's to read.
-    if (!(await worktreeIsClean(worktree))) continue;
+    // Uncommitted work is what a failed validation leaves behind: never merged.
+    if (!(await worktreeIsClean(worktree))) {
+      await reject(worktree, worktreeName, ["The improvement session left its change uncommitted: its own validation failed."]);
+      continue;
+    }
     if ((await worktreeCommitCount(worktree)) === 0) {
       await removeWorktree(pluginRoot, worktree);
       notice("info", "Self-improvement finished without a change", `${worktreeName}: its report stays beside the feedback.`);
@@ -310,7 +347,6 @@ export async function startAutoMerge(options: { isIdle: () => boolean }) {
   isIdle = options.isIdle;
   bootCommit = await headCommit(pluginRoot);
   decisions = await readDecisions();
-  setHeldImprovements(heldWorktrees);
   const run = () => { tick().catch(reportFailure("Automatic merge not run")); };
   setInterval(run, POLL_MS).unref();
   run();

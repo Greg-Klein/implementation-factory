@@ -135,13 +135,6 @@ describe("one improvement in flight at a time", () => {
     expect(improvementWorktreeInFlight([harness, pending])).toBe(pending);
   });
 
-  it("should not wait on a branch the automatic merge put on hold for the user", () => {
-    const held = `${harness}/.claude/worktrees/self-improvement-025063c3`;
-    const next = `${harness}/.claude/worktrees/self-improvement-77aa0b1c`;
-    expect(improvementWorktreeInFlight([harness, held], new Set(["self-improvement-025063c3"]))).toBeUndefined();
-    expect(improvementWorktreeInFlight([harness, held, next], new Set(["self-improvement-025063c3"]))).toBe(next);
-  });
-
   // A branch the user works on themselves is not the loop's business to wait on.
   it("should ignore a worktree that is not an improvement one", () => {
     expect(improvementWorktreeInFlight([harness, `${harness}/.claude/worktrees/feat-259-composer`])).toBeUndefined();

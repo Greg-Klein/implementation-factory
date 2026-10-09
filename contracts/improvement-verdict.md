@@ -48,4 +48,6 @@ Any one of these is enough:
 4. The change weakens a quality gate: a check removed or loosened, a review skipped, a verdict accepted on less evidence, a safety or privacy rule relaxed.
 5. The diff goes beyond what the plan announces.
 6. The change alters a behavior that `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md` or `CLAUDE.md` describes, and the branch leaves that description stale.
-7. You cannot tell. A doubt is a `hold`: the user then decides.
+7. You cannot tell. A doubt is a `hold`.
+
+A `hold` is not handed to anyone: the console discards the branch and puts its feedback back in `pending/` with your reasons, which the next improvement session reads before it tries again. Write the reasons for that session: what is missing or wrong, not only that something is.

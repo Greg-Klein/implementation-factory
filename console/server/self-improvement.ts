@@ -15,14 +15,6 @@ import type { PendingEntry } from "./domain.js";
 
 const auditedRuns = new Set<string>();
 
-/**
- * The improvement branches the automatic merge put on hold for the user. They
- * no longer stop the loop: the next iteration reads them as pending work and
- * steers clear of their files. Set by auto-merge.ts, empty while it is off.
- */
-let heldImprovements: () => ReadonlySet<string> = () => new Set();
-export function setHeldImprovements(provider: () => ReadonlySet<string>) { heldImprovements = provider; }
-
 export type PromotionResult = { merged: boolean; restart: boolean; mergeCommit?: string };
 
 /**
@@ -280,9 +272,9 @@ function startAutonomousImprovement(session: RunSession) {
   return new Promise<void>((resolve) => {
     if (!selfImprovementAutorun()) return resolve();
     void listWorktrees().catch(() => []).then((worktrees) => {
-      const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path), heldImprovements());
+      const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
       if (inFlight) {
-        notice("info", "Self-improvement waiting", `${path.basename(inFlight)} has not been decided yet. Merge it or ignore it to free the loop.`);
+        notice("info", "Self-improvement waiting", `${path.basename(inFlight)} has not been decided yet: the loop resumes once it is merged or rejected.`);
         return resolve();
       }
       const worktreeName = improvementWorktreeName(session.id);

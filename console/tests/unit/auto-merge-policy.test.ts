@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
+import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, MAX_REJECTED_ATTEMPTS, rejectedEntry, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
 
 const repoRoot = path.resolve(process.cwd(), "..");
 const file = (changed: Partial<ChangedFile> & { path: string }): ChangedFile => ({ status: "M", added: 3, removed: 1, ...changed });
@@ -111,8 +111,8 @@ describe("the decisions file", () => {
 
   it("should drop a line with an unknown decision, a bad date or a name git would not accept", () => {
     expect(autoMergeDecision({ worktreeName: "self-improvement-1", at: "2026-10-09T08:00:00.000Z", decision: "approved", reasons: [] })).toBeUndefined();
-    expect(autoMergeDecision({ worktreeName: "self-improvement-1", at: "yesterday", decision: "held", reasons: [] })).toBeUndefined();
-    expect(autoMergeDecision({ worktreeName: "../main", at: "2026-10-09T08:00:00.000Z", decision: "held", reasons: [] })).toBeUndefined();
+    expect(autoMergeDecision({ worktreeName: "self-improvement-1", at: "yesterday", decision: "rejected", reasons: [] })).toBeUndefined();
+    expect(autoMergeDecision({ worktreeName: "../main", at: "2026-10-09T08:00:00.000Z", decision: "rejected", reasons: [] })).toBeUndefined();
   });
 
   it("should offer to revert the merges of the last day not reverted since", () => {
@@ -126,5 +126,31 @@ describe("the decisions file", () => {
       merged("self-improvement-c", "2026-10-09T11:00:00.000Z"),
     ];
     expect(recentAutoMerges(decisions, now).map((decision) => decision.worktreeName)).toEqual(["self-improvement-c", "self-improvement-a"]);
+  });
+});
+
+describe("the feedback of a rejected branch", () => {
+  const branch = "worktree-self-improvement-1a2b3c4d";
+  const attempt = { branch, at: "2026-10-09T08:00:00.000Z", reasons: ["The cause is not shown in the run."] };
+  const processed = { id: "self-audit-run-1", source: "autonomous", runId: "run-1", reasons: ["The run failed."], status: "processed", branch, commit: "abc", decision: "accepted", processedAt: "2026-10-09T07:00:00.000Z" };
+
+  it("should go back to pending with the judge's reasons and without what the branch wrote on it", () => {
+    expect(rejectedEntry(processed, branch, attempt)).toEqual({ retry: { id: "self-audit-run-1", source: "autonomous", runId: "run-1", reasons: ["The run failed."], status: "pending", rejectedAttempts: [attempt] } });
+  });
+
+  it("should match the branch whether or not the agent wrote Claude Code's worktree prefix", () => {
+    expect(rejectedEntry({ ...processed, branch: "self-improvement-1a2b3c4d" }, branch, attempt)).toHaveProperty("retry");
+    expect(rejectedEntry(processed, "self-improvement-1a2b3c4d", attempt)).toHaveProperty("retry");
+  });
+
+  it("should not be tried again after its last allowed attempt", () => {
+    const earlier = Array.from({ length: MAX_REJECTED_ATTEMPTS - 1 }, () => attempt);
+    expect(rejectedEntry({ ...processed, rejectedAttempts: earlier }, branch, attempt)).toEqual({ exhausted: { ...processed, decision: "rejected", rejectedAttempts: [...earlier, attempt] } });
+  });
+
+  it("should leave alone an entry another branch processed, or one that is not an object", () => {
+    expect(rejectedEntry({ ...processed, branch: "worktree-self-improvement-99999999" }, branch, attempt)).toBeUndefined();
+    expect(rejectedEntry([], branch, attempt)).toBeUndefined();
+    expect(rejectedEntry({ id: "x" }, branch, attempt)).toBeUndefined();
   });
 });

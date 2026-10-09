@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, MAX_REJECTED_ATTEMPTS, rejectedEntry, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
+import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, MAX_REJECTED_ATTEMPTS, rejectedEntry, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
 
 const repoRoot = path.resolve(process.cwd(), "..");
 const file = (changed: Partial<ChangedFile> & { path: string }): ChangedFile => ({ status: "M", added: 3, removed: 1, ...changed });
@@ -126,6 +126,32 @@ describe("the decisions file", () => {
       merged("self-improvement-c", "2026-10-09T11:00:00.000Z"),
     ];
     expect(recentAutoMerges(decisions, now).map((decision) => decision.worktreeName)).toEqual(["self-improvement-c", "self-improvement-a"]);
+  });
+});
+
+describe("the judge figures of a decision", () => {
+  const pass = { at: "2026-10-09T07:50:00.000Z", durationMs: 240_000, tokens: { input: 10, output: 2_000, cacheRead: 300_000, cacheWrite: 40_000, total: 342_010 }, costUsd: 1.2, turns: 14, models: ["claude-opus-5-5"] };
+  const line = (judgements: unknown[]) => ({ worktreeName: "self-improvement-1", at: "2026-10-09T08:00:00.000Z", decision: "rejected", reasons: ["Not shown."], judgements });
+
+  it("should keep every judge pass written with the decision", () => {
+    const timedOut = { at: "2026-10-09T07:30:00.000Z", durationMs: 900_000, timedOut: true };
+    expect(autoMergeDecision(line([timedOut, pass]))?.judgements).toEqual([timedOut, pass]);
+  });
+
+  it("should drop a pass whose figures are not counts, and keep the decision", () => {
+    const decision = autoMergeDecision(line([{ ...pass, durationMs: -1 }, { ...pass, tokens: { ...pass.tokens, total: "many" } }, { ...pass, timedOut: false }, pass]));
+    expect(decision?.decision).toBe("rejected");
+    expect(decision?.judgements).toEqual([pass]);
+  });
+
+  it("should count merges and rejections, telling the judge's rejections from the others", () => {
+    const merged = { worktreeName: "self-improvement-a", at: "2026-10-09T09:00:00.000Z", decision: "merged" as const, reasons: [], mergeCommit: COMMIT, judgements: [pass] };
+    const ruled = { worktreeName: "self-improvement-b", at: "2026-10-09T10:00:00.000Z", decision: "rejected" as const, reasons: ["It touches a protected file."] };
+    const judged = { worktreeName: "self-improvement-c", at: "2026-10-09T11:00:00.000Z", decision: "rejected" as const, reasons: ["Not shown."], judgements: [pass, pass] };
+    const reverted = { worktreeName: "self-improvement-a", at: "2026-10-09T12:00:00.000Z", decision: "reverted" as const, reasons: ["Reverted by the user."] };
+    const metrics = improvementJudgeMetrics([merged, ruled, judged, reverted]);
+    expect([metrics.merged, metrics.rejected, metrics.rejectedByJudge, metrics.reverted]).toEqual([1, 2, 1, 1]);
+    expect(metrics.judged.map((entry) => [entry.worktreeName, entry.judgements.length])).toEqual([["self-improvement-c", 2], ["self-improvement-a", 1]]);
   });
 });
 

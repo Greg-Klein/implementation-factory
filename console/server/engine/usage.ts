@@ -2,7 +2,7 @@ import { defined } from "../../lib/defined.js";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { SessionUsage, UsageSource } from "./types.js";
+import type { HeadlessUsage, SessionUsage, UsageSource } from "./types.js";
 
 /**
  * What a run cost, read from the transcripts Claude Code keeps of it. Every
@@ -164,4 +164,30 @@ export async function readSessionUsage({ transcriptPath, cwd, isolated }: UsageS
     sessions.push({ sessionId: path.basename(file, ".jsonl"), ...usage }, ...await subagentUsage(file, read));
   }
   return sessions;
+}
+
+/**
+ * The report `claude -p --output-format json` prints as its last line when it
+ * ends: `modelUsage` holds every model the session called, the main one and
+ * the small ones Claude Code calls on its own, `usage` only the main one.
+ */
+export function headlessUsage(stdout: string): HeadlessUsage | undefined {
+  const line = stdout.trimEnd().split("\n").at(-1);
+  if (!line) return undefined;
+  let report: Record<string, unknown>;
+  try { report = JSON.parse(line) as Record<string, unknown>; } catch { return undefined; }
+  if (typeof report !== "object" || report === null || report.type !== "result") return undefined;
+  const byModel = typeof report.modelUsage === "object" && report.modelUsage !== null ? Object.entries(report.modelUsage as Record<string, Record<string, unknown>>) : [];
+  const usage = report.usage as Record<string, unknown> | undefined;
+  const entries = byModel.length > 0
+    ? byModel.map(([, figures]) => ({ input: count(figures?.inputTokens), output: count(figures?.outputTokens), cacheRead: count(figures?.cacheReadInputTokens), cacheWrite: count(figures?.cacheCreationInputTokens) }))
+    : usage ? [{ input: count(usage.input_tokens), output: count(usage.output_tokens), cacheRead: count(usage.cache_read_input_tokens), cacheWrite: count(usage.cache_creation_input_tokens) }] : [];
+  if (entries.length === 0) return undefined;
+  const sum = (key: "input" | "output" | "cacheRead" | "cacheWrite") => entries.reduce((total, entry) => total + entry[key], 0);
+  const tokens = { input: sum("input"), output: sum("output"), cacheRead: sum("cacheRead"), cacheWrite: sum("cacheWrite") };
+  return {
+    tokens: { ...tokens, total: tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite },
+    models: byModel.map(([model]) => model),
+    ...defined({ turns: typeof report.num_turns === "number" ? report.num_turns : undefined, costUsd: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined }),
+  };
 }

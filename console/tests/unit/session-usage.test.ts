@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import os from "node:os";
 import path from "node:path";
 
-import { createUsageReader, readSessionUsage, transcriptDirectory, usageFromTranscript, type TranscriptAccess } from "../../server/engine/usage";
+import { createUsageReader, headlessUsage, readSessionUsage, transcriptDirectory, usageFromTranscript, type TranscriptAccess } from "../../server/engine/usage";
 
 const call = (id: string, usage: Record<string, number>, extra: Record<string, unknown> = {}) => JSON.stringify({
   type: "assistant", timestamp: "2026-10-03T11:50:37.000Z", ...extra,
@@ -116,5 +116,34 @@ describe("sessions of a run", () => {
   it("should name the directory of a working directory the way the agent does", () => {
     expect(transcriptDirectory("/Users/me/repo/.claude/worktrees/2026-10-03T11-50-33-908Z-9d20ddb0", "/Users/me/.claude"))
       .toBe("/Users/me/.claude/projects/-Users-me-repo--claude-worktrees-2026-10-03T11-50-33-908Z-9d20ddb0");
+  });
+});
+
+describe("the end report of a headless session", () => {
+  const report = (fields: Record<string, unknown>) => JSON.stringify({ type: "result", subtype: "success", num_turns: 7, total_cost_usd: 0.42, ...fields });
+
+  it("should add up every model the session called, the small ones Claude Code calls on its own included", () => {
+    const stdout = `${report({
+      usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 1, cache_creation_input_tokens: 1 },
+      modelUsage: {
+        "claude-opus-5-5": { inputTokens: 10, outputTokens: 200, cacheReadInputTokens: 3_000, cacheCreationInputTokens: 400 },
+        "claude-haiku-5-5": { inputTokens: 5, outputTokens: 20, cacheReadInputTokens: 0, cacheCreationInputTokens: 100 },
+      },
+    })}\n`;
+    expect(headlessUsage(stdout)).toEqual({
+      tokens: { input: 15, output: 220, cacheRead: 3_000, cacheWrite: 500, total: 3_735 },
+      models: ["claude-opus-5-5", "claude-haiku-5-5"], turns: 7, costUsd: 0.42,
+    });
+  });
+
+  it("should fall back on the main usage when the report names no model", () => {
+    expect(headlessUsage(report({ usage: { input_tokens: 2, output_tokens: 4, cache_read_input_tokens: 10, cache_creation_input_tokens: 20 } }))?.tokens)
+      .toEqual({ input: 2, output: 4, cacheRead: 10, cacheWrite: 20, total: 36 });
+  });
+
+  it("should read nothing from a session killed before its report, or from a last line that is not one", () => {
+    expect(headlessUsage("")).toBeUndefined();
+    expect(headlessUsage('{"type":"result","usage":')).toBeUndefined();
+    expect(headlessUsage(JSON.stringify({ type: "assistant", usage: { input_tokens: 3 } }))).toBeUndefined();
   });
 });

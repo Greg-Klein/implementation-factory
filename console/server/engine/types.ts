@@ -89,7 +89,15 @@ export type JudgeOptions = {
   timeoutMs: number;
 };
 
-export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: string }>; kill(): void };
+/** What a headless session consumed, as the agent reports it when it ends. Absent when it was killed or printed no report. */
+export type HeadlessUsage = {
+  turns?: number;
+  costUsd?: number;
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  models: string[];
+};
+
+export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: string; usage?: HeadlessUsage }>; kill(): void };
 
 /**
  * One thing the agent reported, said in the harness's own words. Whatever

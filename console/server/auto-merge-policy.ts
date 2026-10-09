@@ -123,11 +123,52 @@ export type AutoMergeDecision = {
   reasons: string[];
   branch?: string;
   mergeCommit?: string;
+  /** Every pass of the judge on the branch before this decision, one more each time the harness or the branch moved under it. */
+  judgements?: JudgeRun[];
 };
+
+/** One session of the judge: how long it took, and what it consumed when it ended on its own report. */
+export type JudgeRun = {
+  at: string;
+  durationMs: number;
+  timedOut?: true;
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  costUsd?: number;
+  turns?: number;
+  models?: string[];
+};
+
+const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+/** A judge pass read back from the decisions file, or undefined when one of its figures is not one. */
+export function judgeRun(raw: unknown): JudgeRun | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const { at, durationMs, timedOut, tokens, costUsd, turns, models } = raw as Record<string, unknown>;
+  if (typeof at !== "string" || Number.isNaN(Date.parse(at)) || !isCount(durationMs)) return undefined;
+  if (timedOut !== undefined && timedOut !== true) return undefined;
+  if (costUsd !== undefined && !isCount(costUsd)) return undefined;
+  if (turns !== undefined && !isCount(turns)) return undefined;
+  if (models !== undefined && !(Array.isArray(models) && models.every((model) => typeof model === "string"))) return undefined;
+  let figures: JudgeRun["tokens"];
+  if (tokens !== undefined) {
+    if (typeof tokens !== "object" || tokens === null) return undefined;
+    const { input, output, cacheRead, cacheWrite, total } = tokens as Record<string, unknown>;
+    if (![input, output, cacheRead, cacheWrite, total].every(isCount)) return undefined;
+    figures = { input, output, cacheRead, cacheWrite, total } as NonNullable<JudgeRun["tokens"]>;
+  }
+  return {
+    at, durationMs,
+    ...(timedOut ? { timedOut } : {}),
+    ...(figures ? { tokens: figures } : {}),
+    ...(costUsd !== undefined ? { costUsd } : {}),
+    ...(turns !== undefined ? { turns } : {}),
+    ...(models !== undefined ? { models: models as string[] } : {}),
+  };
+}
 
 export function autoMergeDecision(raw: unknown): AutoMergeDecision | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
-  const { worktreeName, at, decision, reasons, branch, mergeCommit } = raw as Record<string, unknown>;
+  const { worktreeName, at, decision, reasons, branch, mergeCommit, judgements } = raw as Record<string, unknown>;
   if (typeof worktreeName !== "string" || !/^[a-z0-9-]+$/i.test(worktreeName)) return undefined;
   if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return undefined;
   if (decision !== "merged" && decision !== "rejected" && decision !== "reverted") return undefined;
@@ -137,6 +178,7 @@ export function autoMergeDecision(raw: unknown): AutoMergeDecision | undefined {
     worktreeName, at, decision, reasons: reasons as string[],
     ...(typeof branch === "string" ? { branch } : {}),
     ...(typeof mergeCommit === "string" ? { mergeCommit } : {}),
+    ...(Array.isArray(judgements) ? { judgements: judgements.flatMap((judgement) => judgeRun(judgement) ?? []) } : {}),
   };
 }
 
@@ -155,6 +197,27 @@ export function recentAutoMerges(decisions: AutoMergeDecision[], now: number) {
     .filter((decision) => decision.decision === "merged" && now - Date.parse(decision.at) < RECENT_MERGE_MS)
     .sort((left, right) => Date.parse(right.at) - Date.parse(left.at));
 }
+
+/**
+ * What the metrics show of the loop: how many branches were merged, rejected
+ * (and among them, how many by the judge rather than by a rule or a check) and
+ * reverted, plus the decisions the judge took part in, newest first.
+ */
+export function improvementJudgeMetrics(decisions: AutoMergeDecision[]) {
+  const count = (decision: AutoMergeDecision["decision"]) => decisions.filter((entry) => entry.decision === decision).length;
+  return {
+    merged: count("merged"),
+    rejected: count("rejected"),
+    rejectedByJudge: decisions.filter((entry) => entry.decision === "rejected" && (entry.judgements?.length ?? 0) > 0).length,
+    reverted: count("reverted"),
+    judged: decisions
+      .filter((entry) => (entry.judgements?.length ?? 0) > 0)
+      .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
+      .map(({ worktreeName, at, decision, reasons, judgements = [] }) => ({ worktreeName, at, decision, reasons, judgements })),
+  };
+}
+
+export type ImprovementJudgeMetrics = ReturnType<typeof improvementJudgeMetrics>;
 
 /** How many rejected branches one feedback entry may cause before the loop stops trying it. */
 export const MAX_REJECTED_ATTEMPTS = 2;

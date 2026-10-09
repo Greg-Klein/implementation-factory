@@ -18,7 +18,7 @@ import { refreshAcceptance } from "./acceptance-runtime.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { applySelfImprovementReview, listPendingImprovements, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
-import { afterPromotion, autoMergeView, recentAutomaticMerges, revertAutomaticMerge, startAutoMerge } from "./auto-merge.js";
+import { afterPromotion, autoMergeView, improvementMetrics, recentAutomaticMerges, revertAutomaticMerge, startAutoMerge } from "./auto-merge.js";
 import { detectProjectDirectory, discoverRepositories } from "./repository.js";
 import { isImprovementWorktreeName, runTakesSlot } from "./domain.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
@@ -255,7 +255,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (request.method === "GET" && requestPath === "/api/metrics") {
-    try { respond(response, 200, { runs: await registry.metrics() }); }
+    try { respond(response, 200, { runs: await registry.metrics(), ...defined({ improvements: improvementMetrics() }) }); }
     catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Metrics unavailable." }); }
     return;
   }

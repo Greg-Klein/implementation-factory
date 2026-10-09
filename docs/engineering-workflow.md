@@ -258,7 +258,7 @@ An improvement branch is never left to a review: it reaches the harness on its o
 2. The checks, rerun by the console on the tree it would merge. The improvement session's own report is a claim.
 3. A judge on Opus (`commands/judge-improvement.md`), which forms its expectation from the run evidence before reading the author's plan, report and diff, as QA writes `qa-plan.md` before reading the developer's report. It refuses a change whose cause is not established, that overfits one run, weakens a gate or leaves the documentation stale.
 
-A rejected branch is discarded, never handed to the user: its uncommitted work is kept as a patch beside its report, and the feedback it was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged branch can be reverted from the console for a day. Each decision is logged in `<data dir>/self-improvement-decisions.jsonl`.
+A rejected branch is discarded, never handed to the user: its uncommitted work is kept as a patch beside its report, and the feedback it was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged branch can be reverted from the console for a day. Each decision is logged in `<data dir>/self-improvement-decisions.jsonl`, with the duration, tokens and cost of every judge session on the branch, which the Metrics panel of the console shows beside the number of branches merged and rejected.
 
 ## The stop gate
 

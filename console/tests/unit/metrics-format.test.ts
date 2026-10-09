@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { formatDuration, formatShare, formatTokens, planSizes, reworkCount, summarize } from "../../lib/metrics";
+import { formatCost, formatDuration, formatShare, formatTokens, judgeRows, judgeSummary, planSizes, reworkCount, summarize } from "../../lib/metrics";
 import type { RunMetrics } from "../../lib/types";
 
 const metrics = (overrides: { status?: RunMetrics["outcome"]["status"]; tokens?: number; activeMs?: number; launches?: Record<string, number>; reworkDevelopers?: number; sizes?: RunMetrics["complexity"]["sizes"]; tasks?: number } = {}) => ({
@@ -46,5 +46,32 @@ describe("metrics as the interface writes them", () => {
   it("should give the medians of the delivered runs, a run without tokens counted for its time only", () => {
     expect(summarize([metrics({ tokens: 1_000, activeMs: 10 }), metrics({ tokens: 3_000, activeMs: 30 }), metrics({ activeMs: 20 }), metrics({ status: "stopped", tokens: 9_000 })]))
       .toMatchObject({ runs: 3, tokens: 2_000, activeMs: 20 });
+  });
+});
+
+describe("the judge of the improvement loop", () => {
+  const tokens = (total: number) => ({ input: 0, output: 0, cacheRead: total, cacheWrite: 0, total });
+  const decision = (worktreeName: string, judgements: { durationMs: number; total?: number; costUsd?: number }[]) => ({
+    worktreeName, at: "2026-10-09T08:00:00.000Z", decision: "merged" as const, reasons: [],
+    judgements: judgements.map(({ durationMs, total, costUsd }) => ({ at: "2026-10-09T07:00:00.000Z", durationMs, ...(total !== undefined ? { tokens: tokens(total) } : {}), ...(costUsd !== undefined ? { costUsd } : {}) })),
+  });
+  const improvements = (judged: ReturnType<typeof decision>[]) => ({ merged: judged.length, rejected: 0, rejectedByJudge: 0, reverted: 0, judged });
+
+  it("should add up the passes of one branch, and say when one left no figure", () => {
+    const [row] = judgeRows(improvements([decision("self-improvement-a", [{ durationMs: 900_000 }, { durationMs: 120_000, total: 200_000, costUsd: 0.8 }])]));
+    expect(row).toMatchObject({ passes: 2, durationMs: 1_020_000, tokens: 200_000, costUsd: 0.8, complete: false });
+  });
+
+  it("should take the median tokens over the decisions measured whole only", () => {
+    const rows = judgeRows(improvements([
+      decision("self-improvement-a", [{ durationMs: 60_000, total: 100_000, costUsd: 0.5 }]),
+      decision("self-improvement-b", [{ durationMs: 180_000, total: 300_000, costUsd: 1.5 }]),
+      decision("self-improvement-c", [{ durationMs: 900_000 }, { durationMs: 120_000, total: 5_000 }]),
+    ]));
+    expect(judgeSummary(rows)).toEqual({ durationMs: 180_000, tokens: 200_000, costUsd: 2 });
+  });
+
+  it("should write a cost in dollars, to the cent below ten", () => {
+    expect([formatCost(0.4), formatCost(12.6)]).toEqual(["$0.40", "$13"]);
   });
 });

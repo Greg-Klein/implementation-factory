@@ -106,14 +106,14 @@ export type UnresolvedTicket = { issueUrl: string; project?: string };
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
 export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
-export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string };
+export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; dismissAfterMs?: number };
 export type ServerMessage =
   | { type: "harness"; snapshot: HarnessSnapshot }
   | { type: "run"; state: RunState }
   /** The run a launch of this page created, named by the `requestId` the page gave that launch. */
   | { type: "run.started"; runId: string; requestId?: string }
   | { type: "terminal.output"; runId: string; data: string }
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string; dismissAfterMs?: number }
   | { type: "error"; message: string; runId?: string; requestId?: string }
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   | { type: "batch.unresolved"; tickets: UnresolvedTicket[] }
@@ -209,4 +209,10 @@ export type RunMetrics = {
   rework: { launches: Record<string, number>; reworkDevelopers: number; lostAgents: number };
   tokens?: { total: TokenUsage; pilot: SessionMetrics; agents: AgentMetrics[]; pilotShare: number };
 };
-export type MetricsResponse = { runs: RunMetrics[]; error?: string };
+/** Mirrors `improvementJudgeMetrics` of server/auto-merge-policy.ts. */
+export type JudgeRun = { at: string; durationMs: number; timedOut?: true; tokens?: TokenUsage; costUsd?: number; turns?: number; models?: string[] };
+export type ImprovementMetrics = {
+  merged: number; rejected: number; rejectedByJudge: number; reverted: number;
+  judged: { worktreeName: string; at: string; decision: "merged" | "rejected" | "reverted"; reasons: string[]; judgements: JudgeRun[] }[];
+};
+export type MetricsResponse = { runs: RunMetrics[]; improvements?: ImprovementMetrics; error?: string };

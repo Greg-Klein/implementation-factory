@@ -8,9 +8,9 @@ import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../do
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import { createTrustPromptWatcher, trustAnswerKeys } from "./trust-prompt.js";
-import { readSessionUsage } from "./usage.js";
+import { headlessUsage, readSessionUsage } from "./usage.js";
 import { judgeArguments, judgeEnvironment } from "./improvement-judge.js";
-import type { Engine, EngineEvent, EngineSession, JudgeOptions, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
+import type { Engine, EngineEvent, EngineSession, HeadlessUsage, JudgeOptions, ScheduleOptions, ScheduleSession, StartOptions } from "./types.js";
 
 /** Long enough for the paste to be read before the submission keystroke arrives. */
 const SUBMIT_DELAY_MS = 150;
@@ -346,6 +346,8 @@ export function scheduleEnvironment<T extends Record<string, string | undefined>
 }
 
 const SCHEDULE_LOG = 20_000;
+/** The end report is one JSON line whose `result` is the session's last message: a whole line is kept, however long that message. */
+const REPORT_TAIL = 1_000_000;
 
 /** A session without a terminal, killed after `timeoutMs`: only its output file says whether it succeeded. */
 function startHeadless(args: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number): ScheduleSession | undefined {
@@ -354,13 +356,14 @@ function startHeadless(args: string[], cwd: string, env: NodeJS.ProcessEnv, time
   // Standard input closed: an open one is read as the prompt.
   const child = spawnChild(executable, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
   let log = "";
+  let stdout = "";
   let timedOut = false;
   const keep = (chunk: Buffer) => { log = (log + chunk.toString()).slice(-SCHEDULE_LOG); };
-  child.stdout.on("data", keep);
+  child.stdout.on("data", (chunk: Buffer) => { keep(chunk); stdout = (stdout + chunk.toString()).slice(-REPORT_TAIL); });
   child.stderr.on("data", keep);
-  const finished = new Promise<{ timedOut: boolean; log: string }>((resolve) => {
+  const finished = new Promise<{ timedOut: boolean; log: string; usage?: HeadlessUsage }>((resolve) => {
     const timeout = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
-    const done = () => { clearTimeout(timeout); resolve({ timedOut, log }); };
+    const done = () => { clearTimeout(timeout); resolve({ timedOut, log, ...defined({ usage: headlessUsage(stdout) }) }); };
     child.once("close", done);
     child.once("error", (error) => { log += `\n${error.message}`; done(); });
   });

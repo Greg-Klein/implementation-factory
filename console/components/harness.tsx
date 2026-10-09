@@ -187,7 +187,7 @@ export function Harness() {
           if (terminalRef.current) terminalRef.current.write(message.data);
           else pendingOutputRef.current = appendTerminalOutput(pendingOutputRef.current, message.data);
         }
-        if (message.type === "notice") setNotice({ level: message.level, title: message.title, ...defined({ detail: message.detail }), at: message.at });
+        if (message.type === "notice") setNotice({ level: message.level, title: message.title, ...defined({ detail: message.detail, dismissAfterMs: message.dismissAfterMs }), at: message.at });
         if (message.type === "error") {
           setError(message.message);
           const feedback = sentFeedbackRef.current;
@@ -225,6 +225,12 @@ export function Harness() {
   useEffect(() => {
     if (noticeIsStale(notice, snapshot.queued)) setNotice(undefined);
   }, [snapshot.queued, notice]);
+
+  useEffect(() => {
+    if (notice?.dismissAfterMs === undefined) return;
+    const timer = window.setTimeout(() => setNotice((current) => (current === notice ? undefined : current)), notice.dismissAfterMs);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   /**
    * A page showing nothing, next to a console holding exactly one run, is

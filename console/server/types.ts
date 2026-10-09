@@ -482,8 +482,9 @@ export type ServerMessage =
    * the activity feed of whichever run happened to be current, which with
    * several runs means a feed picked at random. `queuedId` names the waiting
    * launch a notice is about, so the page can drop it once that launch is gone.
+   * `dismissAfterMs`: the page closes it on its own after that long.
    */
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; requestId?: string; dismissAfterMs?: number }
   /** What became of a batch, answered to the page that pasted it. `duplicates`: tickets already queued, running or waiting for their merge, left out. */
   | { type: "batch.result"; batchId: string; accepted: number; duplicates: string[] }
   /** A batch queued nothing because these tickets have no checkout: the page asks where their merge requests go, then sends it again with `targets`. */

@@ -73,6 +73,8 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
   return result;
 }
 
+const SELF_IMPROVEMENT_NOTICE_MS = 5_000;
+
 /**
  * The improvement loop belongs to the harness, not to any one run: it is read
  * from the worktrees on disk and it keeps going after the run that triggered it
@@ -80,7 +82,7 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
  * into the activity feed of a run that may no longer exist.
  */
 export function notice(level: "info" | "attention", title: string, detail?: string) {
-  broadcast({ type: "notice", level, title, ...defined({ detail }), at: now() });
+  broadcast({ type: "notice", level, title, ...defined({ detail }), at: now(), dismissAfterMs: SELF_IMPROVEMENT_NOTICE_MS });
 }
 
 /** The report of an improvement worktree, undefined until its agent has written it. */

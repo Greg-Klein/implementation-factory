@@ -1,5 +1,5 @@
 import { defined } from "./defined";
-import type { RunMetrics } from "./types";
+import type { ImprovementMetrics, RunMetrics } from "./types";
 
 /** Tokens in the unit a person compares: thousands below a million, millions above: "412k", "1.61M". */
 export function formatTokens(value: number) {
@@ -75,4 +75,38 @@ export function summarize(runs: RunMetrics[]): MetricsSummary | undefined {
       pilotShare: median(measured.map((run) => run.tokens!.pilotShare)),
     }),
   };
+}
+
+/**
+ * One row per decision the judge took part in, its passes added up. `tokens`
+ * counts only the passes that ended on their own report: a pass killed at its
+ * timeout leaves no figure, and `complete` says so.
+ */
+export function judgeRows(improvements: ImprovementMetrics) {
+  return improvements.judged.map((entry) => {
+    const measured = entry.judgements.filter((pass) => pass.tokens);
+    return {
+      ...entry,
+      passes: entry.judgements.length,
+      durationMs: entry.judgements.reduce((sum, pass) => sum + pass.durationMs, 0),
+      tokens: measured.length > 0 ? measured.reduce((sum, pass) => sum + (pass.tokens?.total ?? 0), 0) : undefined,
+      costUsd: measured.some((pass) => pass.costUsd !== undefined) ? measured.reduce((sum, pass) => sum + (pass.costUsd ?? 0), 0) : undefined,
+      complete: measured.length === entry.judgements.length,
+    };
+  });
+}
+
+/** Medians of the judge over its decisions, the tokens over those measured whole. */
+export function judgeSummary(rows: ReturnType<typeof judgeRows>) {
+  return {
+    ...defined({
+      durationMs: median(rows.map((row) => row.durationMs)),
+      tokens: median(rows.flatMap((row) => (row.complete && row.tokens !== undefined ? [row.tokens] : []))),
+    }),
+    costUsd: rows.reduce((sum, row) => sum + (row.costUsd ?? 0), 0),
+  };
+}
+
+export function formatCost(usd: number) {
+  return `$${usd < 10 ? usd.toFixed(2) : Math.round(usd)}`;
 }

@@ -2,10 +2,10 @@
 
 import { CaretRightIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { Fragment, useEffect, useState } from "react";
-import { formatDuration, formatShare, formatTokens, planSizes, reworkCount, sessionLabel, summarize, waitLabel } from "@/lib/metrics";
+import { formatCost, formatDuration, formatShare, formatTokens, judgeRows, judgeSummary, planSizes, reworkCount, sessionLabel, summarize, waitLabel } from "@/lib/metrics";
 import { phaseNames, runLabel, statusLabel } from "@/lib/run-state";
 import { forgeOf, forgeWords } from "@/lib/ticket-urls";
-import type { MetricsResponse, RunMetrics } from "@/lib/types";
+import type { ImprovementMetrics, MetricsResponse, RunMetrics } from "@/lib/types";
 
 /** A run still going moves its figures: the table follows at this pace while it is on screen. */
 const POLL_MS = 10_000;
@@ -91,6 +91,60 @@ function Detail({ run }: { run: RunMetrics }) {
   );
 }
 
+const VERDICT_TONE: Record<string, string> = { merged: "bg-emerald-50 text-emerald-700", rejected: "bg-red-50 text-red-700" };
+
+/** The improvement loop: what the judge decided and what each decision cost it. */
+function Improvements({ improvements }: { improvements: ImprovementMetrics }) {
+  const rows = judgeRows(improvements);
+  const summary = judgeSummary(rows);
+  return (
+    <div className="border-t border-[var(--line)]">
+      <div className="px-5 py-5 md:px-7">
+        <h3 className="text-xs font-medium">Self-improvement</h3>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--muted)]">Branches decided by the automatic merge, and the time and tokens the judge took on each one.</p>
+        <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
+          <Figure label="Merged" value={String(improvements.merged)} help={improvements.reverted > 0 ? `${improvements.reverted} reverted since` : "Branches merged without the user"} />
+          <Figure label="Rejected" value={String(improvements.rejected)} help={`${improvements.rejectedByJudge} by the judge, the others by a rule or a failed check`} />
+          <Figure label="Judge time" value={summary.durationMs !== undefined ? formatDuration(summary.durationMs) : "n/a"} help="Median time of the judge per decision" />
+          <Figure label="Judge tokens" value={summary.tokens !== undefined ? formatTokens(summary.tokens) : "n/a"} help="Median tokens of the judge per decision, cache included" />
+          <Figure label="Judge cost" value={rows.length > 0 ? formatCost(summary.costUsd) : "n/a"} help="Total cost at list price, as Claude Code reports it" />
+        </dl>
+      </div>
+      {rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-[11px]">
+            <thead className="border-y border-[var(--line)] text-[10px] text-[var(--muted)]">
+              <tr>
+                <th className="py-2 pl-5 pr-2 font-medium md:pl-7">Branch</th>
+                <th className="px-2 py-2 font-medium">Decision</th>
+                <th className="px-2 py-2 text-right font-medium" title="Judge sessions on this branch: one more each time the harness or the branch moved under it">Passes</th>
+                <th className="px-2 py-2 text-right font-medium">Time</th>
+                <th className="px-2 py-2 text-right font-medium" title="All tokens read and written, cache included">Tokens</th>
+                <th className="py-2 pl-2 pr-5 text-right font-medium md:pr-7">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.worktreeName}-${row.at}`} className="border-b border-[var(--line)]">
+                  <td className="py-2 pl-5 pr-2 md:pl-7">
+                    <span className="block font-mono text-[10px] text-[var(--ink)]">{row.worktreeName}</span>
+                    <span className="block font-mono text-[9px] text-[var(--muted)]">{new Date(row.at).toLocaleString("en-US", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>
+                  </td>
+                  <td className="px-2 py-2"><span title={row.reasons.join("\n")} className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-semibold ${VERDICT_TONE[row.decision] ?? "bg-[var(--line)] text-[var(--muted)]"}`}>{row.decision === "merged" ? "Merged" : row.decision === "rejected" ? "Rejected" : "Reverted"}</span></td>
+                  <td className="px-2 py-2 text-right font-mono text-[10px]">{row.passes}</td>
+                  <td className="px-2 py-2 text-right font-mono text-[10px]">{formatDuration(row.durationMs)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-[10px] text-[var(--ink)]" title={row.complete ? undefined : "A pass ended at its timeout and left no figure"}>{row.tokens !== undefined ? `${formatTokens(row.tokens)}${row.complete ? "" : "+"}` : ""}</td>
+                  <td className="py-2 pl-2 pr-5 text-right font-mono text-[10px] md:pr-7">{row.costUsd !== undefined ? formatCost(row.costUsd) : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * What every measured run cost and delivered, one row per run. A table and not
  * charts on purpose: with a few dozen runs at most, a curve would smooth away
@@ -98,6 +152,7 @@ function Detail({ run }: { run: RunMetrics }) {
  */
 export function MetricsPanel() {
   const [runs, setRuns] = useState<RunMetrics[]>();
+  const [improvements, setImprovements] = useState<ImprovementMetrics>();
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState<string>();
 
@@ -105,7 +160,7 @@ export function MetricsPanel() {
     let disposed = false;
     const load = () => fetch("/api/metrics")
       .then((response) => response.json() as Promise<MetricsResponse>)
-      .then((result) => { if (!disposed) { setRuns(result.runs ?? []); setError(result.error); } })
+      .then((result) => { if (!disposed) { setRuns(result.runs ?? []); setImprovements(result.improvements); setError(result.error); } })
       .catch(() => { if (!disposed) setError("The metrics could not be read. Check that the local server is running."); });
     void load();
     const timer = window.setInterval(load, POLL_MS);
@@ -186,6 +241,7 @@ export function MetricsPanel() {
           </table>
         </div>
       )}
+      {improvements && <Improvements improvements={improvements} />}
     </section>
   );
 }

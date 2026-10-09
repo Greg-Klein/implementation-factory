@@ -4,11 +4,12 @@ import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "nod
 import path from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
+import { defined } from "../lib/defined.js";
 import { isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, selfImprovementAutorun, storageRoot } from "./config.js";
 import { isImprovementWorktree, mergeNeedsRestart, positiveDuration, withoutBundlerVariables } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { autoMergeBlockers, autoMergeDecision, changedFiles, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type RejectedAttempt } from "./auto-merge-policy.js";
+import { autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type JudgeRun, type RejectedAttempt } from "./auto-merge-policy.js";
 import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, type PromotionResult } from "./self-improvement.js";
 import { branchIsRebasedOn, changedPaths, headCommit, listWorktrees, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean, type Worktree } from "./worktree.js";
 import { improvementReportName } from "./domain.js";
@@ -32,6 +33,8 @@ const JUDGE_TIMEOUT_MS = 15 * 60_000;
 const OUTPUT_TAIL = 1_500;
 
 let decisions: AutoMergeDecision[] = [];
+/** The judge passes of each branch not decided yet, written with its decision. */
+const judged = new Map<string, JudgeRun[]>();
 let checking: string | undefined;
 let ticking = false;
 let restartPending = false;
@@ -42,6 +45,11 @@ let isIdle: () => boolean = () => false;
 export function autoMergeView(worktreeName: string) {
   if (!autoMergeOn()) return undefined;
   return { state: checking === worktreeName ? "checking" as const : "waiting" as const };
+}
+
+/** How many branches were merged and rejected, and what each judge pass cost. Read from memory: undefined when the loop is off. */
+export function improvementMetrics() {
+  return autoMergeOn() ? improvementJudgeMetrics(decisions) : undefined;
 }
 
 /** The branches merged without the user in the last day, which the page offers to revert. */
@@ -63,24 +71,34 @@ async function readDecisions() {
   const read: AutoMergeDecision[] = [];
   for (const [index, line] of text.split("\n").entries()) {
     if (!line.trim()) continue;
-    let decision: AutoMergeDecision | undefined;
-    try { decision = autoMergeDecision(JSON.parse(line) as unknown); } catch { decision = undefined; }
-    if (decision) read.push(decision);
-    else reportFailure("Automatic merge decision not understood", `${decisionsFile}:${index + 1}`)(new Error("not a decision line"));
+    let raw: unknown;
+    try { raw = JSON.parse(line) as unknown; } catch { raw = undefined; }
+    const decision = autoMergeDecision(raw);
+    if (!decision) {
+      reportFailure("Automatic merge decision not understood", `${decisionsFile}:${index + 1}`)(new Error("not a decision line"));
+      continue;
+    }
+    const written = (raw as { judgements?: unknown }).judgements;
+    if (Array.isArray(written) && written.length !== decision.judgements?.length)
+      reportFailure("Judge figures not understood", `${decisionsFile}:${index + 1}`)(new Error(`${written.length - (decision.judgements?.length ?? 0)} judge pass dropped`));
+    read.push(decision);
   }
   return read;
 }
 
 async function record(decision: AutoMergeDecision) {
+  const judgements = decision.decision === "reverted" ? undefined : judged.get(decision.worktreeName);
+  const line: AutoMergeDecision = judgements ? { ...decision, judgements } : decision;
   await mkdir(path.dirname(decisionsFile), { recursive: true });
-  await appendFile(decisionsFile, `${JSON.stringify(decision)}\n`);
-  decisions.push(decision);
+  await appendFile(decisionsFile, `${JSON.stringify(line)}\n`);
+  judged.delete(decision.worktreeName);
+  decisions.push(line);
 }
 
 /**
  * The feedback the rejected branch processed goes back to `pending/` with the
  * reasons, so the next iteration tries another way; after its last allowed
- * attempt it stays processed. Returns how many entries go back.
+ * attempt it stays processed.
  */
 async function requeueFeedback(branch: string, attempt: RejectedAttempt) {
   const processed = path.join(path.dirname(feedbackRoot), "processed");
@@ -88,7 +106,6 @@ async function requeueFeedback(branch: string, attempt: RejectedAttempt) {
     if (isMissingFile(error)) return [] as string[];
     throw error;
   });
-  let retried = 0;
   for (const name of names.filter((candidate) => candidate.endsWith(".json"))) {
     const file = path.join(processed, name);
     let raw: unknown;
@@ -102,9 +119,7 @@ async function requeueFeedback(branch: string, attempt: RejectedAttempt) {
     await mkdir(feedbackRoot, { recursive: true });
     await writeFile(path.join(feedbackRoot, name), JSON.stringify(outcome.retry, null, 2));
     await rm(file);
-    retried += 1;
   }
-  return retried;
 }
 
 /**
@@ -121,8 +136,7 @@ async function reject(worktree: Worktree, worktreeName: string, reasons: string[
     await writeFile(patch, await git(worktree.path, ["diff", "HEAD"]));
   }
   await removeWorktree(pluginRoot, worktree);
-  const retried = worktree.branch ? await requeueFeedback(worktree.branch, { branch: worktree.branch, at, reasons }) : 0;
-  notice("attention", "Improvement rejected", `${worktreeName}: ${reasons[0]} ${retried > 0 ? `Its feedback is queued again for another attempt.` : "Its feedback is not tried again."}`);
+  if (worktree.branch) await requeueFeedback(worktree.branch, { branch: worktree.branch, at, reasons });
 }
 
 /** The environment of the checks: the console's own settings and bundler variables stay out, the suites set theirs. */
@@ -189,9 +203,15 @@ async function judge(worktree: Worktree & { branch: string }, worktreeName: stri
     planPath: existsSync(planPath) ? planPath : null,
     reportPath: path.join(feedbackDirectory, improvementReportName(worktreeName)),
   }, null, 2));
+  const startedAt = Date.now();
   const session = engine.startImprovementJudge({ pluginDir: pluginRoot, inputPath, outputPath, readDirectories: [worktree.path, feedbackDirectory, dataRoot], timeoutMs: JUDGE_TIMEOUT_MS });
   if (!session) return { decision: "hold" as const, reasons: [`${engine.label} was not found: the judge could not run.`] };
-  const { timedOut, log } = await session.finished;
+  const { timedOut, log, usage } = await session.finished;
+  judged.set(worktreeName, [...judged.get(worktreeName) ?? [], {
+    at: new Date(startedAt).toISOString(), durationMs: Date.now() - startedAt,
+    ...(timedOut ? { timedOut: true as const } : {}),
+    ...(usage ? { tokens: usage.tokens, models: usage.models, ...defined({ costUsd: usage.costUsd, turns: usage.turns }) } : {}),
+  }]);
   let raw: unknown;
   try { raw = JSON.parse(await readFile(outputPath, "utf8")) as unknown; } catch { raw = undefined; }
   const read = raw === undefined ? { error: timedOut ? "The judge ran out of time." : "The judge wrote no verdict." } : judgeVerdict(raw);

@@ -10,7 +10,7 @@ description: >-
 # Unslop
 
 Edit text to remove AI patterns. Adapted from poteto's `unslop` (cursor/plugins, pstack), extended
-to French and to Gregory's writing rules.
+to French and to the house rules below.
 
 When a contract fixes the output format (headings, table columns, JSON keys, verdict tokens, commit
 prefixes, required language), keep that format exactly and apply these rules to the sentences.

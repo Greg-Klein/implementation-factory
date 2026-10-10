@@ -1,4 +1,4 @@
-### Write the acceptance criteria registry
+# Acceptance criteria registry
 
 Once the answers are in, and before any plan exists, write `.claude/tasks/acceptance-criteria.json`: the one list of what this run has to prove, with an identifier every later document reuses. The planner links its tasks to these identifiers, every evidence file cites them, and the console computes from them which criterion was verified, on which code, and with what. You are its only writer.
 
@@ -27,7 +27,7 @@ Once the answers are in, and before any plan exists, write `.claude/tasks/accept
 - **Identifiers are stable for the whole run**, review rounds included: `AC1`, `AC2`, in the order of the ticket. A criterion discovered later gets the next free number; nothing is ever renumbered or reused.
 - **A change of meaning is a new revision.** Rewording that changes what has to be true increments the top-level `revision` and sets that criterion's `revision` to it; the console then stops counting the evidence gathered against the older wording. A typo fix is not a change of meaning.
 - **A broad criterion is split into required checks** (`AC<n>-C<m>`, `method` one of `test`, `browser`, `static_analysis`, `manual`). It is verified only when every one of them is. A criterion with a single obvious check needs no `requiredChecks`: it is its own check.
-- **`verification.afterDeployment: true`** marks a criterion only a deployed environment can show, because its source asks for it there: production or ingestion logs, a reading after the release, a review on the deployed app. QA then records it blocked, and `PASS_WITH_WARNINGS` over it is a consistent verdict. A criterion a local run could observe with an access, a token or data it lacks is not one: it stays a blocker of the run.
+- **Nothing that happens after the run is a criterion.** A criterion is something this run can observe before it ends, on the code it delivers: once the implementation and its review are over, nobody is left to verify anything. What the ticket asks to check later (production or ingestion logs, a reading after the release, a review on the deployed app) is written in `open-questions.md` as a follow-up for after the merge, with its source, and listed as such in the review comment and the final report. It gets no id and no evidence. A criterion a local run could observe with an access, a token or data it lacks is not one of those: it stays a criterion, and a blocker of the run.
 - **Lint, typecheck and the whole test suite are not criteria.** They stay visible as general checks and are never attached to every criterion to make them look covered.
 - **No criterion at all is an answer too**: write `"criteria": []` and say why in `open-questions.md`. The console then shows that nothing was identified instead of an empty "all verified".
 

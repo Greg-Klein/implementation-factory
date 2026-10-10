@@ -6,7 +6,7 @@ You MUST write three files:
 
 1. `.claude/tasks/qa-plan.md`, written before you open any author report (the plan's test strategy, developer report and evidence, senior review): your behavior matrix per criterion, the risk grid classes the change triggers, and your defect hypotheses with their trigger and expected result. The console compares when it arrives with when the report does, which is what shows it predates the reconciliation. A later round appends a section headed by its round and never rewrites an earlier one.
 2. `.claude/tasks/qa-report.md`, the report below. That exact name, always. The console maps the run's phases from artifact names and matches this one on its `qa-report` prefix, so a report written as `qa-review.md`, or under any other name, exists on disk and advances nothing.
-3. `.claude/tasks/qa-evidence.json`, the same gates, criteria and break attempts as data, for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/qa-evidence.json`, the same gates, criteria and break attempts as data, for the console's "Evidence" tab. Schema:
 
 ```json
 {
@@ -29,7 +29,7 @@ One item per row of the `Contrôles` table (`verdict` from its `Résultat` colum
 
 The fields that make it traceable, and that the console relies on:
 
-- **`status`** is the verdict of the report, same token. The console flags a `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no fresh QA observation, except `PASS_WITH_WARNINGS` over a criterion marked `afterDeployment`. A file with no `status`, or another word in it (`verdict` is not read), has a verdict it cannot check: the acceptance summary lists it as an anomaly.
+- **`status`** is the verdict of the report, same token. The console flags a `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no fresh QA observation. A file with no `status`, or another word in it (`verdict` is not read), has a verdict it cannot check: the acceptance summary lists it as an anomaly.
 - **`id`**: `QA-R<round>-<n>`, the round your caller gives you (1 when it gives none), one sequence for every kind of item. Never reuse an id, not even your own from an earlier round.
 - **Links**: an item about a criterion cites its registry id in `criterionIds`, and the `checkIds` it covers when the criterion lists several required checks: an item that names only such a criterion counts for none of its checks, so a test that covers several checks cites each of them. The console reads only these fields: a check id written in `label` or `actual` but missing from `checkIds` counts for nothing, so every check id your text names is in `checkIds` too. The gates (lint, typecheck, the whole suite, build) cite none: a green lint says nothing about any criterion.
 - **A break attempt carries `"kind": "attempt"`** and always cites the criterion it targets, under the rule above: `fail` when it found a defect, `pass` when you executed it and nothing broke, `unverified` when you only read the code. The console counts a `fail` attempt against the criterion and shows the others under it without counting them as a verification. No other item carries `kind`.
@@ -141,7 +141,7 @@ Without a worktree the probe is not applicable: it is no obstacle, no missing sc
 
 ## Focused pass
 
-When the brief names a mandate (criteria ids, or the behavior a correction changed), the plan, the tables, the break attempt floor and the verdict cover the criteria in the mandate only. List every other criterion under `Critères d'acceptation` as HORS MANDAT with who covers it (an earlier QA item by id, the pilot's evidence, or nobody), and write no item for it. Put the mandate's criterion ids in a root `"mandate"` array of the evidence. Run the gates the correction can affect; the others are `not run` with "hors mandat" and do not weigh on the verdict.
+When the brief names a mandate (criteria ids, or the behavior a correction changed), the plan, the tables, the break attempt floor and the verdict cover the criteria in the mandate only. List every other criterion under `Critères d'acceptation` as HORS MANDAT with who covers it (an earlier QA item by id, the pilot's evidence, or nobody), and write no item for it. Put the mandate's criterion ids in a root `"mandate"` array of the evidence. When `qa-evidence.json` already holds items written by the pilot (`"producer": { "role": "pilot" }` on the item, ids `GATE-<n>` and `PILOT-<n>`), copy them into your file unchanged, each with its own `producer`: they are the pilot's evidence for the criteria outside your mandate, and dropping them leaves those criteria with nothing. One that covers a criterion of your mandate is replaced the usual way, by a new item of yours naming it in `supersedes`. Run the gates the correction can affect; the others are `not run` with "hors mandat" and do not weigh on the verdict.
 
 ## Severity Definition
 
@@ -167,7 +167,7 @@ A general gate may be reused instead of rerun when the caller gives its result w
 
 ### INCONCLUSIVE
 
-- At least one acceptance criterion is UNVERIFIED. Name each one under `Non vérifiable`, with its `blocker` in the evidence. A criterion the registry marks `afterDeployment` is the exception: see `PASS_WITH_WARNINGS`
+- At least one acceptance criterion is UNVERIFIED. Name each one under `Non vérifiable`, with its `blocker` in the evidence
 - Or a criterion is MET without an executed break attempt, and `Scénarios manquants` names no concrete obstacle that prevented one
 
 ### PASS_WITH_WARNINGS
@@ -176,7 +176,6 @@ A general gate may be reused instead of rerun when the caller gives its result w
 - Or a check is `fail` and you **proved**, with the evidence in the report, that it fails identically without the diff. That failure stays `fail` in the table, gets its own entry under `Non vérifiable` or `Problèmes`, and is named as out of scope. Proof means you ran the same command on the base state and showed the same failure, not that a report said so
 - Or a general gate (lint, typecheck, a whole suite, build) is `not run`: reduced confidence is a warning, never a silent pass
 - Or a criterion is MET and a concrete obstacle, named under `Scénarios manquants`, prevented any executed break attempt on it
-- Or a criterion the registry marks `afterDeployment` is `not_run`, named under `Non vérifiable` with its `blocker` (what to read after the deployment); every other criterion is met
 
 ### PASS
 
@@ -184,4 +183,4 @@ A general gate may be reused instead of rerun when the caller gives its result w
 - Every acceptance criterion is MET, each with at least one executed break attempt
 - No P0 issue
 
-A single `fail` or `not run` line rules `PASS` out, even a harmless one. `PASS_WITH_WARNINGS` is the honest verdict there, and it exits the review loop just as `PASS` does. `INCONCLUSIVE` and `FAIL` do not exit it: a criterion nobody observed, or nobody tried to break, is never written up as a warning.
+A single `fail` or `not run` line rules `PASS` out, even a harmless one. `PASS_WITH_WARNINGS` is the honest verdict there. Like `PASS`, it lets the review loop end, on one more condition your caller checks: no `P1` is left open, since a `P1` you report goes to rework whatever your verdict. `INCONCLUSIVE` and `FAIL` do not exit it: a criterion nobody observed, or nobody tried to break, is never written up as a warning.

@@ -1,13 +1,13 @@
 ---
 name: glab-gitlab-api
-description: Recipes and traps for the `glab` CLI and the GitLab API at Synapse Medicine - linking a ticket to an epic, passing a long description from a file, assigning an issue reliably, reading and writing a work item's native status. Use whenever a glab command fails silently or returns an unexpected error (404 on --epic, assignee_ids ignored, description filled with the literal text "@file.md", status absent from the REST API).
+description: Recipes and traps for the `glab` CLI and the GitLab API - linking a ticket to an epic, passing a long description from a file, assigning an issue reliably, reading and writing a work item's native status. Use whenever a glab command fails silently or returns an unexpected error (404 on --epic, assignee_ids ignored, description filled with the literal text "@file.md", status absent from the REST API).
 ---
 
-# glab / GitLab API - recipes and traps (Synapse Medicine)
+# glab / GitLab API - recipes and traps
 
 ## Linking a ticket to an epic
 
-The `--epic <iid>` flag of `glab issue create` returns a `404 Not Found` (tested on `synapse-medicine&629`). Do not rely on it.
+The `--epic <iid>` flag of `glab issue create` returns a `404 Not Found`. Do not rely on it.
 
 The workflow that works, in three steps:
 
@@ -22,11 +22,11 @@ glab api "projects/<group%2Fproject>/issues/<iid>"   # the `id` field
 glab api --method POST "groups/<group>/epics/<epic_iid>/issues/<internal_id>"
 ```
 
-Real example: ticket `material#5854` (internal id `196700862`) linked to epic `synapse-medicine&629`: `glab api --method POST "groups/synapse-medicine/epics/629/issues/196700862"`.
+Invented example: ticket `shop#412` (internal id `90001234`) linked to epic `acme&17`: `glab api --method POST "groups/acme/epics/17/issues/90001234"`.
 
-**Group trap**: an epic's iid is scoped to its group, not global. `synapse-medicine&6` and `synapse-medicine/app&6` are two completely different epics that share the iid `6` by coincidence. Always reuse the EXACT group path written in the ticket ("Épique : synapse-medicine/app&6"), never assume the root group applies. Check with `glab api "groups/<url-encoded-group-path>/epics/<iid>"` and compare the title before linking.
+**Group trap**: an epic's iid is scoped to its group, not global. `acme&6` and `acme/app&6` are two completely different epics that share the iid `6` by coincidence. Always reuse the EXACT group path written in the ticket ("Épique : acme/app&6"), never assume the root group applies. Check with `glab api "groups/<url-encoded-group-path>/epics/<iid>"` and compare the title before linking.
 
-MedGPT epics live in the root group `synapse-medicine` (id `3049991`), not `synapse-medicine/app`.
+When the `gitlab-tickets` conventions apply, the group the epics live in is the one `IMPL_GITLAB_EPIC_GROUP` names, which may be a root group and not the subgroup of the project.
 
 ## Passing a long description from a file
 

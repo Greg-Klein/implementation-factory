@@ -38,7 +38,7 @@ glab api graphql -f query='
 mutation {
   workItemUpdate(input: {
     id: "gid://gitlab/WorkItem/<numeric id>",
-    statusWidget: { name: "In progress" }
+    statusWidget: { name: "<status name the caller supplies>" }
   }) {
     errors
     workItem { widgets { ... on WorkItemWidgetStatus { status { name } } } }
@@ -49,7 +49,7 @@ mutation {
 What matters:
 
 - The name resolves case insensitively, so the board's exact casing does not have to be guessed:
-  `in progress - merge request` reaches `In progress - Merge request`.
+  `in progress` reaches `In progress`.
 - An unknown name writes nothing and returns an explicit error listing every valid status for that
   work item type. Read that list instead of guessing a second time.
 - `errors: []` plus the new name echoed back is the only proof the write landed. GraphQL returns

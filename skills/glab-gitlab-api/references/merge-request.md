@@ -4,7 +4,7 @@ The caller must authorize publication and supply the source/target branches, tic
 
 The templates and fixed phrases below are written in French. When the workflow language is English ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md)), keep their structure and write every heading and phrase in English, with the fixed forms that contract lists.
 
-**Read the acceptance summary first.** When the console runs the session (`IMPL_RUN_ID` is set), it keeps `.claude/tasks/acceptance-summary.md` up to date from the registry and every evidence file, with the same computation its "Preuves" tab shows: one sentence ("5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié"), the criteria that are not verified and why, and a detail table for step 9. Use it as it is. A criterion it reports unverified, blocked or failed is never reworded as validated, anywhere. That holds even when you saw the check pass: on your own evidence, "version inconnue" ("unknown version" in English) means the code version was missing or not produced by the snapshot utility, and a stale result was taken on older code. Measure again by [the evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), under new ids, and read the summary once more; if you do not, publish its sentence unchanged. When the file is absent (no console), write the same content yourself from the registry and the evidence files, by the same rule: a criterion is verified only when evidence taken on the final code says so.
+**Read the acceptance summary first.** When the console runs the session (`IMPL_RUN_ID` is set), it keeps `.claude/tasks/acceptance-summary.md` up to date from the registry and every evidence file, with the same computation its "Evidence" tab shows: one sentence ("5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié"), the criteria that are not verified and why, and a detail table for step 9. Use it as it is. A criterion it reports unverified, blocked or failed is never reworded as validated, anywhere. That holds even when you saw the check pass: on your own evidence, "version inconnue" ("unknown version" in English) means the code version was missing or not produced by the snapshot utility, and a stale result was taken on older code. Measure again by [the evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), under new ids, and read the summary once more; if you do not, publish its sentence unchanged. When the file is absent (no console), write the same content yourself from the registry and the evidence files, by the same rule: a criterion is verified only when evidence taken on the final code says so.
 
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
@@ -52,7 +52,7 @@ Rules:
   - a ticket filed in another project (the caller gives the delivery projects, `IMPL_DELIVERY_PROJECTS`): `#<iid>` would name an issue of the merge request's own project, so write the full reference, `<group>/<project>#<iid>`, the `references.full` field of the issue. When the caller lists several projects, every merge request of the ticket writes `Related to <full reference>` whatever its target, and adds the line "Livraison partagée avec `<other projects>` : le ticket se ferme à la main une fois toutes les merge requests mergées." A `Closes` would close the ticket at the first merge, with the other repositories still waiting. With a single project listed, the keyword follows the rules above
   - both go into the description file before the merge request is created, so the link is there from the first second
 - **Never merge the MR yourself.** The user merges.
-- **"Livré" means deployed to production**, in the description and in the step 9 comment alike. A ticket whose merge request is open, or merged into a feature branch or `develop`, is not "livré": name the stage it reached ("MR ouverte", "mergé dans `<branch>`").
+- **Name the stage the ticket reached**, in the description and in the step 9 comment alike, by the two words [the workflow language contract](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) fixes: never "livré" or "shipped" for a merge request that is open, or merged into a feature branch or `develop` ("MR ouverte", "mergé dans `<branch>`").
 
 If the caller separately authorized a ticket lifecycle transition, perform that supplied transition using [work-item-status.md](work-item-status.md). MR creation alone does not authorize a status update.
 
@@ -131,12 +131,12 @@ The header depends on how `glab` is logged in. A token obtained through the OAut
 
 The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
 
-Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-factory:review`:
+Use [the comment format](${CLAUDE_PLUGIN_ROOT}/contracts/review-comments.md) for each finding, exactly like `/implementation-factory:review`: it gives the labels, the decorations and the label a `P0`, `P1` or `P2` takes.
 
 ```md
 ## Pré-revue automatisée
 
-Les revues senior, QA et design ont tourné sur N rounds. Les constats ci-dessous sont ce qui reste après la boucle de retouches.
+Name the reviews that actually ran, and only those, with the number of rounds: "Revue senior en une passe." at tier 0, "Les revues senior, design et QA ont tourné sur N rounds." at tier 2. Then: "Les constats ci-dessous sont ce qui reste après les retouches."
 
 ### Constats
 
@@ -168,7 +168,7 @@ The detail table of `.claude/tasks/acceptance-summary.md`. Every attachment it n
 
 - Lint / typecheck / tests : ...
 - Vérification navigateur : routes et viewports, ou pourquoi ça n'a pas pu tourner
-- Revue design : comparée à Figma / ignorée et pourquoi
+- Revue design : niveau de référence (figma / ticket-mockup / live-neighbours) et verdict / hors déclencheur / non lancée et pourquoi
 
 ### Captures
 

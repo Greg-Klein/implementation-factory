@@ -27,13 +27,13 @@ A seventh agent, `ticket-scheduler`, takes part in no run. The console calls it 
 
 The pilot picks a review tier from the size of the diff:
 
-- tier 0: a single pass of `senior-reviewer`, with no orchestrator and no rework loop, while the pilot runs the general checks itself (lint, typecheck, tests);
+- tier 0: a single pass of `senior-reviewer`, with no orchestrator and no rework loop, while the pilot runs the general checks itself (lint, typecheck, tests), plus `designer-reviewer` when the design review is triggered;
 - tier 1: `senior-reviewer`, then `designer-reviewer` if the pilot triggered the design review and the application is reachable, then `qa-reviewer`, once each;
 - tier 2: `review-orchestrator` runs the full loop. `senior-reviewer` and `qa-reviewer` keep their default model there, Opus. At tiers 0 and 1, the pilot calls them with Sonnet. `designer-reviewer` runs on Sonnet at every tier.
 
 QA writes its test plan to `qa-plan.md` before opening the author's reports, then tries to make each criterion fail. It declares a criterion met only on an observation it ran itself. When a criterion has no observation, the verdict is `INCONCLUSIVE` and the merge request is opened as a draft, with those criteria named.
 
-The design review works without Figma. With Figma frames, it runs as soon as the change is visible in the interface. Without Figma, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design not verified" (design not verified), with the reason.
+The design review works without Figma. With a mockup, Figma frames or one attached to the ticket, it runs as soon as the change is visible in the interface, at every tier. With no mockup at all, the pilot triggers it only if the diff modifies a shared interface component or creates a screen or a route. It judges the change against the best reference available: the Figma frames (`figma`), the mockups attached to the ticket (`ticket-mockup`) or the screens the application already ships (`live-neighbours`). It writes its inventory to `design-inventory.md` before reading the developer's measurements. A design verdict of `INCONCLUSIVE` does not block delivery. The merge request, the review comment and the final report flag it with the words "design not verified" (design not verified), with the reason.
 
 See [Agents, skills and independent review](docs/engineering-workflow.md) for the capabilities, the triggers, how context is passed, the review methods and the checks. The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) shows who does what on which model, agents, scripts and the engineer's own steps, from the intake of a ticket to the self-improvement loop. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both pages are served by GitHub Pages from `docs/`; from a checkout, open `docs/agent-map.html` or `docs/architecture.html` in a browser (they load their diagram library from a CDN).
 
@@ -366,7 +366,11 @@ The available settings:
 | `IMPL_WORKTREE_DEPENDENCY_DIRS` | names of the dependency directories Git ignores that the worktree of a run takes from the main checkout, at any depth, separated by commas; no build outputs | `node_modules` |
 | `IMPL_WORKTREE_COPY_FILES` | files copied from the main checkout to the worktree of a run, separated by commas: a name pattern such as `.env*` for files Git ignores, or a path from the root of the repository | `.env*,.claude/settings.local.json` |
 | `IMPL_STALL_MINUTES` | minutes without progress before the console raises a doubt about a run in progress (a doubt only: nothing is stopped or restarted) | `10` |
+| `IMPL_GITLAB_STATUS_STARTED` | name of the GitLab status a run gives its ticket when it creates the branch; status names depend on the GitLab group, and nothing is moved on GitHub | `In progress` |
+| `IMPL_GITLAB_STATUS_MERGE_REQUEST` | name of the GitLab status a run gives its ticket once the merge request is open | `In progress - Merge request` |
 | `IMPL_DEMO_STEP_MS` | duration of a step in demo mode | `5000` |
+
+Three more variables are read only by the `gitlab-tickets` skill, which holds ticket-writing conventions, and are not offered by `impl config`: `IMPL_GITLAB_TICKET_PROJECT` (path of the project tickets are created in), `IMPL_GITLAB_EPIC_GROUP` (path of the group the epics live in) and `IMPL_GITLAB_ASSIGNEE` (username the tickets are assigned to). Write them in the `.env` by hand when you use that skill.
 
 A variable set in the shell wins over the `.env`, which wins over the default. A one-off setting therefore needs no write:
 

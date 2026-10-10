@@ -4,7 +4,7 @@ These checks need no design reference and run at every level, on the surface the
 
 ## Viewports and content
 
-- Required widths: the ones the brief names, else 360, 768 and 1280, plus the exact width of every supplied frame.
+- Required widths: the ones the coverage rule of the design contract gives (the brief's, else its defaults, plus the exact width of every supplied frame).
 - Stressed content, for each text zone or list the change touches: the longest plausible value, an empty value, and zero, one and many items. Produce it through the recipe. When the recipe gives no way to produce the data, the cell is not reached, with that obstacle. Never build a stub of your own to force it.
 
 ## Layout invariants

@@ -1,6 +1,6 @@
 # Reference levels
 
-A finding without a reference is taste. Use the highest level the brief supports, name it at the top of the report and build the inventory from it. Levels combine downwards: a property the higher level leaves open is judged at the next one, and the row says which. Without Figma frames the caller starts this review only when the diff modifies a shared UI component or creates a screen or route.
+A finding without a reference is taste. Use the highest level the brief supports, name it at the top of the report and build the inventory from it. Levels combine downwards: a property the higher level leaves open is judged at the next one, and the row says which. With a mockup (`figma` or `ticket-mockup`) the caller starts this review on any change visible in the UI. With no mockup at all it starts it only when the diff modifies a shared UI component or creates a screen or route.
 
 ## `figma`
 

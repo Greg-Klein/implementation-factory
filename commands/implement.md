@@ -21,7 +21,7 @@ When there is one, write it verbatim at the top of `.claude/tasks/run-instructio
 
 This document is written with GitLab's words: "merge request", "MR", `<iid>`, and the `glab` commands it quotes. **On a GitHub ticket, read "pull request", "PR" and the issue number, and take every forge command from the `gh-github-api` skill, never from the `glab` lines here.** Each place where GitHub differs in more than its commands says so. Three things keep their name on both forges, because the console reads them by it: the files `mr-description.md` and `mr-review-comment.md`, and in `workflow-state.json` the values `merge_request`, `draft_merge_request` and the field `mergeRequestUrl`, which holds the address of the pull request.
 
-Read [engineering principles](${CLAUDE_PLUGIN_ROOT}/principles/engineering.md), [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) and [investigation handoff](${CLAUDE_PLUGIN_ROOT}/contracts/context-handoff.md). These are explicit plugin references, not target-repository files or automatically inherited CLAUDE.md content.
+Read [engineering principles](${CLAUDE_PLUGIN_ROOT}/principles/engineering.md), [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md), [investigation handoff](${CLAUDE_PLUGIN_ROOT}/contracts/context-handoff.md) and, before you produce or merge a proof file, [evidence](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md). These are explicit plugin references, not target-repository files or automatically inherited CLAUDE.md content.
 
 Load `implementation-factory:how` only when the behavior is unfamiliar, and `implementation-factory:why` when an unusual constraint needs historical investigation. Persist useful returned results in `.claude/tasks/investigation-context.md` with scope and source state. Pass its path for later reconciliation, not its conclusions as a reviewer's expected answer. Refresh stale source anchors before reuse.
 
@@ -33,7 +33,7 @@ You are the pilot of this workflow. You own all human interaction and all git op
 
 This run is **as autonomous as possible**. Step 2 is the only planned interruption. After it, never come back to ask for validation, an opinion or a permission: decide, act, record the decision, and report everything at the end. When something goes wrong, prefer a recovery path over stopping.
 
-Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See the specification policy.
+Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See the specification policy. So a later question is legitimate in four places, each named where it arises: a ticket branch that already exists (step 3), a blocking question the planner surfaced (step 4), a specification question a developer returned (step 5), and a measurement that contradicts what the user said the app does (step 6).
 
 **Waiting is never a shell `sleep`.** A foreground `sleep`, on its own or chained before the command you actually want, is blocked and costs you a turn for nothing. You wait a lot in this workflow: for a batch of developers, for a dev server to answer, for a forge call, for a reviewer to hand back its artifact. Three ways to do it, and no fourth:
 
@@ -73,7 +73,7 @@ How to read each kind of resource:
 
 | Resource | How |
 |---|---|
-| Figma | See the design extraction reference in "Shared contracts and conditional methods" |
+| Figma | [Design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-review/references/read-design.md), "Reading a Figma design" |
 | GitLab uploads | `glab api "projects/<url-encoded-project-path>/uploads/<secret>/<filename>" > .claude/tasks/assets/<name>` then `Read` the file to actually look at it. The secret and the filename are the two segments of the upload URL itself (`/uploads/<secret>/<filename>`), and the project path is URL encoded (`group%2Fproject`). Downloading needs no `curl`: `glab api` signs the request itself. The one call in this workflow that does need the token is the screenshot upload of step 9, and the token is read with `glab config get token --host <host>`. Never with `glab auth token`: it is not a subcommand, it prints its own help page on standard output and exits `0`, so the header carries help text instead of a credential and the failure looks like a network error. Name each file after what it shows and confirm it by reading the file, never by trusting the order of the downloads |
 | Epic / linked issues | `glab issue view`, `glab api groups/<group>/epics/<iid>` |
 | GitHub attachments, sub-issues, parent, dependencies | The `gh-github-api` skill, "Reading a ticket". None of the two GitLab rows above applies |
@@ -94,17 +94,15 @@ Use `implementation-factory:clarify-spec` to audit the ticket for gaps: for ever
 - **Blocking**: the answer changes the code, and neither the codebase, the design, nor an existing pattern settles it. Typical cases: behaviour of an unspecified state, wording of a user facing string, data source or endpoint, sort order, pagination or limit, permissions, what happens on error, scope boundary, target of a navigation, mobile behaviour absent from the design.
 - **Non blocking**: an existing convention, a comparable screen, the Figma file or plain obviousness settles it. Write down the answer you derived and where it comes from.
 
-**What the app does today is not a gap either, it is a fact.** Read it or run it when that needs no running app (an existing test, a script, an endpoint already reachable) and record the answer with its source. When only the running app can show it, ask it at step 2 like any blocking question, mark it `observable` in `open-questions.md` with the measurement that will check it, and compare the answer with what step 6 measures: a contradiction goes back to the user before the review starts.
+**What the app does today is not a gap either, it is a fact.** `clarify-spec` says when to read or run it yourself, in which case record the answer with its source, and when only the running app can show it. In that second case ask it at step 2 like any blocking question, mark it `observable` in `open-questions.md` with the measurement that will check it, and compare the answer with what step 6 measures: a contradiction goes back to the user before the review starts.
 
-An obvious behaviour is not a gap. A close button closes the modal, a cancel button discards and closes, `Escape` closes an overlay, a required field blocks submit, a list shows a spinner while loading, a back arrow goes back. Do not ask about those, implement them and note the deduction. What is never obvious: a product rule, a user facing wording, a limit or a threshold, a data source, a permission, a state the ticket never mentions. Those you ask.
+An obvious behaviour is not a gap, and neither is a translation the ticket does not give: the specification policy lists both under "Deduce", and what is never obvious under "Ask". Implement the first and note the deduction, ask the second.
 
 **A gap the run instruction already answers is not a gap.** Record the answer with "run instruction" as its basis and move on. Conversely, if the instruction contradicts the ticket or the design in a way that changes what ships, say so in one sentence at step 2 and then follow the instruction: it is the more recent word.
 
-**English translations are never a gap.** Tickets give the French strings and never the English ones. Write a faithful translation of the French wording: same meaning, same level of detail, same tone, no rewriting and no editorialising. Fill both `fr.json` and `en.json` and move on. Only ask when the French string itself is missing.
-
 ---
 
-## Step 2 - Ask the user (ONLY interactive step)
+## Step 2 - Ask the user (the only planned interruption)
 
 A single interaction with **AskUserQuestion**, carrying everything you will ever need:
 
@@ -164,7 +162,7 @@ Record the base branch. The merge request will target it, whatever it is. A stac
 
 **On a GitHub ticket, move nothing and go to step 4**: an issue has no lifecycle status, at this step or at step 8. Say so once in the final report.
 
-On GitLab, move the ticket to **In progress**, unless it already is. The branch exists and the work
+On GitLab, move the ticket to its "work started" status, unless it already carries it. The branch exists and the work
 starts here, so the board should say so without the user having to touch it. See "Setting the ticket status" below: it is a native work item field, not a label, and it is only reachable through
 GraphQL.
 
@@ -176,13 +174,13 @@ Judge complexity from the ticket context.
 
 **Complex** (several surfaces or components, several acceptance criteria, data layer plus UI, migration, unclear scope): invoke `ticket-planner` with the ticket context path and the path of `.claude/tasks/acceptance-criteria.json`. It writes `.claude/tasks/planner-output.json` with atomic tasks, each naming in `criterion_ids` the registry criteria it serves, and `criteria_revision` at the top. Validate that the JSON is well formed, that every `criterion_ids` entry exists in the registry, and that every criterion is served by at least one task or explicitly left out with the reason in `technical_notes`. If codebase context is missing, obtain a scoped `how` result and pass its checked source anchors to the planner.
 
-**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` and `complexity` included: `{"criteria_revision": 1, "acceptance_criteria": ["AC1: …"], "tasks": [{"id": "T1", "title": "…", "summary": "…", "criterion_ids": ["AC1"], "dependencies": [], "complexity": "S|M|L", …}]}`.
+**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` and `complexity` included: `{"criteria_revision": 1, "tasks": [{"id": "T1", "title": "…", "summary": "…", "criterion_ids": ["AC1"], "doc_paths": [], "dependencies": [], "complexity": "S|M|L", …}]}`.
 
 **A `fix` ticket is reproduced before it is fixed.** The task that fixes the defect opens with its reproduction, on the surface the ticket reports it on, and its developer records that observation as evidence before editing: a regression test seen failing, or a measurement of the faulty behaviour on the frozen base code. The same reproduction run after the fix is the evidence that closes the criterion. A defect nobody could reproduce is delivered with that fact stated, its criterion unverified, never as a verified fix.
 
 Pass the run instruction to the planner verbatim when there is one, as a binding constraint on the plan rather than context. A plan that ignores it is invalid and gets rejected, not patched later by the developers.
 
-**Survey the repository's documentation while you plan, and put it in the plan.** List what exists (`docs/`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, per-feature pages, doc indexes, `.env.example`, a changelog), and name in each task the pages that task will make stale. Documentation is not a separate phase and not a follow-up ticket: a task that changes the state model, adds a folder, adds a flag, adds a route or takes an architectural decision carries the doc update with it. When the ticket introduces a mechanism with no existing home, the plan says which page gets created and which index it gets wired into. A repository that keeps a per-feature page for comparable features expects one for this one too.
+**The plan names the documentation each task touches, in its `doc_paths`.** The planner surveys what exists (`docs/`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, per-feature pages, doc indexes, `.env.example`, a changelog); you do that survey yourself when you write the minimal plan. Check it when you validate the plan: a task that changes a documented behaviour with an empty `doc_paths` goes back to the planner. Documentation is not a separate phase and not a follow-up ticket: a task that changes the state model, adds a folder, adds a flag, adds a route or takes an architectural decision carries the doc update with it. When the ticket introduces a mechanism with no existing home, the plan says which page gets created and which index it gets wired into. A repository that keeps a per-feature page for comparable features expects one for this one too.
 
 Documentation that only makes sense once the whole epic has landed is the exception, not the rule: document the part that exists and say which ticket owns the rest.
 
@@ -196,27 +194,27 @@ Revise the plan when concrete evidence from a developer or reviewer disproves it
 
 One `developer` agent per task, in dependency order. It runs on Sonnet, the model its definition declares: pass no model override, except `opus` for a task whose `complexity` is `L` in the plan, where the developer makes the design choices the plan leaves open. A hook refuses any other model. **Parallel when the file scopes are disjoint, sequential the moment they overlap.**
 
-Decide it from the plan, not from a hunch: two tasks may run together only when their `file_paths` do not intersect at all, tests included, and neither depends on the other. A shared file means sequential, even for a one-line edit, because two agents editing the same file overwrite each other silently.
+Decide it from the plan, not from a hunch: two tasks may run together only when the files each one writes, its `file_paths` and its `doc_paths` taken together, do not intersect at all, tests included, and neither depends on the other. A shared file means sequential, even for a one-line edit, because two agents editing the same file overwrite each other silently. Two tasks on separate code that both name `README.md` in their `doc_paths` share a file.
 
 In practice the early tasks of a ticket are often disjoint (a store, a hook, an i18n file) and the wiring tasks never are. Batch two or three disjoint ones, then fall back to sequential. Announce which tasks you are running together and why.
 
-Whatever the batching, **commit one task at a time**: wait for the batch, verify each task's own gates, then commit them as separate commits. **Read those gates in `.claude/tasks/gate-log.jsonl`**: a hook ran the type-check, lint and related tests of what each `developer` and `senior-reviewer` edited when it stopped, and the newest lines carrying its `agentId`, or the `files` of its task, are the verdict. `fail` with `retry: true` (the agent could not fix it when sent back) or `handedBack: true` (it had already handed its report back and was not sent back) is a broken hand-back: relaunch it once with the failing step, and commit nothing over it unless the same failure is established on the base. `inconclusive` (type errors in a peer's files during a parallel batch), `skipped` (a check that could not run), `none` (nothing to run, or no edit recorded) and no line at all mean the report is the only check so far, and your repository-wide gates decide. The repository-wide gates (lint, typecheck, the full test suite) are yours to run, once the batch is done and nothing is editing any more. A batch member that reported such a gate as non conclusive hands you a measurement to redo here, and redoing it is not optional: it is the only moment its result means anything.
+Whatever the batching, **commit one task at a time**: wait for the batch, verify each task's own gates, then commit them as separate commits. **Read those gates in `.claude/tasks/gate-log.jsonl`**: a hook ran the type-check, lint and related tests of what each `developer` and `senior-reviewer` edited when it stopped, and the newest lines carrying its `agentId`, or the `files` of its task, are the verdict. `fail` with `retry: true` (the agent could not fix it when sent back) or `handedBack: true` (it had already handed its report back and was not sent back) is a broken hand-back: relaunch it once with the failing step, and commit nothing over it unless the same failure is established on the base. `inconclusive` (type errors in a peer's files during a parallel batch), `skipped` (a check that could not run), `none` (nothing to run, or no edit recorded) and no line at all mean the report is the only check so far, and your repository-wide gates decide. The repository-wide gates (lint, typecheck, the full test suite) are yours to run, with `implementation-factory:collect-evidence` and its commands reference, once the batch is done and nothing is editing any more. A batch member that reported such a gate as non conclusive hands you a measurement to redo here, and redoing it is not optional: it is the only moment its result means anything.
 
 Each `developer` invocation must receive:
 
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
 - the path of `.claude/tasks/acceptance-criteria.json`, the criterion and check ids its task serves (its `criterion_ids`), and the [evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), which its `dev-evidence-<task-id>.json` follows
-- **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` keep two agents out of each other's code; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
+- **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` and `doc_paths` keep two agents out of each other's code and pages; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
 - **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - browser ownership and scheduling: no runtime measurement while any peer edits; schedule a measurement-only continuation after the batch freezes
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the path of `.claude/tasks/recurring-findings.md` when the console left one, as kinds of defect to check its change against, which add no requirement
-- the Figma node URLs when the task is UI, and the path to the Figma extraction reference below
+- the Figma node URLs when the task is UI, and the path to the Figma extraction reference of step 1
 - the requirement to self-check observable behavior on frozen code and return the report, evidence and scoped recipe specified by its output contract
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
 - the workflow language, stated in words ("workflow language: French" or "workflow language: English"), as in every other delegation of this workflow
 - the method routing in the developer definition, without copying skill bodies; when a measurement-only continuation is needed, explicitly prohibit code edits
-- **in worktree mode, the path of the run worktree as the only place it writes**, and the dependency rule of "Run worktree" below when its task adds, removes or upgrades a dependency
+- **in worktree mode, the path of the run worktree as the only place it writes**, and the [run worktree](${CLAUDE_PLUGIN_ROOT}/contracts/run-worktree.md) contract by path, which holds the rule on shared dependency directories
 
 ### Implementation method
 
@@ -253,11 +251,11 @@ The implementation phase is over when every task in `planner-output.json` is acc
 
 ## Step 6 - Make the app reachable and measure the change in it
 
-For a change observable in the running app, use `implementation-factory:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
+For a change observable in the running app, use `implementation-factory:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. Start the app with Claude Code's built-in `run` skill when the session has it, otherwise with the repository's documented dev command.
 
-In worktree mode, never assume the default port. Another run of the same repository, or the user's own dev server in the main checkout, may already hold it, and an app that answers there serves another checkout's code. Check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started. Build outputs (`.next`, `dist`) are not provisioned in the worktree, so a first build there is expected.
+In worktree mode, the port rule of [run worktree](${CLAUDE_PLUGIN_ROOT}/contracts/run-worktree.md) applies to you first: check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started.
 
-Record URL, route and a secure credential reference in `.claude/tasks/state.json`, never the secret itself. Use headless browsers. Measure the committed, frozen code; no editing agent runs during measurement. Observable includes requests, redirects, storage and events, not only pixels.
+Give the URL and route you started to every agent that drives the app, in its brief, and name a credential by where it lives, as the runtime recipe does, never the secret itself. Use headless browsers. Measure the committed, frozen code; no editing agent runs during measurement. Observable includes requests, redirects, storage and events, not only pixels.
 
 Preserve the developers' actual measurements, captures and reproduction recipe for later reconciliation by reviewers. Pass paths, not an approving verdict or the author's diagnosis in the review brief. A reviewer forms its own expectations before opening those reports. If live access is unavailable, report the established obstacle and keep indirect evidence available without representing it as a fresh observation.
 
@@ -267,28 +265,32 @@ Preserve the developers' actual measurements, captures and reproduction recipe f
 
 **Size the review to the diff before you delegate anything.** The review phase costs the same on a four line fix as on a feature. Read `git diff --stat <base>...HEAD` and pick a tier. Announce which tier you picked and why, in one line. Write it as `reviewTier` in `workflow-state.json` from this step on: the announcement is prose, and the console compares runs by that field.
 
-**Decide the design review from the same diff, and say it in one line with its reason.** With Figma frames it runs whenever the change is visible in the UI. Without Figma (levels `ticket-mockup` and `live-neighbours`) it runs only when the diff modifies a shared UI component or creates a screen or route. A shared component is a UI file imported by more than one screen or route (search its importers), or one that lives in the repository's shared UI or design system directories. Otherwise skip it: that skip is outside the trigger, not a failed review, and it is never a "design non vérifié" line.
+**Decide the design review from the same diff, and say it in one line with its reason.** The rule is the same at every tier, tier 0 included. With a mockup, Figma frames or one attached to the ticket (levels `figma` and `ticket-mockup`), it runs whenever the change is visible in the UI. With no mockup at all (level `live-neighbours`) it runs only when the diff modifies a shared UI component or creates a screen or route. A shared component is a UI file imported by more than one screen or route (search its importers), or one that lives in the repository's shared UI or design system directories. Otherwise skip it: that skip is outside the trigger, not a failed review, and it is never a "design non vérifié" line.
+
+**When you invoke `designer-reviewer` yourself, at tier 0 and tier 1, you publish its evidence.** Take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after it returns, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. The agent writes only the `.tmp` file and leaves the rest to its caller: evidence you do not rename never reaches the console. At tier 2 the orchestrator does it.
 
 **Tier 0, one short correctness review.** The diff is under about 30 lines of non-test code, touches one or two files, has a single cause, and that cause is already proven by something objective (a measurement, a failing test that now passes, a reproduction). You still get a second pair of eyes, but a narrow one: **a single `senior-reviewer`, one pass, no orchestrator, no rework loop**, invoked with a Sonnet model override (the mandate below is narrow enough that Sonnet holds the same bar at a lower cost; reserve Opus, the agent's default, for tier 2), while you run the gates yourself (lint, typecheck, tests, one browser measurement when the change is visible).
 
 Give it the narrow correctness mandate: independently challenge the cause, affected consumers, regression tests and acceptance criteria; report only P0/P1. It loads `review-change` itself. No cosmetic findings, broad refactors or author checklist as its review plan. Require its normal `senior-review.md` report even on this tier.
 
+When the design review trigger above applies, run `designer-reviewer` too, once, after the senior and on frozen code, with the app reachable. A design `P0` or `P1` it reports is handled as at tier 1: one rework developer, then the design review once more on what changed.
+
 If the senior corrects code, its verdict is not independent evidence about its own fix: run one focused `qa-reviewer` pass, with a Sonnet model override and the changed behavior and its criteria as mandate, on the final code before calling it verified. This is not another rework loop. If the time bound prevents that pass, leave the affected checks unverified in the delivery.
 
-Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
+Reserve about 10 minutes for it, and stop it past that: on a diff this size the cap is deliberately shorter than the 15 minutes every other reviewer gets. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
 
-**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when you decided it runs and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. For QA, pass the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id. Only when the diff adds or modifies test files (a file the repository's test runner collects, among those `git diff --name-only <base>` and `git status --porcelain` list), also create a throwaway worktree (`git worktree add --detach <fresh directory outside the repository> HEAD`, in a system temporary directory for instance, never under `.claude/worktrees/`), pass its path, and remove that one and only that one (`git worktree remove --force <its path>`) when QA returns. The same holds for a reviewer you invoke at tier 0.
+**Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when you decided it runs and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, publish its evidence as said above. For QA, pass the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id. Only when the diff adds or modifies test files (a file the repository's test runner collects, among those `git diff --name-only <base>` and `git status --porcelain` list), also create a throwaway worktree (`git worktree add --detach <fresh directory outside the repository> HEAD`, in a system temporary directory for instance, never under `.claude/worktrees/`), pass its path, and remove that one and only that one (`git worktree remove --force <its path>`) when QA returns. The same holds for a reviewer you invoke at tier 0.
 
 A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, and you merge what it wrote into `developer-report.md` and `dev-evidence.json` the same way as at the end of a batch. At tier 2 the orchestrator does that merge for you.
 
 **Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer` and `qa-reviewer` keep their default Opus model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap. `designer-reviewer` runs on Sonnet, its default, at every tier: its work is mostly measurement.
 
-**The gates you run yourself still get written down.** At tier 0 follow [pilot evidence](${CLAUDE_PLUGIN_ROOT}/contracts/pilot-evidence.md) and write `qa-evidence.json` only when QA did not produce it. Never overwrite a QA report or normalize its valid measured/confirmed/unverified tokens into pass/fail.
+**The gates you run yourself still get written down.** At tier 0 follow [pilot evidence](${CLAUDE_PLUGIN_ROOT}/contracts/pilot-evidence.md) and write `qa-evidence.json` once your gates have run, before the focused `qa-reviewer` pass when there is one: it carries your items over. Never overwrite a QA report or normalize its valid measured/confirmed/unverified tokens into pass/fail.
 
 **Bound every tier in time, whatever the tier.** Two rules, both enforced by you:
 
 - **The review must not outlast the implementation.** Note when step 5 ended. Once the review phase has run about as long as the implementation did, stop launching new rounds: take what the running agents have produced, commit it, and put whatever is unresolved in the step 9 comment as an explicit "not verified" line.
-- **A single reviewer that has been running for more than about 15 minutes gets stopped**, with `TaskStop`, not waited out. Its working tree changes and whatever it has written are still yours to keep. A reviewer that silent for that long is rereading the repository, not finding defects.
+- **A single reviewer that has been running for more than about 15 minutes gets stopped**, about 10 at tier 0, with `TaskStop`, not waited out. Its working tree changes and whatever it has written are still yours to keep. A reviewer that silent for that long is rereading the repository, not finding defects.
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
@@ -310,7 +312,7 @@ The design reviewer loads its own `figma-review` method. Pass the reference leve
 Loop exit criteria, enforced by the orchestrator:
 
 - no `P0` and no `P1` left on any dimension
-- QA status `PASS` or `PASS_WITH_WARNINGS`, with no acceptance criterion left without a fresh QA observation, apart from those the registry marks `afterDeployment`, which QA records blocked. `INCONCLUSIVE` never exits as ready
+- QA status `PASS` or `PASS_WITH_WARNINGS`, with no acceptance criterion left without a fresh QA observation. `INCONCLUSIVE` never exits as ready
 - `P2` findings may remain: they are reported, not fixed
 - the designer's "Écarts préexistants" may remain whatever their severity: they concern elements the ticket does not touch, and they are reported for a follow-up ticket, not fixed
 - one initial review round plus at most two rework rounds (three review rounds total, QA last each time); the time bound may stop earlier. No separate per-dimension limit. If still unresolved, stop and report the competing hypotheses and what would discriminate them
@@ -332,9 +334,9 @@ A design verdict `INCONCLUSIVE`, or a design review you decided to run and skipp
 
 ## Step 8 - Merge request
 
-Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-factory:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-factory:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-factory:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. When `IMPL_DELIVERY_PROJECTS` is set, give the recipe its projects (see "Repository resolution"): they change the reference and the keyword. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
+Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-factory:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-factory:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-factory:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. A base that came from `IMPL_TICKET_BASE_BRANCH` is an ordinary one, not a stacked one: the recipe treats it like any other target. When `IMPL_DELIVERY_PROJECTS` is set, give the recipe its projects (see "Repository resolution"): they change the reference and the keyword. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
 
-Then, on GitLab only, set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
+Then, on GitLab only, set the ticket's authorized lifecycle status to its "merge request open" status (see "Setting the ticket status"), reading the result back. A status failure is reported, not hidden.
 
 A commit made after the merge request exists is pushed too. In worktree mode the console keeps the run worktree as long as HEAD is not on the remote.
 
@@ -359,9 +361,10 @@ Print a short summary in chat:
 - how the run instruction was applied, and anything in it you could not honour, with the reason
 - anything still unanswered, and what part of the code it affects
 - what could not be verified
+- what the ticket asks to check after the merge (production logs, a reading after the release), as follow-ups that are no criterion of this run
 - on a GitHub ticket: that the issue status was left alone, whether the captures were attached or stayed local and why, and the reviewer outcome
 
-Name the stage the ticket actually reached: the merge request is open, not "livré". In French, "livré" means deployed to production, which this workflow never does; a merge is "mergé". In English the same holds for "shipped" or "delivered": see the workflow language contract. The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
+Name the stage the ticket actually reached, by the two words the workflow language contract fixes: the merge request is open, never "livré", "shipped" or "delivered". The same holds for any ticket you mention, here and in everything step 8 and 9 publish.
 
 **Declare the end first.** Write `workflow-state.json` with `"state": "completed"` and its `result` (see the workflow-state contract), before the archive sync below, so the console knows the run reached its end rather than lost its session.
 
@@ -381,7 +384,7 @@ The answer lists the versions kept and any capture still missing. Report a missi
 
 **Name the directory by its absolute path, spelled out, in the removal itself.** Resolve the root once (`git rev-parse --show-toplevel`, which answers the run worktree in worktree mode), then write the literal path, for example `rm -rf /abs/path/to/repo/.claude/tasks`: no `cd` chained before the `rm` in the same command, no shell variable, no relative path or relative glob. Claude Code's built-in removal check cannot resolve a relative target behind a `cd` or a variable, so it holds the run on a permission prompt nobody answers, denies it after two minutes, and the directory stays. The same check refuses to remove the shell's working directory or any of its ancestors, and a shell that `cd`ed into `.claude/tasks/` during the run is sitting exactly there. So move it out first, in a Bash call of its own (`cd /abs/path/to/repo`, the working directory carries over to the next call), and run the removal in the next call. If the check still refuses, do not work around it: put the exact command in the final report and leave it to the user.
 
-**In worktree mode, stop there.** Check `git status --short` and that HEAD is on the remote (`git rev-parse HEAD` against `git rev-parse origin/<branch>`), and report anything left uncommitted or unpushed. Never remove the run worktree and never delete the ticket branch: the console removes the worktree itself after the session ends, once the archive sync above was answered, the merge request exists, the tree is clean and HEAD is pushed. A blocked run that ends on a draft merge request keeps its worktree.
+**In worktree mode, stop there.** Check `git status --short` and that HEAD is on the remote (`git rev-parse HEAD` against `git rev-parse origin/<branch>`), and report anything left uncommitted or unpushed. Leave the run worktree and the ticket branch in place: the console removes the worktree itself after the session ends, once the archive sync above was answered, the merge request exists, the tree is clean and HEAD is pushed. A blocked run that ends on a draft merge request keeps its worktree.
 
 ---
 
@@ -398,19 +401,9 @@ The session stays open after step 10, and the user often writes again: a questio
 
 ---
 
-## Shared contracts and conditional methods
-
-Read [evidence](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md) before producing or merging proof files, and [workflow state](${CLAUDE_PLUGIN_ROOT}/contracts/workflow-state.md) before the first transition. Every delegated producer receives these resolved reference paths, not a pasted schema.
-
-Read [specification policy](${CLAUDE_PLUGIN_ROOT}/contracts/specification.md) before collecting requirements. Use `implementation-factory:clarify-spec` for source contradictions and missing decisions. An unresolved product choice is returned to the user; it is not guessed to preserve autonomy.
-
-For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-review/references/read-design.md). For documented gates or runtime measurements, load `implementation-factory:collect-evidence` with only the relevant reference. A red or unexecuted check is never a pass.
-
----
-
 ## Repository resolution
 
-The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket; `github.com/<owner>/<repo>/issues/<number>` on GitHub, where the path is `<owner>/<repo>`). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket; `github.com/<owner>/<repo>/issues/<number>` on GitHub, where the path is `<owner>/<repo>`). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
 
 **A ticket delivered outside its own project.** A ticket can be filed in a project that holds no code (a support or complaints tracker, for instance) while the change belongs to one or several code repositories. The console then starts one run per repository the user chose, each in its own worktree, and sets `IMPL_DELIVERY_PROJECTS`: the comma-separated project paths that get a merge request for this ticket, this run's own included. When it is set:
 
@@ -430,14 +423,14 @@ The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<ii
 
 In every other case the plugin runs in the checkout itself and nothing in this section applies.
 
-In worktree mode:
+In worktree mode, read [run worktree](${CLAUDE_PLUGIN_ROOT}/contracts/run-worktree.md) now: it holds the rules every agent of the run follows there, on the main checkout, the shared dependency directories, the ports and what stays in place. What they mean for you:
 
-- **The run worktree is the repository of this run.** `.claude/tasks/`, the code, the commands, the agents and the app all live there. Never `cd` to the main checkout to write code, and never stash, switch, pull, commit or clean there. Reading it (`git -C <main checkout> …`) is allowed.
+- **The run worktree is the repository of this run.** `.claude/tasks/`, the code, the commands, the agents and the app all live there, and the main checkout is read, never written.
 - **Other tickets of the same repository may be running at the same time**, each in its own worktree. Branches, the stash and symlinked dependency directories are shared with them and with the main checkout. So never `git stash`: the stash list belongs to every worktree at once, and the worktree starts clean anyway. Where the git preflight says to stash, commit what is yours or stop and report instead.
-- **What the console provisioned.** Ignored dependency directories (`node_modules`) are a copy of the main checkout's when the filesystem allows it, else a symlink to them. `.env*` files and `.claude/settings.local.json` are copies. The links are listed in `.git/info/exclude` and are never staged. Build outputs are not provisioned.
-- **A symlinked dependency directory is never written through.** If `node_modules`, or another dependency directory, is a symlink in the worktree (`IMPL_WORKTREE_DEPENDENCIES=symlink` says at least one is, `clone` says none is; when it is unset, or to check one directory, `test -L node_modules`) and the task adds, removes or upgrades a dependency, or the lockfile differs from the base, replace the link with a real install inside the worktree first: `rm node_modules` on the link itself, with no trailing slash and no `-r` (a trailing slash deletes the content of the main checkout), then the repository's documented install command. Otherwise the install rewrites the dependencies of the main checkout and of every parallel run. When it is a real directory, install normally. Run your own gates after that replacement, never before.
+- **What the console provisioned.** Beside the dependency directories the contract describes, `.env*` files and `.claude/settings.local.json` are copies. The links are listed in `.git/info/exclude` and are never staged.
+- **A symlinked dependency directory is never written through.** Apply the contract's procedure yourself before any install, and give the contract's path to every `developer` whose task adds, removes or upgrades a dependency.
 - **Dependencies behind the lockfile are reinstalled before the first agent.** `IMPL_WORKTREE_DEPENDENCIES_STALE` lists the dependency directories whose install does not match the `package-lock.json` the run checked out (the main checkout was not reinstalled after a lockfile change). Once the ticket branch exists, and before delegating to any agent, run the repository's documented clean install (`npm ci` when nothing else is documented) in the package root of each listed directory, applying the symlink rule above first. Say so in one line of the final report. Without that install, every check of the run runs against versions the repository does not pin.
-- **Never remove the run worktree, never delete the ticket branch**, and never run `git worktree prune`. The console removes the worktree after the session ends.
+- **The worktree and the branch stay**, and `git worktree prune` is never run: the console removes the worktree after the session ends.
 
 ---
 
@@ -445,7 +438,7 @@ In worktree mode:
 
 This section is GitLab's. On GitHub there is no status to set and nothing here applies.
 
-You choose the lifecycle transition at step 3 (`In progress`) and step 8 (`In progress - Merge request`). Use `implementation-factory:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
+You choose the lifecycle transition at step 3 and at step 8. Status names belong to the GitLab group, so they are settings and never written here: read them once, `echo "${IMPL_GITLAB_STATUS_STARTED:-In progress}"` for step 3 and `echo "${IMPL_GITLAB_STATUS_MERGE_REQUEST:-In progress - Merge request}"` for step 8, and pass the name to the recipe. A name the project does not have is answered by the list of valid ones: report it, and never pick another status yourself. Use `implementation-factory:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
 
 ---
 
@@ -464,7 +457,7 @@ says.
 
 Three rules, because a careless write costs more than silence:
 
-- **Read the other ticket first.** A comment or an edit that repeats what it already says is noise.
+- **Read the other ticket first, and write in the language it is written in**, whatever the workflow language. A comment or an edit that repeats what it already says is noise.
   Write only what the run actually established and the ticket does not already contain, and if that
   set turns out to be empty, write nothing.
 - **Edit the description when the ticket states something false**, targeted at the sentence
@@ -509,28 +502,12 @@ If a git operation fails or the state is not what you expected, stop touching gi
 
 ## Hard constraints
 
-- One language for everything a person reads, set by `IMPL_LANGUAGE` and stated in every delegation: French for `fr`, English otherwise. Templates written in French here are translated, heading for heading, when the language is English
-- The run instruction, when there is one, is binding from end to end: it reaches the planner, every developer and every reviewer, and nothing in the ticket, the design or your own judgement overrides it
-- Never invent what the ticket does not say: deduce the obvious, ask for the decisions, guess nothing
-- Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down
-- One ticket, one forge: the URL decides it, `glab` and its recipes never touch a GitHub ticket, `gh` and its recipes never a GitLab one
-- One ticket, one dedicated branch, always
-- In worktree mode the run stays in its worktree from the first step to the last: nothing is written, stashed or switched in the main checkout, and the run worktree and the ticket branch are left in place for the console
-- The MR always targets the base branch of step 2, asked or deduced as the only candidate, or `IMPL_BASE_BRANCH` or an existing `IMPL_TICKET_BASE_BRANCH` when the console set it, in which case the base branch question is not asked. A base from `IMPL_TICKET_BASE_BRANCH` is an ordinary base, not a stacked one: the delivery recipe treats it like any other target
-- Developers run in parallel only on strictly disjoint file scopes, and sequentially the moment those scopes overlap. While a batch is in flight the branch is a moving target: a repository-wide gate measures that, not any one task, so nobody concludes from it until the batch is done
-- Reviewers that drive Playwright run one at a time: a single browser is shared
-- A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
-- Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2, when the diff touches test files. It is never the run worktree and never sits under `.claude/worktrees/`
-- On GitLab the ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8. On GitHub it is never moved
-- A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
+Every rule of this workflow is stated at the step it applies to, and holds from there to the end of the run. These seven have no step of their own, or are worth holding against every shortcut:
+
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
-- At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review
-- The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes
-- Never skip required QA or design review, except at tier 0 where pilot gates accompany the short review; a senior correction still requires focused independent QA or an explicit unverified result
-- QA writes `qa-plan.md` before opening any author report, and a criterion without a fresh QA observation is never delivered as ready
-- The design review builds its own frame inventory before reconciling author measurements; unexplained additions are reported and explicit authoritative decisions are preserved
-- At most two rework rounds, so the run cannot spin forever
+- Never skip a required QA pass, nor a design review its trigger asks for, whatever the tier. At tier 0 your own gates stand in for the full QA pass only; a senior correction still requires focused independent QA or an explicit unverified result
+- A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
+- One ticket, one dedicated branch, always
 - Add a comment in code only for a non obvious "why", in English
 - Every element an end to end test needs to reach carries a stable `data-testid`, named after its role, reusing the ids that already exist
-- Every acceptance criterion has a stable id in `.claude/tasks/acceptance-criteria.json`, every piece of evidence cites it and follows the evidence contract, and nothing unverified is ever presented as validated
 - Every architectural choice and every non obvious mechanism is documented in the repository's own documentation, in the same commit as the code, and the existing pages the change makes stale are updated. A doc that contradicts the code is worse than no doc

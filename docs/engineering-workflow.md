@@ -4,7 +4,7 @@ The factory separates the responsibilities of the agents, the reusable methods a
 
 The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
 
-The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
+The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here. A comment or a correction written on another ticket is the exception: it follows the language that ticket is written in.
 
 ## Who owns what
 
@@ -37,7 +37,7 @@ The principles and contracts are read explicitly from the plugin path. The `CLAU
 | `gh-github-api` | A GitHub operation chosen and authorised by the caller, when the ticket is a GitHub issue. | Adapted recipe and check of the result. |
 | `unslop` | Any text read by a person: report, summary, question, MR description or comment, ticket, documentation, free field of a JSON artifact. | Sentences without AI tics, format and language of the contract unchanged. |
 
-`gitlab-tickets` keeps its Synapse conventions. These conventions do not become universal engineering principles.
+`gitlab-tickets` keeps the ticket conventions of the team the factory was first written for. These conventions do not become universal engineering principles, and the identifiers they need (`IMPL_GITLAB_TICKET_PROJECT`, `IMPL_GITLAB_EPIC_GROUP`, `IMPL_GITLAB_ASSIGNEE`) are read from the `.env`, never written in the skill.
 
 Skills are called under their qualified name in the plugin, for example `implementation-factory:how`. The technical agents have dynamic skill discovery. The designer, which has no `Skill` tool, preloads only `implementation-factory:figma-review` and reads the references that skill cites. If the preload is missing, it first reads the entry of the skill. This documentary reading does not allow it to read the product code.
 
@@ -66,13 +66,13 @@ Standalone impact analysis and dedicated bug diagnosis remain possible evolution
 
 ## Independence of the review
 
-The developer's self-check method is not the review plan. Reviewers start from the specification, the consumers and the code; they state their expectations and their counterexamples before looking at the author's conclusions. The senior records this initial baseline in its report. QA writes it in `qa-plan.md` and the designer in `design-inventory.md`, before opening the author's reports, which the brief passes only by path. They then compare their results with those reports.
+The developer's self-check method is not the review plan. Reviewers start from the specification, the consumers and the code; they state their expectations and their counterexamples before looking at the author's conclusions. The senior records this initial baseline in its report, under a section of its own, apart from the findings the console counts one by one. QA writes it in `qa-plan.md` and the designer in `design-inventory.md`, before opening the author's reports, which the brief passes only by path. They then compare their results with those reports.
 
 `collect-evidence` can be shared: it describes how to run a check and keep the result, without choosing the scenarios or judging whether they are enough. Sharing a recipe for reaching a state does not mean sharing the expected result; stubs and fixtures stay open to challenge.
 
-The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
+The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. The pilot writes its own gates in `qa-evidence.json` before that check, and the focused pass carries those items over unchanged, so the criteria outside its mandate keep their evidence. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
 
-Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. Once its plan is written, QA also reads the `## To be checked by QA` section of the design review and the `## Remaining risks` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
+Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. The developer's evidence holds its browser measurements and its test observations, the reproduction of a defect before and after the fix among them. Once its plan is written, QA also reads the `## To be checked by QA` section of the design review and the `## Remaining risks` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
 
 Independence does not guarantee the absence of bias. A diagnosis already present in the brief is declared as such, then a competing explanation is examined. Reworks necessarily expose the findings of the previous round. No quota of defects is imposed.
 
@@ -111,6 +111,8 @@ The console passes these variables to the session:
 | Ignored entries of a hooks path inside the repository (`core.hooksPath`, such as husky's `.husky/_`) | Copied from the main checkout, so the hooks the commits run find their helper. |
 | Build outputs (`.next`, `dist`) | Nothing is provided. The first build happens in the worktree. |
 | `.claude/tasks/` | Specific to the run, in the worktree. |
+
+The rules the agents follow in that worktree are in `contracts/run-worktree.md`: the main checkout is read and never written, a symlinked dependency directory is replaced by a real install before anything is installed through it, no default port is assumed, and the worktree and the ticket branch are left in place. The pilot, the developer, QA and the `collect-evidence` references link to that file instead of restating it.
 
 The `.claude/worktrees/` directory and the links are added to the repository's `.git/info/exclude` and never enter a commit.
 
@@ -191,13 +193,13 @@ The contract is `contracts/qa.md`, the method `skills/review-change/references/b
 
 QA always receives from its caller the base reference and `git diff --stat <base>...HEAD`. It also receives a disposable git worktree when the diff adds or modifies test files, that is files the repository's test runner collects. There it reverts the fix or reinjects the defect to check that the new or modified tests turn red: a test that stays green discriminates nothing and becomes a P1. There it also replays a failing command on the base, the only way to show that a failure is pre-existing. Evidence on the delivered code is still taken in the delivered checkout, that is the worktree of the run when it has one. Without a worktree, the probe is not applicable: it is neither an obstacle, nor a missing scenario, nor a warning. The comparison with the base is then unavailable, and a failing check counts against the diff.
 
-The QA verdicts are `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` and `FAIL`. The verdict is `INCONCLUSIVE` when a criterion is UNVERIFIED, or when a criterion is MET with no executed break attempt and no named obstacle. A criterion only a deployed environment can show (production logs, a reading after the release) is marked `afterDeployment` by the pilot in the registry, before any plan exists: QA records it blocked with what to read after the deployment, and the verdict is then `PASS_WITH_WARNINGS` at best. The pilot marks it from the source text, never because a local access is missing.
+The QA verdicts are `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` and `FAIL`. The verdict is `INCONCLUSIVE` when a criterion is UNVERIFIED, or when a criterion is MET with no executed break attempt and no named obstacle. Nothing that happens after the run is a criterion: what the ticket asks to check once deployed (production logs, a reading after the release) is noted by the pilot as a follow-up for after the merge, outside the registry, and reported as such.
 
 ## Design method
 
 The contract is `contracts/design.md`, the method `skills/figma-review/`. Despite its name, this skill applies with or without Figma. The designer does not read the product code.
 
-The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. With Figma frames, the review happens as soon as the change is visible in the interface. Without Figma (levels `ticket-mockup` and `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design not verified" line.
+The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. The rule is the same at every tier, tier 0 included. With a mockup, Figma frames or one attached to the ticket (levels `figma` and `ticket-mockup`), the review happens as soon as the change is visible in the interface. With no mockup at all (level `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design not verified" line.
 
 | Reference level | Source | Severity |
 | --- | --- | --- |
@@ -207,7 +209,7 @@ The pilot decides on the design review while sizing the review, from the diff, a
 
 The designer uses the highest level the brief allows and declares it at the top of the report. A property that level leaves open is judged at the next level. The pilot writes `design-reference.md` when the repository has token files, a brand document or a component library, with their paths and the useful values, so the designer does not open the source code.
 
-- The designer writes `design-inventory.md` from the reference and the brief, before opening any author's evidence. It then measures each line itself, then compares its results with the developer's measurements.
+- The designer writes `design-inventory.md` from the reference and the brief, before opening any author's evidence. It then measures each line itself, then compares its results with the developer's measurements. A later round adds to the inventory and never rewrites it.
 - The objective checks apply at every level, without a design reference (`skills/figma-review/references/objective-checks.md`). They cover the layout invariants, the state matrix, the interaction design measurable in the browser, accessibility, themes, labels and consumer routes.
 - The layout invariants (no horizontal scroll of the page, no text overflowing without ellipsis or scroll, no child outside its parent, no unintended overlap) are measured at each required width: those of the brief, otherwise 360, 768 and 1280, plus the exact width of each frame provided. They are measured with normal content, then with the longest plausible value, an empty value, and zero, one and several items.
 - The state matrix covers eight states per modified interactive element: rest, hover, keyboard focus, active, disabled, loading, empty, error.

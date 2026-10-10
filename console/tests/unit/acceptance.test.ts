@@ -81,11 +81,6 @@ describe("acceptance criteria registry", () => {
     expect(view.criteria[0]!.status).toBe("unverified");
   });
 
-  it("should mark a criterion after deployment only when the registry says so with true", () => {
-    const parsed = registry({ schemaVersion: 1, criteria: [{ id: "AC1", text: "a", verification: { afterDeployment: true } }, { id: "AC2", text: "b", verification: { afterDeployment: "yes" } }, { id: "AC3", text: "c", afterDeployment: true }] });
-    expect(parsed.criteria.map((entry) => entry.afterDeployment)).toEqual([true, undefined, undefined]);
-  });
-
   it("should warn on an unknown schema version and refuse a document without criteria", () => {
     expect(parseCriteriaRegistry({ schemaVersion: 9, criteria: [] }).diagnostics[0]!.level).toBe("warning");
     expect(parseCriteriaRegistry({ nope: true }).registry).toBeUndefined();
@@ -612,25 +607,14 @@ describe("QA verdict consistency", () => {
     expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC1", "AC2", "AC3"] });
   });
 
-  describe("with a criterion only a deployed environment can show", () => {
-    const deployed = registry({ ...registryJson, criteria: registryJson.criteria.map((entry) => entry.id === "AC3" ? { ...entry, verification: { afterDeployment: true } } : entry) });
+  it("should flag an approval over a criterion recorded as blocked, whatever the registry says about a deployment", () => {
+    const marked = registry({ ...registryJson, criteria: registryJson.criteria.map((entry) => entry.id === "AC3" ? { ...entry, verification: { afterDeployment: true } } : entry) });
     const blocked = { id: "Q3", label: "Logs après déploiement", verdict: "not_run", criterionIds: ["AC3"], blocker: { reason: "Pas déployé", action: "Lire les logs après le déploiement" } };
-
-    it("should accept PASS_WITH_WARNINGS that records it as blocked", () => {
-      const view = coverage({ registry: deployed, reports: [report("qa-evidence.json", qa([...observedAll.slice(0, 2), blocked], { status: "PASS_WITH_WARNINGS" }))] });
-      expect(view.qa).toMatchObject({ consistent: true, unobserved: [] });
-      expect(criterion(view, "AC3").status).toBe("blocked");
-    });
-
-    it("should still flag PASS over it", () => {
-      const view = coverage({ registry: deployed, reports: [report("qa-evidence.json", qa([...observedAll.slice(0, 2), blocked], { status: "PASS" }))] });
+    for (const status of ["PASS", "PASS_WITH_WARNINGS"]) {
+      const view = coverage({ registry: marked, reports: [report("qa-evidence.json", qa([...observedAll.slice(0, 2), blocked], { status }))] });
       expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC3"] });
-    });
-
-    it("should still flag the other unobserved criteria", () => {
-      const view = coverage({ registry: deployed, reports: [report("qa-evidence.json", qa([observedAll[0]!, blocked], { status: "PASS_WITH_WARNINGS" }))] });
-      expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC2"] });
-    });
+      expect(criterion(view, "AC3").status).toBe("blocked");
+    }
   });
 
   it("should never flag a verdict that approves nothing", () => {
@@ -685,6 +669,17 @@ describe("QA verdict consistency", () => {
     it("should flag a criterion of the mandate left unobserved", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa(observedAll.slice(0, 1), { status: "PASS", mandate: ["AC1", "AC3"] }))] });
       expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC3"] });
+    });
+
+    it("should keep counting the pilot's items the focused pass carried over, for the criteria outside its mandate", () => {
+      const view = coverage({ reports: [report("qa-evidence.json", qa([
+        { id: "PILOT-1", label: "Erreur", verdict: "pass", criterionIds: ["AC3"], producer: { role: "pilot" } },
+        { id: "QA-R1-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] },
+      ], { status: "PASS", mandate: ["AC1"], producer: { role: "qa-reviewer" } }))] });
+      expect(view.qa).toMatchObject({ consistent: true, unobserved: [], mandate: ["AC1"] });
+      expect(criterion(view, "AC3").status).toBe("verified");
+      const evidence = criterion(view, "AC3").checks.flatMap((check) => check.evidence);
+      expect(evidence.map((entry) => [entry.id, entry.producer?.role])).toEqual([["PILOT-1", "pilot"]]);
     });
 
     it("should accept a single id, and ignore ids the registry does not know or that are not strings", () => {

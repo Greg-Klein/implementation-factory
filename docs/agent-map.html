@@ -496,7 +496,7 @@ flowchart TD
     q2 -- "review-summary.md" --> orch
   end
 
-  accept{"<b>acceptance-runtime.ts</b><br/>derives the criteria coverage,<br/>writes acceptance-summary.md"}:::script
+  accept{"<b>acceptance-runtime.ts</b><br/>derives the criteria coverage<br/>and the review confidence (0 to 5),<br/>writes acceptance-summary.md"}:::script
   p8["<b>Pilot</b> · Opus<br/>8-9. pushes the branch, opens the MR,<br/>publishes the consolidated review"]:::agent
   p10["<b>Pilot</b> · Opus<br/>10. final report,<br/>cleans .claude/tasks"]:::agent
   archive{"<b>evidence-archive.ts</b><br/>archives the evidence<br/>before the cleanup"}:::script
@@ -567,7 +567,7 @@ flowchart LR
   <div class="canvas"><pre class="mermaid" data-tips="after">
 flowchart LR
   done["<b>Pilot</b> · Opus<br/>MR open, final report"]:::agent
-  metrics{"<b>run-metrics-runtime.ts</b><br/>tokens, durations, diff<br/>in metrics.json"}:::script
+  metrics{"<b>run-metrics-runtime.ts</b><br/>tokens, durations, diff,<br/>review confidence<br/>in metrics.json"}:::script
   settle{"<b>run-worktrees.ts</b><br/>removes the worktree when the MR exists,<br/>the tree is clean, HEAD is pushed"}:::script
   sweR("<b>Software Engineer</b><br/>reviews the MR,<br/>merges it or asks for a change"):::swe
   reopen["<b>Pilot</b> · Opus<br/>reopens the run"]:::agent
@@ -849,7 +849,7 @@ flowchart LR
       d2: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations, without reading the code."],
       q2: ["QA", "Opus", "Tests the final result with its own scenarios. Always runs last, on the final code."],
       r2: ["Dev rework", "Sonnet", "Fixes the blocking defects the review raised. Two rework rounds at most, then the run stops."],
-      accept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria and writes the summary the merge request quotes."],
+      accept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria, computes the review confidence from what the console observed, and writes the summary the merge request quotes."],
       p8: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes a review comment. As a draft when something still blocks."],
       p10: ["Pilot", "Opus", "Sums up the run, says what could not be verified, then empties its working directory."],
       archive: ["evidence-archive.ts", "Script", "Puts the evidence and the captures away in the run archive before the working directory is emptied."],
@@ -867,7 +867,7 @@ flowchart LR
     },
     after: {
       done: ["Pilot", "Opus", "The merge request is open. The session stays available for a question or a retouch."],
-      metrics: ["run-metrics-runtime.ts", "Script", "Records what the run cost: tokens, durations, diff size. Used to compare runs with each other."],
+      metrics: ["run-metrics-runtime.ts", "Script", "Records what the run cost: tokens, durations, diff size, and the review confidence it was delivered with. Used to compare runs with each other, and the note with the reopenings and feedback that followed."],
       settle: ["run-worktrees.ts", "Script", "Removes the run's working directory, only when nothing would be lost. Otherwise it keeps it and says why."],
       reopen: ["Pilot", "Opus", "A change asked after the report reopens the run. The rules stay the same: it does not code itself."],
       devR: ["Dev rework", "Sonnet", "Applies the change asked after the final report."],

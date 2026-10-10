@@ -3,10 +3,10 @@
 import { CaretRightIcon, CheckCircleIcon, MinusCircleIcon, WarningCircleIcon, XCircleIcon, XIcon } from "@phosphor-icons/react";
 import { createContext, useContext, useEffect, useState } from "react";
 import { normalizeEvidenceReport, readAcceptanceView } from "@/lib/evidence";
-import { acceptanceUrl, artifactUrl, evidenceCaptures } from "@/lib/run-state";
+import { acceptanceUrl, artifactUrl, CONFIDENCE_MAXIMUM, confidenceChip, confidenceReasonLine, evidenceCaptures } from "@/lib/run-state";
 import type {
   AcceptanceCheckView, AcceptanceCriterionView, AcceptanceQaView, AcceptanceStatus, AcceptanceView, ArtifactResponse,
-  EvidenceItem, EvidenceReport, EvidenceVerdict, EvidenceView, RunState,
+  EvidenceItem, EvidenceReport, EvidenceVerdict, EvidenceView, ReviewConfidence, RunState,
 } from "@/lib/types";
 
 const SOURCES: { file: string; title: string }[] = [
@@ -333,6 +333,23 @@ function useAcceptance(run: RunState) {
   return { view, error };
 }
 
+const CONFIDENCE_TONE = { error: "text-red-700", attention: "text-amber-800", verified: "text-[var(--accent)]", neutral: "text-[var(--ink)]" } as const;
+
+/** The note the console gives the automated review, and each observation that lowered it. */
+function Confidence({ confidence }: { confidence: ReviewConfidence }) {
+  const chip = confidenceChip(confidence.score)!;
+  return (
+    <div className="mb-5" data-testid="review-confidence">
+      <p className="text-[10px] uppercase tracking-[.16em] text-[var(--muted)]">Review confidence</p>
+      <p role="status" aria-live="polite" aria-label={chip.title} className={`mt-1 font-mono text-sm font-semibold ${CONFIDENCE_TONE[chip.tone]}`} data-testid="review-confidence-score">{chip.label}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">Computed by the console from what it observed, no agent declares it. 0: a person reviews everything. {CONFIDENCE_MAXIMUM}: nothing observed stands against the automated review.</p>
+      {confidence.reasons.length > 0
+        ? <ul className="mt-2 space-y-0.5" data-testid="review-confidence-reasons">{confidence.reasons.map((reason) => <li key={reason.rule} className="text-[11px] leading-relaxed text-[var(--ink)]">{confidenceReasonLine(reason)}</li>)}</ul>
+        : <p className="mt-2 text-[11px] text-[var(--muted)]">Nothing the console observed lowered it.</p>}
+    </div>
+  );
+}
+
 function Summary({ view, notes }: { view: AcceptanceView; notes: string[] }) {
   const errors = view.diagnostics.filter((diagnostic) => diagnostic.level === "error");
   const details = [
@@ -377,6 +394,7 @@ export function EvidencePanel({ run }: { run: RunState }) {
     <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto bg-[var(--raised)] p-5">
       <section aria-label="Criteria coverage" className="mb-6">
         {error && <p role="alert" className="mb-3 text-[11px] text-red-700">{error}</p>}
+        {run.confidence && <Confidence confidence={run.confidence} />}
         {view && traced && <Summary view={view} notes={run.reviewNotes ?? []} />}
         {view && traced && view.criteria.length > 0 && <ul>{view.criteria.map((criterion) => <CriterionRow key={criterion.id} runId={runId} criterion={criterion} />)}</ul>}
         {view && !traced && (

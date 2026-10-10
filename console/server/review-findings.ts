@@ -39,6 +39,8 @@ export async function keepReviewFindings(session: RunSession, source: string) {
     session.activity("attention", "Review findings not kept", "senior-findings.json does not follow its contract.");
     return;
   }
+  // The review confidence of this run reads them too, whatever the store then keeps.
+  for (const finding of incoming) session.seniorFindings.set(finding.id, { id: finding.id, severity: finding.severity, fixed: finding.fixed });
   if (!incoming.length) return;
   const stored = reviewFindingsStore(storageRoot, sourceRepository(session.state));
   const write = (writes.get(stored) ?? Promise.resolve()).then(async () => {

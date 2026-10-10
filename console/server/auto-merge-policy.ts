@@ -51,7 +51,7 @@ export function isTestFile(file: string) {
   return /(^|\/)tests?\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file);
 }
 
-const DISABLED_TEST = /\b(?:(?:it|test|describe)\.(?:skip|only|todo|fixme)|xit|xdescribe|xtest)\s*\(/;
+export const DISABLED_TEST = /\b(?:(?:it|test|describe)\.(?:skip|only|todo|fixme)|xit|xdescribe|xtest)\s*\(/;
 
 /** The lines a unified diff adds, with the file each one lands in. */
 export function addedLines(patch: string) {

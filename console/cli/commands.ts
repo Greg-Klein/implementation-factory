@@ -4,10 +4,10 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import { acceptanceUrl, artifactUrl, generatedDocuments, runLabel } from "../lib/run-state";
 import { normalizeTicketUrl, parseTicketUrls, ticketReference } from "../lib/ticket-urls";
 import type { ImprovementMetrics } from "../lib/types";
-import type { AcceptanceView, FactorySnapshot, IncidentAction, RunMetrics, RunState, RunSummary } from "../server/types.js";
+import type { AcceptanceView, ConfidenceCalibration, FactorySnapshot, IncidentAction, RunMetrics, RunState, RunSummary } from "../server/types.js";
 import { answerOf, CliError, connect, getJson, type Link } from "./client";
 import { follow, askQuestions, attach, watchFactory } from "./live";
-import { incidentWords, renderEvidence, renderFactory, renderMetrics, renderProposals, renderQuestion, renderQueue, renderRun, renderSessionPrompt, table } from "./format";
+import { incidentWords, renderCalibration, renderEvidence, renderFactory, renderMetrics, renderProposals, renderQuestion, renderQueue, renderRun, renderSessionPrompt, table } from "./format";
 import { answersFromInputs, resolveQueued, resolveRun, shortId } from "./select";
 
 /** Exit code of a command that was not written the way it is used. */
@@ -291,15 +291,17 @@ async function evidence(context: Context, argv: string[]) {
   const { values, positionals } = parse(argv, JSON_OPTION);
   const summary = resolveRun(required(positionals[0], "the run"), await factory(context));
   const view = await getJson(context.base, acceptanceUrl(summary)) as AcceptanceView;
-  if (values.json) json(context, view); else context.print(renderEvidence(view));
+  if (values.json) json(context, view); else context.print(renderEvidence(view, summary.confidence));
   return 0;
 }
 
 async function metrics(context: Context, argv: string[]) {
   const { values } = parse(argv, JSON_OPTION);
-  const response = await getJson(context.base, "/api/metrics") as { runs: RunMetrics[]; improvements?: ImprovementMetrics };
+  const response = await getJson(context.base, "/api/metrics") as { runs: RunMetrics[]; improvements?: ImprovementMetrics; calibration?: ConfidenceCalibration };
   if (values.json) { json(context, response); return 0; }
   context.print(renderMetrics(response.runs));
+  const calibration = renderCalibration(response.calibration ?? []);
+  if (calibration) context.print(`\nReview confidence against what followed delivery\n${calibration}`);
   const improvements = response.improvements;
   if (improvements) context.print(`\nSelf-improvement: ${improvements.merged} merged, ${improvements.rejected} rejected (${improvements.rejectedByJudge} by the judge), ${improvements.reverted} reverted`);
   return 0;

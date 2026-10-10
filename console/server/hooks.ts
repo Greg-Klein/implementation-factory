@@ -8,6 +8,7 @@ import type { EngineEvent } from "./engine/index.js";
 import { recordEngineSignal } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
 import { sessionStarted } from "./session-prompt.js";
+import { refreshConfidence } from "./acceptance-runtime.js";
 import { recordRunMetrics } from "./run-metrics-runtime.js";
 import type { RunSession } from "./run-session.js";
 
@@ -32,7 +33,9 @@ export function closeWorkflowIfDone(session: RunSession) {
   session.markProgress();
   session.activity("attention", "Workflow completed");
   // The figures of the run as delivered; the session's exit writes them once more, final.
-  recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id));
+  // The note is settled on the run as it ended, which is the one the figures keep.
+  refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id))
+    .then(() => recordRunMetrics(session)).catch(reportFailure("Run metrics not recorded", session.id));
   scheduleAutonomousReview(session);
   return true;
 }

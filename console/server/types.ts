@@ -52,6 +52,20 @@ export type AcceptanceDigest = { available: boolean; revision: number; updatedAt
 export type AcceptanceQaView = { status: string; file: string; round?: number; mandate?: string[]; consistent: boolean; unobserved: string[]; warning?: string };
 /** The same verdict in figures, for the run state. */
 export type AcceptanceQaDigest = { status: string; consistent: boolean; unobserved: number };
+/**
+ * One rule of the review confidence that applied to a run. `cap` holds the
+ * note at that value, `minus` takes that much off it; `count` is how many
+ * times the fact was seen. `detail` is the English sentence the interface
+ * shows, the merge request summary writes its own from `rule`.
+ */
+export type ConfidenceReason = { rule: string; cap?: number; minus?: number; count?: number; detail: string };
+/**
+ * How far the automated review of a run can be relied on, from 0 (a person has
+ * to review everything) to 5 (nothing the console observed stands against it).
+ * Computed by the console from what it observes, never declared by an agent.
+ * See server/review-confidence.ts.
+ */
+export type ReviewConfidence = { score: number; reasons: ConfidenceReason[] };
 
 export type EvidenceSource = "qa" | "design" | "developer";
 export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
@@ -272,6 +286,12 @@ export type RunState = {
   reopenings?: Reopening[];
   /** The review tier the workflow declared, kept once a later state omits it. */
   reviewTier?: ReviewTier;
+  /** Absent until a reviewer of the run wrote its report. */
+  confidence?: ReviewConfidence;
+  /** The note as it stood when the workflow first declared its end: what happens afterwards is held against this one. */
+  confidenceAtDelivery?: number;
+  /** How many times the user wrote feedback on this run. */
+  feedbackCount?: number;
   factory?: FactoryVersion;
   /** Tokens consumed so far, read from the transcripts while the run goes. */
   usage?: RunUsage;
@@ -317,6 +337,8 @@ export type RunSummary = {
   health?: RunHealth;
   /** Tokens consumed so far, cache included. */
   tokens?: number;
+  /** The review confidence, from 0 to 5, once a reviewer wrote its report. */
+  confidence?: number;
   /** The open incident, as little of it as a row and a notification need. */
   incident?: { id: string; kind: IncidentKind; title: string; revision: number };
   /** A run read back from its archive after a restart: no session, no slot, no checkout. */
@@ -538,6 +560,11 @@ export type RunMetrics = {
     acceptance?: AcceptanceCounts;
     qaStatus?: string;
     worktree?: RunWorktreeState;
+    /** The review confidence as it stands, and as it stood at the first end of the workflow. */
+    confidence?: number;
+    confidenceAtDelivery?: number;
+    /** How many times the user wrote feedback on the run. */
+    feedback?: number;
   };
   time: {
     startedAt: string | null;
@@ -587,4 +614,6 @@ export type RunMetrics = {
 };
 /** What stands out in a run against the runs it compares to, in one sentence each. */
 export type MetricsFinding = { metric: string; value: number; median: number; ratio: number; detail: string };
+/** What happened after delivery to the runs of each note: how many were reopened, how many drew feedback. See confidenceCalibration. */
+export type ConfidenceCalibration = { score: number; runs: number; reopened: number; feedback: number }[];
 export type MetricsBaseline = { runs: number; scope: string; tokens?: number; activeMs?: number; userWaitMs?: number; pilotCalls?: number; pilotShare?: number };

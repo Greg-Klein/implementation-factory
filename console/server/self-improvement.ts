@@ -187,6 +187,7 @@ export async function saveFeedback(session: RunSession, body: string) {
     id, runId: session.id, createdAt: now(), status: "pending", feedback,
     issueUrl: session.state.issueUrl, projectDirectory: sourceRepository(session.state),
   }, null, 2));
+  session.state.feedbackCount = (session.state.feedbackCount ?? 0) + 1;
   session.activity("artifact", "Feedback added to the self-improvement loop", `${id}.json`);
   session.publish();
 }

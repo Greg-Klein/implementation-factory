@@ -1,0 +1,82 @@
+import { execFile } from "node:child_process";
+import { access, readFile, stat } from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
+import { defined } from "../lib/defined.js";
+import { changedFiles } from "./auto-merge-policy.js";
+import { dataRoot, sensitivePaths } from "./config.js";
+import { isMissingFile, reportFailure } from "./context.js";
+import { changeAfterReading, changeFacts, type ChangeFacts, changeReadingKey, gateFacts, type GateFacts, isTestPath, reviewConfidence } from "./review-confidence.js";
+import { GATE_LOG_FILE, runMergeBase } from "./run-metrics-runtime.js";
+import type { RunSession } from "./run-session.js";
+import { fetchMergeRequestTarget } from "./ticket.js";
+import type { ReviewConfidence } from "./types.js";
+
+const exec = promisify(execFile);
+
+/**
+ * Reads what the review confidence of a run is computed from and that the run
+ * state does not carry: its diff, the stop gate's log and the findings of its
+ * code review. Each reading is kept on the session and made again only when
+ * its source moved, so an event of the run costs a `stat` at most.
+ */
+
+/** The simulated run has no worktree: a small change with its test, so the demonstration shows a note the evidence alone decides. */
+const DEMO_CHANGE: ChangeFacts = { files: 4, lines: 96, sensitive: [], removedTests: [], codeChanged: true, testChanged: true };
+
+/** The branch the merge request targets, asked of the forge once per address, or the one already known when the forge may not be asked. */
+async function deliveryTarget(session: RunSession, forge: boolean) {
+  const { mergeRequestUrl: url, cwd } = session.state;
+  if (!url || !cwd) return undefined;
+  if (forge && session.deliveryTarget?.url !== url) session.deliveryTarget = { url, branch: await fetchMergeRequestTarget(url, cwd) };
+  return session.deliveryTarget?.url === url ? session.deliveryTarget.branch : undefined;
+}
+
+async function readChangeFacts(session: RunSession, target: string | undefined): Promise<ChangeFacts | undefined> {
+  const cwd = session.state.cwd;
+  const base = await runMergeBase(session.state, target);
+  if (!base) return undefined;
+  const git = async (...args: string[]) => (await exec("git", ["-C", cwd, "diff", "-M", ...args], { maxBuffer: 32 * 1024 * 1024 })).stdout;
+  const files = changedFiles(await git("--name-status", base), await git("--numstat", base));
+  // Only the test files are read line by line, for a test the change disables.
+  const tests = files.filter((file) => file.status !== "D" && isTestPath(file.path)).map((file) => file.path);
+  const patch = tests.length > 0 ? await git(base, "--", ...tests) : "";
+  return changeFacts(files, patch, sensitivePaths);
+}
+
+async function changeOf(session: RunSession, forge: boolean) {
+  if (session.demo) return DEMO_CHANGE;
+  const target = await deliveryTarget(session, forge);
+  const key = changeReadingKey(session.acceptanceView?.currentSnapshot?.id, session.state.mergeRequestUrl, target);
+  const known = session.confidenceChange;
+  if (known?.facts && known.key === key) return known.facts;
+  const read = await readChangeFacts(session, target).catch((error: unknown) => { reportFailure("Change of the run not read for its review confidence", session.id)(error); return undefined; });
+  const cwd = session.state.cwd;
+  const worktreeGone = session.state.worktree?.state === "removed" || !cwd || !await access(cwd).then(() => true, () => false);
+  const facts = changeAfterReading(read, known?.facts, worktreeGone);
+  session.confidenceChange = { key, facts };
+  return facts;
+}
+
+async function gateOf(session: RunSession): Promise<GateFacts> {
+  if (session.demo) return { failed: 0, unchecked: 0 };
+  const file = path.join(dataRoot, session.id, GATE_LOG_FILE);
+  try {
+    const { size } = await stat(file);
+    if (session.confidenceGate?.size !== size) session.confidenceGate = { size, facts: gateFacts(await readFile(file, "utf8")) };
+    return session.confidenceGate.facts;
+  } catch (error) {
+    // No log is no check: a change that opens none, documentation for instance, writes no line.
+    if (!isMissingFile(error)) reportFailure("Gate log not read for the review confidence", session.id)(error);
+    return session.confidenceGate?.facts ?? { failed: 0, unchecked: 0 };
+  }
+}
+
+/** `forge`: whether the target of the merge request may be asked of the forge, which a reading made for a page never does. */
+export async function computeConfidence(session: RunSession, { forge = false }: { forge?: boolean } = {}): Promise<ReviewConfidence | undefined> {
+  const state = session.state;
+  return reviewConfidence({
+    state, findings: [...session.seniorFindings.values()], gate: await gateOf(session),
+    ...defined({ acceptance: state.acceptance, change: await changeOf(session, forge) }),
+  });
+}

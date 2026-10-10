@@ -1126,6 +1126,7 @@ export function summarizeRun(state: RunState): RunSummary {
     takesSlot: runTakesSlot(state),
     ...(state.health ? { health: state.health.health } : {}),
     ...(state.usage ? { tokens: state.usage.total } : {}),
+    ...(state.confidence ? { confidence: state.confidence.score } : {}),
     ...(openIncidentSummary(state)),
     ...(state.archived ? { archived: true } : {}),
   };

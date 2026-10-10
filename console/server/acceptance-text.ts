@@ -1,3 +1,5 @@
+import { AUTO_MERGE_LIMITS } from "./auto-merge-policy.js";
+import { CONFIDENCE_DETAILS, CONFIDENCE_DIFF_LINES } from "./review-confidence.js";
 import type { AcceptanceCounts, AcceptanceStatus, EvidenceFreshness, EvidenceSource } from "./types.js";
 
 /**
@@ -83,6 +85,13 @@ const ENGLISH = {
   attachmentsNote: "These files only exist on the machine of the run. Cite one on the forge only once it is uploaded, replacing the path with the returned link; a file that was not uploaded is mentioned as kept local.",
   anomaliesHeading: "### Traceability anomalies",
   anomalyLine: (file: string | undefined, message: string) => `- ${file ? `\`${file}\`: ` : ""}${message}`,
+  confidence: {
+    line: (score: number, maximum: number) => `**Review confidence: ${score}/${maximum}**. Computed by the console from what it observed, no agent declares it: 0 means a person reviews everything, ${maximum} that nothing observed stands against the automated review.`,
+    clean: "Nothing the console observed lowered it.",
+    cap: (value: number, reason: string) => `- held at ${value}: ${reason}`,
+    minus: (value: number, reason: string) => `- minus ${value}: ${reason}`,
+    reason: CONFIDENCE_DETAILS,
+  },
 };
 
 type Catalog = typeof ENGLISH;
@@ -150,6 +159,41 @@ const FRENCH: Catalog = {
   attachmentsNote: "Ces fichiers n'existent que sur la machine du run. Ne les citer sur la forge qu'une fois uploadés, en remplaçant le chemin par le lien renvoyé ; une pièce non uploadée est mentionnée comme restée locale.",
   anomaliesHeading: "### Anomalies de traçabilité",
   anomalyLine: (file, message) => `- ${file ? `\`${file}\` : ` : ""}${message}`,
+  confidence: {
+    line: (score, maximum) => `**Confiance de la revue : ${score}/${maximum}**. Calculée par la console à partir de ce qu'elle a observé, aucun agent ne la déclare : 0 veut dire qu'une personne relit tout, ${maximum} que rien d'observé ne s'oppose à la revue automatisée.`,
+    clean: "Rien de ce que la console a observé ne l'a fait baisser.",
+    cap: (value, reason) => `- plafonnée à ${value} : ${reason}`,
+    minus: (value, reason) => `- moins ${String(value).replace(".", ",")} : ${reason}`,
+    reason: {
+      run_failed: () => "Le run a échoué.",
+      workflow_blocked: () => "Le workflow s'est terminé bloqué.",
+      draft_delivery: () => "La merge request a été ouverte en brouillon.",
+      criterion_failed: (n) => `${n} ${plural(n, "critère d'acceptation en échec", "critères d'acceptation en échec")}.`,
+      qa_rejected: () => "La QA n'a pas approuvé le changement.",
+      finding_p0_open: (n) => `${n} ${plural(n, "constat bloquant", "constats bloquants")} de la revue de code ${plural(n, "laissé", "laissés")} sans correction.`,
+      criterion_blocked: (n) => `${n} ${plural(n, "critère d'acceptation bloqué", "critères d'acceptation bloqués")}.`,
+      no_criteria_registry: () => "Aucun registre de critères : rien ne relie les preuves à une exigence.",
+      qa_unobserved: (n) => `La QA a approuvé alors que ${n} ${plural(n, "critère n'a", "critères n'ont")} aucune observation QA sur le code actuel.`,
+      incident_open: (n) => `${n} ${plural(n, "incident encore ouvert", "incidents encore ouverts")}.`,
+      finding_p1_open: (n) => `${n} ${plural(n, "constat important", "constats importants")} de la revue de code ${plural(n, "laissé", "laissés")} sans correction.`,
+      qa_missing: () => "Aucun verdict QA : personne d'autre que l'auteur n'a observé les critères.",
+      test_removed: (n) => `${n} ${plural(n, "fichier de test supprimé ou avec un test désactivé", "fichiers de test supprimés ou avec un test désactivé")}.`,
+      criterion_unverified: (n) => `${n} ${plural(n, "critère d'acceptation non vérifié", "critères d'acceptation non vérifiés")}.`,
+      evidence_stale: (n) => `${n} ${plural(n, "preuve prise", "preuves prises")} sur un code qui a changé depuis.`,
+      gate_failed: () => "Un contrôle du stop gate échouait encore quand son agent a rendu la main.",
+      gate_unchecked: () => "Un contrôle du stop gate n'a pas pu conclure.",
+      evidence_anomaly: (n) => `${n} ${plural(n, "fichier de preuves n'a", "fichiers de preuves n'ont")} pas pu être lu selon son contrat.`,
+      review_order: (n) => `${n} ${plural(n, "reviewer a écrit ses attentes", "reviewers ont écrit leurs attentes")} après son rapport.`,
+      rework_repeated: (n) => `${n} rounds de rework avant la fin de la revue.`,
+      reviewer_lost: (n) => `${n} ${plural(n, "reviewer s'est arrêté", "reviewers se sont arrêtés")} sans résultat.`,
+      diff_unknown: () => "La taille du changement n'a pas pu être lue.",
+      diff_large: (n) => `${n} lignes modifiées, plus de ${CONFIDENCE_DIFF_LINES.large}.`,
+      diff_very_large: (n) => `${n} lignes modifiées, plus de ${CONFIDENCE_DIFF_LINES.veryLarge}.`,
+      diff_many_files: (n) => `${n} fichiers modifiés, plus de ${AUTO_MERGE_LIMITS.files}.`,
+      sensitive_path: (n) => `${n} ${plural(n, "fichier sensible modifié", "fichiers sensibles modifiés")}.`,
+      no_test_change: () => "Du code a changé et aucun fichier de test.",
+    },
+  },
 };
 
 export function acceptanceText(language: WorkflowLanguage = "en"): Catalog {

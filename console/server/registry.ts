@@ -21,11 +21,12 @@ import { TicketProposals, type ProposalLaunch } from "./ticket-proposals.js";
 import { resolveProposedTickets, resolveTargets } from "./ticket-source.js";
 import type { ScheduleSession } from "./engine/types.js";
 import { engine } from "./engine/index.js";
-import { snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
+import { refreshConfidence, snapshotExclusions, snapshotLogPath } from "./acceptance-runtime.js";
 import { snapshotScript } from "./code-snapshot.js";
 import { RunSession } from "./run-session.js";
 import { RunArchive } from "./run-archive.js";
 import { healthInput, RunMonitor } from "./run-monitor.js";
+import { settleIncidentConfidence } from "./review-confidence.js";
 import { checkIncidentAction, CONTINUATION_INSTRUCTION, withDecision } from "./run-incidents.js";
 import { pilotActs } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
@@ -654,7 +655,12 @@ export class RunRegistry {
     // Nothing works in the worktree any more: it goes if the run delivered, and is kept with its reason otherwise.
     if (this.shuttingDown) { this.keepWorktreeForRestart(session); void recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id)); }
     // Measured first: the size of the change is read in the worktree, which a delivered run then loses.
-    else void session.serializeHealth(async () => { await recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id)); await settleRunWorktree(session); });
+    else void session.serializeHealth(async () => {
+      // A run that failed or was left with an incident says so in its note, read while the worktree is still there.
+      await refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
+      await recordRunMetrics(session).catch(reportFailure("Run metrics not recorded", session.id));
+      await settleRunWorktree(session);
+    });
     // The ticket and the slot are free now, which is what the queue waits on.
     void this.drain();
   }
@@ -719,6 +725,7 @@ export class RunRegistry {
       session.state.incidents = incidents.map((incident) => incident.status === "open"
         ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: "Run removed from the list" } }
         : incident);
+      settleIncidentConfidence(session.state);
       await session.persist();
     });
     // The exit of the session may still be deciding what becomes of the worktree.
@@ -794,9 +801,12 @@ export class RunRegistry {
       }
       current = withDecision(current, { requestId: request.requestId, action: request.action, at, outcome: "done", detail: message });
       replace(current);
+      // An incident dismissed as a false positive no longer holds the note: on an archived run too, whose other facts can no longer be read.
+      const noteMoved = settleIncidentConfidence(session.state);
       session.answeredRequests.set(request.requestId, { outcome: "done", message });
       session.publish();
       await session.persist();
+      if (noteMoved && live) await refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
       if (session.state.archived) this.archive.release(session.id);
       if (session.state.archived) this.publishSnapshot();
       session.signal();

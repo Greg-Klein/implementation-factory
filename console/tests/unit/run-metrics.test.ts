@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import { deliveredCodeSettled, deliveryTargetBranch, diffBases, emptyState } from "../../server/domain";
 import type { SessionUsage } from "../../server/engine/types";
-import { buildRunMetrics, comparableRuns, diffFromNumstat, gateTimes, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
+import { buildRunMetrics, comparableRuns, confidenceCalibration, diffFromNumstat, gateTimes, metricsBaseline, metricsFindings, trackReopening, trackTimeline, userWaitReason } from "../../server/run-metrics";
 import type { RunMetrics, RunState } from "../../server/types";
 import { parseWorkflowState } from "../../server/workflow-state";
 
@@ -287,5 +287,43 @@ describe("a run against the others", () => {
   it("should report rework without needing anyone to compare to", () => {
     const agent = (id: string) => ({ id, name: "qa-reviewer", status: "completed" as const, startedAt: at(1), endedAt: at(2) });
     expect(metricsFindings(measured("new", 1, { agents: [agent("q1"), agent("q2")] }), [])).toEqual([expect.objectContaining({ metric: "rework", value: 1 })]);
+  });
+});
+
+describe("the review confidence in the figures of a run", () => {
+  it("should carry the note as it stands, the one of the delivery and the feedback count", () => {
+    const metrics = buildRunMetrics({ state: run({ status: "completed", endedAt: at(10), confidence: { score: 3, reasons: [] }, confidenceAtDelivery: 4, feedbackCount: 2 }), usage: [], at: at(20) });
+    expect(metrics.outcome).toMatchObject({ confidence: 3, confidenceAtDelivery: 4, feedback: 2 });
+  });
+
+  it("should leave them out of a run that has none, a zero note being one", () => {
+    expect(buildRunMetrics({ state: run(), usage: [], at: at(20) }).outcome).not.toHaveProperty("confidence");
+    expect(buildRunMetrics({ state: run(), usage: [], at: at(20) }).outcome).not.toHaveProperty("feedback");
+    expect(buildRunMetrics({ state: run({ confidence: { score: 0, reasons: [] }, confidenceAtDelivery: 0 }), usage: [], at: at(20) }).outcome).toMatchObject({ confidence: 0, confidenceAtDelivery: 0 });
+  });
+});
+
+describe("the review confidence against what followed delivery", () => {
+  const delivered = (id: string, score: number | undefined, after: { reopened?: boolean; feedback?: number; final?: boolean; status?: RunState["status"] } = {}): RunMetrics => {
+    const metrics = buildRunMetrics({
+      state: run({ id, status: after.status ?? "completed", endedAt: at(10), sessionActive: after.final === false, ...(score === undefined ? {} : { confidenceAtDelivery: score }), ...(after.feedback ? { feedbackCount: after.feedback } : {}), ...(after.reopened ? { reopenings: [{ from: at(12), to: at(15) }] } : {}) }),
+      usage: [], at: at(30),
+    });
+    return metrics;
+  };
+
+  it("should count, per note, the delivered runs that were reopened or drew feedback", () => {
+    const runs = [delivered("a", 4), delivered("b", 4, { reopened: true }), delivered("c", 4, { feedback: 1, reopened: true }), delivered("d", 0), delivered("e", 0), delivered("f", 0, { feedback: 3 })];
+    expect(confidenceCalibration(runs)).toEqual([{ score: 0, runs: 3, reopened: 0, feedback: 1 }, { score: 4, runs: 3, reopened: 2, feedback: 1 }]);
+  });
+
+  it("should say nothing of a note with fewer than three delivered runs", () => {
+    expect(confidenceCalibration([delivered("a", 5), delivered("b", 5)])).toEqual([]);
+  });
+
+  it("should leave out a run with no note, one that did not deliver and one whose session is still open", () => {
+    const runs = [delivered("a", 3), delivered("b", 3), delivered("c", undefined), delivered("d", 3, { status: "failed" }), delivered("e", 3, { final: false })];
+    expect(confidenceCalibration(runs)).toEqual([]);
+    expect(confidenceCalibration([...runs, delivered("f", 3)])).toEqual([{ score: 3, runs: 3, reopened: 0, feedback: 0 }]);
   });
 });

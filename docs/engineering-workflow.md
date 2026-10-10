@@ -295,6 +295,62 @@ Choices worth knowing before changing it:
 
 The gate has three limits. During a parallel batch it only sees the edits made through `Edit` and `Write`. It checks Node packages only. While a gate runs for more than `IMPL_STALL_MINUTES`, the console shows a doubt on the run.
 
+## Review confidence
+
+A review that ends `READY` says nothing of how much of the change a person still has to read. The console gives every reviewed run a note from 0 to 5: at 0 a person reviews everything, at 5 nothing the console observed stands against the automated review. The note is shown with each rule that lowered it, in the "Evidence" tab, in the list of runs, in the metrics, in `impl show` and in the summary the merge request quotes.
+
+No agent declares the note and no model computes it. `reviewConfidence` in `console/server/review-confidence.ts` is a pure function: the same facts give the same note. Three rules hold its table together:
+
+- **A declaration only lowers the note.** A QA verdict, the severity of a finding, a workflow declared blocked: each may lower the note, none raises it. What supports the note is what the console observes, the status it derives for each criterion from the evidence first.
+- **A fact that could not be read is not a favourable one.** A diff that cannot be read, a missing criteria registry, a check of the stop gate that did not conclude all count against the note.
+- **The note is about the review, not about the code.** It says how well the review was evidenced and how risky the change is. A requirement nobody wrote down shows in no evidence, so a 5 is not a proof.
+
+The note starts at 5. A rule either holds it at a cap while its fact stands, or takes points off, by halves. The note is the lowest cap or what is left after the deductions, whichever is lower, rounded down and never below 0. There is none before a reviewer wrote its report (`senior-review.md` or `qa-report.md`).
+
+| Rule | Effect | The console observed | Read from |
+| --- | --- | --- | --- |
+| `run_failed` | held at 0 | the run failed | the run's status |
+| `workflow_blocked` | held at 0 | the workflow declared itself blocked, or ended with blockers | `workflow-state.json` |
+| `draft_delivery` | held at 0 | the merge request was opened as a draft | `workflow-state.json` |
+| `criterion_failed` | held at 0 | an acceptance criterion failed | the coverage |
+| `qa_rejected` | held at 0 | the QA verdict is not `PASS` nor `PASS_WITH_WARNINGS` | the latest QA report |
+| `finding_p0_open` | held at 0 | a `P0` of the last round of the code review that neither its reviewer nor a rework took over | `senior-findings.json` |
+| `criterion_blocked` | held at 1 | an acceptance criterion is blocked | the coverage |
+| `no_criteria_registry` | held at 2 | no criteria registry was written | the coverage |
+| `qa_unobserved` | held at 2 | QA approved over a criterion it did not observe on the current code | `qaVerdictConsistency` |
+| `incident_open` | held at 2 | an incident of the run is still open | the run's incidents |
+| `finding_p1_open` | held at 2 | a `P1` of the last round of the code review nobody took over | `senior-findings.json` |
+| `qa_missing` | held at 3 | no QA report declares a verdict, which is what tier 0 leaves when no focused pass ran | the coverage |
+| `test_removed` | held at 3 | a test file was deleted, renamed out of the tests, or gained a skipped or isolated test | the diff |
+| `criterion_unverified` | minus 1 each, 3 at most | an acceptance criterion is unverified | the coverage |
+| `evidence_stale` | minus 0.5 each, 1.5 at most | a piece of evidence was taken on code that changed since | the coverage |
+| `gate_failed` | minus 1 | a check of the stop gate still failed at its last verdict for an agent | `gate-log.jsonl` |
+| `gate_unchecked` | minus 0.5 | a check of the stop gate ended `skipped` or `inconclusive` | `gate-log.jsonl` |
+| `evidence_anomaly` | minus 0.5 | an evidence file does not follow its contract | the coverage's diagnostics |
+| `review_order` | minus 0.5 each, 1 at most | a reviewer wrote its expectations after its report | `reviewPlanNotes` |
+| `rework_repeated` | minus 0.5 | two rework developers or more | the `developer-report-rework<N>.md` files |
+| `reviewer_lost` | minus 0.5 | a reviewer ended failed or abandoned | the run's agents |
+| `diff_unknown` | minus 0.5 | the diff could not be read | git |
+| `diff_large` | minus 0.5 | more than 400 lines changed | the diff |
+| `diff_very_large` | minus 1 | more than 1000 lines changed, in place of the rule above | the diff |
+| `diff_many_files` | minus 0.5 | more than 15 files changed | the diff |
+| `sensitive_path` | minus 1 | a file under a sensitive path changed | the diff, `IMPL_SENSITIVE_PATHS` |
+| `no_test_change` | minus 0.5 | source code changed and no test file did | the diff |
+
+A unit test holds this table equal to `CONFIDENCE_RULES`. The values are a starting point, to be moved on what the calibration below shows, never on a single run.
+
+`IMPL_SENSITIVE_PATHS` lists the paths whose change is risky whatever the review said, as patterns separated by commas: `**` crosses directories, `*` stays inside one, and a pattern without a slash matches a name at any depth. Its default is `**/migrations/**,**/auth/**,**/security/**,.github/workflows/**,.gitlab-ci.yml,**/Dockerfile*`.
+
+A finding of the code review is open when it belongs to the last round the reviewer wrote, the reviewer did not correct it, and no rework developer came after that round. Once a rework took a finding over, the QA verdict that follows decides.
+
+The reading stays cheap. The diff is read again only when the code snapshot changed or when the base it is measured from did, which is what the opening of the merge request and the answer on its target branch are. A reading that fails leaves the diff unknown, and the last one read is kept only once the worktree is gone. The gate log is read again only when its copy grew, the target branch of the merge request is asked of the forge once, and never for a page that only reads. The note is recomputed when a document of the run arrives and when the run ends. An incident that opens, is resolved or is dismissed as a false positive moves it at once, from the reasons the note already carries, so the page never shows a note its incidents contradict; on an archived run, whose other facts can no longer be read, that is the only thing that moves it.
+
+**What the merge request says.** The note and its reasons are written in `acceptance-summary.md`, in the part the description quotes, in the workflow language. The pilot copies the line, it never computes or rewords a note. The line is the note as it stood when the pilot read the summary: a draft or a blocked end lowers the note in the console afterwards.
+
+**Calibration.** A note is worth what follows it. `RunState.confidenceAtDelivery` keeps the note the run had when its workflow first declared its end, and a change asked later never rewrites it. `confidenceCalibration` then counts, per note, the delivered runs that were reopened after the final report and those the user wrote feedback on, from three delivered runs per note. `GET /api/metrics` serves it as `calibration`, the metrics panel and `impl metrics` show it. Only what the console sees itself counts: it does not read the comments or the commits a person adds to the merge request.
+
+The note changes nothing in the workflow. It sets no label, merges nothing and blocks nothing: it tells a person where to look first.
+
 ## Runtime recipe of a repository
 
 How the app of a target repository is started, reached and driven is the same from one ticket to the next. The pilot writes it to `.claude/tasks/runtime-recipe.md` under `contracts/runtime-recipe.md` at the end of a run that drove the app. The console keeps every version under `repositories/<checkout>-<digest>/runtime-recipe.md` in its data directory, outside the target repository, and puts it back in the task directory of the next run of that repository. The pilot reads it at step 1, checks what it relies on, and corrects the lines it found false. The file holds no secret and nothing specific to one run; `browser-recipe.md` keeps the fixtures of the ticket. Without the console the file is lost with the task directory. The console shows the recipe of a repository from the "Repository" line of a run and from the launch form ("Runtime recipe"), with the date it was written, and "Forget the recipe" drops it: the next run of that repository starts from none and writes a new one, while a run already going keeps its copy.

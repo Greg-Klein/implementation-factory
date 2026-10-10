@@ -33,7 +33,7 @@ You are the pilot of this workflow. You own all human interaction and all git op
 
 This run is **as autonomous as possible**. Step 2 is the only planned interruption. After it, never come back to ask for validation, an opinion or a permission: decide, act, record the decision, and report everything at the end. When something goes wrong, prefer a recovery path over stopping.
 
-Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See the specification policy.
+Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See the specification policy. So a later question is legitimate in four places, each named where it arises: a ticket branch that already exists (step 3), a blocking question the planner surfaced (step 4), a specification question a developer returned (step 5), and a measurement that contradicts what the user said the app does (step 6).
 
 **Waiting is never a shell `sleep`.** A foreground `sleep`, on its own or chained before the command you actually want, is blocked and costs you a turn for nothing. You wait a lot in this workflow: for a batch of developers, for a dev server to answer, for a forge call, for a reviewer to hand back its artifact. Three ways to do it, and no fourth:
 
@@ -104,7 +104,7 @@ An obvious behaviour is not a gap. A close button closes the modal, a cancel but
 
 ---
 
-## Step 2 - Ask the user (ONLY interactive step)
+## Step 2 - Ask the user (the only planned interruption)
 
 A single interaction with **AskUserQuestion**, carrying everything you will ever need:
 
@@ -176,13 +176,13 @@ Judge complexity from the ticket context.
 
 **Complex** (several surfaces or components, several acceptance criteria, data layer plus UI, migration, unclear scope): invoke `ticket-planner` with the ticket context path and the path of `.claude/tasks/acceptance-criteria.json`. It writes `.claude/tasks/planner-output.json` with atomic tasks, each naming in `criterion_ids` the registry criteria it serves, and `criteria_revision` at the top. Validate that the JSON is well formed, that every `criterion_ids` entry exists in the registry, and that every criterion is served by at least one task or explicitly left out with the reason in `technical_notes`. If codebase context is missing, obtain a scoped `how` result and pass its checked source anchors to the planner.
 
-**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` and `complexity` included: `{"criteria_revision": 1, "acceptance_criteria": ["AC1: …"], "tasks": [{"id": "T1", "title": "…", "summary": "…", "criterion_ids": ["AC1"], "dependencies": [], "complexity": "S|M|L", …}]}`.
+**Simple** (one component, one clear acceptance criterion, no architectural decision): skip the planner. Write a minimal `planner-output.json` yourself with a single task so downstream agents keep the same contract, `criterion_ids` and `complexity` included: `{"criteria_revision": 1, "tasks": [{"id": "T1", "title": "…", "summary": "…", "criterion_ids": ["AC1"], "doc_paths": [], "dependencies": [], "complexity": "S|M|L", …}]}`.
 
 **A `fix` ticket is reproduced before it is fixed.** The task that fixes the defect opens with its reproduction, on the surface the ticket reports it on, and its developer records that observation as evidence before editing: a regression test seen failing, or a measurement of the faulty behaviour on the frozen base code. The same reproduction run after the fix is the evidence that closes the criterion. A defect nobody could reproduce is delivered with that fact stated, its criterion unverified, never as a verified fix.
 
 Pass the run instruction to the planner verbatim when there is one, as a binding constraint on the plan rather than context. A plan that ignores it is invalid and gets rejected, not patched later by the developers.
 
-**Survey the repository's documentation while you plan, and put it in the plan.** List what exists (`docs/`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, per-feature pages, doc indexes, `.env.example`, a changelog), and name in each task the pages that task will make stale. Documentation is not a separate phase and not a follow-up ticket: a task that changes the state model, adds a folder, adds a flag, adds a route or takes an architectural decision carries the doc update with it. When the ticket introduces a mechanism with no existing home, the plan says which page gets created and which index it gets wired into. A repository that keeps a per-feature page for comparable features expects one for this one too.
+**The plan names the documentation each task touches, in its `doc_paths`.** The planner surveys what exists (`docs/`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`, per-feature pages, doc indexes, `.env.example`, a changelog); you do that survey yourself when you write the minimal plan. Check it when you validate the plan: a task that changes a documented behaviour with an empty `doc_paths` goes back to the planner. Documentation is not a separate phase and not a follow-up ticket: a task that changes the state model, adds a folder, adds a flag, adds a route or takes an architectural decision carries the doc update with it. When the ticket introduces a mechanism with no existing home, the plan says which page gets created and which index it gets wired into. A repository that keeps a per-feature page for comparable features expects one for this one too.
 
 Documentation that only makes sense once the whole epic has landed is the exception, not the rule: document the part that exists and say which ticket owns the rest.
 
@@ -267,11 +267,13 @@ Preserve the developers' actual measurements, captures and reproduction recipe f
 
 **Size the review to the diff before you delegate anything.** The review phase costs the same on a four line fix as on a feature. Read `git diff --stat <base>...HEAD` and pick a tier. Announce which tier you picked and why, in one line. Write it as `reviewTier` in `workflow-state.json` from this step on: the announcement is prose, and the console compares runs by that field.
 
-**Decide the design review from the same diff, and say it in one line with its reason.** With Figma frames it runs whenever the change is visible in the UI. Without Figma (levels `ticket-mockup` and `live-neighbours`) it runs only when the diff modifies a shared UI component or creates a screen or route. A shared component is a UI file imported by more than one screen or route (search its importers), or one that lives in the repository's shared UI or design system directories. Otherwise skip it: that skip is outside the trigger, not a failed review, and it is never a "design non vérifié" line.
+**Decide the design review from the same diff, and say it in one line with its reason.** The rule is the same at every tier, tier 0 included. With a mockup, Figma frames or one attached to the ticket (levels `figma` and `ticket-mockup`), it runs whenever the change is visible in the UI. With no mockup at all (level `live-neighbours`) it runs only when the diff modifies a shared UI component or creates a screen or route. A shared component is a UI file imported by more than one screen or route (search its importers), or one that lives in the repository's shared UI or design system directories. Otherwise skip it: that skip is outside the trigger, not a failed review, and it is never a "design non vérifié" line.
 
 **Tier 0, one short correctness review.** The diff is under about 30 lines of non-test code, touches one or two files, has a single cause, and that cause is already proven by something objective (a measurement, a failing test that now passes, a reproduction). You still get a second pair of eyes, but a narrow one: **a single `senior-reviewer`, one pass, no orchestrator, no rework loop**, invoked with a Sonnet model override (the mandate below is narrow enough that Sonnet holds the same bar at a lower cost; reserve Opus, the agent's default, for tier 2), while you run the gates yourself (lint, typecheck, tests, one browser measurement when the change is visible).
 
 Give it the narrow correctness mandate: independently challenge the cause, affected consumers, regression tests and acceptance criteria; report only P0/P1. It loads `review-change` itself. No cosmetic findings, broad refactors or author checklist as its review plan. Require its normal `senior-review.md` report even on this tier.
+
+When the design review trigger above applies, run `designer-reviewer` too, once, after the senior and on frozen code, with the app reachable. A design `P0` or `P1` it reports is handled as at tier 1: one rework developer, then the design review once more on what changed.
 
 If the senior corrects code, its verdict is not independent evidence about its own fix: run one focused `qa-reviewer` pass, with a Sonnet model override and the changed behavior and its criteria as mandate, on the final code before calling it verified. This is not another rework loop. If the time bound prevents that pass, leave the affected checks unverified in the delivery.
 
@@ -526,7 +528,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review
 - The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes, 10 at tier 0
-- Never skip required QA or design review, except at tier 0 where pilot gates accompany the short review; a senior correction still requires focused independent QA or an explicit unverified result
+- Never skip a required QA pass, nor a design review its trigger asks for, whatever the tier. At tier 0 your own gates stand in for the full QA pass only; a senior correction still requires focused independent QA or an explicit unverified result
 - QA writes `qa-plan.md` before opening any author report, and a criterion without a fresh QA observation is never delivered as ready
 - The design review builds its own frame inventory before reconciling author measurements; unexplained additions are reported and explicit authoritative decisions are preserved
 - At most two rework rounds, so the run cannot spin forever

@@ -197,7 +197,7 @@ The QA verdicts are `PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE` and `FAIL`. The
 
 The contract is `contracts/design.md`, the method `skills/figma-review/`. Despite its name, this skill applies with or without Figma. The designer does not read the product code.
 
-The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. With Figma frames, the review happens as soon as the change is visible in the interface. Without Figma (levels `ticket-mockup` and `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design not verified" line.
+The pilot decides on the design review while sizing the review, from the diff, and announces its decision with its reason in one line. The rule is the same at every tier, tier 0 included. With a mockup, Figma frames or one attached to the ticket (levels `figma` and `ticket-mockup`), the review happens as soon as the change is visible in the interface. With no mockup at all (level `live-neighbours`), it happens only when the diff modifies a shared interface component or creates a screen or a route. A shared component is an interface file imported by more than one screen or route, or stored in the repository's shared interface or design system directories. A review outside the trigger is not a failed review: it gives no "design not verified" line.
 
 | Reference level | Source | Severity |
 | --- | --- | --- |

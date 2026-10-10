@@ -500,8 +500,10 @@ If a git operation fails or the state is not what you expected, stop touching gi
 
 ## Hard constraints
 
-Every rule of this workflow is stated at the step it applies to, and holds from there to the end of the run. These five have no step of their own:
+Every rule of this workflow is stated at the step it applies to, and holds from there to the end of the run. These seven have no step of their own, or are worth holding against every shortcut:
 
+- The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
+- Never skip a required QA pass, nor a design review its trigger asks for, whatever the tier. At tier 0 your own gates stand in for the full QA pass only; a senior correction still requires focused independent QA or an explicit unverified result
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - One ticket, one dedicated branch, always
 - Add a comment in code only for a non obvious "why", in English

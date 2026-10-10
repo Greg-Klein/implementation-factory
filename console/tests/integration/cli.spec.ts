@@ -1,3 +1,4 @@
+import { controlToken } from "../fixtures";
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
 import path from "node:path";
@@ -10,7 +11,7 @@ const launcher = path.resolve(process.cwd(), "..", "bin", "implementation-factor
 /** One command of the launcher against the console under test, as a terminal with nobody at it runs it. */
 function impl(baseURL: string | undefined, ...args: string[]) {
   return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
-    const child = execFile("bash", [launcher, ...args], { env: { ...process.env, IMPL_CONSOLE_URL: baseURL ?? "" }, timeout: 40_000 }, (error, stdout, stderr) => {
+    const child = execFile("bash", [launcher, ...args], { env: { ...process.env, IMPL_CONSOLE_URL: baseURL ?? "", IMPL_CONTROL_TOKEN: controlToken }, timeout: 40_000 }, (error, stdout, stderr) => {
       resolve({ code: error ? (typeof error.code === "number" ? error.code : 1) : 0, stdout, stderr });
     });
     child.stdin?.end();

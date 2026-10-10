@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
  */
 export const checkoutsRoot = path.join(os.tmpdir(), "implementation-factory-tests", "checkouts");
 /** The hook secret the suite's server is started with, so a test can post hooks the way a session does. */
+export const controlToken = "integration-control-token-0123456789abcdef";
 export const hookToken = "integration-hook-token";
 export const sampleCheckout = path.join(checkoutsRoot, "repo");
 export const sampleProject = "group/repo";

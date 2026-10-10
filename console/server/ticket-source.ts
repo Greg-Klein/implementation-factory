@@ -1,3 +1,4 @@
+import { ticketProjectIdentity } from "./project-identity.js";
 import { deliveryProjects, parseTicketUrls, ticketIdentity, ticketProjectPath } from "./domain.js";
 import { checkoutOfProject, checkoutProject, resolveProjectDirectory } from "./repository.js";
 import { mainCheckout } from "./worktree.js";
@@ -65,7 +66,7 @@ export async function resolveProposedTickets(proposals: TicketProposal[]) {
   for (const proposal of proposals) {
     try {
       if (proposal.repositories?.length) {
-        const paths = await Promise.all(proposal.repositories.map(checkoutOfProject));
+        const paths = await Promise.all(proposal.repositories.map((project) => checkoutOfProject(project, ticketProjectIdentity(proposal.issueUrl))));
         resolved.push(...await resolveTargets(proposal.issueUrl, paths, proposal.baseBranch));
       } else {
         resolved.push({ ...(await resolveTicket(proposal.issueUrl)), ...(proposal.baseBranch ? { baseBranch: proposal.baseBranch } : {}) });

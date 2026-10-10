@@ -1,3 +1,4 @@
+import { WS_BUFFER_BYTES } from "./resource-limits.js";
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
@@ -16,7 +17,9 @@ export const clients = new Map<WebSocket, { runId?: string | undefined }>();
 export function now() { return new Date().toISOString(); }
 
 function deliver(socket: WebSocket, serialized: string) {
-  if (socket.readyState === WebSocket.OPEN) socket.send(serialized);
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (socket.bufferedAmount + Buffer.byteLength(serialized) > WS_BUFFER_BYTES) { socket.terminate(); return; }
+  socket.send(serialized);
 }
 
 export function send(socket: WebSocket, message: ServerMessage) {

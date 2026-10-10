@@ -1,3 +1,4 @@
+import { controlToken } from "../fixtures";
 import { expect, test } from "@playwright/test";
 import WebSocket from "ws";
 
@@ -16,7 +17,8 @@ function upgrade(headers: Record<string, string>) {
 test("should refuse a socket opened by a page the console did not serve", async () => {
   expect(await upgrade({ Origin: "https://evil.example" })).toBe(403);
   expect(await upgrade({})).toBe(403);
-  expect(await upgrade({ Origin: "http://127.0.0.1:3211" })).toBe("open");
+  expect(await upgrade({ Origin: "http://127.0.0.1:3211" })).toBe(401);
+  expect(await upgrade({ Origin: "http://127.0.0.1:3211", Authorization: `Bearer ${controlToken}` })).toBe("open");
 });
 
 test("should refuse a socket addressed to a foreign name, whatever origin it claims", async () => {
@@ -27,7 +29,7 @@ test("should refuse a socket addressed to a foreign name, whatever origin it cla
 /** What the server answers a raw message with, on a socket it accepted. */
 function answerTo(raw: string) {
   return new Promise<{ type: string; message?: string }>((resolve, reject) => {
-    const socket = new WebSocket(socketUrl, { headers: { Origin: "http://127.0.0.1:3211" } });
+    const socket = new WebSocket(socketUrl, { headers: { Origin: "http://127.0.0.1:3211", Authorization: `Bearer ${controlToken}` } });
     socket.on("open", () => socket.send(raw));
     socket.on("message", (data) => {
       const message = JSON.parse(data.toString()) as { type: string; message?: string };
@@ -68,4 +70,39 @@ test("should refuse a hook that does not carry the secret", async ({ request }) 
   expect(response.status()).toBe(401);
   const wrong = await request.post("/api/hooks?token=not-the-secret", { data: { runId: "anything", payload: { hook_event_name: "Stop" } } });
   expect(wrong.status()).toBe(401);
+});
+
+test("should associate the browser without leaving the token in its URL", async ({ browser }) => {
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  try {
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:3211/#access=${controlToken}`);
+    await expect(page.getByRole("heading", { name: "Connect to Implementation Factory" })).not.toBeVisible();
+    await expect.poll(() => page.url().includes("access=")).toBe(false);
+    const cookies = await context.cookies();
+    expect(cookies.find((cookie) => cookie.name === "impl_session")).toMatchObject({ httpOnly: true, sameSite: "Strict" });
+    expect((await context.request.get("http://127.0.0.1:3211/api/runs")).status()).toBe(200);
+  } finally { await context.close(); }
+});
+
+test("should deny anonymous and forged-cookie API reads", async ({ playwright }) => {
+  const anonymous = await playwright.request.newContext({ baseURL: "http://127.0.0.1:3211", storageState: { cookies: [], origins: [] } });
+  try {
+    expect((await anonymous.get("/api/runs")).status()).toBe(401);
+    expect((await anonymous.get("/api/runs", { headers: { Cookie: "impl_session=forged" } })).status()).toBe(401);
+    expect((await anonymous.post("/api/auth/session", { headers: { Authorization: "Bearer wrong" } })).status()).toBe(401);
+    expect((await anonymous.get("/api/health")).status()).toBe(200);
+  } finally { await anonymous.dispose(); }
+});
+
+test("should refuse an oversized hook body and keep serving", async ({ request }) => {
+  const { hookToken } = await import("../fixtures");
+  expect((await request.post(`/api/hooks?token=${hookToken}`, { data: { padding: "x".repeat(2_000_001) } })).status()).toBe(413);
+  expect((await request.get("/api/runs")).status()).toBe(200);
+});
+
+test("should reject oversized terminal input and invalid dimensions without closing another client", async () => {
+  expect(await answerTo(JSON.stringify({ type: "terminal.input", runId: "absent", data: "x".repeat(8193) }))).toMatchObject({ type: "error", message: "Invalid or oversized data." });
+  expect(await answerTo(JSON.stringify({ type: "terminal.resize", runId: "absent", cols: -1, rows: 24 }))).toMatchObject({ type: "error" });
+  expect(await upgrade({ Origin: "http://127.0.0.1:3211", Authorization: `Bearer ${controlToken}` })).toBe("open");
 });

@@ -84,7 +84,7 @@ function RepositoryPicker({ value, onChange, repositories, detectedProject, dete
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--tint)]"}`}
             >
               <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-[var(--raised)] text-[var(--accent)]"><GitBranchIcon size={13} /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}{repository.identity && <span className="ml-2 text-[var(--muted)]">{repository.identity.hostname}</span>}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
               {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Not found</span>}
             </button>
           )) : <p className="px-3 py-3 text-[11px] text-[var(--muted)]">No declared repository matches.</p>}

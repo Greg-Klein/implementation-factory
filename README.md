@@ -79,6 +79,22 @@ Install Implementation Factory from https://github.com/Greg-Klein/implementation
 Do not use sudo without asking me first. Do not start the factory and do not change its configuration: finish by telling me what you installed, what was already there, and that the next steps are `impl config`, then `impl demo` to look around or `impl` to start.
 ```
 
+## Console access and isolated checks
+
+`impl start` associates the browser using a private token stored in the local data directory. The CLI reads that token for the local listener. After a restart, open the console with `impl start` again to renew the browser session. For direct `npm run dev`, enter the token from `console/data/control-token` in the connection form.
+
+Automatic promotion requires a running Docker daemon and a locally pulled check image:
+
+```bash
+docker pull mcr.microsoft.com/playwright:v1.63.0-noble
+```
+
+`IMPL_CHECK_IMAGE` can name another trusted image with compatible Node.js, native build tools and Playwright browsers. If Docker or the image is missing, branches stay available and the console shows "Automatic merge paused". No candidate check runs on the host as a fallback. Dependencies requiring credentials or checks requiring an external service must be reviewed manually.
+
+Listening outside loopback requires a control token of at least 32 characters and HTTPS certificate/key files (`IMPL_CONTROL_TOKEN`, `IMPL_TLS_CERT`, `IMPL_TLS_KEY`). Wildcard listeners also require `IMPL_PUBLIC_URL` naming the HTTPS origin covered by the certificate. A remote CLI supplies its token explicitly. See [SECURITY.md](SECURITY.md) for access, isolation and resource limits.
+
+Automatic repository detection compares the server and project of a ticket with the Git remotes. Several matching checkouts require an explicit path. A watcher’s legacy project paths are resolved only on the ticket’s server, so the same project path on another forge is never selected automatically.
+
 ## Usage
 
 ```bash
@@ -457,7 +473,7 @@ A branch is decided only once its agent wrote its report and an improvement comm
 The console checks every minute for improvement branches whose agent is done (its report is written) and whose worktree is clean. A branch with no commit is removed, its report stays beside the feedback. A branch with commits goes through three locks, in this order, and is merged only when all three agree:
 
 1. **Mechanical rules** (`console/server/auto-merge-policy.ts`). The branch is replayed on the factory by git alone, and is rejected when it touches a protected file (the guard and the stop gate, `/improve`, `/rebase`, the judge, the reviewers and their contracts, the loop's own code, the launcher, the plugin manifest, the CI), deletes or skips a test, or exceeds 15 files or 400 changed lines.
-2. **Checks rerun by the console** in the branch's worktree: typecheck, unit tests and build, plus the integration suite when the branch touches `console/` or `bin/`. What the improvement session says it ran is not taken on trust.
+2. **Checks rerun by the console** in a disposable Docker container containing an export of the exact candidate commit: typecheck, unit tests and build, plus the integration suite when the branch touches `console/` or `bin/`. No host directory or credential is mounted or forwarded. Installation uses the network with lifecycle scripts disabled; dependency scripts and all checks then run offline. What the improvement session says it ran is not taken on trust. Docker and the trusted check image must be available locally; otherwise promotion pauses and the branch is kept.
 3. **An independent judge**, a headless Opus session on `/implementation-factory:judge-improvement` (`contracts/improvement-verdict.md`). It reads the run evidence first and writes what a correct fix should change, then reads the plan, the report and the diff. It refuses a branch whose cause is not established, that treats a symptom, overfits one run, weakens a quality gate, goes beyond its plan or leaves `docs/`, `README.md` or `CLAUDE.md` stale. It can read but writes only its verdict file: the guard refuses it any command, agent or edit. It runs from its own directory and loads the checkout's plugin, so the branch cannot change the prompt or the settings that judge it.
 
 When the factory moved during the checks, nothing is decided and the next tick starts again. A rejected branch is discarded, never handed to you: a change left uncommitted is kept as `improvement-uncommitted-<slug>.patch` beside the report, and the feedback the branch was built on goes back to `pending/` with the reasons, so the next iteration tries another way. After two rejected attempts, that feedback is not tried again. A merged one is shown for a day as "Improvements merged automatically", with its report and a "Revert" button that adds a revert commit. Every decision is a line of `<data dir>/self-improvement-decisions.jsonl`, with the duration and the tokens of each judge session on the branch. A rejection shows no notice, and the other notices of the loop close on their own after five seconds; the **Metrics** panel counts the branches merged and rejected and lists what the judge took on each one. Nothing is ever pushed.

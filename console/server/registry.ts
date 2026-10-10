@@ -584,11 +584,12 @@ export class RunRegistry {
     let terminalLogFailed = false;
     session.engine = engine.start({
       cwd: worktree, sessionLabel: path.basename(repository), runId: id, command, pluginDir: pluginRoot,
-      hookUrl: `http://${hostname}:${port}/api/hooks?token=${hookToken}`,
+      hookUrl: `${process.env.IMPL_TLS_CERT ? "https" : "http"}://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname === "::" ? "[::1]" : hostname.includes(":") && !hostname.startsWith("[") ? `[${hostname}]` : hostname}:${port}/api/hooks?token=${hookToken}`,
       hookSpool: hookSpoolPath(id),
       // The workflow identifies the code it verified with the same utility the
       // console uses, and every snapshot it takes is logged where the console reads it.
       environment: {
+        ...(process.env.IMPL_TLS_CERT ? { IMPL_HOOK_TLS_CERT: process.env.IMPL_TLS_CERT } : {}),
         IMPL_CODE_SNAPSHOT: snapshotScript(pluginRoot),
         IMPL_SNAPSHOT_LOG: snapshotLogPath(id),
         IMPL_SNAPSHOT_EXCLUDE: snapshotExclusions(worktree).join(","),

@@ -53,7 +53,7 @@ describe("env file writer", () => {
 
   it("should append a missing key with the comment from the schema", () => {
     const written = edit("IMPL_PORT='3210'\n", { IMPL_HOST: "0.0.0.0" });
-    expect(written).toContain("# Network interface the local server binds to.\nIMPL_HOST='0.0.0.0'\n");
+    expect(written).toContain("# Network interface the local server binds to; outside loopback requires a control token and TLS certificate/key.\nIMPL_HOST='0.0.0.0'\n");
     expect(written).toContain("IMPL_PORT='3210'");
   });
 

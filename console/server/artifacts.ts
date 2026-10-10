@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
@@ -8,7 +8,7 @@ import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
 import { attachmentPaths } from "./acceptance.js";
 import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
-import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
+import { acceptanceInputKind, atomicWrite, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
 import { trackReopening } from "./run-metrics.js";
 import { GATE_LOG_FILE, keepGateLog } from "./run-metrics-runtime.js";
@@ -18,11 +18,13 @@ import { declaredDelivery, parseWorkflowState, WORKFLOW_STATE_FILE } from "./wor
 import type { RunSession } from "./run-session.js";
 import { reportFailure } from "./context.js";
 
+import { ARCHIVE_BYTES, PREVIEW_BYTES, readConfinedFile } from "./file-safety.js";
+
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 
 /** A version kept by the evidence archive: served only when the archive itself wrote that path. */
 async function readArchivedEvidence(session: RunSession, archivePath: string) {
-  const buffer = await session.evidence.read(archivePath);
+  const buffer = await session.evidence.read(archivePath, PREVIEW_BYTES);
   if (!buffer) throw new Error("Document not found for this run.");
   if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
   const contentType = IMAGE_CONTENT_TYPES[path.extname(archivePath).toLowerCase()];
@@ -43,11 +45,10 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
   const root = path.resolve(dataRoot, session.id, "artifacts");
   // The lexical check refuses `..`; the real path refuses a symbolic link
   // planted in the archive that points outside it.
-  const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
-  if (!target) throw new Error("Invalid document path.");
-  const buffer = await readFile(target);
+  const buffer = resolveArtifactPath(root, artifactPath) ? await readConfinedFile(root, artifactPath, PREVIEW_BYTES) : undefined;
+  if (!buffer) throw new Error("Invalid document path.");
   if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
-  const contentType = IMAGE_CONTENT_TYPES[path.extname(target).toLowerCase()];
+  const contentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
   if (contentType) return { path: artifactPath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: artifactPath, content: buffer.toString("utf8") };
 }
@@ -61,7 +62,7 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
  */
 async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: string, taskRoot: string) {
   let items: unknown;
-  try { items = JSON.parse(await readFile(evidenceSource, "utf8")).items; } catch { return; }
+  try { const data = await readConfinedFile(taskRoot, path.relative(taskRoot, evidenceSource)); items = data ? JSON.parse(data.toString("utf8")).items : undefined; } catch { return; }
   if (!Array.isArray(items)) return;
   const named = items.flatMap((item) => item && typeof item === "object" ? attachmentPaths(item as Record<string, unknown>) : []);
   for (const capture of new Set(named)) {
@@ -73,7 +74,8 @@ async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: s
     if (relative.startsWith("..") || path.isAbsolute(relative)) continue;
     const target = path.join(dataRoot, session.id, "artifacts", relative);
     await mkdir(path.dirname(target), { recursive: true });
-    const copied = await copyFile(source, target).then(() => true, () => false);
+    const data = await readConfinedFile(taskRoot, relative, ARCHIVE_BYTES);
+    const copied = data ? await atomicWrite(target, data).then(() => true, () => false) : false;
     if (copied && !session.state.artifacts.includes(relative)) {
       session.state.artifacts = [...session.state.artifacts, relative];
       session.activity("artifact", "Screenshot archived", relative);
@@ -91,7 +93,9 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   if (!isRunDocument(relative)) { await attachmentArrived(session); return; }
   const target = path.join(dataRoot, session.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });
-  await copyFile(source, target);
+  const data = await readConfinedFile(taskRoot, relative, ARCHIVE_BYTES);
+  if (!data) throw new Error("Artifact source is not a confined regular file.");
+  await atomicWrite(target, data);
   if (!session.state.artifacts.includes(relative)) {
     session.state.artifacts = [...session.state.artifacts, relative];
     session.activity("artifact", "New artifact", relative);

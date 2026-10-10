@@ -1,6 +1,7 @@
+import { ARCHIVE_BYTES, readConfinedFile } from "./file-safety.js";
 import { defined } from "../lib/defined.js";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, realpath, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   deriveAcceptanceCoverage, isRoundCopy, MAX_REPORT_BYTES, parseCriteriaRegistry, parseEvidenceReport, parsePlanLinks, sourceOfReport,
@@ -41,7 +42,7 @@ export type ArchiveStorage = {
   /** A file of the task directory, or undefined when it is missing or leaves that directory. */
   readSource(relativePath: string): Promise<Buffer | undefined>;
   write(archivePath: string, data: Buffer | string): Promise<void>;
-  read(archivePath: string): Promise<Buffer | undefined>;
+  read(archivePath: string, limit?: number): Promise<Buffer | undefined>;
 };
 
 export type ArchivedAttachment = { source: string; archivePath: string; archived: boolean };
@@ -193,8 +194,8 @@ export class EvidenceArchive {
     return this.versions.some((version) => version.archivePath === archivePath || version.attachments.some((attachment) => attachment.archived && attachment.archivePath === archivePath));
   }
 
-  read(archivePath: string) {
-    return this.serves(archivePath) ? this.storage.read(archivePath) : Promise.resolve(undefined);
+  read(archivePath: string, limit?: number) {
+    return this.serves(archivePath) ? this.storage.read(archivePath, limit) : Promise.resolve(undefined);
   }
 
   private registry(): { registry?: CriteriaRegistry; diagnostics: AcceptanceDiagnostic[] } {
@@ -275,9 +276,15 @@ export class EvidenceArchive {
 }
 
 async function atomicWrite(target: string, data: Buffer | string) {
+  let parent = path.dirname(path.resolve(target));
+  while (parent !== path.dirname(parent)) {
+    const entry = await lstat(parent).catch(() => undefined);
+    if (entry?.isSymbolicLink() && parent !== "/var" && parent !== "/tmp") throw new Error("Archive destination contains a symbolic link.");
+    parent = path.dirname(parent);
+  }
   await mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await writeFile(temporary, data);
+  await writeFile(temporary, data, { flag: "wx", mode: 0o600 });
   await rename(temporary, target);
 }
 
@@ -298,17 +305,15 @@ export async function confinedPath(root: string, relativePath: string) {
 export function diskStorage(taskRoot: () => string, runDirectory: string): ArchiveStorage {
   return {
     async readSource(relativePath) {
-      const target = await confinedPath(taskRoot(), relativePath);
-      return target ? readFile(target).catch(() => undefined) : undefined;
+      return readConfinedFile(taskRoot(), relativePath);
     },
     async write(archivePath, data) {
       const target = path.resolve(runDirectory, archivePath);
       if (!target.startsWith(`${path.resolve(runDirectory)}${path.sep}`)) throw new Error("Invalid archive path.");
       await atomicWrite(target, data);
     },
-    async read(archivePath) {
-      const target = await confinedPath(runDirectory, archivePath);
-      return target ? readFile(target).catch(() => undefined) : undefined;
+    async read(archivePath, limit = ARCHIVE_BYTES) {
+      return readConfinedFile(runDirectory, archivePath, limit);
     },
   };
 }

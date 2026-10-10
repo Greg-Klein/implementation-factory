@@ -1,5 +1,5 @@
-import { Factory } from "@/components/factory";
+import { ConsoleAccess } from "@/components/console-access";
 
 export default function Page() {
-  return <Factory />;
+  return <ConsoleAccess />;
 }

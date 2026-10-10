@@ -121,12 +121,49 @@ export const schema = [
   {
     key: "IMPL_HOST",
     label: "Listening interface",
-    comment: "Network interface the local server binds to.",
+    comment: "Network interface the local server binds to; outside loopback requires a control token and TLS certificate/key.",
     help: "Network interface of the local server.",
     fallback: "127.0.0.1",
     kind: "text",
     readBy: "console",
     validate: validateText,
+  },
+  {
+    key: "IMPL_CONTROL_TOKEN",
+    label: "Console control token",
+    comment: "Leave empty for a random token per start; a network binding requires a token of at least 32 characters.",
+    help: "Secret for browser association and CLI authentication. Empty generates a token per start; otherwise at least 32 characters.",
+    fallback: "", kind: "text", readBy: "console",
+    validate: (value) => value.trim() === "" || value.trim().length >= 32 ? [] : [issue("error", "expected at least 32 characters, or nothing for a random token")],
+  },
+  {
+    key: "IMPL_PUBLIC_URL", label: "Public HTTPS address",
+    comment: "HTTPS origin clients use; required when IMPL_HOST listens on all interfaces. The certificate must cover this hostname.",
+    help: "HTTPS origin without a path, required for wildcard bindings. The certificate must cover its hostname.",
+    fallback: "", kind: "text", readBy: "console",
+    validate: (value) => {
+      if (!value.trim()) return [];
+      try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash ? [] : [issue("error", "expected an HTTPS origin without a path")]; }
+      catch { return [issue("error", "expected an HTTPS origin")]; }
+    },
+  },
+  {
+    key: "IMPL_TLS_CERT", label: "HTTPS certificate",
+    comment: "Absolute path of the HTTPS certificate; required with IMPL_TLS_KEY for a network binding.",
+    help: "Absolute path of the HTTPS certificate. Required with IMPL_TLS_KEY when listening outside loopback.",
+    fallback: "", kind: "text", readBy: "console", validate: validateOptionalAbsolutePath,
+  },
+  {
+    key: "IMPL_TLS_KEY", label: "HTTPS private key",
+    comment: "Absolute path of the HTTPS private key; required with IMPL_TLS_CERT for a network binding.",
+    help: "Absolute path of the HTTPS private key. Required with IMPL_TLS_CERT when listening outside loopback.",
+    fallback: "", kind: "text", readBy: "console", validate: validateOptionalAbsolutePath,
+  },
+  {
+    key: "IMPL_CHECK_IMAGE", label: "Isolated check image",
+    comment: "Trusted Docker image for automatic improvement checks; pull it locally before enabling automatic promotion.",
+    help: "Locally available trusted Docker image with Node.js, npm, git, native build tools and Playwright browsers. Its dependency scripts run offline.",
+    fallback: "mcr.microsoft.com/playwright:v1.63.0-noble", kind: "text", readBy: "console", validate: validateText,
   },
   {
     key: "IMPL_NO_OPEN",

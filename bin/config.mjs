@@ -84,7 +84,7 @@ Exit codes of check: 0 valid, 1 at least one error.`);
 function commandList() {
   console.log(`File: ${envPath}${existsSync(envPath) ? "" : " (missing)"}\n`);
   for (const { descriptor, value, source } of settings()) {
-    console.log(`${descriptor.key.padEnd(30)} ${value.padEnd(34)} ${SOURCE_LABELS[source]}`);
+    console.log(`${descriptor.key.padEnd(30)} ${(descriptor.key === "IMPL_CONTROL_TOKEN" && value ? "(configured secret)" : value).padEnd(34)} ${SOURCE_LABELS[source]}`);
   }
   const unknown = unknownKeys();
   if (unknown.length > 0) console.log(`\nUnknown keys in the .env: ${unknown.join(", ")}`);
@@ -200,7 +200,7 @@ function hint(descriptor) {
 }
 
 async function factoryIsListening() {
-  const url = `http://${valueOf("IMPL_HOST")}:${valueOf("IMPL_PORT")}/api/state`;
+  const url = `${valueOf("IMPL_TLS_CERT") ? "https" : "http"}://${valueOf("IMPL_HOST")}:${valueOf("IMPL_PORT")}/api/health`;
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(800) });
     return response.ok;
@@ -219,10 +219,10 @@ async function runAssistant() {
       console.log(`${descriptor.label} (${descriptor.key})`);
       console.log(`  ${descriptor.help}`);
       if (source === "shell") {
-        console.log(`  Set in the shell to '${value}', it will win over the .env.\n`);
+        console.log(`  Set in the shell to '${descriptor.key === "IMPL_CONTROL_TOKEN" && value ? "(configured secret)" : value}', it will win over the .env.\n`);
       }
       for (;;) {
-        const answer = normalize(descriptor, await ask(rl, `  [${value}]${hint(descriptor)} > `));
+        const answer = normalize(descriptor, await ask(rl, `  [${descriptor.key === "IMPL_CONTROL_TOKEN" && value ? "(configured secret)" : value}]${hint(descriptor)} > `));
         if (answer === "" || answer === value) break;
         const errors = descriptor.validate(answer).filter((entry) => entry.severity === "error");
         if (errors.length === 0) {

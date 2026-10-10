@@ -1,3 +1,4 @@
+import type { ProjectIdentity } from "../server/project-identity.js";
 export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string | undefined };
@@ -8,7 +9,7 @@ export type PendingQuestion = { id: string; questions: { question: string; heade
 export type SessionPrompt = { id: string; kind: "folder_trust"; directory: string; since: string };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle.
  * `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting"; reason?: string } };
 /** A branch merged without the user in the last day, which the page offers to revert. */
 export type AutomaticMerge = { worktreeName: string; at: string; reasons: string[] };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
@@ -122,7 +123,7 @@ export type ServerMessage =
   | { type: "findings.result"; repository: string; forgotten: boolean }
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
-export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
+export type RepositoryOption = { identity?: ProjectIdentity; project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "git" }) | null;

@@ -1,3 +1,4 @@
+import type { ProjectIdentity } from "./project-identity.js";
 import type { Question } from "./domain.js";
 
 export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
@@ -22,7 +23,7 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
  * the promotion is not one click.
  */
 /** `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting"; reason?: string } };
 /** A branch merged without the user in the last day, which the page offers to revert. */
 export type AutomaticMerge = { worktreeName: string; at: string; reasons: string[] };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
@@ -408,7 +409,7 @@ export type TicketProposal = { issueUrl: string; title?: string; source?: string
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
 export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[]; proposals: TicketProposal[] };
 
-export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
+export type RepositoryOption = { identity?: ProjectIdentity; project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
 
 /**

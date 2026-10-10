@@ -32,7 +32,7 @@ describe("discovering checkouts next to run worktrees", () => {
 
     const { discoverRepositories, detectProjectDirectory } = await import("../../server/repository");
     const repositories = await discoverRepositories();
-    expect(repositories).toEqual([{ project: "group/app", path: checkout, resolvedPath: checkout, exists: true }]);
+    expect(repositories).toEqual([{ project: "group/app", identity: { forge: "gitlab", hostname: "gitlab.com", project: "group/app" }, path: checkout, resolvedPath: checkout, exists: true }]);
     await expect(detectProjectDirectory("https://gitlab.com/group/app/-/issues/4", repositories)).resolves.toMatchObject({ path: checkout });
   });
 });

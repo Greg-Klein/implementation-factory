@@ -1,3 +1,4 @@
+import { IsolationUnavailable, runIsolatedChecks, type Check } from "./isolated-checks.js";
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -36,6 +37,7 @@ let decisions: AutoMergeDecision[] = [];
 /** The judge passes of each branch not decided yet, written with its decision. */
 const judged = new Map<string, JudgeRun[]>();
 let checking: string | undefined;
+const paused = new Map<string, string>();
 let ticking = false;
 let restartPending = false;
 let bootCommit: string | undefined;
@@ -44,7 +46,7 @@ let isIdle: () => boolean = () => false;
 /** What the page shows of a branch with commits: the console decides it, nobody else. */
 export function autoMergeView(worktreeName: string) {
   if (!autoMergeOn()) return undefined;
-  return { state: checking === worktreeName ? "checking" as const : "waiting" as const };
+  return { state: checking === worktreeName ? "checking" as const : "waiting" as const, ...(paused.has(worktreeName) ? { reason: paused.get(worktreeName)! } : {}) };
 }
 
 /** How many branches were merged and rejected, and what each judge pass cost. Read from memory: undefined when the loop is off. */
@@ -146,7 +148,6 @@ function checkEnvironment() {
   return environment;
 }
 
-type Check = { name: string; command: string; ok: boolean; output: string };
 
 async function npm(directory: string, name: string, args: string[]): Promise<Check> {
   const command = `npm ${args.join(" ")}`;
@@ -157,28 +158,6 @@ async function npm(directory: string, name: string, args: string[]): Promise<Che
     const { stdout = "", stderr = "", message = "" } = error as { stdout?: string; stderr?: string; message?: string };
     return { name, command, ok: false, output: `${stdout}\n${stderr}\n${message}`.trim().slice(-OUTPUT_TAIL) };
   }
-}
-
-/**
- * The checks of the branch, run by the console itself on the tree it would
- * merge: what the improvement session says it ran is a claim.
- */
-async function runChecks(worktree: Worktree, integration: boolean) {
-  const directory = path.join(worktree.path, "console");
-  const checks: Check[] = [];
-  const steps: [string, string[]][] = [
-    ...(existsSync(path.join(directory, "node_modules")) ? [] : [["install", ["ci", "--no-audit", "--no-fund"]] as [string, string[]]]),
-    ["typecheck", ["run", "typecheck"]],
-    ["unit tests", ["run", "test:unit"]],
-    ["build", ["run", "build"]],
-    ...(integration ? [["integration tests", ["run", "test:integration"]] as [string, string[]]] : []),
-  ];
-  for (const [name, args] of steps) {
-    const check = await npm(directory, name, args);
-    checks.push(check);
-    if (!check.ok) break;
-  }
-  return checks;
 }
 
 async function git(cwd: string, args: string[]) {
@@ -245,7 +224,16 @@ async function decide(worktree: Worktree, worktreeName: string) {
   const files = changedFiles(nameStatus, numstat);
   const blockers = autoMergeBlockers(files, patch);
   if (blockers.length > 0) return reject(worktree, worktreeName, blockers);
-  const checks = await runChecks(worktree, mergeNeedsRestart(files.flatMap((file) => [file.path, ...(file.oldPath ? [file.oldPath] : [])])));
+  let checks: Check[];
+  try { checks = await runIsolatedChecks(pluginRoot, branchHead, mergeNeedsRestart(files.flatMap((file) => [file.path, ...(file.oldPath ? [file.oldPath] : [])]))); }
+  catch (error) {
+    if (error instanceof IsolationUnavailable) {
+      if (paused.get(worktreeName) !== error.message) notice("attention", "Automatic merge paused", error.message);
+      paused.set(worktreeName, error.message); return;
+    }
+    return reject(worktree, worktreeName, [`Isolated checks failed: ${String(error)}`]);
+  }
+  paused.delete(worktreeName);
   const failed = checks.find((check) => !check.ok);
   if (failed) return reject(worktree, worktreeName, [`The ${failed.name} check failed (${failed.command}).`, failed.output.split("\n").filter(Boolean).slice(-3).join(" ")].filter(Boolean));
   const verdict = await judge({ ...worktree, branch }, worktreeName, onto, patch, files, checks);

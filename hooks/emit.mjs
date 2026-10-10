@@ -1,6 +1,8 @@
+import { hookTlsOptions } from "./hook-tls.mjs";
 import { appendFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { request } from "node:http";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import process from "node:process";
 import { gateObserve, gateStop } from "./gate.mjs";
 import { denial, guardDecision } from "./guard.mjs";
@@ -49,7 +51,8 @@ function undelivered(response) {
  */
 function post(body, timeout) {
   return new Promise((resolve) => {
-    const outgoing = request(endpoint, { method: "POST", headers: { "content-type": "application/json" }, timeout }, (response) => {
+    const request = endpoint?.startsWith("https:") ? httpsRequest : httpRequest;
+    const outgoing = request(endpoint, { ...hookTlsOptions(endpoint, process.env.IMPL_HOOK_TLS_CERT), method: "POST", headers: { "content-type": "application/json" }, timeout }, (response) => {
       let text = "";
       response.setEncoding("utf8");
       response.on("data", (chunk) => { text += chunk; });

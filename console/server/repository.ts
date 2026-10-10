@@ -3,7 +3,8 @@ import { readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { ticketProjectPath, gitRemoteProjects, originProject } from "./domain.js";
+import { ticketProjectPath } from "./domain.js";
+import { remoteIdentities, sameProject, ticketProjectIdentity, type ProjectIdentity } from "./project-identity.js";
 import type { RepositoryOption } from "./types.js";
 
 /** A checkout nested one level below a search root, such as ~/workspace/client/app. */
@@ -34,7 +35,7 @@ export function searchRoots() {
 
 async function checkoutProjects(directory: string) {
   try {
-    return gitRemoteProjects(await readFile(path.join(directory, ".git", "config"), "utf8"));
+    return remoteIdentities(await readFile(path.join(directory, ".git", "config"), "utf8"));
   } catch {
     return undefined;
   }
@@ -43,7 +44,7 @@ async function checkoutProjects(directory: string) {
 async function collect(directory: string, depth: number, found: Map<string, RepositoryOption>) {
   const projects = await checkoutProjects(directory);
   if (projects) {
-    for (const project of projects) found.set(`${project} ${directory}`, { project, path: directory, resolvedPath: directory, exists: true });
+    for (const identity of projects) found.set(`${identity.hostname}/${identity.project} ${directory}`, { project: identity.project, identity, path: directory, resolvedPath: directory, exists: true });
     return;
   }
   if (depth >= MAX_DEPTH) return;
@@ -70,11 +71,16 @@ export async function discoverRepositories({ fresh = false }: { fresh?: boolean 
   return repositories;
 }
 
+export async function matchingRepositories(issueUrl: string, known?: RepositoryOption[]) {
+  const identity = ticketProjectIdentity(issueUrl);
+  if (!identity) return [];
+  // Old UI or persisted rows without an identity never trigger automatic selection.
+  return (known ?? await discoverRepositories()).filter((repository) => repository.identity && sameProject(repository.identity, identity));
+}
+
 export async function detectProjectDirectory(issueUrl: string, known?: RepositoryOption[]) {
-  const project = ticketProjectPath(issueUrl);
-  if (!project) return undefined;
-  const match = (known ?? await discoverRepositories()).find((repository) => repository.project === project);
-  return match ? { ...match, source: "git" as const } : undefined;
+  const matches = await matchingRepositories(issueUrl, known);
+  return matches.length === 1 ? { ...matches[0]!, source: "git" as const } : undefined;
 }
 
 export async function resolveProjectDirectory(input: string, issueUrl: string) {
@@ -88,22 +94,28 @@ export async function resolveProjectDirectory(input: string, issueUrl: string) {
   // A checkout cloned a moment ago is not in the cached scan yet: look again before refusing.
   const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;
+  const matches = await matchingRepositories(issueUrl);
+  if (matches.length > 1) throw new Error(`Several checkouts match this ticket: ${matches.map((entry) => entry.path).join(", ")}. Choose a repository path explicitly.`);
   throw new Error(`No checkout found for ${project}. Give its path or add its root to IMPL_SEARCH_ROOTS.`);
 }
 
 /** The project a checkout pushes to, read from its `origin` remote. */
 export async function checkoutProject(directory: string) {
   try {
-    return originProject(await readFile(path.join(directory, ".git", "config"), "utf8"));
+    const config = await readFile(path.join(directory, ".git", "config"), "utf8");
+    return remoteIdentities(config, true)[0] ?? remoteIdentities(config)[0];
   } catch {
     return undefined;
   }
 }
 
 /** The checkout of a project path, as a watcher names the repositories of a ticket. */
-export async function checkoutOfProject(project: string) {
-  const find = (repositories: RepositoryOption[]) => repositories.find((repository) => repository.project.toLowerCase() === project.toLowerCase());
-  const found = find(await discoverRepositories()) ?? find(await discoverRepositories({ fresh: true }));
+export async function checkoutOfProject(project: string, scope?: ProjectIdentity) {
+  const find = (repositories: RepositoryOption[]) => repositories.filter((repository) => repository.project.toLowerCase() === project.toLowerCase() && (!scope || repository.identity?.hostname === scope.hostname));
+  let matches = find(await discoverRepositories());
+  if (matches.length === 0) matches = find(await discoverRepositories({ fresh: true }));
+  if (matches.length > 1) throw new Error(`Several checkouts match ${project}. Choose a repository path explicitly.`);
+  const found = matches[0];
   if (!found) throw new Error(`No checkout found for ${project}. Add its root to IMPL_SEARCH_ROOTS.`);
   return found.resolvedPath;
 }

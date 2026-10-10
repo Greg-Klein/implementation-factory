@@ -40,7 +40,17 @@ app_host="${app_host:-127.0.0.1}"
 no_open="${IMPL_NO_OPEN:-$(env_file_value IMPL_NO_OPEN)}"
 no_open="${no_open:-0}"
 app_url="http://$app_host:$app_port"
+tls_cert="${IMPL_TLS_CERT:-$(env_file_value IMPL_TLS_CERT)}"
+if [[ -n "$tls_cert" ]]; then app_url="https://$app_host:$app_port"; fi
+public_url="${IMPL_PUBLIC_URL:-$(env_file_value IMPL_PUBLIC_URL)}"
+if [[ -n "$public_url" ]]; then app_url="${public_url%/}"; fi
 launch_url="$app_url"
+control_data="${IMPL_DATA_DIR:-$(env_file_value IMPL_DATA_DIR)}"
+control_data="${control_data:-$console_dir/data}"
+if [[ "$control_data" != /* ]]; then control_data="$console_dir/$control_data"; fi
+export IMPL_CONTROL_TOKEN_FILE="$control_data/control-token"
+control_token() { if [[ -f "$IMPL_CONTROL_TOKEN_FILE" ]]; then cat "$IMPL_CONTROL_TOKEN_FILE"; fi; }
+control_header() { printf 'Authorization: Bearer %s' "$(control_token)"; }
 
 program="$(basename "$0")"
 command="${1:-}"
@@ -210,7 +220,7 @@ status_report() {
   fi
 
   local runs
-  if ! runs="$(curl -fsS "$app_url/api/runs" 2>/dev/null)" || ! printf '%s' "$runs" | grep -q '"runs"'; then
+  if ! runs="$(curl -fsS -H "$(control_header)" "$app_url/api/runs" 2>/dev/null)" || ! printf '%s' "$runs" | grep -q '"runs"'; then
     printf 'API       : /api/runs does not answer like the factory.\n' >&2
     printf 'Another program may be using port %s.\n' "$app_port" >&2
     return 1
@@ -278,14 +288,14 @@ fi
 open_app() {
   if [[ "$no_open" == "1" ]]; then return; fi
   if command -v open >/dev/null 2>&1; then
-    open "$launch_url"
+    open "$launch_url#access=$(control_token)"
   elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$launch_url" >/dev/null 2>&1
+    xdg-open "$launch_url#access=$(control_token)" >/dev/null 2>&1
   fi
 }
 
 factory_answers() {
-  command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/runs" >/dev/null 2>&1
+  command -v curl >/dev/null 2>&1 && curl -fsS -H "$(control_header)" "$app_url/api/runs" >/dev/null 2>&1
 }
 
 # Starts the server in the background and returns once it answers: 0 when it
@@ -339,7 +349,7 @@ if is_client_command "$command"; then
     no_open=1
     start_server >&2 || exit 1
   fi
-  IMPL_CONSOLE_URL="${IMPL_CONSOLE_URL:-$app_url}" IMPL_PROGRAM="$program" \
+  IMPL_CONSOLE_URL="${IMPL_CONSOLE_URL:-$app_url}" IMPL_LOCAL_CONSOLE_URL="$app_url" IMPL_PORT="$app_port" IMPL_CONTROL_TOKEN="${IMPL_CONTROL_TOKEN:-$(env_file_value IMPL_CONTROL_TOKEN)}" IMPL_PROGRAM="$program" \
     exec "$console_dir/node_modules/.bin/tsx" --tsconfig "$console_dir/tsconfig.json" "$console_dir/cli/index.ts" "$@"
 fi
 

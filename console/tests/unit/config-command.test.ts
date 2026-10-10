@@ -138,3 +138,15 @@ describe("impl config", () => {
     expect(config(["template"]).stdout).toBe(readFileSync(examplePath, "utf8"));
   });
 });
+
+describe("security configuration", () => {
+  it("should validate a control token and avoid printing it in the settings list", () => {
+    const file = envFile();
+    expect(config(["set", "IMPL_CONTROL_TOKEN=short"], { IMPL_ENV_FILE: file }).code).toBe(1);
+    const token = "test-secret-control-token-0123456789abcdef";
+    expect(config(["set", `IMPL_CONTROL_TOKEN=${token}`], { IMPL_ENV_FILE: file }).code).toBe(0);
+    const listed = config(["list"], { IMPL_ENV_FILE: file }).stdout;
+    expect(listed).toContain("(configured secret)"); expect(listed).not.toContain(token);
+    expect(config(["get", "IMPL_CONTROL_TOKEN"], { IMPL_ENV_FILE: file }).stdout.trim()).toBe(token);
+  });
+});

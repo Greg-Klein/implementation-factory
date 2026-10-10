@@ -1,3 +1,4 @@
+import { sameProject, ticketProjectIdentity, type ProjectIdentity } from "./project-identity.js";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { defined } from "../lib/defined.js";
@@ -564,11 +565,19 @@ export function originProject(config: string): string | undefined {
  * projects it closes nothing, since the ticket is done only when all are merged.
  * `undefined` for the usual case, one merge request in the ticket's own project.
  */
-export function deliveryProjects(issueUrl: string, projects: (string | undefined)[]): string[] | undefined {
-  const own = ticketProjectPath(issueUrl)?.toLowerCase();
-  const known = [...new Set(projects.filter((project): project is string => Boolean(project)))];
+export function deliveryProjects(issueUrl: string, projects: (string | ProjectIdentity | undefined)[]): string[] | undefined {
+  const ownIdentity = ticketProjectIdentity(issueUrl);
+  const own = ownIdentity?.project.toLowerCase();
+  const labels = projects.flatMap((project) => {
+    if (!project) return [];
+    if (typeof project === "string") return [project];
+    return [project.hostname === ownIdentity?.hostname ? project.project : `https://${project.hostname}/${project.project}`];
+  });
+  const known = [...new Set(labels)];
   if (known.length === 0) return undefined;
-  return known.length > 1 || known[0]?.toLowerCase() !== own ? known : undefined;
+  const only = projects.filter(Boolean)[0];
+  const isOwn = typeof only === "string" ? only.toLowerCase() === own : Boolean(only && ownIdentity && sameProject(only, ownIdentity));
+  return known.length > 1 || !isOwn ? known : undefined;
 }
 
 /** A previous run leaves its documents in the project, and only this run's own count. */

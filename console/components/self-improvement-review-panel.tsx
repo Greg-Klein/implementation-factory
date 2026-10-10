@@ -95,7 +95,7 @@ function CheckingRow({ review }: { review: PendingSelfImprovementReview }) {
     <Strip tone="muted">
       <p className="flex min-w-0 items-center gap-2 text-[11px]">
         <CircleNotchIcon size={12} className="shrink-0 animate-spin text-[var(--muted)]" />
-        <span className="font-semibold text-[var(--muted)]">{review.autoMerge?.state === "checking" ? "Improvements being checked before an automatic merge" : "Improvements committed, waiting for the session's report"}</span>
+        <span className="font-semibold text-[var(--muted)]">{review.autoMerge?.reason ?? (review.autoMerge?.state === "checking" ? "Improvements being checked before an automatic merge" : "Improvements committed, waiting for the session's report")}</span>
         <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
       </p>
     </Strip>

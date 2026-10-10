@@ -1,13 +1,17 @@
+import { stopIsolatedChecks } from "./isolated-checks.js";
+import { readJsonBody, RequestError, TerminalInputBudget, validateMessageLimits, WS_MESSAGE_BYTES } from "./resource-limits.js";
+import { createServer as createHttpsServer } from "node:https";
+import { ControlAccess, validateNetworkAccess } from "./control-access.js";
 import { defined } from "../lib/defined.js";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdir } from "node:fs/promises";
+import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { mkdir, readFile, writeFile, rename, chmod } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send } from "./context.js";
-import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
+import { hostname, port, dev, dataRoot, storageRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
 import { readArtifact } from "./artifacts.js";
 import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
@@ -32,16 +36,9 @@ import type { ClientMessage } from "./types.js";
 /** Read at each request: port zero binds a free port, only known after listening. */
 function consoleHosts() {
   const addresses = Object.values(os.networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []);
-  return allowedHosts(port, hostname, addresses);
-}
-
-function readBody(request: IncomingMessage) {
-  return new Promise<Record<string, unknown>>((resolve, reject) => {
-    let body = "";
-    request.on("data", (chunk) => { body += chunk; });
-    request.on("end", () => { try { resolve(JSON.parse(body || "{}") as Record<string, unknown>); } catch { reject(new Error("Invalid JSON")); } });
-    request.on("error", reject);
-  });
+  const hosts = allowedHosts(port, hostname, addresses);
+  if (process.env.IMPL_PUBLIC_URL) hosts.add(new URL(process.env.IMPL_PUBLIC_URL).host.toLowerCase());
+  return hosts;
 }
 
 function respond(response: ServerResponse, status: number, body: object) {
@@ -199,6 +196,16 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   throw new Error(`Unknown message type: ${String((message as { type: unknown }).type).slice(0, 60)}.`);
 }
 
+validateNetworkAccess(hostname, process.env.IMPL_CONTROL_TOKEN, process.env.IMPL_TLS_CERT, process.env.IMPL_TLS_KEY, process.env.IMPL_PUBLIC_URL || undefined);
+const access = new ControlAccess(process.env.IMPL_CONTROL_TOKEN);
+const secure = Boolean(process.env.IMPL_TLS_CERT);
+await mkdir(storageRoot, { recursive: true, mode: 0o700 });
+const tokenPath = path.join(storageRoot, "control-token");
+// Write through an atomic replacement rather than following a pre-existing link.
+const tokenTemporary = `${tokenPath}.${process.pid}.tmp`;
+await writeFile(tokenTemporary, access.token, { mode: 0o600, flag: "wx" });
+await rename(tokenTemporary, tokenPath);
+await chmod(tokenPath, 0o600);
 await mkdir(dataRoot, { recursive: true });
 await reconcileInterruptedRuns(dataRoot);
 // Commits landed by hand while the console was down move the factory just as a
@@ -226,12 +233,25 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   // still sends that name: refused before anything is read or run.
   if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Host not allowed." }); return; }
   const requestPath = request.url?.split("?")[0];
+  if (request.headers.origin && !originAllowed(request.headers.origin, consoleHosts())) { respond(response, 403, { error: "Origin not allowed." }); return; }
+  if (requestPath === "/api/health" && request.method === "GET") { respond(response, 200, { ok: true }); return; }
+  if (requestPath === "/api/auth/session") {
+    response.setHeader("cache-control", "no-store");
+    if (request.method === "POST") {
+      if (!access.tokenValid(request.headers.authorization?.replace(/^Bearer /, ""))) { respond(response, 401, { error: "Access token required." }); return; }
+      response.setHeader("set-cookie", access.cookie(secure));
+      respond(response, 200, { ok: true }); return;
+    }
+    if (request.method === "GET") { respond(response, access.authenticated(request.headers) ? 200 : 401, { ok: access.authenticated(request.headers) }); return; }
+    respond(response, 405, { error: "Method not allowed." }); return;
+  }
+  if (requestPath?.startsWith("/api/") && requestPath !== "/api/hooks" && !access.authenticated(request.headers)) { respond(response, 401, { error: "Authentication required. Open the console with impl start." }); return; }
   if (request.method === "POST" && requestPath === "/api/hooks") {
     const token = new URL(request.url ?? "", "http://console").searchParams.get("token") ?? request.headers["x-impl-hook-token"]?.toString();
     if (!tokenMatches(token, hookToken)) { respond(response, 401, { ok: false }); return; }
     let body: Record<string, unknown>;
-    try { body = await readBody(request); }
-    catch { respond(response, 400, { ok: false }); return; }
+    try { body = await readJsonBody(request); }
+    catch (error) { respond(response, error instanceof RequestError ? error.status : 400, { ok: false }); return; }
     const runId = typeof body.runId === "string" ? body.runId : undefined;
     try {
       const session = registry.get(runId);
@@ -383,7 +403,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   await handle(request, response);
 }
 
-const server = createServer((request, response) => {
+const listener = (request: IncomingMessage, response: ServerResponse) => {
   route(request, response).catch((error: unknown) => {
     // An address that does not decode is the caller's mistake, anything else is the console's.
     const malformed = error instanceof URIError;
@@ -391,9 +411,10 @@ const server = createServer((request, response) => {
     if (response.headersSent) response.end();
     else respond(response, malformed ? 400 : 500, { error: malformed ? "Malformed address." : "Internal error." });
   });
-});
+};
+const server = secure ? createHttpsServer({ cert: await readFile(process.env.IMPL_TLS_CERT!), key: await readFile(process.env.IMPL_TLS_KEY!) }, listener) : createHttpServer(listener);
 
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MESSAGE_BYTES });
 server.on("upgrade", (request, socket, head) => {
   if (request.url !== "/ws") return;
   // Browsers apply no same-origin policy to a WebSocket, and this one writes
@@ -403,18 +424,29 @@ server.on("upgrade", (request, socket, head) => {
     socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     return;
   }
+  if (!access.authenticated(request.headers)) { socket.end("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n"); return; }
   wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
 });
-wss.on("connection", (socket) => {
+const terminalBudget = new TerminalInputBudget();
+server.requestTimeout = 30_000;
+server.headersTimeout = 15_000;
+wss.on("connection", (socket, request) => {
+  const expires = access.sessionExpiresAt(request.headers);
+  const expiryTimer = expires === undefined ? undefined : setTimeout(() => socket.terminate(), Math.max(1, expires - Date.now())).unref();
+  let pendingMessages = 0;
+  socket.on("error", () => socket.terminate());
   clients.set(socket, {});
   send(socket, { type: "factory", snapshot: registry.snapshot() });
   socket.on("message", async (raw) => {
+    if (++pendingMessages > 64) { socket.terminate(); pendingMessages -= 1; return; }
     let message: ClientMessage | undefined;
     try {
       const parsed = JSON.parse(raw.toString()) as unknown;
       // Anything that is not a message with a type is refused here, with an answer, instead of being matched against every branch.
       if (!parsed || typeof parsed !== "object" || typeof (parsed as { type?: unknown }).type !== "string") throw new Error("Unreadable message.");
+      validateMessageLimits(parsed as Record<string, unknown>);
       message = parsed as ClientMessage;
+      if (message.type === "terminal.input" && !terminalBudget.consume(Buffer.byteLength(message.data))) throw new Error("Terminal input rate exceeded. Try again shortly.");
       await handleClientMessage(socket, message);
       const { ackId } = ackIdOf(message);
       if (ackId) send(socket, { type: "ack", ackId });
@@ -425,9 +457,9 @@ wss.on("connection", (socket) => {
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message), ...ackIdOf(message) });
       if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
-    }
+    } finally { pendingMessages -= 1; }
   });
-  socket.on("close", () => clients.delete(socket));
+  socket.on("close", () => { if (expiryTimer) clearTimeout(expiryTimer); clients.delete(socket); });
 });
 
 await new Promise<void>((resolve, reject) => {
@@ -437,9 +469,9 @@ await new Promise<void>((resolve, reject) => {
 const address = server.address();
 if (!address || typeof address === "string") throw new Error("The server has no TCP port.");
 setListeningPort(address.port);
-const url = `http://${hostname}:${port}`;
+const url = `${secure ? "https" : "http"}://${hostname}:${port}`;
 console.log(`Implementation Factory: ${url}`);
-if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. Anyone who reaches it can drive the ${engine.label} sessions in progress.`);
+if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. Authenticated clients can drive the ${engine.label} sessions in progress.`);
 // A rejection nothing handles is a defect: it is logged with what it says and
 // shown once, instead of resting on whatever handler a dependency happens to install.
 process.on("unhandledRejection", (reason) => reportFailure("Unhandled failure in the console")(reason));
@@ -462,7 +494,7 @@ async function shutdown() {
   for (const socket of wss.clients) socket.terminate();
   wss.close();
   server.close();
-  try { await registry.shutdown(); await app.close(); }
+  try { await stopIsolatedChecks().catch(reportFailure("Isolated checks not stopped")); await registry.shutdown(); await app.close(); }
   finally { clearTimeout(timeout); process.exit(0); }
 }
 process.on("SIGINT", () => { shutdown().catch(reportFailure("Shutdown failed")); });

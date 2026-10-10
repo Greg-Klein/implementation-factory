@@ -95,7 +95,7 @@ export function TargetPicker({ label, hint, selected, onChange, repositories, co
               onMouseEnter={() => setActiveIndex(index)}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[var(--tint)]"}`}
             >
-              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}{repository.identity && <span className="ml-2 text-[var(--muted)]">{repository.identity.hostname}</span>}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
             </button>
           ))}
         </div>

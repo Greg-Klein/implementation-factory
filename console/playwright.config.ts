@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
-import { checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, fakeGhDirectory, fakeGlabDirectory, hookToken, prepareDataDirectory, scheduleFixtureFile, untrustedRoot } from "./tests/fixtures";
+import { controlToken, checkoutsRoot, createSampleCheckout, dataDirectory, fakeClaudeDirectory, fakeClaudeInputDirectory, fakeGhDirectory, fakeGlabDirectory, hookToken, prepareDataDirectory, scheduleFixtureFile, untrustedRoot } from "./tests/fixtures";
 
 const port = 3211;
 
@@ -10,12 +10,14 @@ if (process.env.TEST_WORKER_INDEX === undefined) prepareDataDirectory();
 
 export default defineConfig({
   testDir: "./tests/integration",
+  globalSetup: "./tests/auth.setup.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,
   expect: { timeout: 10_000 },
   use: {
     baseURL: `http://127.0.0.1:${port}`,
+    storageState: path.join(dataDirectory, "browser-auth.json"),
     channel: process.env.CI ? undefined : "chrome",
     headless: true,
     screenshot: "only-on-failure",
@@ -41,6 +43,7 @@ export default defineConfig({
       // start a real improvement session on this checkout, nor merge one of its branches.
       IMPL_SELF_IMPROVEMENT_AUTORUN: "false",
       IMPL_HOOK_TOKEN: hookToken,
+      IMPL_CONTROL_TOKEN: controlToken,
       // Runs the suite starts for real land here, not in the developer's own history.
       IMPL_DATA_DIR: dataDirectory,
       // Same inheritance: a session the console started would read the developer's own proposals.
@@ -65,7 +68,7 @@ export default defineConfig({
       // A launched run gets a stand-in session instead of a real Claude Code, and `glab` a stand-in too.
       PATH: `${fakeClaudeDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
     },
-    url: `http://127.0.0.1:${port}`,
+    url: `http://127.0.0.1:${port}/api/health`,
     reuseExistingServer: false,
     timeout: 120_000,
   },

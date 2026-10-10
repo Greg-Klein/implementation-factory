@@ -1,3 +1,4 @@
+import { controlHeaders } from "./auth.js";
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import type { ClientMessage, FactorySnapshot, ServerMessage } from "../server/types.js";
@@ -30,7 +31,7 @@ function notRunning(base: string) {
 /** One reading of the HTTP API. A refusal carries the sentence the console gave for it. */
 export async function getJson(base: string, route: string): Promise<unknown> {
   let response: Response;
-  try { response = await fetch(`${base}${route}`); } catch { throw notRunning(base); }
+  try { response = await fetch(`${base}${route}`, { headers: await controlHeaders(base) }); } catch { throw notRunning(base); }
   let body: unknown;
   try { body = await response.json(); } catch { throw new CliError(`${base}${route} did not answer like the console (HTTP ${response.status}).`); }
   if (!response.ok) {
@@ -72,9 +73,10 @@ function readMessage(raw: WebSocket.RawData): ServerMessage | undefined {
  * accepts a socket from a page it served: this client names the console itself
  * as its origin, which a page of another site cannot do.
  */
-export function connect(base: string): Promise<Link> {
+export async function connect(base: string): Promise<Link> {
+  const headers = await controlHeaders(base);
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(`${base.replace(/^http/, "ws")}/ws`, { origin: base });
+    const socket = new WebSocket(`${base.replace(/^http/, "ws")}/ws`, { origin: base, headers });
     const listeners = new Set<Listener>();
     const pending = new Map<string, { received: ServerMessage[]; resolve: (messages: ServerMessage[]) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
     let snapshot: FactorySnapshot | undefined;

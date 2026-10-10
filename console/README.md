@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Then open <http://127.0.0.1:3210>.
+Then open <http://127.0.0.1:3210> and enter the token from `data/control-token`. The launcher (`impl start`) associates the browser automatically. All API reads and WebSocket commands require a Bearer token or the browser session cookie; `/api/health` remains public for readiness checks. Browser sessions expire after twelve hours and are invalidated on restart. Network listeners require a strong control token and TLS certificate/key settings. See [SECURITY.md](../SECURITY.md) for the full access and isolation policy.
 
 Enter the local path of the project and the ticket URL. Several URLs, one per line, start a batch (see [Batch of tickets and scheduling](#batch-of-tickets-and-scheduling)). The factory creates a git worktree of the project for the run (`<project>/.claude/worktrees/<run id>`, see the [main README](../README.md#one-worktree-per-run)) and starts Claude Code in it with the neighbouring plugin:
 

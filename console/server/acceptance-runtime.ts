@@ -110,10 +110,14 @@ export function refreshAcceptance(session: RunSession, { snapshot = false, forge
       session.state.evidenceUpdatedAt = view.updatedAt;
     }
     const confidenceMoved = await settleConfidence(session, forge);
-    if (coverageMoved || confidenceMoved) {
-      if (session.evidence.hasInputs) await writeSummary(session, view);
-      session.publish();
+    // An incident revises the note before this refresh runs (settleIncidentConfidence): the state then
+    // has not moved here, and the summary still carries the earlier note.
+    const noteKey = confidenceKey(session.state.confidence);
+    if ((coverageMoved || noteKey !== session.summaryConfidenceKey) && session.evidence.hasInputs) {
+      await writeSummary(session, view);
+      session.summaryConfidenceKey = noteKey;
     }
+    if (coverageMoved || confidenceMoved) session.publish();
     return view;
   });
 }

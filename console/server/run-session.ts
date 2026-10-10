@@ -88,6 +88,8 @@ export class RunSession {
   confidenceGate: { size: number; facts: GateFacts } | null = null;
   /** The branch the merge request targets, asked once per address. */
   deliveryTarget: { url: string; branch: string | undefined } | null = null;
+  /** The note the summary was last written with. The summary follows this, not the moves of the state: the note is also revised outside the refresh that writes it. */
+  summaryConfidenceKey = "";
   /** The figures last computed for this run. See run-metrics-runtime.ts. */
   metrics: RunMetrics | null = null;
   /** Computations of those figures one after another, so two never write the file together. */

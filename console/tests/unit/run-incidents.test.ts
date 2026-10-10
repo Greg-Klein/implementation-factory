@@ -254,6 +254,41 @@ describe("the review confidence of a run when its incidents move", () => {
     expect(rulesOf(session)).not.toContain("incident_open");
   });
 
+  it("should write the summary the merge request quotes again each time an incident moves the note", async () => {
+    const { ingestAcceptanceInput, refreshConfidence } = await import("../../server/acceptance-runtime");
+    const cwd = mkdtempSync(path.join(os.tmpdir(), "factory-note-summary-"));
+    const tasks = path.join(cwd, ".claude", "tasks");
+    mkdirSync(tasks, { recursive: true });
+    writeFileSync(path.join(tasks, "acceptance-criteria.json"), JSON.stringify({ schemaVersion: 1, revision: 1, criteria: [{ id: "AC1", text: "The filter keeps its value" }] }));
+    const session = reviewedRun("run-note-summary");
+    session.state.cwd = cwd;
+    delete session.state.confidence;
+    try {
+      await ingestAcceptanceInput(session, "acceptance-criteria.json");
+      await refreshConfidence(session);
+      // The JSON beside the markdown: the same note, whatever language the workflow writes in.
+      const written = () => (JSON.parse(readFileSync(path.join(tasks, "acceptance-summary.json"), "utf8")) as { confidence?: { score: number; reasons: { rule: string }[] } }).confidence;
+      const writtenRules = () => written()?.reasons.map((reason) => reason.rule) ?? [];
+      const markdown = () => readFileSync(path.join(tasks, "acceptance-summary.md"), "utf8");
+      expect(written()).toEqual(session.state.confidence);
+      expect(writtenRules()).not.toContain("incident_open");
+
+      await monitor.applyHealth(session, T0 + 61_000, policy);
+      expect(session.state.incidents?.[0]?.status).toBe("open");
+      expect(writtenRules()).toContain("incident_open");
+      expect(written()).toEqual(session.state.confidence);
+      expect(markdown()).toContain(`${session.state.confidence!.score}/5**`);
+
+      const incident = session.state.incidents![0]!;
+      await registryWith(session).incidentAction({ runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "d1", action: "dismiss", reason: "It was waiting for me" });
+      expect(writtenRules()).not.toContain("incident_open");
+      expect(written()).toEqual(session.state.confidence);
+      expect(markdown()).toContain(`${session.state.confidence!.score}/5**`);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("should leave a run no reviewer reported on without a note", async () => {
     const session = idleRun("run-note-none");
     await monitor.applyHealth(session, T0 + 61_000, policy);

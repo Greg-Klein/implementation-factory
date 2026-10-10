@@ -64,7 +64,7 @@ That condition is the trap, measured on a real repository:
 
 So never delete a base branch yourself, and never merge anything. The user merges. In the final report of a stacked delivery, tell the user to let GitHub delete the base branch when they merge the first pull request.
 
-**"Livré" means deployed to production**, here as on GitLab. A ticket whose pull request is open, or merged into a feature branch, is not "livré": name the stage it reached ("PR ouverte", "mergé dans `<branch>`").
+**Name the stage the ticket reached**, here as on GitLab and by the same contract: never "livré" or "shipped" for a pull request that is open, or merged into a feature branch ("PR ouverte", "mergé dans `<branch>`").
 
 ## The ticket status
 

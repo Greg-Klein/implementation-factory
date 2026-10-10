@@ -112,6 +112,8 @@ The console passes these variables to the session:
 | Build outputs (`.next`, `dist`) | Nothing is provided. The first build happens in the worktree. |
 | `.claude/tasks/` | Specific to the run, in the worktree. |
 
+The rules the agents follow in that worktree are in `contracts/run-worktree.md`: the main checkout is read and never written, a symlinked dependency directory is replaced by a real install before anything is installed through it, no default port is assumed, and the worktree and the ticket branch are left in place. The pilot, the developer, QA and the `collect-evidence` references link to that file instead of restating it.
+
 The `.claude/worktrees/` directory and the links are added to the repository's `.git/info/exclude` and never enter a commit.
 
 Rules `commands/implement.md` applies in this mode (section "Run worktree"):

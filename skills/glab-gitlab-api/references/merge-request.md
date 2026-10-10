@@ -52,7 +52,7 @@ Rules:
   - a ticket filed in another project (the caller gives the delivery projects, `IMPL_DELIVERY_PROJECTS`): `#<iid>` would name an issue of the merge request's own project, so write the full reference, `<group>/<project>#<iid>`, the `references.full` field of the issue. When the caller lists several projects, every merge request of the ticket writes `Related to <full reference>` whatever its target, and adds the line "Livraison partagée avec `<other projects>` : le ticket se ferme à la main une fois toutes les merge requests mergées." A `Closes` would close the ticket at the first merge, with the other repositories still waiting. With a single project listed, the keyword follows the rules above
   - both go into the description file before the merge request is created, so the link is there from the first second
 - **Never merge the MR yourself.** The user merges.
-- **"Livré" means deployed to production**, in the description and in the step 9 comment alike. A ticket whose merge request is open, or merged into a feature branch or `develop`, is not "livré": name the stage it reached ("MR ouverte", "mergé dans `<branch>`").
+- **Name the stage the ticket reached**, in the description and in the step 9 comment alike, by the two words [the workflow language contract](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) fixes: never "livré" or "shipped" for a merge request that is open, or merged into a feature branch or `develop` ("MR ouverte", "mergé dans `<branch>`").
 
 If the caller separately authorized a ticket lifecycle transition, perform that supplied transition using [work-item-status.md](work-item-status.md). MR creation alone does not authorize a status update.
 

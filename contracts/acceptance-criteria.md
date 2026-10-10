@@ -1,4 +1,4 @@
-### Write the acceptance criteria registry
+# Acceptance criteria registry
 
 Once the answers are in, and before any plan exists, write `.claude/tasks/acceptance-criteria.json`: the one list of what this run has to prove, with an identifier every later document reuses. The planner links its tasks to these identifiers, every evidence file cites them, and the console computes from them which criterion was verified, on which code, and with what. You are its only writer.
 

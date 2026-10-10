@@ -7,7 +7,7 @@ description: Independently review a running interface against a design reference
 
 Input: application URL, setup recipe, observation/correction scope, authoritative decisions, and whatever reference exists: Figma frames, ticket mockups, `.claude/tasks/design-reference.md`, viewports, locales, consumer routes. Return measured comparisons, findings that each cite their reference, coverage, unverified cells and reproducible observations for QA. The caller owns report formats and final verdict policy.
 
-1. Pick the reference level with [reference-levels.md](references/reference-levels.md) and declare it. For Figma sources read [read-design.md](references/read-design.md).
+1. Pick the reference level with [reference-levels.md](references/reference-levels.md) and declare it. For Figma sources read the first part of [read-design.md](references/read-design.md), "Reading a Figma design".
 2. Build your own inventory from that reference and the brief, and write it down where the caller says, before reading the developer's measurements, captures or conclusions. A caller's inventory or style list never feeds or bounds yours.
 3. Read a supplied setup recipe to reach the state, but inspect its simulation assumptions. Do not infer application internals from a DOM proxy or treat a malformed stub as a product bug.
 4. Measure in the order and with the rules of [visual-comparison.md](references/visual-comparison.md), then run the checks of [objective-checks.md](references/objective-checks.md): layout invariants, states, interaction design, accessibility, themes, wording, consumer routes. These need no design reference and apply at every level.

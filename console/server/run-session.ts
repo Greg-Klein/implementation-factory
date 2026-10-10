@@ -82,8 +82,8 @@ export class RunSession {
   acceptanceKey = "";
   /** What the code review wrote as data, every round together, by finding id. See review-confidence-runtime.ts. */
   readonly seniorFindings = new Map<string, Pick<ReviewFinding, "id" | "severity" | "fixed">>();
-  /** The last reading of the diff, and the code snapshot it was made on: read again only once the code moved. */
-  confidenceChange: { snapshot: string; facts: ChangeFacts | undefined } | null = null;
+  /** The last reading of the diff, and what it holds for (changeReadingKey): read again once the code or the base it is measured from moved. */
+  confidenceChange: { key: string; facts: ChangeFacts | undefined } | null = null;
   /** The last reading of the kept gate log, and its size then. */
   confidenceGate: { size: number; facts: GateFacts } | null = null;
   /** The branch the merge request targets, asked once per address. */

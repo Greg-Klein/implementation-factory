@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "@jest/globals";
 
+import { defined } from "../../lib/defined";
 import { acceptanceText } from "../../server/acceptance-text";
 import { changedFiles } from "../../server/auto-merge-policy";
 import { emptyState } from "../../server/domain";
 import {
-  type ChangeFacts, changeFacts, CONFIDENCE_DETAILS, CONFIDENCE_MAXIMUM, CONFIDENCE_RULES, confidenceAtDelivery, type ConfidenceInput, confidenceKey, gateFacts, pathMatches, reviewConfidence,
+  changeAfterReading, type ChangeFacts, changeFacts, changeReadingKey, CONFIDENCE_DETAILS, CONFIDENCE_MAXIMUM, CONFIDENCE_RULES, confidenceAtDelivery, type ConfidenceInput, confidenceKey, gateFacts, pathMatches, reviewConfidence,
 } from "../../server/review-confidence";
 import type { AcceptanceDigest, AgentState, RunIncident } from "../../server/types";
 
@@ -246,6 +247,36 @@ describe("what a diff says of the confidence its review deserves", () => {
     expect(pathMatches("src/*.ts", "src/deep/file.ts")).toBe(false);
     expect(pathMatches("a+b/**", "aab/file")).toBe(false);
     expect(pathMatches("", "anything")).toBe(false);
+  });
+});
+
+describe("when the diff of a run is read again", () => {
+  it("should read it again once the merge request is opened on unchanged code, and once its target is known", () => {
+    const before = changeReadingKey("snap-1", undefined, undefined);
+    const opened = changeReadingKey("snap-1", "https://gitlab.com/g/p/-/merge_requests/4", undefined);
+    const targeted = changeReadingKey("snap-1", "https://gitlab.com/g/p/-/merge_requests/4", "develop");
+    expect(new Set([before, opened, targeted]).size).toBe(3);
+    expect(changeReadingKey("snap-1", "https://gitlab.com/g/p/-/merge_requests/4", "develop")).toBe(targeted);
+  });
+
+  it("should read it again when the code moved, and tell an unidentified code from an identified one", () => {
+    expect(changeReadingKey("snap-1", undefined, undefined)).not.toBe(changeReadingKey("snap-2", undefined, undefined));
+    expect(changeReadingKey(undefined, undefined, undefined)).not.toBe(changeReadingKey("snap-1", undefined, undefined));
+  });
+
+  it("should leave the diff unknown after a failed reading while the worktree is there", () => {
+    const known = change({ lines: 12 });
+    expect(changeAfterReading(undefined, known, false)).toBeUndefined();
+    const { change: _read, ...run } = reviewed();
+    expect(rules({ ...run, ...defined({ change: changeAfterReading(undefined, known, false) }) })).toEqual(["diff_unknown"]);
+  });
+
+  it("should keep the last diff read once the worktree is gone, and take a new reading over it", () => {
+    const known = change({ lines: 12 });
+    const read = change({ lines: 40 });
+    expect(changeAfterReading(undefined, known, true)).toBe(known);
+    expect(changeAfterReading(read, known, true)).toBe(read);
+    expect(changeAfterReading(undefined, undefined, true)).toBeUndefined();
   });
 });
 

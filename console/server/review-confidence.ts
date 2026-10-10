@@ -134,6 +134,25 @@ export function changeFacts(files: ChangedFile[], patch: string, sensitivePatter
   };
 }
 
+/**
+ * What a reading of the diff holds for: the code it was made on and the base it
+ * was measured from. The merge request is usually opened after the last edit,
+ * so its address and the branch it targets are part of it: the code alone would
+ * leave the diff measured from the base known before the merge request existed.
+ */
+export function changeReadingKey(snapshot: string | undefined, mergeRequestUrl: string | undefined, targetBranch: string | undefined) {
+  return JSON.stringify([snapshot ?? "", mergeRequestUrl ?? "", targetBranch ?? ""]);
+}
+
+/**
+ * What stands after a reading of the diff. One that failed leaves the diff
+ * unknown, which counts against the note. The last one read is kept only once
+ * the worktree is gone, since there is then no diff left to read.
+ */
+export function changeAfterReading(read: ChangeFacts | undefined, known: ChangeFacts | undefined, worktreeGone: boolean) {
+  return read ?? (worktreeGone ? known : undefined);
+}
+
 /** What the stop gate last said of each check of each agent: a check that failed and was run again counts by its second verdict. */
 export type GateFacts = { failed: number; unchecked: number };
 

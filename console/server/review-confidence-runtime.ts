@@ -1,12 +1,12 @@
 import { execFile } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { defined } from "../lib/defined.js";
 import { changedFiles } from "./auto-merge-policy.js";
 import { dataRoot, sensitivePaths } from "./config.js";
 import { isMissingFile, reportFailure } from "./context.js";
-import { changeFacts, type ChangeFacts, gateFacts, type GateFacts, isTestPath, reviewConfidence } from "./review-confidence.js";
+import { changeAfterReading, changeFacts, type ChangeFacts, changeReadingKey, gateFacts, type GateFacts, isTestPath, reviewConfidence } from "./review-confidence.js";
 import { GATE_LOG_FILE, runMergeBase } from "./run-metrics-runtime.js";
 import type { RunSession } from "./run-session.js";
 import { fetchMergeRequestTarget } from "./ticket.js";
@@ -24,17 +24,17 @@ const exec = promisify(execFile);
 /** The simulated run has no worktree: a small change with its test, so the demonstration shows a note the evidence alone decides. */
 const DEMO_CHANGE: ChangeFacts = { files: 4, lines: 96, sensitive: [], removedTests: [], codeChanged: true, testChanged: true };
 
-/** The branch the merge request targets, asked of the forge once per address. */
-async function deliveryTarget(session: RunSession) {
+/** The branch the merge request targets, asked of the forge once per address, or the one already known when the forge may not be asked. */
+async function deliveryTarget(session: RunSession, forge: boolean) {
   const { mergeRequestUrl: url, cwd } = session.state;
   if (!url || !cwd) return undefined;
-  if (session.deliveryTarget?.url !== url) session.deliveryTarget = { url, branch: await fetchMergeRequestTarget(url, cwd) };
-  return session.deliveryTarget.branch;
+  if (forge && session.deliveryTarget?.url !== url) session.deliveryTarget = { url, branch: await fetchMergeRequestTarget(url, cwd) };
+  return session.deliveryTarget?.url === url ? session.deliveryTarget.branch : undefined;
 }
 
-async function readChangeFacts(session: RunSession, forge: boolean): Promise<ChangeFacts | undefined> {
+async function readChangeFacts(session: RunSession, target: string | undefined): Promise<ChangeFacts | undefined> {
   const cwd = session.state.cwd;
-  const base = await runMergeBase(session.state, forge ? await deliveryTarget(session) : session.deliveryTarget?.branch);
+  const base = await runMergeBase(session.state, target);
   if (!base) return undefined;
   const git = async (...args: string[]) => (await exec("git", ["-C", cwd, "diff", "-M", ...args], { maxBuffer: 32 * 1024 * 1024 })).stdout;
   const files = changedFiles(await git("--name-status", base), await git("--numstat", base));
@@ -46,13 +46,16 @@ async function readChangeFacts(session: RunSession, forge: boolean): Promise<Cha
 
 async function changeOf(session: RunSession, forge: boolean) {
   if (session.demo) return DEMO_CHANGE;
-  const snapshot = session.acceptanceView?.currentSnapshot?.id ?? "";
+  const target = await deliveryTarget(session, forge);
+  const key = changeReadingKey(session.acceptanceView?.currentSnapshot?.id, session.state.mergeRequestUrl, target);
   const known = session.confidenceChange;
-  if (known?.facts && known.snapshot === snapshot) return known.facts;
-  const facts = await readChangeFacts(session, forge).catch((error: unknown) => { reportFailure("Change of the run not read for its review confidence", session.id)(error); return undefined; });
-  // A worktree that is gone has no diff left to read: the last one read in it stands.
-  if (facts || !known) session.confidenceChange = { snapshot, facts };
-  return session.confidenceChange?.facts;
+  if (known?.facts && known.key === key) return known.facts;
+  const read = await readChangeFacts(session, target).catch((error: unknown) => { reportFailure("Change of the run not read for its review confidence", session.id)(error); return undefined; });
+  const cwd = session.state.cwd;
+  const worktreeGone = session.state.worktree?.state === "removed" || !cwd || !await access(cwd).then(() => true, () => false);
+  const facts = changeAfterReading(read, known?.facts, worktreeGone);
+  session.confidenceChange = { key, facts };
+  return facts;
 }
 
 async function gateOf(session: RunSession): Promise<GateFacts> {

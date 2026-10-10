@@ -343,7 +343,7 @@ A unit test holds this table equal to `CONFIDENCE_RULES`. The values are a start
 
 A finding of the code review is open when it belongs to the last round the reviewer wrote, the reviewer did not correct it, and no rework developer came after that round. Once a rework took a finding over, the QA verdict that follows decides.
 
-The reading stays cheap. The diff is read again only when the code snapshot changed, the gate log only when its copy grew, the target branch of the merge request is asked of the forge once, and never for a page that only reads. The note is recomputed when a document of the run arrives and when the run ends.
+The reading stays cheap. The diff is read again only when the code snapshot changed or when the base it is measured from did, which is what the opening of the merge request and the answer on its target branch are. A reading that fails leaves the diff unknown, and the last one read is kept only once the worktree is gone. The gate log is read again only when its copy grew, the target branch of the merge request is asked of the forge once, and never for a page that only reads. The note is recomputed when a document of the run arrives and when the run ends.
 
 **What the merge request says.** The note and its reasons are written in `acceptance-summary.md`, in the part the description quotes, in the workflow language. The pilot copies the line, it never computes or rewords a note. The line is the note as it stood when the pilot read the summary: a draft or a blocked end lowers the note in the console afterwards.
 

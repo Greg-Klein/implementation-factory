@@ -60,7 +60,7 @@ Every free-text field's content is written in the workflow language: `summary`, 
 ## Criteria and documentation
 
 - `criterion_ids` is the only link between a task and what it has to prove: the ids of the registry (`.claude/tasks/acceptance-criteria.json`). The plan restates no criterion text of its own.
-- `doc_paths`: the documentation pages this task makes stale or has to create (README, architecture or feature page, index, configuration example, changelog), found by surveying what the repository documents. The task updates them in the same commit as the code. An empty list says you looked and found none. A page that only makes sense once a later ticket lands is left to that ticket and named in `technical_notes`.
+- `doc_paths`: the documentation pages this task makes stale or has to create (README, architecture or feature page, index, configuration example, changelog), found by surveying what the repository documents. The task updates them in the same commit as the code. An empty list says you looked and found none. A page counts as a file the task writes, like a `file_paths` entry: two tasks that name the same page do not run together. A page that only makes sense once a later ticket lands is left to that ticket and named in `technical_notes`.
 
 ## Quality Self-Check (MANDATORY)
 

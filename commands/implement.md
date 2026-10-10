@@ -194,7 +194,7 @@ Revise the plan when concrete evidence from a developer or reviewer disproves it
 
 One `developer` agent per task, in dependency order. It runs on Sonnet, the model its definition declares: pass no model override, except `opus` for a task whose `complexity` is `L` in the plan, where the developer makes the design choices the plan leaves open. A hook refuses any other model. **Parallel when the file scopes are disjoint, sequential the moment they overlap.**
 
-Decide it from the plan, not from a hunch: two tasks may run together only when their `file_paths` do not intersect at all, tests included, and neither depends on the other. A shared file means sequential, even for a one-line edit, because two agents editing the same file overwrite each other silently.
+Decide it from the plan, not from a hunch: two tasks may run together only when the files each one writes, its `file_paths` and its `doc_paths` taken together, do not intersect at all, tests included, and neither depends on the other. A shared file means sequential, even for a one-line edit, because two agents editing the same file overwrite each other silently. Two tasks on separate code that both name `README.md` in their `doc_paths` share a file.
 
 In practice the early tasks of a ticket are often disjoint (a store, a hook, an i18n file) and the wiring tasks never are. Batch two or three disjoint ones, then fall back to sequential. Announce which tasks you are running together and why.
 
@@ -204,7 +204,7 @@ Each `developer` invocation must receive:
 
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
 - the path of `.claude/tasks/acceptance-criteria.json`, the criterion and check ids its task serves (its `criterion_ids`), and the [evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), which its `dev-evidence-<task-id>.json` follows
-- **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` keep two agents out of each other's code; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
+- **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` and `doc_paths` keep two agents out of each other's code and pages; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
 - **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - browser ownership and scheduling: no runtime measurement while any peer edits; schedule a measurement-only continuation after the batch freezes
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets

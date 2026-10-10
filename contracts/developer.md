@@ -11,7 +11,7 @@ You MUST produce:
 
 .claude/tasks/developer-report-<suffix>.md
 
-3. `.claude/tasks/dev-evidence-<suffix>.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/dev-evidence-<suffix>.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Evidence" tab. Schema:
 
 ```json
 {

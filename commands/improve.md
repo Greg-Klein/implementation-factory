@@ -14,7 +14,7 @@ This is a controlled recursive self-improvement run. Work autonomously, but keep
 
 ## 1. Establish the evidence
 
-Start from the factory as it stands. This worktree is cut from the last pushed commit, and this loop never pushes: every improvement the user has accepted since then is missing from the tree you are about to read, and the gap widens with each promotion. Level the branch before you diagnose anything, against the branch the factory checkout is on — `main` in the normal case:
+Start from the factory as it stands. This worktree is cut from the last pushed commit, and this loop never pushes: every improvement merged since then is missing from the tree you are about to read, and the gap widens with each merge. Level the branch before you diagnose anything, against the branch the factory checkout is on, `main` in the normal case:
 
 ```bash
 git log --oneline HEAD..main
@@ -42,7 +42,7 @@ Ignore vague preferences that have no observable outcome. Merge duplicate feedba
 
 One explicit user report can justify a change when the evidence confirms it. A reason of an autonomous entry justifies a change once you have found its cause in the run and can name the factory file that produced it; a reason whose cause you cannot establish, or that comes from the target repository, the ticket or the environment, justifies none. Anything else you notice on the way requires the same pattern in at least two independent runs and a reproduction (a failing test, a violated invariant you can point at). Defer everything else. When nothing passes, change nothing and report that: an iteration without a commit is a valid outcome. Never optimize a metric by weakening the workflow's quality gates.
 
-Improvement branches the user has not yet accepted or discarded are evidence too, and several iterations of this loop run at the same time. Before choosing what to implement, read what is already proposed and what is in flight:
+Improvement branches the console has not yet merged or rejected are evidence too, and several iterations of this loop run at the same time. Before choosing what to implement, read what is already proposed and what is in flight:
 
 ```bash
 git branch --list 'worktree-self-improvement-*'
@@ -59,7 +59,7 @@ Write the diagnosis to `$ARGUMENTS/improvement-plan-<slug>.md`, where `<slug>` i
 
 Run `git status --short --branch`. Stop if there are uncommitted changes you do not understand. Never stash, discard, reset, clean, rebase or overwrite existing work.
 
-If Claude Code already placed this session in a worktree or a non-protected branch, keep that branch. Otherwise create a dedicated branch named `self-improvement-<YYYYMMDD>-<short-slug>` from the current branch. Never edit directly on `main`, `master` or `develop`.
+If Claude Code already placed this session in a worktree or a non-protected branch, keep that branch. Otherwise create a dedicated branch named `worktree-self-improvement-<YYYYMMDD>-<short-slug>` from the current branch, so the slug of your plan and report is formed the same way in both cases. Never edit directly on `main`, `master` or `develop`.
 
 ## 3. Make the smallest durable improvement
 
@@ -69,7 +69,7 @@ Implement only changes directly supported by the feedback and run evidence. Pref
 
 For instruction changes, read `docs/engineering-workflow.md` first. Put reusable procedures in the responsible skill or its conditional reference, role decisions in the agent, formats in `contracts/`, and scheduling in the command. Do not paste a skill body back into agent briefs. Preserve the separation between developer self-checks and independent review; shared measurement mechanics must not become a shared verdict or scenario checklist.
 
-Keep the documentation true in the same commit: whenever `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md` or `CLAUDE.md` describes something you change (installation, configuration, behavior, an agent, a command, data storage), update that passage. A branch that leaves them stale is held for the user instead of being merged.
+Keep the documentation true in the same commit: whenever `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md` or `CLAUDE.md` describes something you change (installation, configuration, behavior, an agent, a command, data storage), update that passage. A branch that leaves them stale is rejected by the judge.
 
 ## 4. Validate independently
 
@@ -103,7 +103,7 @@ Write `$ARGUMENTS/improvement-report-<slug>.md` last, after the commit and the m
 - the pending improvement branches you read, and what you left to them;
 - exact behavior changed;
 - checks run and their results;
-- risks, whether it was auto-applied, and how to undo the change;
+- risks, and how to undo the change;
 - the next command for the user: `git show --stat <commit>`.
 
 End by giving the same concise report in chat. A promoted improvement takes effect when the factory is restarted. The user always decides whether anything is pushed.

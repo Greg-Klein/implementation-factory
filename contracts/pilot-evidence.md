@@ -1,6 +1,6 @@
 # Pilot evidence
 
-**The gates you run yourself still get written down.** At tier 0 no `qa-reviewer` runs, so nobody writes `.claude/tasks/qa-evidence.json` and the console's "Preuves" tab reports the tests as never run while they were green in your own terminal. Once lint, typecheck and tests have run, write that file yourself, same schema as `qa-reviewer`'s:
+**The gates you run yourself still get written down.** At tier 0 no `qa-reviewer` runs, so nobody writes `.claude/tasks/qa-evidence.json` and the console's "Evidence" tab reports the tests as never run while they were green in your own terminal. Once lint, typecheck and tests have run, write that file yourself, same schema as `qa-reviewer`'s:
 
 ```json
 {

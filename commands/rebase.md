@@ -44,12 +44,10 @@ npm run test:unit --prefix console
 bash -n install.sh install-remote.sh bin/implementation-factory
 ```
 
-`npm run build` rewrites the tracked `console/next-env.d.ts`. If you run it, restore that file with `git checkout -- console/next-env.d.ts` and never commit it.
-
 If a check fails because of the replay, fix the resolution. If it fails for a reason the branch already carried, say so and leave it: it is not yours to fix here.
 
 ## 4. Leave it ready, not promoted
 
-Commit nothing new: the rebase already rewrote the branch's own commits. Never merge into the factory, never push, never open a merge request. The console shows the diff and the user decides.
+Commit nothing new: the rebase already rewrote the branch's own commits. Never merge into the factory, never push, never open a merge request. The console reruns its checks and its judge on the replayed branch, then merges it or rejects it.
 
 End with a short report: the commit replayed onto, the files that conflicted and how you resolved each one, the checks you ran and their results, and anything you deliberately left alone.

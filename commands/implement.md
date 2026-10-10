@@ -253,11 +253,11 @@ The implementation phase is over when every task in `planner-output.json` is acc
 
 ## Step 6 - Make the app reachable and measure the change in it
 
-For a change observable in the running app, use `implementation-factory:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. The repository's documented dev command is the fallback when an external `run` skill is absent.
+For a change observable in the running app, use `implementation-factory:collect-evidence` with its browser reference. Start from `.claude/tasks/runtime-recipe.md` when it exists, and pass its path to every agent that drives the app. Establish the configured port, backend, flags and state prerequisites before declaring a check unreachable. Start the app with Claude Code's built-in `run` skill when the session has it, otherwise with the repository's documented dev command.
 
 In worktree mode, never assume the default port. Another run of the same repository, or the user's own dev server in the main checkout, may already hold it, and an app that answers there serves another checkout's code. Check that the port is free, start the app from the run worktree on a free one through the repository's documented override, and give the reviewers the URL you actually started. Build outputs (`.next`, `dist`) are not provisioned in the worktree, so a first build there is expected.
 
-Record URL, route and a secure credential reference in `.claude/tasks/state.json`, never the secret itself. Use headless browsers. Measure the committed, frozen code; no editing agent runs during measurement. Observable includes requests, redirects, storage and events, not only pixels.
+Give the URL and route you started to every agent that drives the app, in its brief, and name a credential by where it lives, as the runtime recipe does, never the secret itself. Use headless browsers. Measure the committed, frozen code; no editing agent runs during measurement. Observable includes requests, redirects, storage and events, not only pixels.
 
 Preserve the developers' actual measurements, captures and reproduction recipe for later reconciliation by reviewers. Pass paths, not an approving verdict or the author's diagnosis in the review brief. A reviewer forms its own expectations before opening those reports. If live access is unavailable, report the established obstacle and keep indirect evidence available without representing it as a fresh observation.
 
@@ -275,7 +275,7 @@ Give it the narrow correctness mandate: independently challenge the cause, affec
 
 If the senior corrects code, its verdict is not independent evidence about its own fix: run one focused `qa-reviewer` pass, with a Sonnet model override and the changed behavior and its criteria as mandate, on the final code before calling it verified. This is not another rework loop. If the time bound prevents that pass, leave the affected checks unverified in the delivery.
 
-Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
+Reserve about 10 minutes for it, and stop it past that: on a diff this size the cap is deliberately shorter than the 15 minutes every other reviewer gets. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
 
 **Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer`, then `designer-reviewer` when you decided it runs and the app is reachable, then `qa-reviewer`, once each with a Sonnet model override, and rework only `P0` and `P1`. A rework done after QA gets one focused `qa-reviewer` pass with the criteria it affects as mandate, or those criteria are delivered as unverified. No second full pass unless a `P0` is still open. No orchestrator: you sequence the agents yourself, and you do for them what the orchestrator does at tier 2. For the design review, take `node "$IMPL_CODE_SNAPSHOT"` before it starts and pass the id, take it again after, add `codeSnapshot.atEnd` to `design-evidence.json.tmp` and rename it to `design-evidence.json`. For QA, pass the base ref, `git diff --stat <base>...HEAD` and your gate results with their snapshot id. Only when the diff adds or modifies test files (a file the repository's test runner collects, among those `git diff --name-only <base>` and `git status --porcelain` list), also create a throwaway worktree (`git worktree add --detach <fresh directory outside the repository> HEAD`, in a system temporary directory for instance, never under `.claude/worktrees/`), pass its path, and remove that one and only that one (`git worktree remove --force <its path>`) when QA returns. The same holds for a reviewer you invoke at tier 0.
 
@@ -288,7 +288,7 @@ A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, 
 **Bound every tier in time, whatever the tier.** Two rules, both enforced by you:
 
 - **The review must not outlast the implementation.** Note when step 5 ended. Once the review phase has run about as long as the implementation did, stop launching new rounds: take what the running agents have produced, commit it, and put whatever is unresolved in the step 9 comment as an explicit "not verified" line.
-- **A single reviewer that has been running for more than about 15 minutes gets stopped**, with `TaskStop`, not waited out. Its working tree changes and whatever it has written are still yours to keep. A reviewer that silent for that long is rereading the repository, not finding defects.
+- **A single reviewer that has been running for more than about 15 minutes gets stopped**, about 10 at tier 0, with `TaskStop`, not waited out. Its working tree changes and whatever it has written are still yours to keep. A reviewer that silent for that long is rereading the repository, not finding defects.
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
@@ -410,7 +410,7 @@ For Figma sources, read [design extraction](${CLAUDE_PLUGIN_ROOT}/skills/figma-r
 
 ## Repository resolution
 
-The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket; `github.com/<owner>/<repo>/issues/<number>` on GitHub, where the path is `<owner>/<repo>`). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, read `IMPL_REPOSITORIES` when present: it is a JSON object mapping project paths to local checkouts. If there is no matching entry, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`, or `/-/work_items/<iid>` for the work item view of the same ticket; `github.com/<owner>/<repo>/issues/<number>` on GitHub, where the path is `<owner>/<repo>`). If the current directory already is the right repository, stay there; a run worktree always is. Otherwise, search the comma-separated `IMPL_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
 
 **A ticket delivered outside its own project.** A ticket can be filed in a project that holds no code (a support or complaints tracker, for instance) while the change belongs to one or several code repositories. The console then starts one run per repository the user chose, each in its own worktree, and sets `IMPL_DELIVERY_PROJECTS`: the comma-separated project paths that get a merge request for this ticket, this run's own included. When it is set:
 
@@ -525,7 +525,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review
-- The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes
+- The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes, 10 at tier 0
 - Never skip required QA or design review, except at tier 0 where pilot gates accompany the short review; a senior correction still requires focused independent QA or an explicit unverified result
 - QA writes `qa-plan.md` before opening any author report, and a criterion without a fresh QA observation is never delivered as ready
 - The design review builds its own frame inventory before reconciling author measurements; unexplained additions are reported and explicit authoritative decisions are preserved

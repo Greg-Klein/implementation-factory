@@ -46,7 +46,7 @@ Merge its report by suffix and its evidence by immutable id under the evidence c
 
 ## Stop and report
 
-One initial review round plus at most two rework rounds: three review rounds total, no separate per-dimension counter limit. Honor an earlier caller deadline; stop a reviewer after about 15 minutes. Preserve partial work and report unverified checks rather than manufacturing completion. Repeated failure requires reconsidering the hypothesis, not a fourth round.
+One initial review round plus at most two rework rounds: three review rounds total, no separate per-dimension counter limit. Honor an earlier caller deadline; stop a reviewer after about 15 minutes (the pilot's shorter cap of 10 concerns tier 0, where you do not run). Preserve partial work and report unverified checks rather than manufacturing completion. Repeated failure requires reconsidering the hypothesis, not a fourth round.
 
 READY requires no remaining in-scope P0/P1, QA PASS or PASS_WITH_WARNINGS, and no acceptance criterion left without a fresh QA observation. QA INCONCLUSIVE is never READY: lift the named blocker and rerun QA when you can within the round limit, otherwise report BLOCKED with each unobserved criterion and its blocker. A design verdict INCONCLUSIVE, or a design review the pilot asked for and the unreachable app prevented, is written under `## Design non vérifié`, with the reason; it stays visible and does not block READY. A review out of the trigger is not written there. A correction is closed only by a subsequent independent reviewer or QA check on the final code, never by its author's claim. Missing required artifacts, unresolved product decisions or remaining blocking findings produce BLOCKED. Do not soften a verdict to finish.
 

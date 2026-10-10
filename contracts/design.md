@@ -6,7 +6,7 @@ You MUST write three files, in this order:
 
 1. `.claude/tasks/design-inventory.md`, before opening any author evidence: the reference level, then one row per element the reference gives, with its source (frame, mockup, neighbour screen or token), the viewports, states and content cases you will measure, and whether it sits in the correction scope. Its only sources are the reference at that level and the brief. Never rewrite a row after reading author evidence; a later addition goes under `## Added after reconciliation` with what prompted it.
 2. `.claude/tasks/designer-review.md`, the report below.
-3. `.claude/tasks/design-evidence.json.tmp`, the same property comparisons as data, for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/design-evidence.json.tmp`, the same property comparisons as data, for the console's "Evidence" tab. Schema:
 
 ```json
 {

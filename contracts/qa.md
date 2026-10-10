@@ -6,7 +6,7 @@ You MUST write three files:
 
 1. `.claude/tasks/qa-plan.md`, written before you open any author report (the plan's test strategy, developer report and evidence, senior review): your behavior matrix per criterion, the risk grid classes the change triggers, and your defect hypotheses with their trigger and expected result. The console compares when it arrives with when the report does, which is what shows it predates the reconciliation. A later round appends a section headed by its round and never rewrites an earlier one.
 2. `.claude/tasks/qa-report.md`, the report below. That exact name, always. The console maps the run's phases from artifact names and matches this one on its `qa-report` prefix, so a report written as `qa-review.md`, or under any other name, exists on disk and advances nothing.
-3. `.claude/tasks/qa-evidence.json`, the same gates, criteria and break attempts as data, for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/qa-evidence.json`, the same gates, criteria and break attempts as data, for the console's "Evidence" tab. Schema:
 
 ```json
 {

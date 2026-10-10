@@ -7,7 +7,7 @@ import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
 import { attachmentPaths } from "./acceptance.js";
-import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput } from "./acceptance-runtime.js";
+import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput, refreshConfidence } from "./acceptance-runtime.js";
 import { acceptanceInputKind, confinedPath, SYNC_REQUEST_FILE } from "./evidence-archive.js";
 import { closeWorkflowIfDone } from "./hooks.js";
 import { trackReopening } from "./run-metrics.js";
@@ -87,7 +87,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   const taskRoot = engine.taskDirectory(session.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
-  if (relative === GATE_LOG_FILE && !session.demo) await keepGateLog(session, source);
+  if (relative === GATE_LOG_FILE && !session.demo) { await keepGateLog(session, source); await refreshConfidence(session); }
   if (!isRunDocument(relative)) { await attachmentArrived(session); return; }
   const target = path.join(dataRoot, session.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });
@@ -113,6 +113,8 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   if (relative === RUNTIME_RECIPE_FILE && !session.demo) await keepRuntimeRecipe(session, source);
   if (relative === SENIOR_FINDINGS_FILE && !session.demo) await keepReviewFindings(session, source);
   if (relative === WORKFLOW_STATE_FILE) readWorkflowState(session, await readFile(source, "utf8").catch(() => ""));
+  // A report, a finding or the workflow's state may each move the review confidence.
+  await refreshConfidence(session);
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) session.inferPhase(completedPhase + 1);

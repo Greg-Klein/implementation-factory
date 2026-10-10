@@ -87,6 +87,11 @@ describe("the place a run holds", () => {
 });
 
 describe("what the side list is told about a run", () => {
+  it("should carry the review confidence as a figure, a zero included, and nothing before there is one", () => {
+    expect(summarizeRun(state({ confidence: { score: 0, reasons: [{ rule: "run_failed", cap: 0, detail: "The run failed." }] } })).confidence).toBe(0);
+    expect(summarizeRun(state())).not.toHaveProperty("confidence");
+  });
+
   it("should carry what a row needs without carrying the run itself", () => {
     const summary = summarizeRun(state({
       status: "attention", phase: 6, branch: "feat/258", sessionActive: true,

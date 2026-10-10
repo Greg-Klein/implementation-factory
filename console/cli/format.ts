@@ -1,6 +1,6 @@
 import { formatDuration, formatShare, formatTokens } from "../lib/metrics";
-import { acceptanceChip, elapsedLabel, generatedDocuments, healthBadge, incidentActions, mergeRequestLabel, pendingDecisions, phaseNames, proposalLabel, queueStatus, runLabel, runStatusBadge, sourceRepository, statusLabel, worktreeLabel } from "../lib/run-state";
-import type { AcceptanceView, Activity, ConversationMessage, FactorySnapshot, IncidentAction, PendingQuestion, QueuedRunView, RunMetrics, RunState, RunSummary, SessionPrompt } from "../server/types.js";
+import { acceptanceChip, confidenceChip, confidenceReasonLine, elapsedLabel, generatedDocuments, healthBadge, incidentActions, mergeRequestLabel, pendingDecisions, phaseNames, proposalLabel, queueStatus, runLabel, runStatusBadge, sourceRepository, statusLabel, worktreeLabel } from "../lib/run-state";
+import type { AcceptanceView, Activity, ConfidenceCalibration, ConversationMessage, FactorySnapshot, IncidentAction, PendingQuestion, QueuedRunView, RunMetrics, RunState, RunSummary, SessionPrompt } from "../server/types.js";
 import { shortId } from "./select";
 
 /** Rows as aligned columns, two spaces apart. The last column is left as long as it is. */
@@ -103,6 +103,7 @@ export function renderRun(run: RunState, now: number, program: string) {
     ["Branch", run.branch],
     ["Delivery", run.mergeRequestUrl],
     ["Criteria", run.acceptance?.available ? acceptanceChip(run.acceptance.counts)?.title : undefined],
+    ["Confidence", run.confidence ? [`${confidenceChip(run.confidence.score)!.label}`, ...run.confidence.reasons.map(confidenceReasonLine)].join("\n") : undefined],
     ["Error", run.error],
   ];
   const width = Math.max(...lines.map(([label]) => label.length));
@@ -135,9 +136,10 @@ export function messageLine(message: ConversationMessage) {
 }
 
 /** The "Evidence" tab: the coverage sentence, the QA verdict, each criterion with its status and why. */
-export function renderEvidence(view: AcceptanceView) {
-  if (!view.available) return "This run wrote no acceptance criteria.";
-  const lines = [view.sentence];
+export function renderEvidence(view: AcceptanceView, confidence?: number) {
+  const note = confidenceChip(confidence);
+  if (!view.available) return [...(note ? [`Review confidence: ${note.label}`] : []), "This run wrote no acceptance criteria."].join("\n");
+  const lines = [...(note ? [`Review confidence: ${note.label}`] : []), view.sentence];
   if (view.qa) lines.push(`QA verdict: ${view.qa.status}${view.qa.warning ? `\n  ${view.qa.warning}` : ""}`);
   lines.push("");
   for (const criterion of view.criteria) {
@@ -152,7 +154,7 @@ export function renderEvidence(view: AcceptanceView) {
 export function renderMetrics(runs: RunMetrics[]) {
   if (runs.length === 0) return "No measured run.";
   return table([
-    ["RUN", "STATUS", "ACTIVE", "WAITED", "TOKENS", "PILOT", "DIFF", "TIER", "DELIVERY"],
+    ["RUN", "STATUS", "ACTIVE", "WAITED", "TOKENS", "PILOT", "DIFF", "TIER", "CONF", "DELIVERY"],
     ...runs.map((metrics) => [
       runLabel({ cwd: metrics.ticket.repository, issueUrl: metrics.ticket.issueUrl }),
       statusLabel(metrics.outcome.status),
@@ -162,7 +164,17 @@ export function renderMetrics(runs: RunMetrics[]) {
       metrics.tokens ? formatShare(metrics.tokens.pilotShare) : "-",
       metrics.complexity.diff ? `${metrics.complexity.diff.files} files +${metrics.complexity.diff.insertions} -${metrics.complexity.diff.deletions}` : "-",
       metrics.complexity.reviewTier === undefined ? "-" : String(metrics.complexity.reviewTier),
+      confidenceChip(metrics.outcome.confidenceAtDelivery ?? metrics.outcome.confidence)?.label ?? "-",
       metrics.outcome.mergeRequestUrl ? mergeRequestLabel(metrics.outcome.mergeRequestUrl) : metrics.outcome.delivery === "none" ? "none" : "-",
     ]),
+  ]);
+}
+
+/** What happened after delivery to the runs of each note: the figures that say whether the note means anything. */
+export function renderCalibration(calibration: ConfidenceCalibration) {
+  if (calibration.length === 0) return "";
+  return table([
+    ["CONFIDENCE", "RUNS", "REOPENED", "FEEDBACK"],
+    ...calibration.map((row) => [confidenceChip(row.score)!.label, String(row.runs), String(row.reopened), String(row.feedback)]),
   ]);
 }

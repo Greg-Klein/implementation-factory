@@ -4,10 +4,11 @@ import path from "node:path";
 import type { FSWatcher } from "chokidar";
 import { ARCHIVED_ACTIVITIES, broadcastToViewers, now, reportFailure } from "./context.js";
 import { dataRoot } from "./config.js";
-import { emptyState, phaseAfterInference, planTaskBoard, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
+import { emptyState, phaseAfterInference, planTaskBoard, type ReviewFinding, reviewPlanNotes, runHoldsRepository, summarizeRun } from "./domain.js";
 import { engine, type EngineSession } from "./engine/index.js";
 import { diskStorage, EvidenceArchive, memoryStorage } from "./evidence-archive.js";
 import { createSignals, pilotActs, type RunSignals } from "./run-health.js";
+import type { ChangeFacts, GateFacts } from "./review-confidence.js";
 import { RUN_SCHEMA_VERSION } from "./run-incidents.js";
 import { trackTimeline } from "./run-metrics.js";
 import { refreshUsage } from "./run-metrics-runtime.js";
@@ -79,6 +80,14 @@ export class RunSession {
   acceptanceView: AcceptanceView | null = null;
   /** What the figures last published were computed from, so an unchanged recomputation publishes nothing. */
   acceptanceKey = "";
+  /** What the code review wrote as data, every round together, by finding id. See review-confidence-runtime.ts. */
+  readonly seniorFindings = new Map<string, Pick<ReviewFinding, "id" | "severity" | "fixed">>();
+  /** The last reading of the diff, and the code snapshot it was made on: read again only once the code moved. */
+  confidenceChange: { snapshot: string; facts: ChangeFacts | undefined } | null = null;
+  /** The last reading of the kept gate log, and its size then. */
+  confidenceGate: { size: number; facts: GateFacts } | null = null;
+  /** The branch the merge request targets, asked once per address. */
+  deliveryTarget: { url: string; branch: string | undefined } | null = null;
   /** The figures last computed for this run. See run-metrics-runtime.ts. */
   metrics: RunMetrics | null = null;
   /** Computations of those figures one after another, so two never write the file together. */

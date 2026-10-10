@@ -1,7 +1,8 @@
 import { defined } from "../lib/defined.js";
 import { runInProgress, sourceRepository } from "./domain.js";
 import type { SessionUsage } from "./engine/index.js";
-import type { AgentMetrics, GateTimes, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
+import { CONFIDENCE_MAXIMUM } from "./review-confidence.js";
+import type { AgentMetrics, ConfidenceCalibration, GateTimes, MetricsBaseline, MetricsFinding, RunDiff, RunMetrics, RunState, SessionMetrics, TokenUsage, UserWait, WorkflowState } from "./types.js";
 import { declaredCompletion } from "./workflow-state.js";
 
 /**
@@ -197,6 +198,7 @@ export function buildRunMetrics({ state, usage, diff, gate, qaStatus, at }: Metr
       ...(state.acceptance?.available ? { acceptance: state.acceptance.counts } : {}),
       ...defined({ qaStatus: (qaStatus ?? state.acceptance?.qa?.status) || undefined }),
       ...(state.worktree ? { worktree: state.worktree.state } : {}),
+      ...defined({ confidence: state.confidence?.score, confidenceAtDelivery: state.confidenceAtDelivery, feedback: state.feedbackCount || undefined }),
     },
     time: { ...timeMetrics(state, new Date(at).getTime()), ...(gate ? { gate } : {}) },
     complexity: {
@@ -288,4 +290,22 @@ export function metricsFindings(run: RunMetrics, others: RunMetrics[]): MetricsF
   }
   if (run.time.incidentMs > 60_000) findings.push({ metric: "incidentMs", value: run.time.incidentMs, median: 0, ratio: 0, detail: `${minutes(run.time.incidentMs)} under an open incident, with nothing moving the run forward.` });
   return findings;
+}
+
+/**
+ * What happened after delivery to the runs of each note, which is what says
+ * whether the note means anything: a 5 that is reopened as often as a 2 does
+ * not. Only what the console sees itself counts, a change asked after the final
+ * report and feedback the user wrote. A note with fewer than `BASELINE_MINIMUM`
+ * delivered runs is left out, and so is a run that was never given one.
+ */
+export function confidenceCalibration(runs: RunMetrics[]): ConfidenceCalibration {
+  const delivered = runs.filter((run) => run.final && run.outcome.status === "completed" && run.outcome.confidenceAtDelivery !== undefined);
+  const rows: ConfidenceCalibration = [];
+  for (let score = 0; score <= CONFIDENCE_MAXIMUM; score += 1) {
+    const scored = delivered.filter((run) => run.outcome.confidenceAtDelivery === score);
+    if (scored.length < BASELINE_MINIMUM) continue;
+    rows.push({ score, runs: scored.length, reopened: scored.filter((run) => (run.time.reopened?.count ?? 0) > 0).length, feedback: scored.filter((run) => (run.outcome.feedback ?? 0) > 0).length });
+  }
+  return rows;
 }

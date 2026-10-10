@@ -189,6 +189,16 @@ export const schema = [
     validate: validateText,
   },
   {
+    key: "IMPL_SENSITIVE_PATHS",
+    label: "Paths whose change lowers the review confidence",
+    comment: "Comma-separated path patterns whose change lowers the review confidence of a run, whatever its review said: ** crosses directories, * stays inside one, a pattern without a slash matches a name at any depth.",
+    help: "Path patterns whose change lowers the review confidence of a run, whatever its review said. ** crosses directories, * stays inside one, a pattern without a slash matches a name at any depth. Comma-separated.",
+    fallback: "**/migrations/**,**/auth/**,**/security/**,.github/workflows/**,.gitlab-ci.yml,**/Dockerfile*",
+    kind: "list",
+    readBy: "console",
+    validate: validateText,
+  },
+  {
     key: "IMPL_STALL_MINUTES",
     label: "Silence before a doubt, in minutes",
     comment: "Minutes without any progress before the console voices a doubt about a run in progress. A doubt only: it never stops nor restarts anything.",

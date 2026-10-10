@@ -1,5 +1,5 @@
 import { forgeOf, forgeWords, parseTicketUrl, ticketReference, withoutQuery } from "./ticket-urls";
-import type { AcceptanceCounts, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
+import type { AcceptanceCounts, ConfidenceReason, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
 export function activeAgents<T extends { status: string }>(agents: T[]) {
   return agents.filter((agent) => agent.status === "running");
@@ -340,6 +340,26 @@ export function healthBadge(run: { health?: string; incident?: { title: string }
   if (run.incident) return { label: run.incident.title, tone: run.health === "interrupted" ? "error" as const : "attention" as const };
   if (run.health === "suspected_stall") return { label: "No progress observed", tone: "doubt" as const };
   return undefined;
+}
+
+/** Mirrors CONFIDENCE_MAXIMUM of server/review-confidence.ts. */
+export const CONFIDENCE_MAXIMUM = 5;
+
+/**
+ * The review confidence as a row can afford it: the note over its maximum,
+ * coloured by how much of the change a person still has to review. Nothing
+ * before a reviewer wrote its report.
+ */
+export function confidenceChip(score: number | undefined) {
+  if (score === undefined) return undefined;
+  const tone = score <= 1 ? "error" as const : score <= 3 ? "attention" as const : score < CONFIDENCE_MAXIMUM ? "neutral" as const : "verified" as const;
+  const meaning = score === 0 ? "a person has to review everything" : score === CONFIDENCE_MAXIMUM ? "nothing observed stands against the automated review" : "see the Evidence tab for what lowered it";
+  return { label: `${score}/${CONFIDENCE_MAXIMUM}`, title: `Review confidence ${score} of ${CONFIDENCE_MAXIMUM}: ${meaning}`, tone };
+}
+
+/** One rule that lowered the note, as a line: what it did, then what was observed. */
+export function confidenceReasonLine(reason: ConfidenceReason) {
+  return `${reason.cap !== undefined ? `Held at ${reason.cap}` : `Minus ${reason.minus ?? 0}`}: ${reason.detail}`;
 }
 
 /**

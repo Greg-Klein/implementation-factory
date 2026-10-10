@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, confidenceChip, confidenceReasonLine, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 import { attachmentPaths } from "../../server/acceptance";
 
@@ -308,5 +308,21 @@ describe("the queue as it is shown", () => {
     expect(scope("b1", "/work/shop")).not.toBe(scope("b2", "/work/shop"));
     expect(scope(undefined, "/work/shop")).toBe(scope(undefined, "/work/api"));
     expect(scope(undefined, "/work/shop")).not.toBe(scope("b1", "/work/shop"));
+  });
+});
+
+describe("the review confidence as the interface words it", () => {
+  it("should show nothing before the run has a note, and a zero as a note", () => {
+    expect(confidenceChip(undefined)).toBeUndefined();
+    expect(confidenceChip(0)).toMatchObject({ label: "0/5", tone: "error" });
+  });
+
+  it("should colour the note by how much is left for a person to review", () => {
+    expect([0, 1, 2, 3, 4, 5].map((score) => confidenceChip(score)!.tone)).toEqual(["error", "error", "attention", "attention", "neutral", "verified"]);
+  });
+
+  it("should word a rule by what it did to the note", () => {
+    expect(confidenceReasonLine({ rule: "incident_open", cap: 2, detail: "1 incident still open." })).toBe("Held at 2: 1 incident still open.");
+    expect(confidenceReasonLine({ rule: "sensitive_path", minus: 1, detail: "1 sensitive file changed." })).toBe("Minus 1: 1 sensitive file changed.");
   });
 });

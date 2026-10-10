@@ -25,6 +25,7 @@ import { findWorktree, worktreeDiff } from "./worktree.js";
 import { registry } from "./registry.js";
 import { resolvePastedTickets } from "./ticket-source.js";
 import { reconcileRunWorktrees } from "./run-worktrees.js";
+import { confidenceCalibration } from "./run-metrics.js";
 import { backfillRunMetrics } from "./run-metrics-runtime.js";
 import { engine } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
@@ -265,8 +266,10 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (request.method === "GET" && requestPath === "/api/metrics") {
-    try { respond(response, 200, { runs: await registry.metrics(), ...defined({ improvements: improvementMetrics() }) }); }
-    catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Metrics unavailable." }); }
+    try {
+      const runs = await registry.metrics();
+      respond(response, 200, { runs, calibration: confidenceCalibration(runs), ...defined({ improvements: improvementMetrics() }) });
+    } catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Metrics unavailable." }); }
     return;
   }
   if (request.method === "GET" && requestPath === "/api/repositories/recipe") {

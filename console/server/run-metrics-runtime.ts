@@ -33,18 +33,28 @@ function usageOf(state: RunState) {
   return engine.sessionUsage({ ...defined({ transcriptPath: state.transcriptPath }), cwd: state.cwd, isolated: isRunWorktreePath(sourceRepository(state), state.cwd) });
 }
 
-/** What the run changed since the branch it was cut from, committed or not. Undefined once the worktree is gone or when no base can be read. */
-async function runDiff(state: RunState): Promise<RunDiff | undefined> {
+/**
+ * The commit a run's change is measured from: where its work left the branch its
+ * merge request targets, or the next base that can be read. Undefined once the
+ * worktree is gone or when no base is known there.
+ */
+export async function runMergeBase(state: RunState, targetBranch?: string): Promise<string | undefined> {
   const cwd = state.cwd;
   if (!cwd || !await access(cwd).then(() => true, () => false)) return undefined;
-  const target = state.mergeRequestUrl ? await fetchMergeRequestTarget(state.mergeRequestUrl, cwd) : undefined;
-  for (const base of diffBases(state, target)) {
+  for (const base of diffBases(state, targetBranch)) {
     try {
-      const mergeBase = (await exec("git", ["-C", cwd, "merge-base", base, "HEAD"])).stdout.trim();
-      return diffFromNumstat((await exec("git", ["-C", cwd, "diff", "--numstat", mergeBase])).stdout);
+      return (await exec("git", ["-C", cwd, "merge-base", base, "HEAD"])).stdout.trim();
     } catch { /* this base is not known here: the next one is tried */ }
   }
   return undefined;
+}
+
+/** What the run changed since the branch it was cut from, committed or not. Undefined once the worktree is gone or when no base can be read. */
+async function runDiff(state: RunState): Promise<RunDiff | undefined> {
+  const target = state.mergeRequestUrl && state.cwd ? await fetchMergeRequestTarget(state.mergeRequestUrl, state.cwd) : undefined;
+  const mergeBase = await runMergeBase(state, target);
+  if (!mergeBase) return undefined;
+  return diffFromNumstat((await exec("git", ["-C", state.cwd, "diff", "--numstat", mergeBase])).stdout);
 }
 
 /**

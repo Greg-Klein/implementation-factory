@@ -6,6 +6,8 @@ import type {
   EvidenceAttachmentView, EvidenceBasis, EvidenceFreshness, EvidenceMethod, EvidenceSource, EvidenceView,
 } from "./types.js";
 import { acceptanceText, type WorkflowLanguage } from "./acceptance-text.js";
+import { CONFIDENCE_MAXIMUM } from "./review-confidence.js";
+import type { ConfidenceReason, ReviewConfidence } from "./types.js";
 
 export { acceptanceText, workflowLanguageOf, type WorkflowLanguage } from "./acceptance-text.js";
 
@@ -728,6 +730,8 @@ export type AcceptanceSummary = {
     criteria: { id: string; text: string; status: AcceptanceStatus; reasons: string[]; attachments: string[] }[];
     /** Set when the verdict QA declares is not backed by its own observations. */
     qaWarning?: string;
+    /** The review confidence, absent until a reviewer wrote its report. See review-confidence.ts. */
+    confidence?: ReviewConfidence;
     /** Local files only: a link to them in the merge request is valid once uploaded, never before. */
     localAttachments: string[];
   };
@@ -751,7 +755,15 @@ function summaryReasons(criterion: AcceptanceCriterionView): string[] {
   return [...new Set([...deciding.flatMap((check) => check.reasons), ...others.flatMap((check) => check.reasons), ...criterion.reasons])];
 }
 
-export function renderAcceptanceSummary(view: AcceptanceView, language: WorkflowLanguage = "en"): AcceptanceSummary {
+/** The note and what lowered it, in the workflow language. A rule this version does not know keeps the sentence it was stored with. */
+function confidenceLines(confidence: ReviewConfidence, language: WorkflowLanguage) {
+  const t = acceptanceText(language).confidence;
+  const sentence = (reason: ConfidenceReason) => (Object.hasOwn(t.reason, reason.rule) ? t.reason[reason.rule as keyof typeof t.reason](reason.count ?? 1) : reason.detail);
+  const reasons = confidence.reasons.map((reason) => (reason.cap !== undefined ? t.cap(reason.cap, sentence(reason)) : t.minus(reason.minus ?? 0, sentence(reason))));
+  return [t.line(confidence.score, CONFIDENCE_MAXIMUM), "", ...(reasons.length > 0 ? reasons : [t.clean]), ""];
+}
+
+export function renderAcceptanceSummary(view: AcceptanceView, language: WorkflowLanguage = "en", confidence?: ReviewConfidence): AcceptanceSummary {
   const t = acceptanceText(language);
   const sentence = t.sentence(view.counts);
   const lines: string[] = [t.summaryTitle, "", t.summaryOrigin, ""];
@@ -776,6 +788,7 @@ export function renderAcceptanceSummary(view: AcceptanceView, language: Workflow
     if (criteria.some((entry) => entry.status !== "verified")) lines.push("");
   }
   if (view.qa?.warning) lines.push(t.qaToConfirm(view.qa.warning), "");
+  if (confidence) lines.push(...confidenceLines(confidence, language));
 
   lines.push(t.detailHeading, "");
   if (view.criteria.length > 0) {
@@ -809,6 +822,7 @@ export function renderAcceptanceSummary(view: AcceptanceView, language: Workflow
       ...(view.currentSnapshot ? { currentSnapshotId: view.currentSnapshot.id } : {}),
       criteria, localAttachments: [...localAttachments],
       ...(view.qa?.warning ? { qaWarning: view.qa.warning } : {}),
+      ...(confidence ? { confidence } : {}),
     },
   };
 }

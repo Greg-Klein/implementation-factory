@@ -6,6 +6,8 @@ The templates and fixed phrases below are written in French. When the workflow l
 
 **Read the acceptance summary first.** When the console runs the session (`IMPL_RUN_ID` is set), it keeps `.claude/tasks/acceptance-summary.md` up to date from the registry and every evidence file, with the same computation its "Evidence" tab shows: one sentence ("5 critères vérifiés sur 8 · 1 échec · 1 bloqué · 1 non vérifié"), the criteria that are not verified and why, and a detail table for step 9. Use it as it is. A criterion it reports unverified, blocked or failed is never reworded as validated, anywhere. That holds even when you saw the check pass: on your own evidence, "version inconnue" ("unknown version" in English) means the code version was missing or not produced by the snapshot utility, and a stale result was taken on older code. Measure again by [the evidence contract](${CLAUDE_PLUGIN_ROOT}/contracts/evidence.md), under new ids, and read the summary once more; if you do not, publish its sentence unchanged. When the file is absent (no console), write the same content yourself from the registry and the evidence files, by the same rule: a criterion is verified only when evidence taken on the final code says so.
 
+The summary may also carry a review confidence line, "**Confiance de la revue : 3/5**" ("**Review confidence: 3/5**" in English), followed by what lowered it. The console computes that note from what it observed, and no agent declares it. Copy the line and its reasons into the description as they are, under `## Critères d'acceptation`. Never compute a note yourself, never change the figure and never reword a reason, even when you think one no longer holds: say so in a sentence of your own beside it. When the summary has no such line, the description has none.
+
 That summary feeds the decisions this workflow already takes; it is not a second verdict. A criterion in failure is an acceptance criterion not met, which is a `P0` of the review loop and, if still open, the draft case below. A blocked criterion goes under `## Blocked` when the merge request is a draft, and into the step 9 comment as not verified otherwise.
 
 Write the description to `.claude/tasks/mr-description.md` first, applying `implementation-factory:unslop`, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2. Run both from the checkout the caller worked in, the run worktree when there is one: the relative paths and `:fullpath` resolve from there. Never delete the local branch or remove a worktree after the push; `remove_source_branch` only concerns GitLab, at merge time.
@@ -75,7 +77,7 @@ Three to five bullets, one per notable item. File names only when they help the 
 
 ## Critères d'acceptation
 
-The summary sentence, then one bullet per criterion that is not verified, with its reason in a few words. Nothing more: the detail goes in the step 9 comment. Omit the bullets when every criterion is verified.
+The summary sentence, then one bullet per criterion that is not verified, with its reason in a few words. Omit the bullets when every criterion is verified. Then the review confidence line and its reasons, copied from the summary, when it has one. Nothing more: the detail goes in the step 9 comment.
 
 ## Notes d'implémentation
 

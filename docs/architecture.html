@@ -529,6 +529,8 @@ flowchart LR
   versions[("<b>data/runs/#lt;id#gt;/evidence</b><br/>every version<br/>and capture")]:::file
   derive{"<b>acceptance.ts</b><br/>failed, blocked,<br/>unverified, verified"}:::script
   qa{"<b>qaVerdictConsistency</b><br/>QA's verdict against<br/>what QA observed"}:::script
+  facts[("<b>Observed facts</b><br/>diff, gate log, findings,<br/>incidents, workflow state")]:::file
+  confidence{"<b>review-confidence.ts</b><br/>note from 0 to 5,<br/>with what lowered it"}:::script
   tab{"<b>Evidence tab</b><br/>in the console,<br/>in English"}:::script
   summary[("<b>acceptance-summary.md</b><br/>in IMPL_LANGUAGE")]:::file
   mr["<b>Pilot</b><br/>merge request<br/>description"]:::agent
@@ -540,6 +542,11 @@ flowchart LR
   derive --> tab
   qa --> summary --> mr
   derive --> summary
+  derive --> confidence
+  qa --> confidence
+  facts --> confidence
+  confidence --> tab
+  confidence --> summary
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
   classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
@@ -550,6 +557,7 @@ flowchart LR
     <div class="chip"><b>Which status wins</b>Failed over blocked, then unverified, then verified. Stale, unversioned or replaced evidence never counts as verified, and a <code>fail</code> is never read as a confirmation.</div>
     <div class="chip"><b>Break attempts</b>A QA item of kind <code>attempt</code> that fails counts against its criterion; any other is listed under it and verifies nothing.</div>
     <div class="chip warn"><b>QA verdict checked</b>A <code>PASS</code> over a criterion QA did not observe raises a warning in the tab and in the summary.</div>
+    <div class="chip"><b>Review confidence</b>A note from 0 (a person reviews everything) to 5 (nothing observed stands against the automated review), computed by a pure function from the coverage, the diff, the stop gate's log, the findings and the incidents. No agent declares it, and what an agent declares can only lower it. Each rule that applied is listed with the note.</div>
     <div class="chip"><b>Coverage frozen at delivery</b>The code is identified until the workflow's end is archived. A rebase or an edit made afterwards, outside a reopening, leaves the delivered coverage as it was.</div>
   </div>
 </section>
@@ -710,8 +718,10 @@ flowchart LR
       versions: ["evidence/", "Files", "Every version of every evidence file and its captures, with the code snapshots, so a restart derives the same coverage."],
       derive: ["acceptance.ts", "Server", "Pure derivation of each criterion's status from the evidence it names."],
       qa: ["qaVerdictConsistency", "Server", "Compares QA's declared status with what QA itself observed on the current code."],
+      facts: ["Observed facts", "Files and state", "What the console reads itself beside the coverage: the diff since the base (size, sensitive paths, tests removed or disabled), the last verdict of each stop gate check, the findings of the code review, the incidents and the workflow's state."],
+      confidence: ["review-confidence.ts", "Server", "Pure: starts from 5, holds the note at a cap or takes points off for each rule that applies. The note at the first end of the workflow is kept apart, and the metrics hold it against what followed delivery."],
       tab: ["Evidence tab", "Interface", "The full view, served by /api/runs/<id>/acceptance."],
-      summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request."],
+      summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request. Carries the review confidence and its reasons."],
       mr: ["Pilot", "Claude Code", "Prepares the description from the summary: failed or unverified criteria stay visible."],
     },
   };

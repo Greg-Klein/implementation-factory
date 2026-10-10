@@ -1,7 +1,7 @@
 "use client";
 
 import { ArchiveIcon, ChartBarIcon, FolderDashedIcon, CheckCircleIcon, ClockCounterClockwiseIcon, GitBranchIcon, HourglassMediumIcon, PlusIcon, StackIcon, TrashIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
-import { acceptanceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
+import { acceptanceChip, confidenceChip, healthBadge, holdsIdleSession, isClosable, pendingDecisions, runInProgress, runLabel, statusLabel } from "@/lib/run-state";
 import { formatTokens } from "@/lib/metrics";
 import { statusColor } from "@/lib/notifications";
 import type { QueuedRunView, RepositoryOption, RunSummary, TicketProposal } from "@/lib/types";
@@ -68,6 +68,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
   const badge = healthBadge(run);
   const closable = isClosable(run);
   const coverage = acceptanceChip(run.acceptance);
+  const confidence = confidenceChip(run.confidence);
   const completed = run.status === "completed";
   return (
     <div style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }} className={`reveal group relative flex transition-colors duration-200 ${selected ? "bg-[var(--raised)]" : "hover:bg-[var(--raised)]/60"}`}>
@@ -97,6 +98,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
             {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>}
             {run.tokens !== undefined && <span title={`${run.tokens.toLocaleString("en-US")} tokens used, cache included`} aria-label={`${formatTokens(run.tokens)} tokens used`} className={`shrink-0 font-mono text-[9px] ${coverage ? "" : "ml-auto"}`}>{formatTokens(run.tokens)}</span>}
             {coverage && <span title={coverage.title} aria-label={coverage.title} className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined ? "" : "ml-auto"} ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
+            {confidence && <span title={confidence.title} aria-label={confidence.title} data-testid="run-confidence" className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined || coverage ? "" : "ml-auto"} ${CHIP_TONE[confidence.tone]}`}>conf {confidence.label}</span>}
           </span>
           <PhaseBar phase={run.phase} status={run.status} />
         </span>

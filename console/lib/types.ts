@@ -50,6 +50,8 @@ export type RunState = {
   reviewNotes?: string[];
   /** Acceptance coverage in figures; the full view comes from /api/runs/<id>/acceptance. */
   acceptance?: AcceptanceDigest;
+  /** How far the automated review can be relied on, from 0 to 5, absent until a reviewer wrote its report. */
+  confidence?: ReviewConfidence;
   /** Who can move the run forward, as the health monitor sees it. See server/run-health.ts. */
   health?: RunHealthView;
   incidents?: RunIncident[];
@@ -85,6 +87,8 @@ export type RunSummary = {
   health?: RunHealth;
   /** Tokens consumed so far, cache included. */
   tokens?: number;
+  /** The review confidence, from 0 to 5. */
+  confidence?: number;
   incident?: { id: string; kind: IncidentKind; title: string; revision: number };
   archived?: boolean;
 };
@@ -145,6 +149,9 @@ export type AcceptanceStatus = "verified" | "unverified" | "blocked" | "failed";
 export type AcceptanceCounts = { total: number; verified: number; failed: number; blocked: number; unverified: number; stale: number };
 export type AcceptanceQaView = { status: string; file: string; round?: number; mandate?: string[]; consistent: boolean; unobserved: string[]; warning?: string };
 export type AcceptanceQaDigest = { status: string; consistent: boolean; unobserved: number };
+/** Mirrors the review confidence types of server/types.ts. */
+export type ConfidenceReason = { rule: string; cap?: number; minus?: number; count?: number; detail: string };
+export type ReviewConfidence = { score: number; reasons: ConfidenceReason[] };
 export type AcceptanceDigest = { available: boolean; revision: number; updatedAt: string; counts: AcceptanceCounts; diagnostics: number; qa?: AcceptanceQaDigest };
 export type EvidenceSource = "qa" | "design" | "developer";
 export type EvidenceMethod = "test" | "browser" | "static_analysis" | "manual";
@@ -203,7 +210,7 @@ export type RunMetrics = {
   final: boolean;
   factory?: { version?: string; commit?: string };
   ticket: { issueUrl: string; title?: string; repository: string };
-  outcome: { status: Status; phase: number; delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; questions: number; incidents: string[]; acceptance?: AcceptanceCounts; qaStatus?: string; worktree?: string };
+  outcome: { status: Status; phase: number; delivery: "merge_request" | "draft_merge_request" | "none"; mergeRequestUrl?: string; questions: number; incidents: string[]; acceptance?: AcceptanceCounts; qaStatus?: string; worktree?: string; confidence?: number; confidenceAtDelivery?: number; feedback?: number };
   time: { startedAt: string | null; endedAt: string | null; elapsedMs: number; reopened?: { count: number; ms: number }; userWaitMs: number; waits: { reason: "question" | "session_prompt" | "terminal"; count: number; ms: number }[]; activeMs: number; incidentMs: number; phases: { phase: number; enteredAt: string; ms: number }[]; gate?: { ms: number; steps: { step: string; runs: number; ms: number }[] } };
   complexity: { tasks: number; sizes: { S: number; M: number; L: number }; criteria: number; reviewTier?: 0 | 1 | 2; diff?: { files: number; insertions: number; deletions: number } };
   rework: { launches: Record<string, number>; reworkDevelopers: number; lostAgents: number };
@@ -215,4 +222,6 @@ export type ImprovementMetrics = {
   merged: number; rejected: number; rejectedByJudge: number; reverted: number;
   judged: { worktreeName: string; at: string; decision: "merged" | "rejected" | "reverted"; reasons: string[]; judgements: JudgeRun[] }[];
 };
-export type MetricsResponse = { runs: RunMetrics[]; improvements?: ImprovementMetrics; error?: string };
+/** Mirrors `confidenceCalibration` of server/run-metrics.ts: what happened after delivery, per note. */
+export type ConfidenceCalibration = { score: number; runs: number; reopened: number; feedback: number }[];
+export type MetricsResponse = { runs: RunMetrics[]; improvements?: ImprovementMetrics; calibration?: ConfidenceCalibration; error?: string };

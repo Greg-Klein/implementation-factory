@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { incidentWords, renderFactory, renderQuestion, renderRun, table } from "../../cli/format";
-import type { FactorySnapshot, RunIncident, RunState, RunSummary } from "../../server/types";
+import { incidentWords, renderCalibration, renderEvidence, renderFactory, renderQuestion, renderRun, table } from "../../cli/format";
+import type { AcceptanceView, FactorySnapshot, RunIncident, RunState, RunSummary } from "../../server/types";
 
 const now = Date.parse("2026-10-09T08:05:00.000Z");
 const issueUrl = "https://gitlab.example.com/acme/shop/-/issues/12";
@@ -79,5 +79,27 @@ describe("one run printed in full", () => {
 
   it("should offer only to dismiss the incident of a run whose session is gone", () => {
     expect(incidentWords(state({ sessionActive: false, status: "failed", incidents: [incident] }))).toEqual(["dismiss"]);
+  });
+});
+
+describe("the review confidence the command line prints", () => {
+  it("should give the note of a run and each reason under it", () => {
+    const text = renderRun(state({ confidence: { score: 2, reasons: [{ rule: "incident_open", cap: 2, detail: "1 incident still open." }, { rule: "gate_unchecked", minus: 0.5, detail: "A check of the stop gate could not conclude." }] } }), now, "impl");
+    expect(text).toMatch(/Confidence {2}2\/5\n {12}Held at 2: 1 incident still open\.\n {12}Minus 0\.5: A check of the stop gate could not conclude\./);
+  });
+
+  it("should leave the line out of a run no reviewer reported on", () => {
+    expect(renderRun(state(), now, "impl")).not.toContain("Confidence");
+  });
+
+  it("should open the evidence with the note, with or without criteria", () => {
+    const view = { available: false } as AcceptanceView;
+    expect(renderEvidence(view, 0)).toBe("Review confidence: 0/5\nThis run wrote no acceptance criteria.");
+    expect(renderEvidence(view)).toBe("This run wrote no acceptance criteria.");
+  });
+
+  it("should print one row per note of the calibration, and nothing without one", () => {
+    expect(renderCalibration([])).toBe("");
+    expect(renderCalibration([{ score: 4, runs: 12, reopened: 2, feedback: 1 }])).toBe("CONFIDENCE  RUNS  REOPENED  FEEDBACK\n4/5         12    2         1");
   });
 });

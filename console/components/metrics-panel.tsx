@@ -3,9 +3,9 @@
 import { CaretRightIcon, ChartBarIcon } from "@phosphor-icons/react";
 import { Fragment, useEffect, useState } from "react";
 import { formatCost, formatDuration, formatShare, formatTokens, judgeRows, judgeSummary, planSizes, reworkCount, sessionLabel, summarize, waitLabel } from "@/lib/metrics";
-import { phaseNames, runLabel, statusLabel } from "@/lib/run-state";
+import { confidenceChip, phaseNames, runLabel, statusLabel } from "@/lib/run-state";
 import { forgeOf, forgeWords } from "@/lib/ticket-urls";
-import type { ImprovementMetrics, MetricsResponse, RunMetrics } from "@/lib/types";
+import type { ConfidenceCalibration, ImprovementMetrics, MetricsResponse, RunMetrics } from "@/lib/types";
 
 /** A run still going moves its figures: the table follows at this pace while it is on screen. */
 const POLL_MS = 10_000;
@@ -91,6 +91,45 @@ function Detail({ run }: { run: RunMetrics }) {
   );
 }
 
+const CONFIDENCE_TONE = { error: "text-red-700", attention: "text-amber-800", verified: "text-[var(--accent)]", neutral: "text-[var(--ink)]" } as const;
+
+/** Whether the review confidence means anything: what followed delivery for the runs of each note. */
+function Calibration({ calibration }: { calibration: ConfidenceCalibration }) {
+  return (
+    <div className="border-t border-[var(--line)]" data-testid="confidence-calibration">
+      <div className="px-5 py-5 md:px-7">
+        <h3 className="text-xs font-medium">Review confidence</h3>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[var(--muted)]">What followed delivery for the runs of each note. A high note whose runs are reopened as often as a low one says the rules need adjusting.</p>
+        {calibration.length === 0 && <p className="mt-3 text-[11px] text-[var(--muted)]">A note shows here from three delivered runs.</p>}
+      </div>
+      {calibration.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[420px] text-left text-[11px]">
+            <thead className="border-y border-[var(--line)] text-[10px] text-[var(--muted)]">
+              <tr>
+                <th className="py-2 pl-5 pr-2 font-medium md:pl-7" title="The note the run had when its workflow first ended">Confidence</th>
+                <th className="px-2 py-2 text-right font-medium">Delivered runs</th>
+                <th className="px-2 py-2 text-right font-medium" title="Runs with a change asked after the final report">Reopened</th>
+                <th className="py-2 pl-2 pr-5 text-right font-medium md:pr-7" title="Runs the user wrote feedback on">With feedback</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calibration.map((row) => (
+                <tr key={row.score} className="border-b border-[var(--line)]">
+                  <td className={`py-2 pl-5 pr-2 font-mono text-[10px] font-semibold md:pl-7 ${CONFIDENCE_TONE[confidenceChip(row.score)!.tone]}`}>{confidenceChip(row.score)!.label}</td>
+                  <td className="px-2 py-2 text-right font-mono text-[10px]">{row.runs}</td>
+                  <td className="px-2 py-2 text-right font-mono text-[10px]">{row.reopened}</td>
+                  <td className="py-2 pl-2 pr-5 text-right font-mono text-[10px] md:pr-7">{row.feedback}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const VERDICT_TONE: Record<string, string> = { merged: "bg-emerald-50 text-emerald-700", rejected: "bg-red-50 text-red-700" };
 
 /** The improvement loop: what the judge decided and what each decision cost it. */
@@ -153,6 +192,7 @@ function Improvements({ improvements }: { improvements: ImprovementMetrics }) {
 export function MetricsPanel() {
   const [runs, setRuns] = useState<RunMetrics[]>();
   const [improvements, setImprovements] = useState<ImprovementMetrics>();
+  const [calibration, setCalibration] = useState<ConfidenceCalibration>();
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState<string>();
 
@@ -160,7 +200,7 @@ export function MetricsPanel() {
     let disposed = false;
     const load = () => fetch("/api/metrics")
       .then((response) => response.json() as Promise<MetricsResponse>)
-      .then((result) => { if (!disposed) { setRuns(result.runs ?? []); setImprovements(result.improvements); setError(result.error); } })
+      .then((result) => { if (!disposed) { setRuns(result.runs ?? []); setImprovements(result.improvements); setCalibration(result.calibration); setError(result.error); } })
       .catch(() => { if (!disposed) setError("The metrics could not be read. Check that the local server is running."); });
     void load();
     const timer = window.setInterval(load, POLL_MS);
@@ -188,7 +228,7 @@ export function MetricsPanel() {
       {runs && runs.length === 0 && !error && <p className="px-5 py-8 text-xs text-[var(--muted)] md:px-7">No run measured yet. The metrics of a run are written when it ends.</p>}
       {runs && runs.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-[11px]">
+          <table className="w-full min-w-[900px] text-left text-[11px]">
             <thead className="border-b border-[var(--line)] text-[10px] text-[var(--muted)]">
               <tr>
                 <th className="py-2 pl-5 pr-2 font-medium md:pl-7">Run</th>
@@ -200,6 +240,7 @@ export function MetricsPanel() {
                 <th className="px-2 py-2 text-right font-medium" title="Duration of the run outside waits on the user">Active</th>
                 <th className="px-2 py-2 text-right font-medium" title="Time spent waiting for an answer from the user">Wait</th>
                 <th className="px-2 py-2 text-right font-medium" title="Review passes beyond the first, and fixes after review">Rework</th>
+                <th className="px-2 py-2 text-right font-medium" title="Review confidence when the workflow ended, from 0 (a person reviews everything) to 5">Confidence</th>
                 <th className="py-2 pl-2 pr-5 font-medium md:pr-7">Outcome</th>
               </tr>
             </thead>
@@ -208,6 +249,7 @@ export function MetricsPanel() {
                 const expanded = open === run.runId;
                 const diff = run.complexity.diff;
                 const rework = reworkCount(run);
+                const confidence = confidenceChip(run.outcome.confidenceAtDelivery ?? run.outcome.confidence);
                 const label = runLabel({ cwd: run.ticket.repository, repository: run.ticket.repository, issueUrl: run.ticket.issueUrl });
                 return (
                   <Fragment key={run.runId}>
@@ -229,11 +271,12 @@ export function MetricsPanel() {
                       <td className="px-2 py-2 text-right font-mono text-[10px]">{formatDuration(run.time.activeMs)}</td>
                       <td className="px-2 py-2 text-right font-mono text-[10px]">{run.time.userWaitMs > 0 ? formatDuration(run.time.userWaitMs) : ""}</td>
                       <td className={`px-2 py-2 text-right font-mono text-[10px] ${rework > 0 ? "font-semibold text-amber-800" : ""}`}>{rework > 0 ? rework : ""}</td>
+                      <td title={confidence?.title} className={`px-2 py-2 text-right font-mono text-[10px] font-semibold ${confidence ? CONFIDENCE_TONE[confidence.tone] : ""}`}>{confidence?.label ?? ""}</td>
                       <td className="py-2 pl-2 pr-5 md:pr-7">
                         <span className={`whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-semibold ${run.final ? STATUS_TONE[run.outcome.status] ?? "bg-[var(--line)] text-[var(--muted)]" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.final || run.outcome.status === "completed" ? outcomeLabel(run) : "Running"}</span>
                       </td>
                     </tr>
-                    {expanded && <tr className="border-b border-[var(--line)]"><td colSpan={10} className="p-0"><Detail run={run} /></td></tr>}
+                    {expanded && <tr className="border-b border-[var(--line)]"><td colSpan={11} className="p-0"><Detail run={run} /></td></tr>}
                   </Fragment>
                 );
               })}
@@ -241,6 +284,7 @@ export function MetricsPanel() {
           </table>
         </div>
       )}
+      {calibration && runs && runs.length > 0 && <Calibration calibration={calibration} />}
       {improvements && <Improvements improvements={improvements} />}
     </section>
   );

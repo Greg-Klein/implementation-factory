@@ -785,3 +785,40 @@ describe("the workflow language setting", () => {
     expect(workflowLanguageOf("de")).toBe("en");
   });
 });
+
+describe("the review confidence in the acceptance summary", () => {
+  const view = deriveAcceptanceCoverage({ registry: registry({ schemaVersion: 1, criteria: [] }), reports: [], now: NOW });
+  const confidence = { score: 2, reasons: [
+    { rule: "incident_open", cap: 2, detail: "1 incident still open." },
+    { rule: "evidence_stale", minus: 0.5, count: 1, detail: "1 piece of evidence taken on code that changed since." },
+    { rule: "rule_of_a_later_version", minus: 1, detail: "Kept as it was stored." },
+  ] };
+
+  it("should leave the note out until the run has one", () => {
+    const summary = renderAcceptanceSummary(view);
+    expect(summary.markdown).not.toContain("Review confidence");
+    expect(summary.json).not.toHaveProperty("confidence");
+  });
+
+  it("should write the note and each reason in the part the merge request quotes", () => {
+    const summary = renderAcceptanceSummary(view, "en", confidence);
+    const description = summary.markdown.slice(summary.markdown.indexOf("## Summary for the merge request description"), summary.markdown.indexOf("## Detail for the review comment"));
+    expect(description).toContain("**Review confidence: 2/5**");
+    expect(description).toContain("- held at 2: 1 incident still open.");
+    expect(description).toContain("- minus 0.5: 1 piece of evidence taken on code that changed since.");
+    expect(description).toContain("- minus 1: Kept as it was stored.");
+    expect(summary.json.confidence).toEqual(confidence);
+  });
+
+  it("should write it in the workflow language from the rule, not from the stored sentence", () => {
+    const markdown = renderAcceptanceSummary(view, "fr", confidence).markdown;
+    expect(markdown).toContain("**Confiance de la revue : 2/5**");
+    expect(markdown).toContain("- plafonnée à 2 : 1 incident encore ouvert.");
+    expect(markdown).toContain("- moins 0,5 : 1 preuve prise sur un code qui a changé depuis.");
+    expect(markdown).not.toContain("still open");
+  });
+
+  it("should say so when nothing lowered the note", () => {
+    expect(renderAcceptanceSummary(view, "en", { score: 5, reasons: [] }).markdown).toContain("Nothing the console observed lowered it.");
+  });
+});

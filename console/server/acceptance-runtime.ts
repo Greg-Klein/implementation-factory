@@ -6,6 +6,8 @@ import { dataRoot, workflowLanguage } from "./config.js";
 import { deliveredCodeSettled } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { acceptanceInputKind, atomicWrite, SUMMARY_FILES, SYNC_ACK_FILE } from "./evidence-archive.js";
+import { confidenceAtDelivery, confidenceKey } from "./review-confidence.js";
+import { computeConfidence } from "./review-confidence-runtime.js";
 import type { RunSession } from "./run-session.js";
 import type { AcceptanceView } from "./types.js";
 import { reportFailure } from "./context.js";
@@ -47,7 +49,7 @@ async function identifyCode(session: RunSession, force: boolean) {
  * in English, out of the same evidence.
  */
 function workflowSummary(session: RunSession, view: AcceptanceView) {
-  return renderAcceptanceSummary(workflowLanguage === "en" ? view : session.evidence.view(workflowLanguage), workflowLanguage);
+  return renderAcceptanceSummary(workflowLanguage === "en" ? view : session.evidence.view(workflowLanguage), workflowLanguage, session.state.confidence);
 }
 
 async function writeSummary(session: RunSession, view: AcceptanceView) {
@@ -68,17 +70,37 @@ async function writeSummary(session: RunSession, view: AcceptanceView) {
 }
 
 /**
+ * Brings the review confidence of the run up to date with what the console
+ * observes now. Returns whether it moved. The note the workflow first ended on
+ * is kept apart: a reopening is held against that one, so it never rewrites it.
+ */
+async function settleConfidence(session: RunSession, forge: boolean) {
+  const state = session.state;
+  const confidence = await computeConfidence(session, { forge });
+  const moved = confidenceKey(confidence) !== confidenceKey(state.confidence);
+  if (moved) {
+    if (confidence) state.confidence = confidence;
+    else delete state.confidence;
+  }
+  const delivered = confidenceAtDelivery(state, confidence);
+  if (delivered === undefined || delivered === state.confidenceAtDelivery) return moved;
+  state.confidenceAtDelivery = delivered;
+  return true;
+}
+
+/**
  * Recomputes the coverage and publishes it when it moved. `snapshot`: identify
  * the code again, which is what turns evidence stale once the code changed.
+ * `forge`: see computeConfidence.
  */
-export function refreshAcceptance(session: RunSession, { snapshot = false }: { snapshot?: boolean } = {}): Promise<AcceptanceView> {
+export function refreshAcceptance(session: RunSession, { snapshot = false, forge = false }: { snapshot?: boolean; forge?: boolean } = {}): Promise<AcceptanceView> {
   return session.evidence.serialize(async () => {
     await identifyCode(session, snapshot);
     const view = session.evidence.view();
     session.acceptanceView = view;
-    if (!session.evidence.hasInputs) return view;
-    const key = acceptanceCountsKey(view);
-    if (key !== session.acceptanceKey) {
+    const key = session.evidence.hasInputs ? acceptanceCountsKey(view) : session.acceptanceKey;
+    const coverageMoved = key !== session.acceptanceKey;
+    if (coverageMoved) {
       session.acceptanceKey = key;
       session.state.acceptance = {
         available: view.available, revision: (session.state.acceptance?.revision ?? 0) + 1, updatedAt: view.updatedAt,
@@ -86,11 +108,23 @@ export function refreshAcceptance(session: RunSession, { snapshot = false }: { s
         ...(view.qa ? { qa: { status: view.qa.status, consistent: view.qa.consistent, unobserved: view.qa.unobserved.length } } : {}),
       };
       session.state.evidenceUpdatedAt = view.updatedAt;
-      await writeSummary(session, view);
+    }
+    const confidenceMoved = await settleConfidence(session, forge);
+    if (coverageMoved || confidenceMoved) {
+      if (session.evidence.hasInputs) await writeSummary(session, view);
       session.publish();
     }
     return view;
   });
+}
+
+/**
+ * What the confidence reads beside the coverage moved: the workflow's state,
+ * the gate log, a finding, the end of the run. The summary the merge request
+ * quotes is written again when the note did.
+ */
+export function refreshConfidence(session: RunSession) {
+  return refreshAcceptance(session, { forge: true });
 }
 
 /** A document of the task directory changed: archive it if coverage reads it, then recompute. */
@@ -101,7 +135,7 @@ export async function ingestAcceptanceInput(session: RunSession, relativePath: s
     const attached = await session.evidence.retryPendingAttachments();
     return ingested || attached;
   });
-  if (changed) await refreshAcceptance(session, { snapshot: true });
+  if (changed) await refreshAcceptance(session, { snapshot: true, forge: true });
 }
 
 /** A capture landed: a report written before it may have been waiting for it. */

@@ -75,6 +75,7 @@ The ones several agents rely on have a fixed English form, so that everyone name
 | "à confirmer" | "to confirm" |
 | "capture restée locale" | "screenshot kept local" |
 | "Verdict QA à confirmer" | "QA verdict to confirm" |
+| "Confiance de la revue" | "Review confidence" |
 | "Empilée sur `<branche>` (…) : à merger après elle." | "Stacked on `<branch>` (…): to be merged after it." |
 
 The cell values of that table (`exécuté`, `simulé`, `non atteint`, `sans objet` and the others) are what the rules of the contracts test: a rule that names one in French means its English form in an English report. Two headings are written in English in both languages, `## Blocked` in a draft merge request description and `## Added after reconciliation` in the design inventory.

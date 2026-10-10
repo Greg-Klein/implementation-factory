@@ -254,9 +254,33 @@ export function reviewConfidence({ state, acceptance, findings, gate, change }: 
     if (change.codeChanged && !change.testChanged) apply("no_test_change");
   }
 
+  return { score: scoreOf(reasons), reasons };
+}
+
+/** The note the rules that applied leave: the lowest cap or what the deductions leave, whichever is lower, rounded down. */
+function scoreOf(reasons: ConfidenceReason[]) {
   const taken = reasons.reduce((sum, reason) => sum + (reason.minus ?? 0), 0);
   const ceiling = Math.min(CONFIDENCE_MAXIMUM, ...reasons.flatMap((reason) => (reason.cap === undefined ? [] : [reason.cap])));
-  return { score: Math.max(0, Math.floor(Math.min(ceiling, CONFIDENCE_MAXIMUM - taken))), reasons };
+  return Math.max(0, Math.floor(Math.min(ceiling, CONFIDENCE_MAXIMUM - taken)));
+}
+
+/**
+ * Brings the note of a run up to date with its incidents alone, from the
+ * reasons it already carries: an incident opens, is resolved or is dismissed
+ * between two readings of everything else, and on an archived run those
+ * readings can no longer be made. Returns whether the note moved. A run with no
+ * note gets none.
+ */
+export function settleIncidentConfidence(state: Pick<RunState, "confidence" | "incidents">) {
+  if (!state.confidence) return false;
+  const open = (state.incidents ?? []).filter((incident) => incident.status === "open").length;
+  const rule: ConfidenceRule = CONFIDENCE_RULES.find((entry) => entry.id === "incident_open")!;
+  const others = state.confidence.reasons.filter((reason) => reason.rule !== rule.id);
+  const reasons = open > 0 ? [...others, { rule: rule.id, cap: rule.value, ...(open > 1 ? { count: open } : {}), detail: CONFIDENCE_DETAILS.incident_open(open) }] : others;
+  const next = { score: scoreOf(reasons), reasons };
+  if (confidenceKey(next) === confidenceKey(state.confidence)) return false;
+  state.confidence = next;
+  return true;
 }
 
 /**
@@ -297,5 +321,6 @@ export function storedConfidence(state: { confidence?: unknown; confidenceAtDeli
 
 /** What two computations are compared by: the note is published and its summary rewritten only when this moves. */
 export function confidenceKey(confidence: ReviewConfidence | undefined) {
-  return confidence ? JSON.stringify([confidence.score, confidence.reasons.map((reason) => [reason.rule, reason.cap, reason.minus, reason.count])]) : "";
+  // Sorted: the same rules say the same thing in whatever order they were applied.
+  return confidence ? JSON.stringify([confidence.score, confidence.reasons.map((reason) => [reason.rule, reason.cap, reason.minus, reason.count]).sort()]) : "";
 }

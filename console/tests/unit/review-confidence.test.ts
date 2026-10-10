@@ -7,7 +7,7 @@ import { acceptanceText } from "../../server/acceptance-text";
 import { changedFiles } from "../../server/auto-merge-policy";
 import { emptyState } from "../../server/domain";
 import {
-  changeAfterReading, type ChangeFacts, changeFacts, changeReadingKey, CONFIDENCE_DETAILS, CONFIDENCE_MAXIMUM, CONFIDENCE_RULES, confidenceAtDelivery, type ConfidenceInput, confidenceKey, gateFacts, pathMatches, reviewConfidence,
+  changeAfterReading, type ChangeFacts, changeFacts, changeReadingKey, CONFIDENCE_DETAILS, CONFIDENCE_MAXIMUM, CONFIDENCE_RULES, confidenceAtDelivery, type ConfidenceInput, confidenceKey, gateFacts, pathMatches, reviewConfidence, settleIncidentConfidence,
 } from "../../server/review-confidence";
 import type { AcceptanceDigest, AgentState, RunIncident } from "../../server/types";
 
@@ -247,6 +247,52 @@ describe("what a diff says of the confidence its review deserves", () => {
     expect(pathMatches("src/*.ts", "src/deep/file.ts")).toBe(false);
     expect(pathMatches("a+b/**", "aab/file")).toBe(false);
     expect(pathMatches("", "anything")).toBe(false);
+  });
+});
+
+describe("the note of a run when one of its incidents moves", () => {
+  const incident = (status: RunIncident["status"]) => ({ status }) as RunIncident;
+  const sensitive = { rule: "sensitive_path", minus: 1, detail: "1 sensitive file changed." };
+
+  it("should hold the note at two as soon as an incident opens, whatever it was", () => {
+    const state = { confidence: { score: 5, reasons: [] }, incidents: [incident("open")] };
+    expect(settleIncidentConfidence(state)).toBe(true);
+    expect(state.confidence).toEqual({ score: 2, reasons: [{ rule: "incident_open", cap: 2, detail: "1 incident still open." }] });
+  });
+
+  it("should give the note back once the incident is resolved or dismissed as a false positive, keeping the other reasons", () => {
+    for (const status of ["resolved", "dismissed"] as const) {
+      const state = { confidence: { score: 2, reasons: [sensitive, { rule: "incident_open", cap: 2, detail: "1 incident still open." }] }, incidents: [incident(status)] };
+      expect(settleIncidentConfidence(state)).toBe(true);
+      expect(state.confidence).toEqual({ score: 4, reasons: [sensitive] });
+    }
+  });
+
+  it("should count the incidents left open and leave a lower cap in force", () => {
+    const failed = { rule: "criterion_failed", cap: 0, detail: "1 acceptance criterion failed." };
+    const state = { confidence: { score: 0, reasons: [failed, { rule: "incident_open", cap: 2, detail: "1 incident still open." }] }, incidents: [incident("open"), incident("open"), incident("resolved")] };
+    expect(settleIncidentConfidence(state)).toBe(true);
+    expect(state.confidence).toEqual({ score: 0, reasons: [failed, { rule: "incident_open", cap: 2, count: 2, detail: "2 incidents still open." }] });
+  });
+
+  it("should say nothing moved when the note already tells the incidents as they are", () => {
+    const open = { confidence: { score: 2, reasons: [{ rule: "incident_open", cap: 2, detail: "1 incident still open." }] }, incidents: [incident("open")] };
+    const none = { confidence: { score: 4, reasons: [sensitive] }, incidents: [incident("resolved")] };
+    expect([settleIncidentConfidence(open), settleIncidentConfidence(none)]).toEqual([false, false]);
+    expect(none.confidence).toEqual({ score: 4, reasons: [sensitive] });
+  });
+
+  it("should give no note to a run that has none", () => {
+    const state: { confidence?: { score: number; reasons: [] }; incidents: RunIncident[] } = { incidents: [incident("open")] };
+    expect(settleIncidentConfidence(state)).toBe(false);
+    expect(state).not.toHaveProperty("confidence");
+  });
+
+  it("should come to the note a whole computation gives for the same incidents", () => {
+    const input = reviewed({ change: change({ sensitive: ["a/auth/x.ts"] }), state: { incidents: [incident("open")] } });
+    const state = { confidence: reviewConfidence({ ...input, state: { ...input.state, incidents: [] } })!, incidents: [incident("open")] };
+    settleIncidentConfidence(state);
+    expect(confidenceKey(state.confidence)).toBe(confidenceKey(reviewConfidence(input)));
   });
 });
 

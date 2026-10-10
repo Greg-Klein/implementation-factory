@@ -26,6 +26,7 @@ import { snapshotScript } from "./code-snapshot.js";
 import { RunSession } from "./run-session.js";
 import { RunArchive } from "./run-archive.js";
 import { healthInput, RunMonitor } from "./run-monitor.js";
+import { settleIncidentConfidence } from "./review-confidence.js";
 import { checkIncidentAction, CONTINUATION_INSTRUCTION, withDecision } from "./run-incidents.js";
 import { pilotActs } from "./run-health.js";
 import { declaredCompletion } from "./workflow-state.js";
@@ -724,6 +725,7 @@ export class RunRegistry {
       session.state.incidents = incidents.map((incident) => incident.status === "open"
         ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: "Run removed from the list" } }
         : incident);
+      settleIncidentConfidence(session.state);
       await session.persist();
     });
     // The exit of the session may still be deciding what becomes of the worktree.
@@ -799,9 +801,12 @@ export class RunRegistry {
       }
       current = withDecision(current, { requestId: request.requestId, action: request.action, at, outcome: "done", detail: message });
       replace(current);
+      // An incident dismissed as a false positive no longer holds the note: on an archived run too, whose other facts can no longer be read.
+      const noteMoved = settleIncidentConfidence(session.state);
       session.answeredRequests.set(request.requestId, { outcome: "done", message });
       session.publish();
       await session.persist();
+      if (noteMoved && live) await refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
       if (session.state.archived) this.archive.release(session.id);
       if (session.state.archived) this.publishSnapshot();
       session.signal();

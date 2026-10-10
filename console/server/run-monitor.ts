@@ -1,7 +1,9 @@
+import { refreshConfidence } from "./acceptance-runtime.js";
 import { runInProgress } from "./domain.js";
 import { demoHealthGraceMs } from "./demo.js";
 import { drainHookSpool } from "./hook-bridge.js";
 import { DEFAULT_HEALTH_POLICY, evaluateRunHealth, healthSignalsView, wokeUpFromSuspension, type HealthInput, type HealthPolicy } from "./run-health.js";
+import { settleIncidentConfidence } from "./review-confidence.js";
 import { reconcileIncidents, resolutionOutcome } from "./run-incidents.js";
 import type { RunSession } from "./run-session.js";
 import type { RunHealthView, WaitReason } from "./types.js";
@@ -67,7 +69,11 @@ export async function applyHealth(session: RunSession, now: number, policy: Heal
     ...(workflow ? { workflow } : {}), evaluatedAt: at,
   };
   let changed = transition.changed || comparable(view) !== comparable(session.state.health);
-  if (transition.changed) session.state.incidents = transition.incidents;
+  if (transition.changed) {
+    session.state.incidents = transition.incidents;
+    // An incident that opens or closes moves the review confidence at once, in the state this publishes.
+    settleIncidentConfidence(session.state);
+  }
   if (comparable(view) !== comparable(session.state.health)) session.state.health = view;
   if (runInProgress(session.state.status) && session.state.status !== "starting") {
     const openLive = transition.incidents.some((incident) => incident.status === "open" && incident.kind !== "lost_session");
@@ -81,6 +87,8 @@ export async function applyHealth(session: RunSession, now: number, policy: Heal
   session.publish();
   // An incident is only worth something if it survives the next crash.
   if (transition.changed) await session.persist();
+  // Everything else the note reads, and the summary the merge request quotes, which is a file.
+  if (transition.changed && session.state.confidence) await refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
   return true;
 }
 

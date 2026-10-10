@@ -222,6 +222,46 @@ describe("actions on an incident", () => {
   });
 });
 
+describe("the review confidence of a run when its incidents move", () => {
+  const rulesOf = (session: InstanceType<typeof RunSession>) => session.state.confidence?.reasons.map((reason) => reason.rule) ?? [];
+  const reviewedRun = (id: string) => {
+    const session = idleRun(id);
+    session.state.artifacts = ["qa-report.md"];
+    session.state.confidence = { score: 5, reasons: [] };
+    return session;
+  };
+
+  it("should lower the note when the monitor opens an incident and give it back when it resolves it", async () => {
+    const session = reviewedRun("run-note-monitor");
+    await monitor.applyHealth(session, T0 + 61_000, policy);
+    expect(session.state.incidents?.[0]?.status).toBe("open");
+    expect(rulesOf(session)).toContain("incident_open");
+    expect(session.state.confidence!.score).toBeLessThanOrEqual(2);
+    expect((JSON.parse(readFileSync(path.join(runsDirectory, session.id, "run.json"), "utf8")) as RunState).confidence?.reasons.map((reason) => reason.rule)).toContain("incident_open");
+    health.recordEngineSignal(session.signals, { kind: "tool.start", tool: "Read", toolUseId: "r1", background: false, endReported: false }, T0 + 100_000);
+    await monitor.applyHealth(session, T0 + 100_000, policy);
+    expect(session.state.incidents?.[0]?.status).toBe("resolved");
+    expect(rulesOf(session)).not.toContain("incident_open");
+  });
+
+  it("should give the note back when the incident is dismissed as a false positive", async () => {
+    const session = reviewedRun("run-note-dismiss");
+    await monitor.applyHealth(session, T0 + 61_000, policy);
+    const incident = session.state.incidents![0]!;
+    expect(rulesOf(session)).toContain("incident_open");
+    const registry = registryWith(session);
+    expect(await registry.incidentAction({ runId: session.id, incidentId: incident.id, expectedRevision: incident.revision, requestId: "d1", action: "dismiss", reason: "It was waiting for me" })).toMatchObject({ outcome: "done" });
+    expect(rulesOf(session)).not.toContain("incident_open");
+  });
+
+  it("should leave a run no reviewer reported on without a note", async () => {
+    const session = idleRun("run-note-none");
+    await monitor.applyHealth(session, T0 + 61_000, policy);
+    expect(session.state.incidents?.[0]?.status).toBe("open");
+    expect(session.state).not.toHaveProperty("confidence");
+  });
+});
+
 describe("after a restart", () => {
   function writeRun(runId: string, state: Partial<RunState>) {
     mkdirSync(path.join(runsDirectory, runId), { recursive: true });

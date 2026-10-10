@@ -549,7 +549,7 @@ flowchart LR
   <div class="chips">
     <div class="chip"><b>Which status wins</b>Failed over blocked, then unverified, then verified. Stale, unversioned or replaced evidence never counts as verified, and a <code>fail</code> is never read as a confirmation.</div>
     <div class="chip"><b>Break attempts</b>A QA item of kind <code>attempt</code> that fails counts against its criterion; any other is listed under it and verifies nothing.</div>
-    <div class="chip warn"><b>QA verdict checked</b>A <code>PASS</code> over a criterion QA did not observe raises a warning in the tab and in the summary, except <code>PASS_WITH_WARNINGS</code> over a criterion only a deployed environment can show.</div>
+    <div class="chip warn"><b>QA verdict checked</b>A <code>PASS</code> over a criterion QA did not observe raises a warning in the tab and in the summary.</div>
     <div class="chip"><b>Coverage frozen at delivery</b>The code is identified until the workflow's end is archived. A rebase or an edit made afterwards, outside a reopening, leaves the delivered coverage as it was.</div>
   </div>
 </section>

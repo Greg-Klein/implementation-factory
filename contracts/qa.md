@@ -29,7 +29,7 @@ One item per row of the `Contrôles` table (`verdict` from its `Résultat` colum
 
 The fields that make it traceable, and that the console relies on:
 
-- **`status`** is the verdict of the report, same token. The console flags a `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no fresh QA observation, except `PASS_WITH_WARNINGS` over a criterion marked `afterDeployment`. A file with no `status`, or another word in it (`verdict` is not read), has a verdict it cannot check: the acceptance summary lists it as an anomaly.
+- **`status`** is the verdict of the report, same token. The console flags a `PASS` or `PASS_WITH_WARNINGS` written while a criterion has no fresh QA observation. A file with no `status`, or another word in it (`verdict` is not read), has a verdict it cannot check: the acceptance summary lists it as an anomaly.
 - **`id`**: `QA-R<round>-<n>`, the round your caller gives you (1 when it gives none), one sequence for every kind of item. Never reuse an id, not even your own from an earlier round.
 - **Links**: an item about a criterion cites its registry id in `criterionIds`, and the `checkIds` it covers when the criterion lists several required checks: an item that names only such a criterion counts for none of its checks, so a test that covers several checks cites each of them. The console reads only these fields: a check id written in `label` or `actual` but missing from `checkIds` counts for nothing, so every check id your text names is in `checkIds` too. The gates (lint, typecheck, the whole suite, build) cite none: a green lint says nothing about any criterion.
 - **A break attempt carries `"kind": "attempt"`** and always cites the criterion it targets, under the rule above: `fail` when it found a defect, `pass` when you executed it and nothing broke, `unverified` when you only read the code. The console counts a `fail` attempt against the criterion and shows the others under it without counting them as a verification. No other item carries `kind`.
@@ -167,7 +167,7 @@ A general gate may be reused instead of rerun when the caller gives its result w
 
 ### INCONCLUSIVE
 
-- At least one acceptance criterion is UNVERIFIED. Name each one under `Non vérifiable`, with its `blocker` in the evidence. A criterion the registry marks `afterDeployment` is the exception: see `PASS_WITH_WARNINGS`
+- At least one acceptance criterion is UNVERIFIED. Name each one under `Non vérifiable`, with its `blocker` in the evidence
 - Or a criterion is MET without an executed break attempt, and `Scénarios manquants` names no concrete obstacle that prevented one
 
 ### PASS_WITH_WARNINGS
@@ -176,7 +176,6 @@ A general gate may be reused instead of rerun when the caller gives its result w
 - Or a check is `fail` and you **proved**, with the evidence in the report, that it fails identically without the diff. That failure stays `fail` in the table, gets its own entry under `Non vérifiable` or `Problèmes`, and is named as out of scope. Proof means you ran the same command on the base state and showed the same failure, not that a report said so
 - Or a general gate (lint, typecheck, a whole suite, build) is `not run`: reduced confidence is a warning, never a silent pass
 - Or a criterion is MET and a concrete obstacle, named under `Scénarios manquants`, prevented any executed break attempt on it
-- Or a criterion the registry marks `afterDeployment` is `not_run`, named under `Non vérifiable` with its `blocker` (what to read after the deployment); every other criterion is met
 
 ### PASS
 

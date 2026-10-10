@@ -12,13 +12,14 @@ Read it once, at the start (`echo "${IMPL_LANGUAGE:-en}"`), and keep it for the 
 - every message of the pilot to the user, progress notes, questions and their options, the final report
 - every report and document of the run: ticket context, open questions, plan, developer, QA, senior and design reports, review summary, runtime recipe
 - the free-text fields of the JSON files: labels, summaries, reasons, descriptions, blockers
-- what is published on the forge: the merge request or pull request description, the review comment, a comment or a correction on another ticket
+- what is published on the forge for this ticket: the merge request or pull request description, the review comment
 
 ## What never changes
 
 - code, identifiers, commands, file names, branch names
 - commit messages and the title of the merge request or pull request: English, conventional prefix
-- JSON field names, enum values and verdict tokens (`PASS`, `PASS_WITH_WARNINGS`, `INCONCLUSIVE`, `measured`, `confirmed`, `unverified`, `P0`, `P1`, `P2`): the console reads them
+- JSON field names, enum values and verdict tokens: the console and the other agents read them. That covers the review verdicts (`PASS`, `PASS_WITH_WARNINGS`, `PASS_WITH_CHANGES`, `INCONCLUSIVE`, `FAIL`, `READY`, `BLOCKED`), the evidence verdicts (`pass`, `fail`, `not_run`, `measured`, `confirmed`, `unverified`), the criterion statuses of the QA report (`MET`, `NOT MET`, `UNVERIFIED`) and the severities (`P0`, `P1`, `P2`)
+- a comment or a correction written on another ticket: it follows the language that ticket is already written in, whatever this setting says, so the ticket stays in one language for the people who read it
 - the strings of the product being built: they follow the ticket and the repository, not this setting
 - `acceptance-summary.md`: the console writes it, already in the workflow language. Quote it as it is
 
@@ -40,7 +41,7 @@ The ones several agents rely on have a fixed English form, so that everyone name
 | `## Pré-revue automatisée` | `## Automated pre-review` |
 | `### Constats` | `### Findings` |
 | `### Corrigé pendant la boucle` | `### Fixed during the loop` |
-| `### Constats écartés` | `### Dismissed findings` |
+| `### Constats écartés`, `## Constats écartés` | `### Dismissed findings`, `## Dismissed findings` |
 | `### Validation` | `### Validation` |
 | `### Captures` | `### Screenshots` |
 | `### Verdict` | `### Verdict` |
@@ -53,10 +54,29 @@ The ones several agents rely on have a fixed English form, so that everyone name
 | `## Tentatives de mise en échec` | `## Break attempts` |
 | `## À vérifier par la QA` | `## To be checked by QA` |
 | `## Risques restants` | `## Remaining risks` |
+| `## Attentes et recherche de contre-exemples` | `## Expectations and counterexample search` |
+| `## Problèmes constatés` | `## Issues found` |
+| `## Problèmes` | `## Issues` |
+| `## Couverture`, `Scénarios manquants` | `## Coverage`, `Missing scenarios` |
+| `## Rapprochement` | `## Reconciliation` |
+| `## Non vérifiable` | `## Not verifiable` |
+| `## Observations par test` | `## Test observations` |
+| `Conflits à arbitrer` | `Conflicts to arbitrate` |
+| `## Encore ouvert` | `## Still open` |
+| `HORS MANDAT`, "hors mandat" | `OUT OF MANDATE`, "out of mandate" |
+| "hors déclencheur" | "outside the trigger" |
+| `test non discriminant` | `non-discriminating test` |
+| `exécuté` / `lu` | `executed` / `read` |
+| `réel` / `simulé` | `real` / `simulated` |
+| `mesuré` / `non atteint` / `sans objet` | `measured` / `not reached` / `not applicable` |
+| `conforme` / `différent` / `absent de l'implémentation` | `conforming` / `different` / `missing from the implementation` |
+| "Aucun", "Rien" | "None" |
 | `Observations sans référence` | `Observations without a reference` |
 | "à confirmer" | "to confirm" |
 | "capture restée locale" | "screenshot kept local" |
 | "Verdict QA à confirmer" | "QA verdict to confirm" |
 | "Empilée sur `<branche>` (…) : à merger après elle." | "Stacked on `<branch>` (…): to be merged after it." |
+
+The cell values of that table (`exécuté`, `simulé`, `non atteint`, `sans objet` and the others) are what the rules of the contracts test: a rule that names one in French means its English form in an English report. Two headings are written in English in both languages, `## Blocked` in a draft merge request description and `## Added after reconciliation` in the design inventory.
 
 Two words keep their meaning across languages. French "livré" means deployed to production, which this workflow never does; a merge is "mergé". In English, never write "shipped", "delivered" or "released" for a ticket whose merge request is only open or merged into a branch: name the stage it reached ("merge request open", "merged into `<branch>`").

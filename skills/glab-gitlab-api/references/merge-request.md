@@ -131,12 +131,12 @@ The header depends on how `glab` is logged in. A token obtained through the OAut
 
 The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
 
-Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-factory:review`:
+Use [the comment format](${CLAUDE_PLUGIN_ROOT}/contracts/review-comments.md) for each finding, exactly like `/implementation-factory:review`: it gives the labels, the decorations and the label a `P0`, `P1` or `P2` takes.
 
 ```md
 ## Pré-revue automatisée
 
-Les revues senior, QA et design ont tourné sur N rounds. Les constats ci-dessous sont ce qui reste après la boucle de retouches.
+Name the reviews that actually ran, and only those, with the number of rounds: "Revue senior en une passe." at tier 0, "Les revues senior, design et QA ont tourné sur N rounds." at tier 2. Then: "Les constats ci-dessous sont ce qui reste après les retouches."
 
 ### Constats
 
@@ -168,7 +168,7 @@ The detail table of `.claude/tasks/acceptance-summary.md`. Every attachment it n
 
 - Lint / typecheck / tests : ...
 - Vérification navigateur : routes et viewports, ou pourquoi ça n'a pas pu tourner
-- Revue design : comparée à Figma / ignorée et pourquoi
+- Revue design : niveau de référence (figma / ticket-mockup / live-neighbours) et verdict / hors déclencheur / non lancée et pourquoi
 
 ### Captures
 

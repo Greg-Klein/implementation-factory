@@ -466,7 +466,7 @@ says.
 
 Three rules, because a careless write costs more than silence:
 
-- **Read the other ticket first.** A comment or an edit that repeats what it already says is noise.
+- **Read the other ticket first, and write in the language it is written in**, whatever the workflow language. A comment or an edit that repeats what it already says is noise.
   Write only what the run actually established and the ticket does not already contain, and if that
   set turns out to be empty, write nothing.
 - **Edit the description when the ticket states something false**, targeted at the sentence

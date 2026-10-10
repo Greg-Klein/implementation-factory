@@ -11,7 +11,7 @@ Reference project `synapse-medicine/app/material` (id `20355218`); epics live on
 
 Commit format `feat: xxx`, **in English** by default.
 
-**French exception**: Greg occasionally asks for French, `fix: ...` titles included. Write in English by default. If he asks for French again on a ticket, rewrite both title and description, and do not carry that over to the next ticket without a new request. On a series of tickets created in the same run, apply French to the whole series as soon as he asks for it on any one of them.
+**French exception, for the title only**: the description is in French in every case (see "Ticket structure"). Greg occasionally asks for a French title too, `fix: ...` titles included. Write the title in English by default. If he asks for French on a ticket, rewrite its title, and do not carry that over to the next ticket without a new request. On a series of tickets created in the same run, apply French titles to the whole series as soon as he asks for it on any one of them.
 
 ## Estimation
 

@@ -4,7 +4,7 @@ The factory separates the responsibilities of the agents, the reusable methods a
 
 The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
 
-The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here.
+The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here. A comment or a correction written on another ticket is the exception: it follows the language that ticket is written in.
 
 ## Who owns what
 
@@ -66,13 +66,13 @@ Standalone impact analysis and dedicated bug diagnosis remain possible evolution
 
 ## Independence of the review
 
-The developer's self-check method is not the review plan. Reviewers start from the specification, the consumers and the code; they state their expectations and their counterexamples before looking at the author's conclusions. The senior records this initial baseline in its report. QA writes it in `qa-plan.md` and the designer in `design-inventory.md`, before opening the author's reports, which the brief passes only by path. They then compare their results with those reports.
+The developer's self-check method is not the review plan. Reviewers start from the specification, the consumers and the code; they state their expectations and their counterexamples before looking at the author's conclusions. The senior records this initial baseline in its report, under a section of its own, apart from the findings the console counts one by one. QA writes it in `qa-plan.md` and the designer in `design-inventory.md`, before opening the author's reports, which the brief passes only by path. They then compare their results with those reports.
 
 `collect-evidence` can be shared: it describes how to run a check and keep the result, without choosing the scenarios or judging whether they are enough. Sharing a recipe for reaching a state does not mean sharing the expected result; stubs and fixtures stay open to challenge.
 
-The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
+The senior remains corrective, in two phases: independent diagnosis, then justified fixes. QA checks the final code after those fixes. At tier 0, a fix by the senior triggers a focused QA check, or stays explicitly unverified if the review budget prevents it. The pilot writes its own gates in `qa-evidence.json` before that check, and the focused pass carries those items over unchanged, so the criteria outside its mandate keep their evidence. At tier 1, a rework made after QA gets the same focused pass on the criteria it touches.
 
-Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. Once its plan is written, QA also reads the `## To be checked by QA` section of the design review and the `## Remaining risks` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
+Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.json`, `browser-recipe.md`, captures) by path. The brief never copies their values. The developer's evidence holds its browser measurements and its test observations, the reproduction of a defect before and after the fix among them. Once its plan is written, QA also reads the `## To be checked by QA` section of the design review and the `## Remaining risks` section of the senior, passed by path, and tests them as hypotheses. These hypotheses do not bound its coverage.
 
 Independence does not guarantee the absence of bias. A diagnosis already present in the brief is declared as such, then a competing explanation is examined. Reworks necessarily expose the findings of the previous round. No quota of defects is imposed.
 
@@ -207,7 +207,7 @@ The pilot decides on the design review while sizing the review, from the diff, a
 
 The designer uses the highest level the brief allows and declares it at the top of the report. A property that level leaves open is judged at the next level. The pilot writes `design-reference.md` when the repository has token files, a brand document or a component library, with their paths and the useful values, so the designer does not open the source code.
 
-- The designer writes `design-inventory.md` from the reference and the brief, before opening any author's evidence. It then measures each line itself, then compares its results with the developer's measurements.
+- The designer writes `design-inventory.md` from the reference and the brief, before opening any author's evidence. It then measures each line itself, then compares its results with the developer's measurements. A later round adds to the inventory and never rewrites it.
 - The objective checks apply at every level, without a design reference (`skills/figma-review/references/objective-checks.md`). They cover the layout invariants, the state matrix, the interaction design measurable in the browser, accessibility, themes, labels and consumer routes.
 - The layout invariants (no horizontal scroll of the page, no text overflowing without ellipsis or scroll, no child outside its parent, no unintended overlap) are measured at each required width: those of the brief, otherwise 360, 768 and 1280, plus the exact width of each frame provided. They are measured with normal content, then with the longest plausible value, an empty value, and zero, one and several items.
 - The state matrix covers eight states per modified interactive element: rest, hover, keyboard focus, active, disabled, loading, empty, error.

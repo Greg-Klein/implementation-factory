@@ -11,7 +11,7 @@ You MUST produce:
 
 .claude/tasks/developer-report-<suffix>.md
 
-3. `.claude/tasks/dev-evidence-<suffix>.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Evidence" tab. Schema:
+3. `.claude/tasks/dev-evidence-<suffix>.json`, the rows of the `## Preuves navigateur` and `## Observations par test` tables below, as data for the console's "Evidence" tab. Schema:
 
 ```json
 {
@@ -30,12 +30,26 @@ You MUST produce:
       "codeSnapshotId": "<id printed before the measurement>", "codeSnapshotAtEnd": "<id printed after it>",
       "expected": "string (the reference value)", "actual": "string (the measured value)",
       "screenshot": "assets/relative-path.png", "note": "route, viewport, how to reproduce"
+    },
+    {
+      "id": "<suffix>-E2",
+      "label": "string (what the test or command establishes, in the workflow language)",
+      "verdict": "measured",
+      "criterionIds": ["AC1"], "taskIds": ["<task id>"],
+      "method": "test",
+      "observedAt": "ISO 8601",
+      "codeSnapshotId": "<id printed before the run>", "codeSnapshotAtEnd": "<id printed after it>",
+      "command": "the literal command run",
+      "expected": "string (the result the criterion asks for)", "actual": "string (what the command returned)",
+      "note": "for a reproduction: before or after the fix, and the id of the other observation"
     }
   ]
 }
 ```
 
-One item per row of the `## Preuves navigateur` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app. `label`, `expected`, `actual` and `note` are written in the workflow language, matching the table; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
+One item per row of the `## Preuves navigateur` table (first shape, `method: "browser"`) and one per row of the `## Observations par test` table (second shape, `method: "test"`, with the literal `command`). Write this file as soon as one of the two tables has a row; skip it entirely rather than writing an empty one when neither has. `label`, `expected`, `actual` and `note` are written in the workflow language, matching the tables; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
+
+- **The reproduction of a defect is two items.** The observation made before the fix (the regression test seen failing, or the faulty behaviour measured on the base code) cites no criterion: it shows the defect, not the criterion. The same reproduction run after the fix cites the criterion it closes and names the earlier id in `note`. A reproduction you could not run is an `unverified` item with its `blocker`, as below.
 
 - **`id`**: `<suffix>-E<n>`. Before a continuation or repeated invocation, read your previous suffixed evidence and the merged `dev-evidence.json`; allocate above the highest number ever used for this suffix. New measurements, including a formerly unverified check, always get new ids and name the older ids in `supersedes`. Never recycle table positions as ids. If you cannot establish earlier ids, ask the caller for a fresh suffix rather than guessing. An unchanged observation retains its id and exact content.
 - **`criterionIds`** are the registry ids (`.claude/tasks/acceptance-criteria.json`) the row measures, among those your task serves; add `checkIds` when that criterion lists several required checks, since a row that names only such a criterion counts for none of its checks. A row that measures no criterion cites none.
@@ -96,6 +110,17 @@ instead.
 | ... | valeur lue dans le DOM en direct | nœud Figma, ticket, ou la valeur du design | `.claude/tasks/assets/<nom>.png` | route, viewport, et la section de `browser-recipe.md` qui pose l'état s'il a fallu un harnais |
 
 - Critères non mesurables, et pourquoi (app inaccessible, pas de credentials, état non atteignable)
+
+## Observations par test
+
+One row per test or command that establishes a criterion, the reproduction of a
+defect before and after the fix included. Omit the section when no criterion
+rests on a test, and say so in one line instead. The general gates (lint,
+typecheck, the whole suite) do not go here.
+
+| Critère | Commande exécutée | Attendu | Constaté | Moment |
+| --- | --- | --- | --- | --- |
+| ... | commande littérale | ... | ... | avant la correction / après la correction / sans objet |
 
 ## Limites connues
 

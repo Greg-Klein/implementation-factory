@@ -141,7 +141,7 @@ Without a worktree the probe is not applicable: it is no obstacle, no missing sc
 
 ## Focused pass
 
-When the brief names a mandate (criteria ids, or the behavior a correction changed), the plan, the tables, the break attempt floor and the verdict cover the criteria in the mandate only. List every other criterion under `Critères d'acceptation` as HORS MANDAT with who covers it (an earlier QA item by id, the pilot's evidence, or nobody), and write no item for it. Put the mandate's criterion ids in a root `"mandate"` array of the evidence. Run the gates the correction can affect; the others are `not run` with "hors mandat" and do not weigh on the verdict.
+When the brief names a mandate (criteria ids, or the behavior a correction changed), the plan, the tables, the break attempt floor and the verdict cover the criteria in the mandate only. List every other criterion under `Critères d'acceptation` as HORS MANDAT with who covers it (an earlier QA item by id, the pilot's evidence, or nobody), and write no item for it. Put the mandate's criterion ids in a root `"mandate"` array of the evidence. When `qa-evidence.json` already holds items written by the pilot (`"producer": { "role": "pilot" }` on the item, ids `GATE-<n>` and `PILOT-<n>`), copy them into your file unchanged, each with its own `producer`: they are the pilot's evidence for the criteria outside your mandate, and dropping them leaves those criteria with nothing. One that covers a criterion of your mandate is replaced the usual way, by a new item of yours naming it in `supersedes`. Run the gates the correction can affect; the others are `not run` with "hors mandat" and do not weigh on the verdict.
 
 ## Severity Definition
 
@@ -184,4 +184,4 @@ A general gate may be reused instead of rerun when the caller gives its result w
 - Every acceptance criterion is MET, each with at least one executed break attempt
 - No P0 issue
 
-A single `fail` or `not run` line rules `PASS` out, even a harmless one. `PASS_WITH_WARNINGS` is the honest verdict there, and it exits the review loop just as `PASS` does. `INCONCLUSIVE` and `FAIL` do not exit it: a criterion nobody observed, or nobody tried to break, is never written up as a warning.
+A single `fail` or `not run` line rules `PASS` out, even a harmless one. `PASS_WITH_WARNINGS` is the honest verdict there. Like `PASS`, it lets the review loop end, on one more condition your caller checks: no `P1` is left open, since a `P1` you report goes to rework whatever your verdict. `INCONCLUSIVE` and `FAIL` do not exit it: a criterion nobody observed, or nobody tried to break, is never written up as a warning.

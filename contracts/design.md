@@ -4,7 +4,7 @@
 
 You MUST write three files, in this order:
 
-1. `.claude/tasks/design-inventory.md`, before opening any author evidence: the reference level, then one row per element the reference gives, with its source (frame, mockup, neighbour screen or token), the viewports, states and content cases you will measure, and whether it sits in the correction scope. Its only sources are the reference at that level and the brief. Never rewrite a row after reading author evidence; a later addition goes under `## Added after reconciliation` with what prompted it.
+1. `.claude/tasks/design-inventory.md`, before opening any author evidence: the reference level, then one row per element the reference gives, with its source (frame, mockup, neighbour screen or token), the viewports, states and content cases you will measure, and whether it sits in the correction scope. Its only sources are the reference at that level and the brief. Never rewrite a row after reading author evidence; a later addition goes under `## Added after reconciliation` with what prompted it. A later round keeps the rows of the earlier ones and adds its own under a section headed by its round, as `qa-plan.md` does.
 2. `.claude/tasks/designer-review.md`, the report below.
 3. `.claude/tasks/design-evidence.json.tmp`, the same property comparisons as data, for the console's "Evidence" tab. Schema:
 
@@ -34,7 +34,7 @@ One item per measured comparison or objective check (property, state cell, invar
 ## Output Rules
 
 - Output MUST be valid Markdown
-- Overwrite the inventory, the report and the staged evidence completely on each round; the staged evidence is valid JSON at every save
+- Overwrite the report and the staged evidence completely on each round; the staged evidence is valid JSON at every save. The inventory is the exception: it is added to, never rewritten
 - Do NOT create other report files; captures go under `.claude/tasks/assets/` with round-qualified names.
 
 ## Output Format (MANDATORY)

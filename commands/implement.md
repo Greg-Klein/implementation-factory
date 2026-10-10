@@ -283,7 +283,7 @@ A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, 
 
 **Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer` and `qa-reviewer` keep their default Opus model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap. `designer-reviewer` runs on Sonnet, its default, at every tier: its work is mostly measurement.
 
-**The gates you run yourself still get written down.** At tier 0 follow [pilot evidence](${CLAUDE_PLUGIN_ROOT}/contracts/pilot-evidence.md) and write `qa-evidence.json` only when QA did not produce it. Never overwrite a QA report or normalize its valid measured/confirmed/unverified tokens into pass/fail.
+**The gates you run yourself still get written down.** At tier 0 follow [pilot evidence](${CLAUDE_PLUGIN_ROOT}/contracts/pilot-evidence.md) and write `qa-evidence.json` once your gates have run, before the focused `qa-reviewer` pass when there is one: it carries your items over. Never overwrite a QA report or normalize its valid measured/confirmed/unverified tokens into pass/fail.
 
 **Bound every tier in time, whatever the tier.** Two rules, both enforced by you:
 

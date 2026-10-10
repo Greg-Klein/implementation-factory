@@ -687,6 +687,17 @@ describe("QA verdict consistency", () => {
       expect(view.qa).toMatchObject({ consistent: false, unobserved: ["AC3"] });
     });
 
+    it("should keep counting the pilot's items the focused pass carried over, for the criteria outside its mandate", () => {
+      const view = coverage({ reports: [report("qa-evidence.json", qa([
+        { id: "PILOT-1", label: "Erreur", verdict: "pass", criterionIds: ["AC3"], producer: { role: "pilot" } },
+        { id: "QA-R1-1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] },
+      ], { status: "PASS", mandate: ["AC1"], producer: { role: "qa-reviewer" } }))] });
+      expect(view.qa).toMatchObject({ consistent: true, unobserved: [], mandate: ["AC1"] });
+      expect(criterion(view, "AC3").status).toBe("verified");
+      const evidence = criterion(view, "AC3").checks.flatMap((check) => check.evidence);
+      expect(evidence.map((entry) => [entry.id, entry.producer?.role])).toEqual([["PILOT-1", "pilot"]]);
+    });
+
     it("should accept a single id, and ignore ids the registry does not know or that are not strings", () => {
       expect(coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate: "AC2" }))] }).qa).toMatchObject({ mandate: ["AC2"], unobserved: ["AC2"] });
       expect(coverage({ reports: [report("qa-evidence.json", qa([], { status: "PASS", mandate: ["AC9", 4, null, " AC3 "] }))] }).qa).toMatchObject({ mandate: ["AC3"], unobserved: ["AC3"] });

@@ -100,7 +100,7 @@ An obvious behaviour is not a gap. A close button closes the modal, a cancel but
 
 **A gap the run instruction already answers is not a gap.** Record the answer with "run instruction" as its basis and move on. Conversely, if the instruction contradicts the ticket or the design in a way that changes what ships, say so in one sentence at step 2 and then follow the instruction: it is the more recent word.
 
-**English translations are never a gap.** Tickets give the French strings and never the English ones. Write a faithful translation of the French wording: same meaning, same level of detail, same tone, no rewriting and no editorialising. Fill both `fr.json` and `en.json` and move on. Only ask when the French string itself is missing.
+**A translation the ticket does not give is never a gap.** When the ticket gives a user-facing string in one language and the repository ships others, write a faithful translation into each of them: same meaning, same level of detail, same tone, no rewriting and no editorialising. Fill every locale file the repository already keeps for the surface and move on. Only ask when the source string itself is missing.
 
 ---
 
@@ -164,7 +164,7 @@ Record the base branch. The merge request will target it, whatever it is. A stac
 
 **On a GitHub ticket, move nothing and go to step 4**: an issue has no lifecycle status, at this step or at step 8. Say so once in the final report.
 
-On GitLab, move the ticket to **In progress**, unless it already is. The branch exists and the work
+On GitLab, move the ticket to its "work started" status, unless it already carries it. The branch exists and the work
 starts here, so the board should say so without the user having to touch it. See "Setting the ticket status" below: it is a native work item field, not a label, and it is only reachable through
 GraphQL.
 
@@ -336,7 +336,7 @@ A design verdict `INCONCLUSIVE`, or a design review you decided to run and skipp
 
 Read `.claude/tasks/acceptance-summary.md` and the final review results. Preserve failed, blocked and unverified criteria. Use the delivery recipe of the ticket's forge, `implementation-factory:glab-gitlab-api` with [the merge request recipe](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/merge-request.md) on GitLab, `implementation-factory:gh-github-api` with [the pull request recipe](${CLAUDE_PLUGIN_ROOT}/skills/gh-github-api/references/pull-request.md) on GitHub, to prepare the exact description before publication, written with `implementation-factory:unslop`, push only the feature branch, from the checkout you worked in (the run worktree in worktree mode), and open the MR against the chosen base. When the base came from `IMPL_BASE_BRANCH`, tell the recipe the merge request is stacked and on which branch: it changes the keyword and adds a line to the description. When `IMPL_DELIVERY_PROJECTS` is set, give the recipe its projects (see "Repository resolution"): they change the reference and the keyword. An unresolved P0/P1, a QA `INCONCLUSIVE` or a blocked review means a draft, never an assertion of readiness. Set the initiating user's reviewer identity and verify it; no assignee and no automatic merge. On GitHub the author of a pull request cannot be its reviewer: the recipe says what to record instead.
 
-Then, on GitLab only, set the ticket's authorized lifecycle status to `In progress - Merge request`, reading the result back. A status failure is reported, not hidden.
+Then, on GitLab only, set the ticket's authorized lifecycle status to its "merge request open" status (see "Setting the ticket status"), reading the result back. A status failure is reported, not hidden.
 
 A commit made after the merge request exists is pushed too. In worktree mode the console keeps the run worktree as long as HEAD is not on the remote.
 
@@ -447,7 +447,7 @@ In worktree mode:
 
 This section is GitLab's. On GitHub there is no status to set and nothing here applies.
 
-You choose the lifecycle transition at step 3 (`In progress`) and step 8 (`In progress - Merge request`). Use `implementation-factory:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
+You choose the lifecycle transition at step 3 and at step 8. Status names belong to the GitLab group, so they are settings and never written here: read them once, `echo "${IMPL_GITLAB_STATUS_STARTED:-In progress}"` for step 3 and `echo "${IMPL_GITLAB_STATUS_MERGE_REQUEST:-In progress - Merge request}"` for step 8, and pass the name to the recipe. A name the project does not have is answered by the list of valid ones: report it, and never pick another status yourself. Use `implementation-factory:glab-gitlab-api` with [native status mechanics](${CLAUDE_PLUGIN_ROOT}/skills/glab-gitlab-api/references/work-item-status.md): read first, write only if needed, inspect GraphQL errors and read the resulting name. Report a failure without halting unrelated work.
 
 ---
 
@@ -523,7 +523,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
 - Only you touch git: branches, commits, push, MR. The one exception is the throwaway QA worktree the orchestrator creates and removes at tier 2, when the diff touches test files. It is never the run worktree and never sits under `.claude/worktrees/`
-- On GitLab the ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8. On GitHub it is never moved
+- On GitLab the ticket status is moved twice, by you, to the two names the settings give: at step 3 and at step 8. On GitHub it is never moved
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review

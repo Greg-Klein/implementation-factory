@@ -37,7 +37,7 @@ The principles and contracts are read explicitly from the plugin path. The `CLAU
 | `gh-github-api` | A GitHub operation chosen and authorised by the caller, when the ticket is a GitHub issue. | Adapted recipe and check of the result. |
 | `unslop` | Any text read by a person: report, summary, question, MR description or comment, ticket, documentation, free field of a JSON artifact. | Sentences without AI tics, format and language of the contract unchanged. |
 
-`gitlab-tickets` keeps its Synapse conventions. These conventions do not become universal engineering principles.
+`gitlab-tickets` keeps the ticket conventions of the team the factory was first written for. These conventions do not become universal engineering principles, and the identifiers they need (`IMPL_GITLAB_TICKET_PROJECT`, `IMPL_GITLAB_EPIC_GROUP`, `IMPL_GITLAB_ASSIGNEE`) are read from the `.env`, never written in the skill.
 
 Skills are called under their qualified name in the plugin, for example `implementation-factory:how`. The technical agents have dynamic skill discovery. The designer, which has no `Skill` tool, preloads only `implementation-factory:figma-review` and reads the references that skill cites. If the preload is missing, it first reads the entry of the skill. This documentary reading does not allow it to read the product code.
 

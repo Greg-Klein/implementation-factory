@@ -366,7 +366,11 @@ The available settings:
 | `IMPL_WORKTREE_DEPENDENCY_DIRS` | names of the dependency directories Git ignores that the worktree of a run takes from the main checkout, at any depth, separated by commas; no build outputs | `node_modules` |
 | `IMPL_WORKTREE_COPY_FILES` | files copied from the main checkout to the worktree of a run, separated by commas: a name pattern such as `.env*` for files Git ignores, or a path from the root of the repository | `.env*,.claude/settings.local.json` |
 | `IMPL_STALL_MINUTES` | minutes without progress before the console raises a doubt about a run in progress (a doubt only: nothing is stopped or restarted) | `10` |
+| `IMPL_GITLAB_STATUS_STARTED` | name of the GitLab status a run gives its ticket when it creates the branch; status names depend on the GitLab group, and nothing is moved on GitHub | `In progress` |
+| `IMPL_GITLAB_STATUS_MERGE_REQUEST` | name of the GitLab status a run gives its ticket once the merge request is open | `In progress - Merge request` |
 | `IMPL_DEMO_STEP_MS` | duration of a step in demo mode | `5000` |
+
+Three more variables are read only by the `gitlab-tickets` skill, which holds ticket-writing conventions, and are not offered by `impl config`: `IMPL_GITLAB_TICKET_PROJECT` (path of the project tickets are created in), `IMPL_GITLAB_EPIC_GROUP` (path of the group the epics live in) and `IMPL_GITLAB_ASSIGNEE` (username the tickets are assigned to). Write them in the `.env` by hand when you use that skill.
 
 A variable set in the shell wins over the `.env`, which wins over the default. A one-off setting therefore needs no write:
 

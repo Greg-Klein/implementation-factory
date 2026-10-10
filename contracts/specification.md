@@ -22,7 +22,7 @@ Never resolve a contradiction silently. Say which sources disagree, on what, whi
 
 A specification gap is never filled by imagination. Three ways out, in this order:
 
-1. **Deduce, when it is genuinely obvious.** Standard interaction behaviour, an existing convention in the repository, a comparable screen already shipped, an explicit answer in the Figma file. A close button closes the modal, a cancel discards and closes, `Escape` closes an overlay, a spinner shows while loading. The English translation of a French string the ticket does provide also belongs here: translate faithfully, never ask. Implement it and write the deduction down in the report.
+1. **Deduce, when it is genuinely obvious.** Standard interaction behaviour, an existing convention in the repository, a comparable screen already shipped, an explicit answer in the Figma file. A close button closes the modal, a cancel discards and closes, `Escape` closes an overlay, a spinner shows while loading. The translation of a string the ticket does provide, into the other languages the repository ships, also belongs here: translate faithfully, never ask. Implement it and write the deduction down in the report.
 2. **Ask, when the answer is a decision.** A product rule, a user facing string, a limit or threshold, a data source, a permission, an error behaviour, a scope boundary, a state the ticket never mentions. These are nobody's to choose but the user's, whatever the cost in autonomy.
 3. **Never guess in silence.** No plausible placeholder copy, no invented endpoint, no arbitrary limit, no `// TODO: confirm with product` buried in a diff.
 

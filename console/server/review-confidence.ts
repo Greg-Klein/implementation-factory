@@ -269,6 +269,32 @@ export function confidenceAtDelivery(state: Pick<RunState, "confidenceAtDelivery
   return confidence && state.workflow?.state === "completed" ? confidence.score : undefined;
 }
 
+const isScore = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= CONFIDENCE_MAXIMUM;
+
+/**
+ * The confidence fields of a run read back from `run.json`: a file, so each is
+ * checked. A note out of range or a reason without its sentence is dropped, and
+ * a reason of a rule this version no longer has is kept with the sentence it
+ * was stored with.
+ */
+export function storedConfidence(state: { confidence?: unknown; confidenceAtDelivery?: unknown; feedbackCount?: unknown }): Pick<RunState, "confidence" | "confidenceAtDelivery" | "feedbackCount"> {
+  const stored = state.confidence as { score?: unknown; reasons?: unknown } | null | undefined;
+  const amount = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
+  const reasons = stored && Array.isArray(stored.reasons) ? stored.reasons.flatMap((entry: unknown): ConfidenceReason[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const { rule, cap, minus, count, detail } = entry as Record<string, unknown>;
+    if (typeof rule !== "string" || !rule || typeof detail !== "string" || !detail) return [];
+    const effect = { cap: amount(cap), minus: amount(minus), count: amount(count) };
+    if (effect.cap === undefined && effect.minus === undefined) return [];
+    return [{ rule, ...Object.fromEntries(Object.entries(effect).filter(([, value]) => value !== undefined)), detail }];
+  }) : [];
+  return {
+    ...(stored && typeof stored === "object" && isScore(stored.score) ? { confidence: { score: stored.score, reasons } } : {}),
+    ...(isScore(state.confidenceAtDelivery) ? { confidenceAtDelivery: state.confidenceAtDelivery } : {}),
+    ...(typeof state.feedbackCount === "number" && Number.isInteger(state.feedbackCount) && state.feedbackCount > 0 ? { feedbackCount: state.feedbackCount } : {}),
+  };
+}
+
 /** What two computations are compared by: the note is published and its summary rewritten only when this moves. */
 export function confidenceKey(confidence: ReviewConfidence | undefined) {
   return confidence ? JSON.stringify([confidence.score, confidence.reasons.map((reason) => [reason.rule, reason.cap, reason.minus, reason.count])]) : "";

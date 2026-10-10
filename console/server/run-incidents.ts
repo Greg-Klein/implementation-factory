@@ -1,4 +1,5 @@
 import { closeAbandonedAgents, runInProgress } from "./domain.js";
+import { storedConfidence } from "./review-confidence.js";
 import type { HealthInput, HealthVerdict, IncidentCandidate } from "./run-health.js";
 import type { IncidentAction, IncidentDecision, RunIncident, RunState } from "./types.js";
 
@@ -198,6 +199,8 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     ...(state.factory ? { factory: state.factory } : {}), ...(state.baseCommit ? { baseCommit: state.baseCommit } : {}),
     ...(state.baseBranch ? { baseBranch: state.baseBranch } : {}), ...(state.ticketBaseBranch ? { ticketBaseBranch: state.ticketBaseBranch } : {}),
     ...(state.transcriptPath ? { transcriptPath: state.transcriptPath } : {}),
+    // The note the interface shows and the calibration counts: figures written again after a restart are built from this state.
+    ...storedConfidence(state),
     // A question whose session is gone cannot be answered: its text stays, in the incident, as context.
     pendingQuestion: undefined,
     sessionActive: false,

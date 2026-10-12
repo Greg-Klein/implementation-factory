@@ -28,7 +28,7 @@ const SECRETS = [
 /** A file whose content the command sends: `key=@file`, `--body-file file`, `-F file`, `$(cat file)`. A file it only mentions is not read. */
 const PUBLISHED_FILE = /(?:@|(?:--body-file|--file|-F|\bcat)[\s=]+["']?)((?:\.{0,2}\/)?[\w.@/-]+)/g;
 const MAX_PUBLISHED_BYTES = 1_000_000;
-const SESSION_TRACE = /co-authored-by:|claude-session:|claude\.ai\/code\/session_|generated with \[claude code\]/i;
+const SESSION_LINK = /claude-session:|claude\.ai\/code\/session_/i;
 
 /** The task directory of the workflow, from the session's directory or one of its parents. */
 export function taskDirectory(cwd) {
@@ -326,8 +326,8 @@ export function guardDecision(payload, env = process.env) {
 
   if (payload.tool_name === "Bash") {
     const command = typeof input.command === "string" ? input.command : "";
-    if (PUBLISHING.test(command) && SESSION_TRACE.test(command)) {
-      return "Nothing this run publishes carries a trace of the session: remove the Co-Authored-By or Claude-Session trailer, the claude.ai/code/session_ link and the \"Generated with\" line, then run the command again.";
+    if (PUBLISHING.test(command) && SESSION_LINK.test(command)) {
+      return "Nothing this run publishes links to the session: remove the Claude-Session trailer and the claude.ai/code/session_ link, then run the command again. The Co-Authored-By trailer and the \"Generated with\" line can stay.";
     }
     if (PUBLISHING.test(command) || API_WRITE.test(command)) {
       const secret = publishedSecret(command, payload.cwd);

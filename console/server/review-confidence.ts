@@ -81,7 +81,7 @@ export const CONFIDENCE_DETAILS: Record<ConfidenceRuleId, (occurrences: number) 
   evidence_stale: (n) => `${count(n, "piece of evidence", "pieces of evidence")} taken on code that changed since.`,
   gate_failed: () => "A check of the stop gate still failed when its agent handed over.",
   gate_unchecked: () => "A check of the stop gate could not conclude.",
-  evidence_anomaly: (n) => `${count(n, "evidence file", "evidence files")} could not be read as its contract says.`,
+  evidence_anomaly: (n) => `${count(n, "traceability anomaly", "traceability anomalies")} in the evidence files.`,
   review_order: (n) => `${count(n, "reviewer", "reviewers")} wrote its expectations after its report.`,
   rework_repeated: (n) => `${n} rework rounds before the review ended.`,
   reviewer_lost: (n) => `${count(n, "reviewer", "reviewers")} ended without an outcome.`,

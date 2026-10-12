@@ -297,7 +297,7 @@ The gate has three limits. During a parallel batch it only sees the edits made t
 
 ## Review confidence
 
-A review that ends `READY` says nothing of how much of the change a person still has to read. The console gives every reviewed run a note from 0 to 5: at 0 a person reviews everything, at 5 nothing the console observed stands against the automated review. The note is shown with each rule that lowered it, in the "Evidence" tab, in the list of runs, in the metrics, in `impl show` and in the summary the merge request quotes.
+A review that ends `READY` says nothing of how much of the change a person still has to read. The console gives every reviewed run a note from 0 to 5: at 0 a person reviews everything, at 5 nothing the console observed stands against the automated review. The note is shown with each rule that lowered it, in the "Evidence" tab, in the list of runs, in the metrics, in `impl show` and at the top of the merge request's review comment.
 
 No agent declares the note and no model computes it. `reviewConfidence` in `console/server/review-confidence.ts` is a pure function: the same facts give the same note. Three rules hold its table together:
 
@@ -323,7 +323,7 @@ The note starts at 5. A rule either holds it at a cap while its fact stands, or 
 | `qa_missing` | held at 3 | no QA report declares a verdict, which is what tier 0 leaves when no focused pass ran | the coverage |
 | `test_removed` | held at 3 | a test file was deleted, renamed out of the tests, or gained a skipped or isolated test | the diff |
 | `criterion_unverified` | minus 1 each, 3 at most | an acceptance criterion is unverified | the coverage |
-| `evidence_stale` | minus 0.5 each, 1.5 at most | a piece of evidence was taken on code that changed since | the coverage |
+| `evidence_stale` | minus 0.5 each, 1.5 at most | a piece of evidence was taken on code that changed since, on a check no evidence on the current code verifies | the coverage |
 | `gate_failed` | minus 1 | a check of the stop gate still failed at its last verdict for an agent | `gate-log.jsonl` |
 | `gate_unchecked` | minus 0.5 | a check of the stop gate ended `skipped` or `inconclusive` | `gate-log.jsonl` |
 | `evidence_anomaly` | minus 0.5 | an evidence file does not follow its contract | the coverage's diagnostics |
@@ -345,7 +345,7 @@ A finding of the code review is open when it belongs to the last round the revie
 
 The reading stays cheap. The diff is read again only when the code snapshot changed or when the base it is measured from did, which is what the opening of the merge request and the answer on its target branch are. A reading that fails leaves the diff unknown, and the last one read is kept only once the worktree is gone. The gate log is read again only when its copy grew, the target branch of the merge request is asked of the forge once, and never for a page that only reads. The note is recomputed when a document of the run arrives and when the run ends. An incident that opens, is resolved or is dismissed as a false positive moves it at once, from the reasons the note already carries, so the page never shows a note its incidents contradict; on an archived run, whose other facts can no longer be read, that is the only thing that moves it.
 
-**What the merge request says.** The note and its reasons are written in `acceptance-summary.md`, in the part the description quotes, in the workflow language. The pilot copies the line, it never computes or rewords a note. The line is the note as it stood when the pilot read the summary: a draft or a blocked end lowers the note in the console afterwards.
+**What the merge request says.** The note and its reasons are written in `acceptance-summary.md`, in a section of their own, in the workflow language. The pilot copies that section, bold note first, at the top of the review comment, never into the description, and at the top of the follow-up comment of a change asked after the final report, read again from the summary as it then stands. It never computes or rewords a note. The line is the note as it stood when the pilot read the summary: a draft or a blocked end lowers the note in the console afterwards.
 
 **Calibration.** A note is worth what follows it. `RunState.confidenceAtDelivery` keeps the note the run had when its workflow first declared its end, and a change asked later never rewrites it. `confidenceCalibration` then counts, per note, the delivered runs that were reopened after the final report and those the user wrote feedback on, from three delivered runs per note. `GET /api/metrics` serves it as `calibration`, the metrics panel and `impl metrics` show it. Only what the console sees itself counts: it does not read the comments or the commits a person adds to the merge request.
 

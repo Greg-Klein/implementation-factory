@@ -396,7 +396,7 @@ The session stays open after step 10, and the user often writes again: a questio
 2. When the request changes what must be true, or covers something no criterion states, write a new revision of `acceptance-criteria.json`, as at step 2, and record the request verbatim in `open-questions.md` as a user decision.
 3. Delegate the change to a `developer` with `rework<N>` as its artifact suffix and the request verbatim as binding, then commit it as at step 5.
 4. Review its own diff at the tier step 7 sizes it to, with the browser measurement when the change is visible.
-5. Push, correct every sentence of the MR description and review comment the change made false, and post a short follow-up comment saying what changed.
+5. Push, correct every sentence of the MR description and review comment the change made false, and post a short follow-up comment saying what changed. Read `acceptance-summary.md` again first: the follow-up comment starts with its review confidence section as it now stands, the way the step 9 comment does.
 6. Close as step 10 does: `completed` with the next revision, archive sync, cleaning, and a report limited to what this request changed.
 
 ---

@@ -253,6 +253,16 @@ describe("acceptance coverage", () => {
       expect(view.counts.stale).toBe(1);
     });
 
+    it("should not count stale evidence on a check that current evidence verifies", () => {
+      const view = coverage({ reports: [
+        report("dev-evidence-T1.json", qa([{ id: "T1-E1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: OLD, atEnd: OLD } })),
+        report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }])),
+      ] });
+      expect(criterion(view, "AC1").status).toBe("verified");
+      expect(criterion(view, "AC1").checks[0]!.evidence.map((entry) => entry.freshness).sort()).toEqual(["current", "stale"]);
+      expect(view.counts.stale).toBe(0);
+    });
+
     it("should call a measurement inconclusive when the code moved during it", () => {
       const view = coverage({ reports: [report("qa-evidence.json", qa([{ id: "Q1", label: "Filtre", verdict: "pass", checkIds: ["AC1-C1"] }], { codeSnapshot: { atStart: OLD, atEnd: CURRENT } }))] });
       expect(criterion(view, "AC1").checks[0]!.evidence[0]!.freshness).toBe("inconclusive");
@@ -800,13 +810,15 @@ describe("the review confidence in the acceptance summary", () => {
     expect(summary.json).not.toHaveProperty("confidence");
   });
 
-  it("should write the note and each reason in the part the merge request quotes", () => {
+  it("should write the note and each reason in a section of its own for the top of the review comment", () => {
     const summary = renderAcceptanceSummary(view, "en", confidence);
-    const description = summary.markdown.slice(summary.markdown.indexOf("## Summary for the merge request description"), summary.markdown.indexOf("## Detail for the review comment"));
-    expect(description).toContain("**Review confidence: 2/5**");
-    expect(description).toContain("- held at 2: 1 incident still open.");
-    expect(description).toContain("- minus 0.5: 1 piece of evidence taken on code that changed since.");
-    expect(description).toContain("- minus 1: Kept as it was stored.");
+    const description = summary.markdown.slice(summary.markdown.indexOf("## Summary for the merge request description"), summary.markdown.indexOf("## Note for the top of the review comment"));
+    const note = summary.markdown.slice(summary.markdown.indexOf("## Note for the top of the review comment"), summary.markdown.indexOf("## Detail for the review comment"));
+    expect(description).not.toContain("Review confidence");
+    expect(note.split("\n")).toContain("**Review confidence: 2/5**");
+    expect(note).toContain("- held at 2: 1 incident still open.");
+    expect(note).toContain("- minus 0.5: 1 piece of evidence taken on code that changed since.");
+    expect(note).toContain("- minus 1: Kept as it was stored.");
     expect(summary.json.confidence).toEqual(confidence);
   });
 

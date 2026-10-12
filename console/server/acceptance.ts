@@ -579,6 +579,8 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
     diagnostics.push({ level: "warning", file: "planner-output.json", message: t.planRevision(input.plan.criteriaRevision, input.registry.revision) });
   }
 
+  // Stale evidence counts only on a check the current code leaves unverified: beside a current result that
+  // verifies its check, it is the history of earlier rounds and says nothing of the code as it stands.
   const staleCounted = new Set<string>();
   const criteriaViews: AcceptanceCriterionView[] = criteria.map((criterion) => {
     const checks: AcceptanceCheckView[] = criterion.checks.map((check) => {
@@ -590,7 +592,6 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
         if ((entry.criteriaRevision ?? 1) < criterion.revision) { reasons.push(t.olderCriterionVersion(entry.view.label)); continue; }
         const result = effective(entry);
         if (result.problem) reasons.push(result.problem);
-        if (result.freshness === "stale") staleCounted.add(entry.identity);
         counted.push({ entry, outcome: result.outcome, freshness: result.freshness });
       }
       const failing = counted.filter(({ outcome, freshness }) => outcome === "negative" && (freshness === "current" || freshness === "unknown"));
@@ -622,6 +623,7 @@ export function deriveAcceptanceCoverage(input: CoverageInput): AcceptanceView {
           if (outcome === "none") reasons.push(t.notRun(entry.view.label, entry.view.actual));
         }
       }
+      if (status !== "verified") for (const { entry, freshness } of counted) if (freshness === "stale") staleCounted.add(entry.identity);
       const active = linked.filter((entry) => !entry.view.supersededBy).map((entry) => entry.view);
       const history = linked.filter((entry) => entry.view.supersededBy).map((entry) => entry.view);
       return { id: check.id, description: check.description, ...(check.method ? { method: check.method } : {}), status, reasons: [...new Set(reasons)], evidence: active, history };
@@ -739,7 +741,7 @@ export type AcceptanceSummary = {
 
 /**
  * The summary the workflow reads before the merge request. Short part for the
- * description, detail for the review comment. Attachments are named by their
+ * description, the review confidence and the detail for the review comment. Attachments are named by their
  * local path and marked as such: whoever publishes them uploads them first and
  * swaps in the returned link, a local path being unreachable from the forge.
  * `language` is the workflow language, and `view` must have been derived in
@@ -760,7 +762,7 @@ function confidenceLines(confidence: ReviewConfidence, language: WorkflowLanguag
   const t = acceptanceText(language).confidence;
   const sentence = (reason: ConfidenceReason) => (Object.hasOwn(t.reason, reason.rule) ? t.reason[reason.rule as keyof typeof t.reason](reason.count ?? 1) : reason.detail);
   const reasons = confidence.reasons.map((reason) => (reason.cap !== undefined ? t.cap(reason.cap, sentence(reason)) : t.minus(reason.minus ?? 0, sentence(reason))));
-  return [t.line(confidence.score, CONFIDENCE_MAXIMUM), "", ...(reasons.length > 0 ? reasons : [t.clean]), ""];
+  return [t.heading, "", t.line(confidence.score, CONFIDENCE_MAXIMUM), "", ...(reasons.length > 0 ? reasons : [t.clean]), "", t.meaning(CONFIDENCE_MAXIMUM), ""];
 }
 
 export function renderAcceptanceSummary(view: AcceptanceView, language: WorkflowLanguage = "en", confidence?: ReviewConfidence): AcceptanceSummary {

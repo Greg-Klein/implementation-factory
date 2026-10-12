@@ -721,7 +721,7 @@ flowchart LR
       facts: ["Observed facts", "Files and state", "What the console reads itself beside the coverage: the diff since the base (size, sensitive paths, tests removed or disabled), the last verdict of each stop gate check, the findings of the code review, the incidents and the workflow's state."],
       confidence: ["review-confidence.ts", "Server", "Pure: starts from 5, holds the note at a cap or takes points off for each rule that applies. The note at the first end of the workflow is kept apart, and the metrics hold it against what followed delivery."],
       tab: ["Evidence tab", "Interface", "The full view, served by /api/runs/<id>/acceptance."],
-      summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request. Carries the review confidence and its reasons."],
+      summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request. Carries the review confidence and its reasons, for the top of the review comment."],
       mr: ["Pilot", "Claude Code", "Prepares the description from the summary: failed or unverified criteria stay visible."],
     },
   };

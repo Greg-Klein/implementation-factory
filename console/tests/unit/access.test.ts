@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "../../server/access";
+import { allowedHosts, clientAddress, hostAllowed, isLoopbackHost, macAllowed, macInNeighbourEntry, normalizeMac, originAllowed, tokenMatches } from "../../server/access";
 
 describe("who may talk to the console", () => {
   const hosts = allowedHosts(3210, "127.0.0.1");
@@ -45,6 +45,38 @@ describe("who may talk to the console", () => {
     expect(isLoopbackHost("::1")).toBe(true);
     expect(isLoopbackHost("0.0.0.0")).toBe(false);
     expect(isLoopbackHost("192.168.1.5")).toBe(false);
+  });
+
+  it("should answer to a name the user gave it, and to no other", () => {
+    const named = allowedHosts(3210, "0.0.0.0", ["192.168.1.5"], ["MacMini.home"]);
+    expect(hostAllowed("macmini.home:3210", named)).toBe(true);
+    expect(originAllowed("http://macmini.home:3210", named)).toBe(true);
+    expect(hostAllowed("evil.example:3210", named)).toBe(false);
+    expect(hostAllowed("macmini.home:3210", hosts)).toBe(false);
+  });
+
+  it("should read a hardware address whatever the tool that wrote it", () => {
+    expect(normalizeMac("0:ce:39:d0:48:c")).toBe("00:ce:39:d0:48:0c");
+    expect(normalizeMac("00-CE-39-D0-48-0C")).toBe("00:ce:39:d0:48:0c");
+    expect(normalizeMac("00:ce:39:d0:48")).toBeUndefined();
+    expect(normalizeMac("not-a-mac")).toBeUndefined();
+    expect(macInNeighbourEntry("? (192.168.0.4) at 0:ce:39:d0:48:c on en0 ifscope [ethernet]")).toBe("00:ce:39:d0:48:0c");
+    expect(macInNeighbourEntry("192.168.0.4 ether 00:ce:39:d0:48:0c C eth0")).toBe("00:ce:39:d0:48:0c");
+    expect(macInNeighbourEntry("? (192.168.0.99) at (incomplete) on en0 ifscope [ethernet]")).toBeUndefined();
+    expect(macInNeighbourEntry("192.168.0.99 (192.168.0.99) -- no entry")).toBeUndefined();
+  });
+
+  it("should let in only the devices listed, and none the neighbour table does not know", () => {
+    const listed = new Set(["00:ce:39:d0:48:0c"]);
+    expect(macAllowed("00:ce:39:d0:48:0c", listed)).toBe(true);
+    expect(macAllowed("dc:b4:d9:5c:67:bc", listed)).toBe(false);
+    expect(macAllowed(undefined, listed)).toBe(false);
+  });
+
+  it("should read the address of an IPv4 client reported in its IPv6 form", () => {
+    expect(clientAddress("::ffff:192.168.1.5")).toBe("192.168.1.5");
+    expect(clientAddress("192.168.1.5")).toBe("192.168.1.5");
+    expect(clientAddress(undefined)).toBe("");
   });
 
   it("should accept only the exact hook secret", () => {

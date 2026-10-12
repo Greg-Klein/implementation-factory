@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { concurrencyLimit, listSetting, permissionMode, positiveDuration, scheduleDirectory } from "./domain.js";
 import { workflowLanguageOf } from "./acceptance-text.js";
 import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
+import { normalizeMac } from "./access.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envFile = process.env.IMPL_ENV_FILE ?? path.resolve(consoleRoot, "..", ".env");
@@ -31,6 +32,14 @@ export function setListeningPort(value: number) { port = value; }
 /** On unless explicitly turned off. */
 export function selfImprovementAutorun() { return process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "false"; }
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
+/** Other names the console answers to, a local DNS name pointing at this machine for instance. */
+export const givenHostNames = listSetting(process.env.IMPL_ALLOWED_HOSTS, []);
+/**
+ * The devices let in from the network, by hardware address; empty lets every
+ * device in. An entry that is not a hardware address stays in the set, where it
+ * matches nothing: a typo closes the door instead of opening it to everyone.
+ */
+export const allowedMacs = new Set(listSetting(process.env.IMPL_ALLOWED_MACS, []).map((entry) => normalizeMac(entry) ?? entry.toLowerCase()));
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 /** The language of what a run writes for people; the interface is in English whatever it says. */

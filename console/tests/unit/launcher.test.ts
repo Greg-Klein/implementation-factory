@@ -71,7 +71,7 @@ describe("implementation-factory launcher", () => {
 
   it("should say no console answers, with the exit code of a stopped server, instead of starting one to read from", async () => {
     const port = await freePort();
-    const { code, stderr } = launch(["runs"], { IMPL_PORT: String(port), IMPL_CONSOLE_URL: "" });
+    const { code, stderr } = launch(["runs"], { IMPL_PORT: String(port), IMPL_HOST: "127.0.0.1", IMPL_CONSOLE_URL: "" });
     expect(code).toBe(3);
     expect(stderr).toContain(`No Implementation Factory console answers at http://127.0.0.1:${port}`);
   });

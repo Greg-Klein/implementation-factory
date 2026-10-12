@@ -7,7 +7,8 @@ import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send } from "./context.js";
-import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken } from "./config.js";
+import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken, givenHostNames, allowedMacs } from "./config.js";
+import { deviceAllowed } from "./device-access.js";
 import { readArtifact } from "./artifacts.js";
 import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
@@ -33,7 +34,7 @@ import type { ClientMessage } from "./types.js";
 /** Read at each request: port zero binds a free port, only known after listening. */
 function consoleHosts() {
   const addresses = Object.values(os.networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []);
-  return allowedHosts(port, hostname, addresses);
+  return allowedHosts(port, hostname, addresses, givenHostNames);
 }
 
 function readBody(request: IncomingMessage) {
@@ -226,6 +227,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   // A page on another site that got a name of its own resolved to this address
   // still sends that name: refused before anything is read or run.
   if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Host not allowed." }); return; }
+  if (!await deviceAllowed(request.socket.remoteAddress)) { respond(response, 403, { error: "Device not allowed." }); return; }
   const requestPath = request.url?.split("?")[0];
   if (request.method === "POST" && requestPath === "/api/hooks") {
     const token = new URL(request.url ?? "", "http://console").searchParams.get("token") ?? request.headers["x-impl-hook-token"]?.toString();
@@ -406,7 +408,10 @@ server.on("upgrade", (request, socket, head) => {
     socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
     return;
   }
-  wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
+  void deviceAllowed(request.socket.remoteAddress).then((allowed) => {
+    if (!allowed) { socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); return; }
+    wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
+  });
 });
 wss.on("connection", (socket) => {
   clients.set(socket, {});
@@ -442,7 +447,7 @@ if (!address || typeof address === "string") throw new Error("The server has no 
 setListeningPort(address.port);
 const url = `http://${hostname}:${port}`;
 console.log(`Implementation Factory: ${url}`);
-if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. Anyone who reaches it can drive the ${engine.label} sessions in progress.`);
+if (!isLoopbackHost(hostname)) console.warn(`Warning: the console is listening on ${hostname}, it is reachable from the network. ${allowedMacs.size > 0 ? "Any device listed in IMPL_ALLOWED_MACS, or passing for one," : "Anyone who reaches it"} can drive the ${engine.label} sessions in progress.`);
 // A rejection nothing handles is a defect: it is logged with what it says and
 // shown once, instead of resting on whatever handler a dependency happens to install.
 process.on("unhandledRejection", (reason) => reportFailure("Unhandled failure in the console")(reason));

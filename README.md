@@ -359,6 +359,8 @@ The available settings:
 | `IMPL_REMOTE_CONTROL` | Remote Control on the terminal of a run | `true` |
 | `IMPL_PORT` | listening port | `3210` |
 | `IMPL_HOST` | listening interface; outside the loopback, the console is reachable from the network and says so on start | `127.0.0.1` |
+| `IMPL_ALLOWED_HOSTS` | other host names the console answers to, separated by commas, a local DNS name pointing at this machine for instance | empty |
+| `IMPL_ALLOWED_MACS` | hardware (MAC) addresses of the devices let in from the network, separated by commas; empty lets every device in. This machine is always let in, and a device that is not on the local network is refused. A filter, not an authentication | empty |
 | `IMPL_NO_OPEN` | `1` to start without opening the browser | `0` |
 | `IMPL_MAX_CONCURRENT_RUNS` | number of runs held in parallel, from 1 to 10; beyond it, launches wait in the queue | `3` |
 | `IMPL_SCHEDULE_TIMEOUT_MINUTES` | minutes given to the analysis of a batch of tickets, per repository, from 1 to 60; past it, the tickets of that repository run one at a time | `5` |

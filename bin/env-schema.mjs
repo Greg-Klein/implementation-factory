@@ -40,6 +40,18 @@ function validateText(value) {
   return value.trim() ? [] : [issue("error", "a non-empty value is expected")];
 }
 
+/** Host names as a browser sends them: no scheme, no port, no path. */
+function validateHostNames(value) {
+  return splitRoots(value).flatMap((name) =>
+    /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(name) ? [] : [issue("error", `not a host name: ${name}`)]);
+}
+
+/** Six pairs of hexadecimal digits, separated by colons or dashes. */
+function validateMacAddresses(value) {
+  return splitRoots(value).flatMap((address) =>
+    /^[0-9a-f]{1,2}([:-][0-9a-f]{1,2}){5}$/i.test(address) ? [] : [issue("error", `not a hardware address: ${address}`)]);
+}
+
 /** The console resolves the path as it is written, so a leading ~ would not be expanded. */
 function validateOptionalAbsolutePath(value) {
   const trimmed = value.trim();
@@ -127,6 +139,26 @@ export const schema = [
     kind: "text",
     readBy: "console",
     validate: validateText,
+  },
+  {
+    key: "IMPL_ALLOWED_HOSTS",
+    label: "Other names the console answers to",
+    comment: "Comma-separated host names the console also answers to, a local DNS name pointing at this machine for instance; leave empty to answer only to its addresses.",
+    help: "Host names the console also answers to, separated by commas. Empty to answer only to its addresses.",
+    fallback: "",
+    kind: "list",
+    readBy: "console",
+    validate: validateHostNames,
+  },
+  {
+    key: "IMPL_ALLOWED_MACS",
+    label: "Devices let in from the network",
+    comment: "Comma-separated hardware (MAC) addresses of the devices let in when the server is reachable from the network; leave empty to let every device in. This machine is always let in. A filter, not an authentication: a hardware address can be forged.",
+    help: "Hardware (MAC) addresses of the devices let in from the network, separated by commas. Empty to let every device in.",
+    fallback: "",
+    kind: "list",
+    readBy: "console",
+    validate: validateMacAddresses,
   },
   {
     key: "IMPL_NO_OPEN",

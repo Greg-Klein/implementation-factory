@@ -24,13 +24,15 @@ export function isLoopbackHost(host: string) {
 
 /**
  * Every `host:port` the console answers to: the loopback names, the interface it
- * binds, and, when it binds every interface, each address the machine holds.
+ * binds, when it binds every interface, each address the machine holds, and the
+ * names the user gave it, a local DNS name pointing at this machine for instance.
  */
-export function allowedHosts(port: number, bindHost: string, interfaceAddresses: string[] = []) {
+export function allowedHosts(port: number, bindHost: string, interfaceAddresses: string[] = [], givenNames: string[] = []) {
   const names = new Set(LOOPBACK_NAMES);
   const bound = bindHost.trim().toLowerCase();
   if (bound) names.add(hostLiteral(bound));
   if (WILDCARD_HOSTS.has(bound)) for (const address of interfaceAddresses) names.add(hostLiteral(address.toLowerCase()));
+  for (const name of givenNames) if (name.trim()) names.add(hostLiteral(name.trim().toLowerCase()));
   return new Set([...names].map((name) => `${name}:${port}`));
 }
 
@@ -47,6 +49,33 @@ export function originAllowed(originHeader: string | undefined, allowed: Set<str
   if (origin.protocol !== "http:" && origin.protocol !== "https:") return false;
   const port = origin.port || (origin.protocol === "https:" ? "443" : "80");
   return allowed.has(`${origin.hostname.toLowerCase()}:${port}`);
+}
+
+/** An IPv4 client of a listener bound to every interface may be reported as `::ffff:a.b.c.d`. */
+export function clientAddress(remoteAddress: string | undefined) {
+  return (remoteAddress ?? "").trim().toLowerCase().replace(/^::ffff:/, "");
+}
+
+/** One spelling for a hardware address: macOS prints `0:ce:39:d0:48:c`, other tools `00-CE-39-D0-48-0C`. */
+export function normalizeMac(value: string) {
+  const parts = value.trim().toLowerCase().split(/[:-]/);
+  if (parts.length !== 6 || parts.some((part) => !/^[0-9a-f]{1,2}$/.test(part))) return undefined;
+  return parts.map((part) => part.padStart(2, "0")).join(":");
+}
+
+/** The hardware address the neighbour table (`arp -n <address>`) holds for a device, when it holds one. */
+export function macInNeighbourEntry(output: string) {
+  const found = /(?<![0-9a-f:-])[0-9a-f]{1,2}(?:[:-][0-9a-f]{1,2}){5}(?![0-9a-f:-])/i.exec(output);
+  return found ? normalizeMac(found[0]) : undefined;
+}
+
+/**
+ * Whether a device is let in by its hardware address. A filter, not a proof of
+ * identity: a hardware address is sent in clear on the local network and anyone
+ * there can take one. An address the table does not know is refused.
+ */
+export function macAllowed(mac: string | undefined, allowed: Set<string>) {
+  return Boolean(mac) && allowed.has(mac!);
 }
 
 /** Compared in constant time, so the answer does not leak how much of the token was right. */

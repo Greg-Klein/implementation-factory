@@ -403,7 +403,7 @@ flowchart LR
 <svg class="xlinks" aria-hidden="true"></svg>
 </div></div>
   <div class="chips">
-    <div class="chip"><b>What the guard refuses</b>A workflow agent under its bare name, a Dev on a model other than Sonnet or Opus, a reviewer started while a task has no report, a session trailer in a commit or a publication, a publication that shows a credential, a git command that destroys work.</div>
+    <div class="chip"><b>What the guard refuses</b>A workflow agent under its bare name, a Dev on a model other than Sonnet or Opus, a reviewer started while a task has no report, a session link in a commit or a publication, a publication that shows a credential, a git command that destroys work.</div>
     <div class="chip"><b>What the stop gate runs</b>Per package the edited files belong to: the type-check, then the lint and the related tests of those files. A failure sends the agent back once. Every verdict is a line of <code>gate-log.jsonl</code>.</div>
     <div class="chip"><b>Lost hooks</b><code>emit.mjs</code> retries once, then spools the event. The spool is replayed before the next hook and on every monitor tick, and <code>hookId</code> drops the duplicates.</div>
     <div class="chip warn"><b>Fails open</b>A guard that cannot read what it checks lets the call through, and so does a gate that cannot run a check. <code>IMPL_STOP_GATE=off</code> disables the gate.</div>

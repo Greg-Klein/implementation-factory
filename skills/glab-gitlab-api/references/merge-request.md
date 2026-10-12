@@ -96,7 +96,7 @@ What does **not** belong in the description, because it is noise for the reviewe
 
 All of that either belongs in the review comment of step 9, or nowhere. The description answers "what changed and why", nothing else.
 
-One more thing is banned here, for a different reason than noise: **the link to the engine's session**, and the `Co-Authored-By` trailer. That is the step 5 rule, and it holds for this description and for the step 9 comment exactly as it holds for a commit message.
+One more thing is banned here, for a different reason than noise: **the link to the engine's session**, and the `Claude-Session` trailer. The `Co-Authored-By` trailer and the "Generated with" line stay. That is the step 5 rule, and it holds for this description and for the step 9 comment exactly as it holds for a commit message.
 
 **Nothing about the machine that ran the session**, in the description or in the step 9 comment: its shell hooks and command wrappers, the environment prefix its commands needed, its local paths, the workaround a reviewer used to get a true output. The people on the merge request do not have that machine, so they can neither reproduce nor act on it, and it publishes the operator's setup. A check that could not run is still reported, in terms of the project (which command, what it could not establish). Anything about the machine goes to the final report of step 10.
 

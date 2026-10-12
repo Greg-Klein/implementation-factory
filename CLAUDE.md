@@ -34,7 +34,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, unit, build, integration. `npm r
 - While working, and before a commit: `npm run typecheck` and the unit tests the change concerns, the whole unit suite (30 s) when in doubt.
 - Before a push: `npm run verify` once, on the tree that is pushed. When the diff only touches documentation, prompts (`agents/`, `commands/`, `skills/`, `contracts/`, `principles/`) or `hooks/`, the unit suite is enough: it is what reads them, and the integration suite does not.
 - Run these yourself and report their real output, including when a subagent already said the work passes.
-- After a change under `console/` or `bin/`, run `impl restart`, otherwise the running console still serves the old build.
+- After a change under `console/` or `bin/`, run `npm run build` in `console/`, then `impl restart`. The restart does not build: the server runs `server/` through `tsx` but serves the interface from `.next/`, so a change under `components/`, `lib/` or `app/` stays invisible until it is built.
 
 `impl demo` (or the demo mode in the UI) replays a simulated run from `server/demo.ts` / `demo-data.ts` without touching any repo or GitLab. Integration tests lean on it. `/?demo=incident` plays a pilot that hands back with nothing next, `/?demo=batch` a batch of three invented tickets with one conflict (`DEMO_BATCH`, canned analysis, merge request merged by a timer).
 
@@ -96,7 +96,6 @@ Runtime data lives in `console/data/runs/<run-id>/` (`run.json`, `metrics.json`,
 - Developer `self-check` and independent `review-change` must remain separate. `collect-evidence` supplies execution mechanics, never the reviewer's scenario selection or verdict. Reviewer expectations are established before reading author conclusions: QA writes them to `qa-plan.md`, the design reviewer to `design-inventory.md`, and briefs pass author evidence by path only.
 - The design review (`designer-reviewer`, file `agents/designer-reviewer-figma.md`, skill `figma-review`) runs on Sonnet at every tier. With a mockup (Figma frames or one attached to the ticket) it runs on any change visible in the UI, tier 0 included; with no mockup at all, only when the diff modifies a shared UI component or creates a screen or route (the pilot decides). QA gets a disposable worktree only when the diff touches test files. A QA verdict `INCONCLUSIVE` never exits as ready. A design verdict `INCONCLUSIVE` is reported as "design not verified" and does not block.
 - Editing `commands/` or `agents/` changes the workflow prompts run against real tickets; `implement.md` and agents are tightly coupled to Claude Code tool names.
-- After changing server code, a running `impl` must be restarted (`impl restart`), otherwise it serves a stale Next manifest (unstyled page).
 
 ## Code habits
 

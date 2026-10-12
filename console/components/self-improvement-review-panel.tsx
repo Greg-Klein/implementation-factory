@@ -102,7 +102,7 @@ function CheckingRow({ review }: { review: PendingSelfImprovementReview }) {
   );
 }
 
-function MergedRow({ merge, onRevert, onViewReport }: { merge: AutomaticMerge; onRevert: () => void; onViewReport: () => void }) {
+function MergedRow({ merge, onRevert, onViewReport, onDismiss }: { merge: AutomaticMerge; onRevert: () => void; onViewReport: () => void; onDismiss: () => void }) {
   return (
     <Strip tone="muted">
       <div className="flex min-w-0 flex-col gap-1">
@@ -116,6 +116,7 @@ function MergedRow({ merge, onRevert, onViewReport }: { merge: AutomaticMerge; o
       <div className="flex shrink-0 items-center gap-2">
         <button type="button" onClick={onViewReport} className={ACTION}><FileTextIcon size={12} /> View the report</button>
         <button type="button" onClick={onRevert} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><ArrowCounterClockwiseIcon size={12} /> Revert</button>
+        <button type="button" onClick={onDismiss} aria-label="Close" title="Close" className="grid size-7 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)]"><XIcon size={13} /></button>
       </div>
     </Strip>
   );
@@ -146,14 +147,39 @@ function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: Pendin
   );
 }
 
+const DISMISSED_MERGES_KEY = "impl.dismissedMerges";
+
+function readDismissedMerges(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISSED_MERGES_KEY) ?? "[]") as unknown;
+    return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedMerges(names: string[]) {
+  try { localStorage.setItem(DISMISSED_MERGES_KEY, JSON.stringify(names)); } catch { /* storage unavailable: the banner comes back on reload */ }
+}
+
 export function SelfImprovementReviewPanel({ reviews, merged = [], onApprove, onReject, onRevert }: { reviews: PendingSelfImprovementReview[]; merged?: AutomaticMerge[]; onApprove: (worktreeName: string) => void; onReject: (worktreeName: string) => void; onRevert: (worktreeName: string) => void }) {
   const [shown, setShown] = useState<ShownDocument | null>(null);
+  // Read after mount: the server renders this page and has no localStorage.
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  useEffect(() => setDismissed(readDismissedMerges()), []);
+  const dismiss = (worktreeName: string) => {
+    // Only the merges still listed are kept, so the stored list does not grow forever.
+    const next = [...dismissed.filter((name) => merged.some((merge) => merge.worktreeName === name)), worktreeName];
+    setDismissed(next);
+    writeDismissedMerges(next);
+  };
+  const shownMerges = merged.filter((merge) => !dismissed.includes(merge.worktreeName));
 
-  if (reviews.length === 0 && merged.length === 0) return null;
+  if (reviews.length === 0 && shownMerges.length === 0) return null;
 
   return (
     <>
-      {merged.map((merge) => <MergedRow key={`merged-${merge.worktreeName}`} merge={merge} onRevert={() => onRevert(merge.worktreeName)} onViewReport={() => setShown({ worktreeName: merge.worktreeName, kind: "report" })} />)}
+      {shownMerges.map((merge) => <MergedRow key={`merged-${merge.worktreeName}`} merge={merge} onRevert={() => onRevert(merge.worktreeName)} onDismiss={() => dismiss(merge.worktreeName)} onViewReport={() => setShown({ worktreeName: merge.worktreeName, kind: "report" })} />)}
       {reviews.map((review) => review.status === "analyzing"
         ? <AnalyzingRow key={review.worktreeName} review={review} />
         : review.status === "ready" && review.autoMerge

@@ -22,7 +22,7 @@ Before you open the plan, the report or the diff, read the processed feedback en
 
 ## 2. Read the change
 
-Read the plan (`planPath`), the report (`reportPath`), then the diff (`diffPath`) and the changed files under `worktreePath`. Compare them with your expectation and go through the reasons to hold of the contract, one by one. For reason 6, search `docs/`, `README.md` and `CLAUDE.md` under `worktreePath` for the names the diff touches (modules, agents, commands, settings, file names) and check that what they say is still true.
+Read the plan (`planPath`), the report (`reportPath`), then the diff (`diffPath`) and the changed files under `worktreePath`. Compare them with your expectation and go through the reasons to hold of the contract, one by one. For reason 6, search `docs/`, `README.md`, `AGENTS.md` and `CLAUDE.md` under `worktreePath` for the names the diff touches (modules, agents, commands, settings, file names) and check that what they say is still true.
 
 ## 3. Decide and write
 

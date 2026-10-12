@@ -69,7 +69,7 @@ Implement only changes directly supported by the feedback and run evidence. Pref
 
 For instruction changes, read `docs/engineering-workflow.md` first. Put reusable procedures in the responsible skill or its conditional reference, role decisions in the agent, formats in `contracts/`, and scheduling in the command. Do not paste a skill body back into agent briefs. Preserve the separation between developer self-checks and independent review; shared measurement mechanics must not become a shared verdict or scenario checklist.
 
-Keep the documentation true in the same commit: whenever `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md` or `CLAUDE.md` describes something you change (installation, configuration, behavior, an agent, a command, data storage), update that passage. A branch that leaves them stale is rejected by the judge.
+Keep the documentation true in the same commit: whenever `docs/` (`architecture.html`, `agent-map.html`, `engineering-workflow.md`), `README.md`, `AGENTS.md` or `CLAUDE.md` describes something you change (installation, configuration, behavior, an agent, a command, data storage), update that passage. A branch that leaves them stale is rejected by the judge.
 
 ## 4. Validate independently
 

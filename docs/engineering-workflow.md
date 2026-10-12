@@ -19,7 +19,7 @@ The console's interface is in English. The language of what the workflow writes 
 | `hooks/gate.mjs` | The checks an editing agent's own files call for, run again when it stops. |
 | `contracts/` | Output formats, specification policy, handoff and identity of evidence. |
 
-The principles and contracts are read explicitly from the plugin path. The `CLAUDE.md` of this repository documents the development of the factory; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
+The principles and contracts are read explicitly from the plugin path. The `AGENTS.md` of this repository, which its `CLAUDE.md` imports, documents the development of the factory; it is not meant to be injected into the projects the plugin drives. No proprietary YAML field for loading the principles is introduced.
 
 ## Capabilities and triggers
 

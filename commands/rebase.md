@@ -50,4 +50,6 @@ If a check fails because of the replay, fix the resolution. If it fails for a re
 
 Commit nothing new: the rebase already rewrote the branch's own commits. Never merge into the factory, never push, never open a merge request. The console reruns its checks and its judge on the replayed branch, then merges it or rejects it.
 
+Nobody watches this session and it cannot ask a question: when something is the user's to decide, leave the branch where it was and say so in the report.
+
 End with a short report: the commit replayed onto, the files that conflicted and how you resolved each one, the checks you ran and their results, and anything you deliberately left alone.

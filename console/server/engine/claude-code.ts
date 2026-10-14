@@ -234,11 +234,13 @@ export function sessionArguments({ pluginDir, sessionName, command }: { pluginDi
  * The command line of a session that works on the factory itself, detached, in
  * a worktree of its own. Each names its model, so the user's default one never
  * decides: Opus to diagnose a run and rewrite what drives the next ones, Sonnet
- * to replay a branch.
+ * to replay a branch. No page shows a detached session, so a question it asked
+ * would hold it blocked with nobody to answer: the tool is denied.
  */
 export function backgroundArguments({ pluginDir, worktreeName, sessionName, model, command }: { pluginDir: string; worktreeName: string; sessionName: string; model: "opus" | "sonnet"; command: string }) {
   return [
     "--background", "--worktree", worktreeName,
+    "--disallowedTools", "AskUserQuestion",
     "--add-dir", pluginDir,
     "--plugin-dir", pluginDir,
     "--model", model,

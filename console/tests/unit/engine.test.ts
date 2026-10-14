@@ -171,6 +171,10 @@ describe("a session that works on the factory", () => {
     expect(valueOf("--permission-mode")).toBe("auto");
     expect(args.at(-1)).toBe("/implementation-factory:rebase abc123");
   });
+
+  it("should deny the question tool, which nobody would answer", () => {
+    expect(valueOf("--disallowedTools")).toBe("AskUserQuestion");
+  });
 });
 
 describe("the headless scheduling session", () => {

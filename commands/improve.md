@@ -96,6 +96,8 @@ Always leave the commit on its improvement branch. Never merge it into the prima
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 
+Nobody watches this session and it cannot ask a question. When a decision is the user's, take the safest one that still lets the report be written, and name it in the report; never wait.
+
 Write `$ARGUMENTS/improvement-report-<slug>.md` last, after the commit and the move of the feedback files: the console reads its presence as the sign that you are done. Write it with `implementation-factory:unslop`, with the same slug as the plan, containing:
 
 - branch and commit;

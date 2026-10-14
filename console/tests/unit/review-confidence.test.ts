@@ -141,11 +141,13 @@ describe("the review confidence of a run", () => {
     expect(rules(unread)).toEqual(["diff_unknown"]);
   });
 
-  it("should lower the note with the size of the change, the larger threshold replacing the smaller", () => {
+  it("should lower the note once for the size of the change, the heaviest size rule replacing the others", () => {
     expect(rules(reviewed({ change: change({ lines: 400, files: 15 }) }))).toEqual([]);
     expect(rules(reviewed({ change: change({ lines: 401 }) }))).toEqual(["diff_large"]);
-    expect(rules(reviewed({ change: change({ lines: 1001, files: 16 }) }))).toEqual(["diff_very_large", "diff_many_files"]);
-    expect(score(reviewed({ change: change({ lines: 1001, files: 16 }) }))).toBe(3);
+    expect(rules(reviewed({ change: change({ lines: 30, files: 16 }) }))).toEqual(["diff_many_files"]);
+    expect(rules(reviewed({ change: change({ lines: 401, files: 16 }) }))).toEqual(["diff_large"]);
+    expect(rules(reviewed({ change: change({ lines: 1001, files: 16 }) }))).toEqual(["diff_very_large"]);
+    expect(score(reviewed({ change: change({ lines: 1001, files: 16 }) }))).toBe(4);
   });
 
   it("should lower the note on a sensitive path, a removed test and code changed without a test", () => {

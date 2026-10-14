@@ -333,7 +333,7 @@ The note starts at 5. A rule either holds it at a cap while its fact stands, or 
 | `diff_unknown` | minus 0.5 | the diff could not be read | git |
 | `diff_large` | minus 0.5 | more than 400 lines changed | the diff |
 | `diff_very_large` | minus 1 | more than 1000 lines changed, in place of the rule above | the diff |
-| `diff_many_files` | minus 0.5 | more than 15 files changed | the diff |
+| `diff_many_files` | minus 0.5 | more than 15 files changed, when neither rule above applies | the diff |
 | `sensitive_path` | minus 1 | a file under a sensitive path changed | the diff, `IMPL_SENSITIVE_PATHS` |
 | `no_test_change` | minus 0.5 | source code changed and no test file did | the diff |
 

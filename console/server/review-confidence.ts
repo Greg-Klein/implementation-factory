@@ -249,7 +249,7 @@ export function reviewConfidence({ state, acceptance, findings, gate, change }: 
     apply("test_removed", change.removedTests.length);
     if (change.lines > CONFIDENCE_DIFF_LINES.veryLarge) apply("diff_very_large", change.lines);
     else if (change.lines > CONFIDENCE_DIFF_LINES.large) apply("diff_large", change.lines);
-    if (change.files > AUTO_MERGE_LIMITS.files) apply("diff_many_files", change.files);
+    else if (change.files > AUTO_MERGE_LIMITS.files) apply("diff_many_files", change.files);
     apply("sensitive_path", change.sensitive.length);
     if (change.codeChanged && !change.testChanged) apply("no_test_change");
   }

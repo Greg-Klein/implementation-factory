@@ -120,6 +120,22 @@ export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number,
   return exitCode === 0 ? "Session ended" : "Session interrupted";
 }
 
+/** How long after an interrupt typed in the run's terminal the session's exit is still the user's doing. */
+export const INTERRUPT_EXIT_WINDOW_MS = 5_000;
+
+/** ETX, what a terminal sends for Ctrl-C, whatever program reads it. */
+export function carriesInterrupt(input: string) {
+  return input.includes("\u0003");
+}
+
+/**
+ * A Ctrl-C typed in the run's terminal closes the session without a `run.stop`.
+ * An exit that follows it closely is the user's stop, not a lost session.
+ */
+export function exitFollowsInterrupt(interruptedAt: number | null, exitAt: number) {
+  return interruptedAt !== null && exitAt >= interruptedAt && exitAt - interruptedAt <= INTERRUPT_EXIT_WINDOW_MS;
+}
+
 /**
  * The autonomous loop only has something to learn from a run that left a trace:
  * a delegated agent, a produced document, or an unexpected exit. A session

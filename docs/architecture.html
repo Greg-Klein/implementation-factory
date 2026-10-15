@@ -512,7 +512,7 @@ flowchart LR
   </pre></div>
   <div class="chips">
     <div class="chip"><b>Five readings</b><code>healthy</code>, <code>waiting</code> (on the engineer, dated from the question), <code>suspected_stall</code> (silence alone, never an incident), <code>stalled</code>, <code>interrupted</code>.</div>
-    <div class="chip err"><b>Four incidents</b><code>no_next_action</code>, <code>lost_session</code> (the session exited before a result: the run is <code>failed</code>), <code>missing_result</code>, <code>unresolvable_dependency</code>.</div>
+    <div class="chip err"><b>Four incidents</b><code>no_next_action</code>, <code>lost_session</code> (the session exited before a result: the run is <code>failed</code>; an exit within 5 s of a Ctrl-C typed in the run's terminal is a stop by the user), <code>missing_result</code>, <code>unresolvable_dependency</code>.</div>
     <div class="chip"><b>Actions</b>Answer, open the terminal, view the diagnostic, ask the pilot to continue, stop the run, dismiss.</div>
     <div class="chip warn"><b>File contracts</b>An agent that ends without the file its contract requires (<code>planner-output.json</code>, the QA and design reports with their plan and evidence, <code>review-summary.md</code>), with nobody taking over, raises an incident.</div>
   </div>

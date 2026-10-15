@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRecurringFindings } from "./review-findings.js";
@@ -639,9 +639,11 @@ export class RunRegistry {
     // then ends says nothing about the outcome it reached.
     const inProgress = runInProgress(session.state.status);
     const complete = !inProgress || declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
+    const reopened = reopeningOpen(session.state);
     if (inProgress) {
-      session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null || Boolean(trustRefused), complete);
-      session.state.endedAt = now();
+      session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null || Boolean(trustRefused), complete, reopened);
+      if (reopened) session.activity("attention", "Change after the final report not delivered", "The session ended before the workflow completed again.");
+      else session.state.endedAt = now();
       if (trustRefused) session.state.error = trustRefused;
       else if (session.state.status === "failed") session.state.error = exitCode === 0
         ? `${engine.label} ended before the workflow reached a result.`
@@ -966,7 +968,10 @@ export class RunRegistry {
     for (const session of this.analysisSessions) session.kill();
     for (const session of this.sessions.values()) {
       session.stoppedBy = "user";
-      if (runInProgress(session.state.status)) {
+      if (runInProgress(session.state.status) && reopeningOpen(session.state)) {
+        session.state.status = "completed";
+        session.activity("attention", "Change after the final report not delivered", "The application closed before the workflow completed again.");
+      } else if (runInProgress(session.state.status)) {
         session.state.status = "stopped";
         session.state.endedAt = now();
         session.activity("system", "Session stopped when the application closed");

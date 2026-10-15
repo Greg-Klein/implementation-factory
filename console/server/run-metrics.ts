@@ -56,9 +56,9 @@ export function trackTimeline(state: RunState, at: string) {
  * Records a change asked after the final report. The workflow then goes from
  * `completed` back to work, and declares `completed` again once the change is
  * reviewed and pushed (see "A request after the final report" in
- * commands/implement.md). The console keeps the run as ended, but its figures
- * must run to that second end, or the work it took would count in the tokens
- * and in no duration. Returns whether anything moved.
+ * commands/implement.md). The run keeps its first end, but its figures must
+ * run to that second end, or the work it took would count in the tokens and
+ * in no duration. Returns whether anything moved.
  */
 export function trackReopening(state: RunState, previous: WorkflowState | undefined, next: WorkflowState, at: string) {
   const reopenings = state.reopenings ?? [];

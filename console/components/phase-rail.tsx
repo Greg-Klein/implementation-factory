@@ -2,7 +2,7 @@
 
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { formatTokens } from "@/lib/metrics";
-import { elapsedLabel, phaseNames, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
+import { elapsedLabel, phaseNames, runInProgress, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
 import { forgeOf, forgeWords, withoutQuery } from "@/lib/ticket-urls";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
@@ -36,7 +36,9 @@ function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; labe
 }
 
 export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?: () => void }) {
-  const now = useNow(Boolean(run.startedAt) && !run.endedAt);
+  // A run reopened after its final report keeps its first end while it works again.
+  const endedAt = runInProgress(run.status) ? undefined : run.endedAt ?? undefined;
+  const now = useNow(Boolean(run.startedAt) && !endedAt);
   const finished = run.status === "completed";
   const badge = runStatusBadge(run);
   const repository = sourceRepository(run);
@@ -92,7 +94,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
             </div>
           )}
         </dl>
-        {run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}
+        {run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, endedAt, now)}</p>}
         {run.usage && (
           <div className="mt-3">
             <p className="text-[10px] font-semibold text-[var(--muted)]">Tokens</p>

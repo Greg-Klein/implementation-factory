@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
-import { artifactWatchRoot, belongsToRun, declaredPhase, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, plannedTasks, resolveArtifactPath, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, phaseOfWorkflow, plannedTasks, reopeningOpen, resolveArtifactPath, runInProgress, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -129,7 +129,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
  * the last valid one in force; a declared end closes the run only once it
  * holds against the deliverable (see closeWorkflowIfDone).
  */
-function readWorkflowState(session: RunSession, content: string) {
+export function readWorkflowState(session: RunSession, content: string) {
   const reading = parseWorkflowState(content, new Date().toISOString());
   if ("error" in reading) {
     if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignored", reading.error);
@@ -152,11 +152,13 @@ function readWorkflowState(session: RunSession, content: string) {
     session.activity("system", "Merge request declared by the workflow", delivery.url);
   }
   session.state.workflow = reading.state;
-  if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", session.state.reopenings?.at(-1)?.to ? "Change after the final report delivered" : "Change asked after the final report");
+  const reopened = reopeningOpen(session.state);
+  if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", reopened ? "Change after the final report delivered" : "Change asked after the final report");
+  // Back in progress, so the hooks of the change are applied again and the run closes once more when it is delivered.
+  if (!reopened && reopeningOpen(session.state) && session.state.status === "completed" && session.state.sessionActive) session.state.status = "running";
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
-  // The step the workflow declares is the phase. It never goes back: a request after the final report reopens an earlier step.
-  session.state.phase = Math.max(session.state.phase, declaredPhase(reading.state) ?? 0);
+  session.state.phase = phaseOfWorkflow(session.state.phase, reading.state, reopeningOpen(session.state) && runInProgress(session.state.status));
   if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow: ${reading.state.state}${reading.state.step ? `, step ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
   closeWorkflowIfDone(session);
 }

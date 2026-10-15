@@ -1,4 +1,4 @@
-import { closeAbandonedAgents, runInProgress } from "./domain.js";
+import { closeAbandonedAgents, reopeningOpen, runInProgress } from "./domain.js";
 import { storedConfidence } from "./review-confidence.js";
 import type { HealthInput, HealthVerdict, IncidentCandidate } from "./run-health.js";
 import type { IncidentAction, IncidentDecision, RunIncident, RunState } from "./types.js";
@@ -211,9 +211,14 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
 
 /**
  * The run a restart found in progress: closed as interrupted, with one
- * interruption incident however many times the console restarts over it.
+ * interruption incident however many times the console restarts over it. A run
+ * reopened after its final report is closed as the delivered run it was.
  */
 export function interruptRun(state: RunState, now: string): RunState {
+  // A change asked after the final report that the restart left undone does not take back what the run delivered.
+  if (reopeningOpen(state) && state.endedAt) {
+    return { ...state, status: "completed", sessionActive: false, pendingQuestion: undefined, sessionPrompt: undefined, action: undefined, agents: closeAbandonedAgents(state.agents ?? [], now).agents, schemaVersion: RUN_SCHEMA_VERSION };
+  }
   const incidents = state.incidents ?? [];
   const hasInterruption = incidents.some((incident) => incident.kind === "lost_session");
   const question = state.pendingQuestion?.questions.map((entry) => entry.question).join(" · ");

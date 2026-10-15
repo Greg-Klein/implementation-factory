@@ -95,7 +95,7 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
               : completed
                 ? <span className="font-medium text-[var(--accent)]">{statusLabel(run.status)}</span>
                 : <>{run.branch && <GitBranchIcon size={10} className="shrink-0" />}<span className="truncate">{idle ? "Session open" : run.action ?? statusLabel(run.status)}</span></>}
-            {run.endedAt && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>}
+            {run.endedAt && !runInProgress(run.status) && <span className="shrink-0 font-mono text-[9px]">{new Date(run.endedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>}
             {run.tokens !== undefined && <span title={`${run.tokens.toLocaleString("en-US")} tokens used, cache included`} aria-label={`${formatTokens(run.tokens)} tokens used`} className={`shrink-0 font-mono text-[9px] ${coverage ? "" : "ml-auto"}`}>{formatTokens(run.tokens)}</span>}
             {coverage && <span title={coverage.title} aria-label={coverage.title} className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined ? "" : "ml-auto"} ${CHIP_TONE[coverage.tone]}`}>{coverage.label}</span>}
             {confidence && <span title={confidence.title} aria-label={confidence.title} data-testid="run-confidence" className={`shrink-0 font-mono text-[9px] font-semibold ${run.tokens !== undefined || coverage ? "" : "ml-auto"} ${CHIP_TONE[confidence.tone]}`}>conf {confidence.label}</span>}

@@ -98,7 +98,9 @@ export function positiveDuration(value: string | undefined, fallback: number) {
  * request, a published review) when they themselves had just cut it off,
  * sometimes before a single agent had started.
  */
-export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean, workflowComplete = false) {
+export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean, workflowComplete = false, deliveredBeforeReopening = false) {
+  // A change asked after the final report that the session leaves undone does not take back what the run delivered.
+  if (deliveredBeforeReopening) return "completed" as const;
   if (intentionallyStopped) return "stopped" as const;
   // A clean exit of the process proves nothing about the workflow: only a
   // result the workflow reached makes a session ending on its own a success.
@@ -340,6 +342,23 @@ export function agentStopTarget(agents: AgentState[], agentId: string, agentName
 
 export function runInProgress(status: RunStatus) {
   return status === "starting" || status === "running" || status === "attention";
+}
+
+/** A change asked after the final report is being worked on: the run is back in progress until it is delivered. */
+export function reopeningOpen(state: Pick<RunState, "reopenings">) {
+  const last = state.reopenings?.at(-1);
+  return last !== undefined && last.to === undefined;
+}
+
+/**
+ * The phase once the workflow declared `workflow`. The declared step never
+ * goes back, except while a change asked after the final report is worked on:
+ * that change reopens an earlier step, which is the one the run is at.
+ */
+export function phaseOfWorkflow(current: number, workflow: { step?: string } | undefined, reopened: boolean) {
+  const declared = declaredPhase(workflow);
+  if (declared === undefined) return current;
+  return reopened ? declared : Math.max(current, declared);
 }
 
 /** The workflow ended and archived its evidence since the last change asked after the final report. */

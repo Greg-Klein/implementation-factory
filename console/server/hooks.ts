@@ -28,8 +28,9 @@ export function closeWorkflowIfDone(session: RunSession) {
   session.state.status = "completed";
   session.state.action = undefined;
   // The workflow, not the session, decides when the run ended: the session then
-  // sits idle at its prompt and may be killed much later.
-  session.state.endedAt = now();
+  // sits idle at its prompt and may be killed much later. A change delivered after
+  // the final report keeps the first end: its time is counted in `reopenings`.
+  if (!session.state.reopenings?.length) session.state.endedAt = now();
   session.markProgress();
   session.activity("attention", "Workflow completed");
   // The figures of the run as delivered; the session's exit writes them once more, final.

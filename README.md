@@ -510,7 +510,7 @@ The data of a run is archived in `runs/<run-id>/`, under the [data directory](#c
 
 This directory is local and ignored by Git. It can contain confidential information from the tickets processed and must not be shared.
 
-A run the server could not close itself (a hard stop, a restart) is reclassified `failed` on the next start, and does not stay marked `running`. See `console/README.md`.
+A run the server could not close itself (a hard stop, a restart) is reclassified `failed` on the next start, and does not stay marked `running`. A run reopened by a change asked after its final report is closed `completed` instead: what it delivered still holds. See `console/README.md`.
 
 ## Tests
 

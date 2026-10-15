@@ -26,6 +26,7 @@ function sameObservations(left: RunIncident["observations"], right: RunIncident[
 export function resolutionOutcome(incident: RunIncident, input: HealthInput, verdict: HealthVerdict) {
   if (input.status === "completed") return "Workflow completed";
   if (input.status === "stopped") return "Run stopped";
+  if (input.status === "paused") return "Run paused";
   if (input.status === "failed") return "Session ended";
   if (verdict.wait?.reason === "user_question") return "A question is waiting for your answer";
   if (verdict.wait?.reason === "permission" || verdict.wait?.reason === "terminal_interaction") return "Claude Code is waiting for input in the terminal";
@@ -180,7 +181,8 @@ export function normalizeArchivedRun(raw: unknown, runId: string): RunState | un
     decisions: (Array.isArray(incident.decisions) ? incident.decisions : []).map((decision) => decision.outcome === "pending" ? { ...decision, outcome: "unknown" as const, detail: "The server stopped before confirming this action: its outcome is unknown." } : decision),
   })) : [];
   return {
-    id: state.id ?? runId, status: state.status, phase: typeof state.phase === "number" ? state.phase : 0, cwd: state.cwd,
+    // A pause lives only as long as its session, and an archive has none.
+    id: state.id ?? runId, status: state.status === "paused" ? "stopped" : state.status, phase: typeof state.phase === "number" ? state.phase : 0, cwd: state.cwd,
     issueUrl: state.issueUrl ?? "", instruction: state.instruction ?? "", startedAt: state.startedAt ?? null, endedAt: state.endedAt ?? lastKnownActivityAt(state) ?? null,
     agents: Array.isArray(state.agents) ? state.agents : [], activities: Array.isArray(state.activities) ? state.activities : [],
     messages: Array.isArray(state.messages) ? state.messages : [], artifacts: Array.isArray(state.artifacts) ? state.artifacts : [],

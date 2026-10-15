@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { defined } from "../lib/defined.js";
 import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, withoutQuery, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
-import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal } from "./types.js";
+import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal, WorkflowStateName } from "./types.js";
 import type { WorkflowLanguage } from "./acceptance-text.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
@@ -358,6 +358,16 @@ export function agentStopTarget(agents: AgentState[], agentId: string, agentName
 
 export function runInProgress(status: RunStatus) {
   return status === "starting" || status === "running" || status === "attention";
+}
+
+/**
+ * A wait the user asked for (another ticket's merge, someone else's decision) is
+ * neither an end nor work: the run pauses while its session stays open, and goes
+ * back to work on the next state the workflow declares.
+ */
+export function pauseTransition(status: RunStatus, sessionActive: boolean, workflowState: WorkflowStateName) {
+  if (workflowState === "paused") return runInProgress(status) && sessionActive ? "pause" as const : undefined;
+  return status === "paused" ? "resume" as const : undefined;
 }
 
 /** A change asked after the final report is being worked on: the run is back in progress until it is delivered. */
@@ -960,6 +970,11 @@ export function runTakesSlot(state: Pick<RunState, "status">) {
   return runInProgress(state.status);
 }
 
+/** Whether a run keeps the conflicting tickets of its repository waiting: a paused run resumes on the work it left. */
+export function runHoldsConflicts(status: RunStatus) {
+  return runInProgress(status) || status === "paused";
+}
+
 /** The checkout a run was launched on. A run archived before worktrees ran in that checkout itself. */
 export function sourceRepository(run: { repository?: string; cwd: string }) {
   return run.repository || run.cwd;
@@ -984,11 +999,12 @@ type Launch = { cwd: string; repository?: string; issueUrl: string };
  * workflow is over but their session sits at its prompt, holding its ticket:
  * harmless while nobody is waiting, which is why the session is kept, and
  * unacceptable the moment a queued launch needs that very ticket. A slot never
- * calls for it, since a finished run takes none.
+ * calls for it, since a finished run takes none. A paused run is not finished:
+ * only the user closes its session.
  */
 export function sessionsToReleaseForQueue(runs: HeldRun[], queue: Launch[]) {
   const awaited = new Set(queue.map(runLockKey));
-  return runs.filter((run) => runHoldsRepository(run) && !runTakesSlot(run) && awaited.has(runLockKey(run))).map((run) => run.id);
+  return runs.filter((run) => runHoldsRepository(run) && !runTakesSlot(run) && run.status !== "paused" && awaited.has(runLockKey(run))).map((run) => run.id);
 }
 
 /** Where the worktrees of the runs live inside a repository, ignored through `.git/info/exclude`. */
@@ -1436,7 +1452,7 @@ function priorityOrder(queue: QueuedRun[], index: ScheduleIndex) {
 
 function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext): QueuedRunView[] {
   const index = scheduleIndex(context);
-  const running = (context.runs ?? []).filter((run) => runInProgress(run.status));
+  const running = (context.runs ?? []).filter((run) => runHoldsConflicts(run.status));
   const ahead: QueuedRun[] = [];
   const assess = (entry: QueuedRun): QueuedRunView => {
     const own = index.tickets.get(runLockKey(entry));

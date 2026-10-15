@@ -263,6 +263,7 @@ export function statusLabel(status: Status) {
   if (status === "starting") return "Starting";
   if (status === "running") return "Running";
   if (status === "attention") return "Your turn";
+  if (status === "paused") return "Paused";
   if (status === "completed") return "Completed";
   if (status === "stopped") return "Stopped";
   if (status === "failed") return "Error";
@@ -288,7 +289,7 @@ export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" 
     return { label: statusLabel(run.status), tone: "decision" };
   }
   if (run.status === "failed") return { label: statusLabel(run.status), tone: "error" };
-  if (run.status === "stopped") return { label: statusLabel(run.status), tone: "stopped" };
+  if (run.status === "stopped" || run.status === "paused") return { label: statusLabel(run.status), tone: "stopped" };
   return { label: statusLabel(run.status), tone: "neutral" };
 }
 

@@ -1,4 +1,4 @@
-export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
+export type Status = "idle" | "starting" | "running" | "attention" | "paused" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string | undefined };
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };

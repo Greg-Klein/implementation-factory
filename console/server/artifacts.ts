@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar from "chokidar";
 import type { Stats } from "node:fs";
-import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, phaseOfWorkflow, plannedTasks, reopeningOpen, resolveArtifactPath, runInProgress, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, pauseTransition, phaseForArtifact, phaseOfWorkflow, plannedTasks, reopeningOpen, resolveArtifactPath, runInProgress, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -15,6 +15,7 @@ import { GATE_LOG_FILE, keepGateLog } from "./run-metrics-runtime.js";
 import { keepReviewFindings } from "./review-findings.js";
 import { keepRuntimeRecipe } from "./runtime-recipe.js";
 import { declaredDelivery, parseWorkflowState, WORKFLOW_STATE_FILE } from "./workflow-state.js";
+import { pilotActs } from "./run-health.js";
 import type { RunSession } from "./run-session.js";
 import { reportFailure } from "./context.js";
 
@@ -156,6 +157,10 @@ export function readWorkflowState(session: RunSession, content: string) {
   if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", reopened ? "Change after the final report delivered" : "Change asked after the final report");
   // Back in progress, so the hooks of the change are applied again and the run closes once more when it is delivered.
   if (!reopened && reopeningOpen(session.state) && session.state.status === "completed" && session.state.sessionActive) session.state.status = "running";
+  const pause = pauseTransition(session.state.status, session.state.sessionActive, reading.state.state);
+  if (pause === "pause") { session.state.status = "paused"; session.state.action = undefined; }
+  // The hooks of a paused run are not applied: the state that resumes it, written before its first command, is what says the pilot is at work again.
+  if (pause === "resume") { session.state.status = "running"; pilotActs(session.signals, Date.now()); session.markProgress(); }
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
   session.state.phase = phaseOfWorkflow(session.state.phase, reading.state, reopeningOpen(session.state) && runInProgress(session.state.status));

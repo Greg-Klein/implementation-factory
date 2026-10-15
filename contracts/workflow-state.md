@@ -6,7 +6,7 @@
 {
   "schemaVersion": 1,
   "revision": 7,
-  "state": "working | waiting | completed | blocked",
+  "state": "working | waiting | paused | completed | blocked",
   "step": "5",
   "reviewTier": 1,
   "nextAction": {
@@ -29,6 +29,7 @@
 - **`reviewTier`** is the tier you picked at step 7 (`0`, `1` or `2`). Write it from the state that opens step 7 onwards, on every later write. The console keeps it with the run's figures, which is how two runs of the same tier get compared.
 - **`working`** when you start a step (`step` is its number, `nextAction.kind` `run_step`). The console shows and times the run by this number: a step you do not declare is a step it never saw.
 - **`waiting`** right before you end a turn while something works for you: `await_agent` with the `agents` and `taskIds` of the batch you launched in the background, `await_process` for a background command or a `Monitor` you are waiting on, `await_dependency` for anything else outside the session, with `expectedArtifact` when a file will mark the end. A declared wait never hides a run for long: with no agent actually running, `await_agent` is reported as no next action, and the others turn into a doubt after the silence threshold.
+- **`paused`** when the user tells you to wait for something outside the session before going on (another ticket's merge, a decision someone else takes). Let the agents you launched finish, record the decision in `open-questions.md`, then write `paused` at the step you stopped at, with `nextAction.kind` `await_dependency` and a `description` naming what resumes the run, say so in one message and end your turn. A pause is not an end: no `completed`, no archive sync, no cleaning. The console shows the run paused, frees its slot and keeps its ticket. The user resumes it with a message: write `working` with the next revision at the step you resume, before the first tool call that acts on it.
 - **`completed`** at step 10, before the archive sync, and again at the end of a run a later request reopened (back to `working` first, see "A request after the final report" in the command): `result.delivery` is `merge_request` or `draft_merge_request` with the `mergeRequestUrl` you opened (the address of the pull request on GitHub, under the same field and the same `delivery` values), or `none` with every reason in `blockers`. A draft merge request with known blockers is a correct end: list them. The console checks the end against the merge request it saw open, or failing that against the address you give, which must be one a merge request or a pull request of the ticket's forge can have; an end it cannot confirm does not close the run.
 - **`blocked`** when you stop for one of the two reasons that override the run's autonomy (a git state you do not understand, a specification gap you cannot resolve without inventing), with `nextAction.description` naming what would unblock the run.
 

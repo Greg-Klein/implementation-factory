@@ -15,7 +15,7 @@ import type { WorkflowState, WorkflowStateName } from "./types.js";
 export const WORKFLOW_STATE_FILE = "workflow-state.json";
 
 const MAX_BYTES = 64_000;
-const STATES: WorkflowStateName[] = ["working", "waiting", "completed", "blocked"];
+const STATES: WorkflowStateName[] = ["working", "waiting", "paused", "completed", "blocked"];
 const DELIVERIES = ["merge_request", "draft_merge_request", "none"] as const;
 
 function identifiers(value: unknown) {

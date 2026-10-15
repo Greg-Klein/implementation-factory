@@ -1,6 +1,6 @@
 import type { Question } from "./domain.js";
 
-export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
+export type RunStatus = "idle" | "starting" | "running" | "attention" | "paused" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type AgentStatus = "running" | "completed" | "failed" | "abandoned";
 /** `nickname`: a first name given in start order within the run, so two agents of one type can be told apart; `avatar`: the picture bound to that name; `role`: the label of its type. */
@@ -202,7 +202,7 @@ export type RunHealthView = {
   workflow?: { state: WorkflowStateName; revision: number; nextAction?: string; receivedAt: string } | { missing: true };
   evaluatedAt: string;
 };
-export type WorkflowStateName = "working" | "waiting" | "completed" | "blocked";
+export type WorkflowStateName = "working" | "waiting" | "paused" | "completed" | "blocked";
 /** `workflow-state.json` as read: what the pilot says it is doing and what comes next. See server/workflow-state.ts. */
 export type WorkflowState = {
   schemaVersion: 1;

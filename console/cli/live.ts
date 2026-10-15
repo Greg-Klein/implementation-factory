@@ -14,7 +14,8 @@ const ENDED_SESSION_GRACE_MS = 300;
 const DETACH_KEY = 0x1d;
 
 function ended(status: RunState["status"]) {
-  return status === "completed" || status === "stopped" || status === "failed";
+  // A pause can last days: following it would hold the terminal for nothing.
+  return status === "completed" || status === "stopped" || status === "failed" || status === "paused";
 }
 
 /**
@@ -136,7 +137,7 @@ export function follow(context: Context, link: Link, runId: string): Promise<num
 
       if (ended(state.status)) {
         print(`--- ${runStatusBadge(state).label}${state.error ? `: ${state.error}` : ""}${state.mergeRequestUrl ? `\n${state.mergeRequestUrl}` : ""}`);
-        finish(state.status === "completed" ? 0 : 1);
+        finish(state.status === "completed" || state.status === "paused" ? 0 : 1);
       }
     };
 

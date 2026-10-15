@@ -145,7 +145,7 @@ impl answer 12 2 "keep the critical alerts"                     # answers its de
 | `impl run <ticket-url>... [-r <checkout>]... [-m <instruction>] [-f]` | starts a run; several tickets are queued as a batch and compared first; `-f` follows the run; `--demo [workflow\|incident\|batch]` plays a simulated one |
 | `impl runs` | lists the runs, the queue, the kept worktrees and the watcher's tickets |
 | `impl show <run>` | one run: step, agents at work, plan, decision waiting, incident |
-| `impl watch [<run>]` | follows a run until its workflow ends, or every run when none is named |
+| `impl watch [<run>]` | follows a run until its workflow ends or pauses, or every run when none is named |
 | `impl attach <run>` | the terminal of the run's session, `Ctrl-]` leaves it running |
 | `impl answer <run> [<answer>...]` | answers the decision a run waits on |
 | `impl trust <run> accept\|refuse` | answers the folder trust dialog |
@@ -164,7 +164,7 @@ impl answer 12 2 "keep the critical alerts"                     # answers its de
 
 A run is named by its id, the end of its id as the lists show it, its ticket number (`#12` or `12`) or its ticket address. A name that fits several runs is refused with the list. `--json` on the reading commands prints the data the interface is fed, and `impl <command> --help` gives the arguments of one command.
 
-`impl answer` takes one answer per question, in the order asked: the number of a suggested choice, several numbers separated by commas when the question takes several, or your own words. With nothing after the run, it asks at the terminal. `impl watch` and `impl run -f` ask the decisions the same way when a person is at the terminal, and print the command that answers them otherwise; they end `0` on a completed run and `1` on any other end.
+`impl answer` takes one answer per question, in the order asked: the number of a suggested choice, several numbers separated by commas when the question takes several, or your own words. With nothing after the run, it asks at the terminal. `impl watch` and `impl run -f` ask the decisions the same way when a person is at the terminal, and print the command that answers them otherwise; they end `0` on a completed or paused run and `1` on any other end.
 
 Exit codes: `0` done, `1` refused by the console or failed, `2` a command written wrong, `3` no console answers.
 
@@ -204,6 +204,8 @@ Several tickets of the same repository can run at the same time, because each ru
 A launch that hits either limit goes to the queue, shown under the list with the reason it waits, "ticket already running" or "every slot is taken". It starts on its own as soon as the ticket or a slot is free. The queue is saved in `queue.json`, under the [data directory](#configuration), with the schedule that holds it, and survives a restart. The requests that were only waiting for a slot start as soon as the server listens again, without anyone launching them again. The ones waiting for a merge request keep waiting for it. A cross removes a request from the queue.
 
 A run frees its slot as soon as its workflow is finished, even while its session stays open at its prompt: only working runs count against `IMPL_MAX_CONCURRENT_RUNS`. The open session still holds its ticket. The **Close the session** button closes it, and when a queued launch is waiting for that ticket, the factory closes it itself. Once the session is closed, the bin icon on its row, or the **Close** button of the view, removes the run from the list. Its documents, its conversation and its log stay archived in `runs/<id>/`, under the data directory.
+
+A run you ask to wait for something outside its session, such as the merge of another ticket, shows **Paused**. Its workflow is not finished: the run frees its slot, keeps its ticket and keeps the tickets of its repository that conflict with it in the queue, and the factory never closes its session for a queued launch. A message telling it to go on puts it back to work. Closing its session, stopping the console or a restart ends it **Stopped**.
 
 The notifications, the tab title and the tab icon cover every run at once, because the run that needs an answer is rarely the one you are looking at. Messages that concern no run in particular (a request put in the queue, an improvement rebased) show in a banner under the header.
 

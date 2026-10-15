@@ -91,6 +91,7 @@ export class RunRegistry {
   private watches: MergeWatch[] = [];
   /** Runs whose end has been taken into account, so it is once. */
   private readonly settled = new Set<string>();
+  private readonly paused = new Set<string>();
   /** One analysis at a time per repository: the next one compares against what this one predicted. */
   private readonly analysisChains = new Map<string, Promise<void>>();
   private readonly analysisSessions = new Set<ScheduleSession>();
@@ -466,6 +467,12 @@ export class RunRegistry {
 
   /** Seen on every change of a run: the first one that finds its workflow over settles what waits behind it. */
   private noteRunEnd(session: RunSession) {
+    // A pause frees the slot, not what the run holds: it resumes, and its end is still to come.
+    if (session.state.status === "paused") {
+      if (!this.paused.has(session.id)) { this.paused.add(session.id); void this.drain(); }
+      return;
+    }
+    this.paused.delete(session.id);
     if (this.settled.has(session.id) || runInProgress(session.state.status) || this.sessions.get(session.id) !== session) return;
     this.settled.add(session.id);
     this.runEnded(session);
@@ -641,6 +648,11 @@ export class RunRegistry {
     const inProgress = runInProgress(session.state.status);
     const complete = !inProgress || declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
     const reopened = reopeningOpen(session.state);
+    // Nothing resumes a paused run once its session is gone.
+    if (session.state.status === "paused") {
+      session.state.status = reopened ? "completed" : "stopped";
+      if (!reopened) session.state.endedAt = now();
+    }
     if (inProgress) {
       session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null || Boolean(trustRefused), complete, reopened);
       if (reopened) session.activity("attention", "Change after the final report not delivered", "The session ended before the workflow completed again.");
@@ -976,10 +988,11 @@ export class RunRegistry {
     for (const session of this.analysisSessions) session.kill();
     for (const session of this.sessions.values()) {
       session.stoppedBy = "user";
-      if (runInProgress(session.state.status) && reopeningOpen(session.state)) {
+      const unfinished = runInProgress(session.state.status) || session.state.status === "paused";
+      if (unfinished && reopeningOpen(session.state)) {
         session.state.status = "completed";
         session.activity("attention", "Change after the final report not delivered", "The application closed before the workflow completed again.");
-      } else if (runInProgress(session.state.status)) {
+      } else if (unfinished) {
         session.state.status = "stopped";
         session.state.endedAt = now();
         session.activity("system", "Session stopped when the application closed");

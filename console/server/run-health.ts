@@ -257,7 +257,7 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   const after = (at: number) => Math.max(at, signals.resumedAt ?? 0);
   const quietFor = now - after(Math.max(signals.lastExecutionAt, signals.lastProgressAt));
 
-  if (input.status === "completed" || input.status === "stopped" || input.status === "idle") return { health: "healthy" };
+  if (input.status === "completed" || input.status === "stopped" || input.status === "paused" || input.status === "idle") return { health: "healthy" };
   if (input.status === "failed") {
     if (!signals.exit || input.stoppedBy) return { health: "healthy" };
     const exit = signals.exit;

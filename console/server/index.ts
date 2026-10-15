@@ -142,7 +142,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "run", state: session.state });
     return;
   }
-  if (message.type === "terminal.input") { registry.get(message.runId)?.engine?.write(message.data); return; }
+  if (message.type === "terminal.input") { registry.terminalInput(message.runId, message.data); return; }
   if (message.type === "terminal.resize") { registry.get(message.runId)?.engine?.resize(message.cols, message.rows); return; }
   if (message.type === "instruction.send") { registry.sendInstruction(message.runId, message.text); return; }
   if (message.type === "run.stop") { registry.stop(message.runId); return; }

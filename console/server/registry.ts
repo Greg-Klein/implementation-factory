@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
-import { admitBatch, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, carriesInterrupt, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitFollowsInterrupt, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRecurringFindings } from "./review-findings.js";
@@ -630,6 +630,7 @@ export class RunRegistry {
     session.engine = null;
     session.state.sessionActive = false;
     session.signals.exit = { at: Date.now(), code: exitCode };
+    if (session.stoppedBy === null && exitFollowsInterrupt(session.interruptedAt, session.signals.exit.at)) session.stoppedBy = "user";
     // Whatever the session was doing when it went away, it is not doing it now.
     session.state.action = undefined;
     clearPendingQuestion(session);
@@ -688,6 +689,13 @@ export class RunRegistry {
       this.publishSnapshot();
     }
     return result;
+  }
+
+  terminalInput(runId: string, data: string) {
+    const session = this.get(runId);
+    if (!session?.engine) return;
+    if (carriesInterrupt(data)) session.interruptedAt = Date.now();
+    session.engine.write(data);
   }
 
   stop(runId: string) {

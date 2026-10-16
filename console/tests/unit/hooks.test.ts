@@ -134,6 +134,22 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.activities).toEqual([]);
   });
 
+  it("should compute the review confidence again as soon as the merge request is opened", async () => {
+    session.state.artifacts = ["senior-review.md"];
+    const settled = () => session.evidence.serialize(async () => undefined);
+    hook({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "npm test" }, tool_response: { stdout: "ok" } });
+    await settled();
+    expect(session.state.confidence).toBeUndefined();
+
+    hook({
+      hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "glab mr create --fill" },
+      tool_response: { stdout: "https://gitlab.example/group/app/-/merge_requests/12" },
+    });
+    await settled();
+    expect(session.state.mergeRequestUrl).toBe("https://gitlab.example/group/app/-/merge_requests/12");
+    expect(session.state.confidence).toMatchObject({ score: expect.any(Number) });
+  });
+
   it("should keep the run open while a command the pilot left in the background has yet to wake it", () => {
     session.state.phase = 9;
     hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "b1", tool_input: { command: "./upload.sh", run_in_background: true } });

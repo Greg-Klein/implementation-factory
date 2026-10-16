@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { backgroundArguments, claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
 import { engine } from "../../server/engine/index";
@@ -35,6 +36,24 @@ describe("engine event translation", () => {
       .toEqual({ kind: "agent.start", agentId: "a1", agentName: "implementation-factory:developer" });
     expect(claudeCode.event({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "a1" }))
       .toEqual({ kind: "agent.stop", agentId: "a1", agentName: "implementation-factory:developer" });
+  });
+
+  it("should say whether a subagent's turn ended on its hand-back, from the end of its transcript", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "engine-handback-"));
+    const transcript = (name: string, lastTool: string) => {
+      const file = path.join(directory, name);
+      const entry = (tool: string) => JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "…" }, { type: "tool_use", name: tool, input: {} }] } });
+      writeFileSync(file, `${entry("Bash")}\n${JSON.stringify({ type: "user", message: { content: "<task-notification>" } })}\n${entry(lastTool)}\n`);
+      return file;
+    };
+    const stop = (file: string) => claudeCode.event({ hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "a1", agent_transcript_path: file });
+    try {
+      expect(stop(transcript("delivered.jsonl", "SubagentHandback"))).toMatchObject({ kind: "agent.stop", handedBack: true });
+      expect(stop(transcript("waiting.jsonl", "Monitor"))).toMatchObject({ kind: "agent.stop", handedBack: false });
+      expect(stop(path.join(directory, "absent.jsonl"))).not.toHaveProperty("handedBack");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("should read a stopped background task as a killed agent", () => {

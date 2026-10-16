@@ -1,6 +1,7 @@
 import { defined } from "../../lib/defined.js";
 import * as pty from "node-pty";
 import { spawn as spawnChild } from "node:child_process";
+import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pluginRoot, remoteControl, sessionPermissionMode } from "../config.js";
@@ -163,6 +164,48 @@ function delegatedPlanTaskIds(tool: string | undefined, input: Record<string, un
   return ids.length > 0 ? ids : undefined;
 }
 
+const TRANSCRIPT_TAIL_BYTES = 65_536;
+
+/**
+ * Whether a subagent's turn ended on its SubagentHandback call, read off the
+ * end of its transcript as the stop gate does. A background agent that stops
+ * while a command of its own still runs has not handed back: it resumes when
+ * that command ends. Undefined when the transcript cannot be read.
+ */
+function handedBack(payload: Record<string, unknown>) {
+  const sessionId = normalizeText(payload.session_id);
+  const agentId = normalizeText(payload.agent_id);
+  const transcript = normalizeText(payload.agent_transcript_path)
+    ?? (typeof payload.transcript_path === "string" && sessionId && agentId
+      ? path.join(path.dirname(payload.transcript_path), sessionId, "subagents", `agent-${agentId}.jsonl`)
+      : undefined);
+  if (!transcript) return undefined;
+  let text: string;
+  try {
+    const file = openSync(transcript, "r");
+    try {
+      const size = fstatSync(file).size;
+      const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+      const buffer = Buffer.alloc(length);
+      readSync(file, buffer, 0, length, size - length);
+      text = buffer.toString("utf8");
+    } finally {
+      closeSync(file);
+    }
+  } catch {
+    return undefined;
+  }
+  for (const line of text.trim().split("\n").reverse()) {
+    let entry: { type?: unknown; message?: { content?: unknown } };
+    try { entry = JSON.parse(line); } catch { continue; }
+    if (entry?.type !== "assistant") continue;
+    const content = entry.message?.content;
+    const last = Array.isArray(content) ? content[content.length - 1] as { type?: unknown; name?: unknown } | undefined : undefined;
+    return last?.type === "tool_use" && last.name === "SubagentHandback";
+  }
+  return undefined;
+}
+
 function event(payload: Record<string, unknown>): EngineEvent | undefined {
   const name = normalizeText(payload.hook_event_name) ?? "Hook";
   if (name === "SubagentStart" || name === "SubagentStop") {
@@ -172,7 +215,9 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
     const agentName = normalizeText(payload.agent_type);
     if (!agentName) return undefined;
     const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;
-    return { kind: name === "SubagentStart" ? "agent.start" : "agent.stop", agentId, agentName };
+    if (name === "SubagentStart") return { kind: "agent.start", agentId, agentName };
+    const delivered = handedBack(payload);
+    return { kind: "agent.stop", agentId, agentName, ...(delivered === undefined ? {} : { handedBack: delivered }) };
   }
   if (name === "Notification") {
     const message = normalizeText(payload.message);

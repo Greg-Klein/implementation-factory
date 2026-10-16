@@ -50,6 +50,7 @@ The health of a run is a projection separate from its status (`server/run-health
 |---|---|---|
 | A question, folder trust, a permission or an input is awaited | waiting | the question or trust panel, or "Open the terminal" |
 | An agent, a command or a background task is working | healthy or waiting | nothing; past the silence threshold, a doubt |
+| A subagent stopped without its `SubagentHandback` call while a background command of its own runs: it resumes when that command ends | waiting | "Waiting for an agent"; past the silence threshold, a doubt, never a missing report |
 | Prolonged silence (`IMPL_STALL_MINUTES`, 10 by default) | doubt | "No progress observed", without stopping or restarting anything |
 | The pilot handed back, nothing runs, nothing is awaited, the workflow is unfinished | incident after 60 s | "Nothing in progress" |
 | An agent ended without the file its contract requires, and nobody took over | incident after 30 s | "QA report expected", "QA test plan expected", "Design inventory expected", "Report of T3 expected"… |

@@ -68,6 +68,10 @@ export type RunSignals = {
   activeTools: Map<string, { tool: string; agentId?: string; since: number; label?: string }>;
   /** Calls that return at once and wake the pilot later. They last until the pilot wakes up. */
   backgroundWaits: Map<string, { tool: string; since: number; label?: string }>;
+  /** Subagents that launched a call of their own in the background, by agent id. */
+  agentBackgroundCalls: Set<string>;
+  /** Subagents whose turn ended without handing back while their background work runs: they resume when it ends. */
+  agentsAwaitingBackground: Map<string, { name: string; since: number }>;
   /** When the machine was seen waking up, so no grace is measured across the sleep. */
   resumedAt?: number;
   /** The session exited: when, and with which code. */
@@ -75,7 +79,7 @@ export type RunSignals = {
 };
 
 export function createSignals(now: number): RunSignals {
-  return { lastExecutionAt: now, lastProgressAt: now, lastOutputAt: now, activeTools: new Map(), backgroundWaits: new Map() };
+  return { lastExecutionAt: now, lastProgressAt: now, lastOutputAt: now, activeTools: new Map(), backgroundWaits: new Map(), agentBackgroundCalls: new Set(), agentsAwaitingBackground: new Map() };
 }
 
 function clearHumanWaits(signals: RunSignals) {
@@ -112,11 +116,18 @@ export function recordEngineSignal(signals: RunSignals, event: EngineEvent, now:
   clearHumanWaits(signals);
   if (event.kind === "agent.start" || event.kind === "agent.stop" || event.kind === "agent.kill") {
     signals.lastProgressAt = now;
+    if (event.kind === "agent.stop" && event.handedBack === false && signals.agentBackgroundCalls.has(event.agentId)) {
+      signals.agentsAwaitingBackground.set(event.agentId, { name: event.agentName, since: now });
+    } else {
+      signals.agentsAwaitingBackground.delete(event.agentId);
+      if (event.kind !== "agent.start") signals.agentBackgroundCalls.delete(event.agentId);
+    }
     if (event.kind !== "agent.start") for (const [id, tool] of signals.activeTools) if (tool.agentId === event.agentId) signals.activeTools.delete(id);
     return;
   }
   if (event.kind === "tool.start") {
     if (!event.agentId) pilotActs(signals, now);
+    if (event.background && event.agentId) signals.agentBackgroundCalls.add(event.agentId);
     if (!event.toolUseId) return;
     if (event.background && !event.agentId) signals.backgroundWaits.set(event.toolUseId, { tool: event.tool, since: now, ...(label ? { label } : {}) });
     else if (event.endReported) signals.activeTools.set(event.toolUseId, { tool: event.tool, since: now, ...(event.agentId ? { agentId: event.agentId } : {}), ...(label ? { label } : {}) });
@@ -202,6 +213,7 @@ export type HealthInput = {
   signals: Pick<RunSignals, "lastExecutionAt" | "lastProgressAt" | "pilotIdleSince" | "pilotLastActedAt" | "permission" | "terminalInteraction" | "unexplainedAttention" | "resumedAt" | "exit"> & {
     activeTools: { tool: string; agentId?: string; since: number; label?: string }[];
     backgroundWaits: { tool: string; since: number; label?: string }[];
+    agentsAwaitingBackground: { name: string; since: number }[];
   };
 };
 
@@ -319,6 +331,12 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
     if (quietFor >= policy.suspicionMs) return suspicion(`Claude Code is still waiting for ${wait.label ?? wait.tool} in the background.`);
     return waiting("tool", wait.since, "Waiting for a background task", wait.label ?? wait.tool, wait.label ?? wait.tool, "the background task finishing");
   }
+  const [awaiting] = signals.agentsAwaitingBackground;
+  if (awaiting) {
+    const name = agentType(awaiting.name);
+    if (quietFor >= policy.suspicionMs) return suspicion(`The ${name} agent is still waiting on its own background work.`);
+    return waiting("agent", awaiting.since, "Waiting for an agent", `The ${name} agent waits on its own background work and resumes when it ends.`, name, "the agent finishing");
+  }
   // A wait the workflow declares on something the console cannot see: a process, a dependency. Trusted until the doubt threshold, never beyond.
   if (workflow?.state === "waiting" && declared && (declared.kind === "await_process" || declared.kind === "await_dependency") && !(declared.expectedArtifact && input.artifacts.includes(declared.expectedArtifact))) {
     const reason: WaitReason = declared.kind === "await_process" ? "tool" : "dependency";
@@ -410,5 +428,6 @@ export function healthSignalsView(signals: RunSignals): HealthInput["signals"] {
     }),
     activeTools: [...signals.activeTools.values()],
     backgroundWaits: [...signals.backgroundWaits.values()],
+    agentsAwaitingBackground: [...signals.agentsAwaitingBackground.values()],
   };
 }

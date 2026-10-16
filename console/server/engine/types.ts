@@ -106,7 +106,8 @@ export type ScheduleSession = { finished: Promise<{ timedOut: boolean; log: stri
  */
 export type EngineEvent =
   | { kind: "agent.start"; agentId: string; agentName: string }
-  | { kind: "agent.stop"; agentId: string; agentName: string }
+  /** `handedBack` is false when the agent's turn ended without delivering its report, and absent when the agent cannot tell. */
+  | { kind: "agent.stop"; agentId: string; agentName: string; handedBack?: boolean }
   /** The agent was stopped from the outside, which reports no outcome of its own. */
   | { kind: "agent.kill"; agentId: string }
   /**

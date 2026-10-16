@@ -21,7 +21,7 @@ import type { RunSession } from "./run-session.js";
  */
 export function closeWorkflowIfDone(session: RunSession) {
   if (!runInProgress(session.state.status) || session.state.pendingQuestion) return false;
-  if (session.signals.pilotIdleSince === undefined || session.state.agents.some((agent) => agent.status === "running")) return false;
+  if (session.signals.pilotIdleSince === undefined || session.state.agents.some((agent) => agent.status === "running") || session.signals.agentsAwaitingBackground.size > 0) return false;
   const declared = declaredCompletion(session.state.workflow, session.state.mergeRequestUrl).complete;
   if (!declared && (Math.max(session.state.phase, session.inferredPhase) < 9 || session.signals.backgroundWaits.size > 0)) return false;
   session.state.phase = 10;
@@ -163,7 +163,7 @@ function apply(session: RunSession, event: EngineEvent) {
     // announce an agent finishing that the feed never saw start.
     if (stopped) {
       session.state.agents = session.state.agents.map((agent) => agent.id === stopped.id ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-      session.activity("agent", `${stopped.name} finishes`);
+      session.activity("agent", session.signals.agentsAwaitingBackground.has(stopped.id) ? `${stopped.name} waits on its own background work` : `${stopped.name} finishes`);
     }
     resumeFromAttention(session);
     return;

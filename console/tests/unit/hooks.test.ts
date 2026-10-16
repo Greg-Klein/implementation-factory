@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { answerQuestion, processHook, withdrawQuestion } from "../../server/hooks";
 import { RunSession } from "../../server/run-session";
@@ -36,6 +39,31 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.phase).toBe(8);
     hook({ hook_event_name: "Stop" });
     expect(session.state).toMatchObject({ status: "completed", phase: 10 });
+  });
+
+  it("should keep the run open while an agent that has not handed back waits on its own background command", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "hooks-handback-"));
+    const transcript = path.join(directory, "agent-a1.jsonl");
+    const lastCall = (tool: string) => writeFileSync(transcript, `${JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: tool, input: {} }] } })}\n`);
+    const stop = { hook_event_name: "SubagentStop", agent_type: "implementation-factory:developer", agent_id: "a1", agent_transcript_path: transcript };
+    try {
+      session.state.phase = 9;
+      hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
+      hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "b1", agent_id: "a1", tool_input: { command: "node measure.mjs", run_in_background: true } });
+      lastCall("Monitor");
+      hook(stop);
+      hook({ hook_event_name: "Stop" });
+      expect(session.state.status).toBe("running");
+      expect(session.state.activities.map((activity) => activity.title)).toContain("implementation-factory:developer waits on its own background work");
+
+      hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
+      lastCall("SubagentHandback");
+      hook(stop);
+      hook({ hook_event_name: "Stop" });
+      expect(session.state).toMatchObject({ status: "completed", phase: 10 });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("should light up the branch step when the branch is created", () => {

@@ -166,6 +166,38 @@ describe("a result its producer never wrote", () => {
   it("should expect a developer's report for each task it was handed", () => {
     expect(requiredFiles({ id: "d1", name: "implementation-factory:developer" }, [{ agentType: "developer", taskIds: ["T2", "T3"], agentId: "d1" }])).toEqual(["developer-report-T2.md", "developer-report-T3.md"]);
   });
+
+  it("should wait on an agent that stopped without handing back while its own background command runs", () => {
+    const delegations = [{ agentType: "developer", taskIds: ["T5"], agentId: "d1" }];
+    const signals = createSignals(T0);
+    recordEngineSignal(signals, { kind: "agent.start", agentId: "d1", agentName: "implementation-factory:developer" }, T0);
+    recordEngineSignal(signals, { kind: "tool.start", tool: "Bash", toolUseId: "b1", agentId: "d1", background: true, endReported: true }, T0 + seconds(5));
+    recordEngineSignal(signals, { kind: "agent.stop", agentId: "d1", agentName: "implementation-factory:developer", handedBack: false }, T0 + seconds(10));
+    recordEngineSignal(signals, { kind: "turn.end" }, T0 + seconds(12));
+    const developer = agent({ id: "d1", status: "completed", endedAt: new Date(T0 + seconds(10)).toISOString() });
+    const run = { ...input({ agents: [developer], planDelegations: delegations }), signals: healthSignalsView(signals) };
+    const verdict = evaluateRunHealth(run, T0 + minutes(5), policy);
+    expect(verdict).toMatchObject({ health: "waiting", wait: { reason: "agent", on: "developer" } });
+    expect(verdict.incident).toBeUndefined();
+    expect(evaluateRunHealth(run, T0 + minutes(11), policy).health).toBe("suspected_stall");
+
+    recordEngineSignal(signals, { kind: "agent.start", agentId: "d1", agentName: "implementation-factory:developer" }, T0 + minutes(6));
+    recordEngineSignal(signals, { kind: "agent.stop", agentId: "d1", agentName: "implementation-factory:developer", handedBack: true }, T0 + minutes(7));
+    expect(signals.agentsAwaitingBackground.size).toBe(0);
+    const ended = agent({ id: "d1", status: "completed", endedAt: new Date(T0 + minutes(7)).toISOString() });
+    const final = { ...input({ agents: [ended], planDelegations: delegations }), signals: healthSignalsView(signals) };
+    expect(evaluateRunHealth(final, T0 + minutes(8), policy).incident).toMatchObject({ kind: "missing_result", fingerprint: "missing_result:d1:developer-report-T5.md" });
+  });
+
+  it("should still name the missing report of an agent that stopped without handing back and with nothing in the background", () => {
+    const signals = createSignals(T0);
+    recordEngineSignal(signals, { kind: "agent.start", agentId: "d1", agentName: "implementation-factory:developer" }, T0);
+    recordEngineSignal(signals, { kind: "agent.stop", agentId: "d1", agentName: "implementation-factory:developer", handedBack: false }, T0 + seconds(10));
+    recordEngineSignal(signals, { kind: "turn.end" }, T0 + seconds(12));
+    const developer = agent({ id: "d1", status: "completed", endedAt: new Date(T0 + seconds(10)).toISOString() });
+    const run = { ...input({ agents: [developer], planDelegations: [{ agentType: "developer", taskIds: ["T5"], agentId: "d1" }] }), signals: healthSignalsView(signals) };
+    expect(evaluateRunHealth(run, T0 + minutes(2), policy).incident).toMatchObject({ kind: "missing_result", fingerprint: "missing_result:d1:developer-report-T5.md" });
+  });
 });
 
 describe("a plan nothing can execute", () => {

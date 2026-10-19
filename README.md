@@ -437,7 +437,7 @@ Recording an audit does not open an improvement session. In autonomous mode, Cla
 
 - the run failed, or an incident was raised;
 - an acceptance criterion ended failed or blocked, or QA declared a pass over a criterion it did not observe;
-- the workflow ended blocked;
+- the workflow ended blocked, or listed blockers without delivering a merge request (a merge request delivered with its blockers listed is the end the workflow contract asks for);
 - a change was asked after the final report;
 - a cost stands out against the delivered runs (tokens, active time, pilot calls), which needs at least three comparable runs.
 

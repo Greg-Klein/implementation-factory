@@ -227,6 +227,7 @@ describe("the review confidence of a run when its incidents move", () => {
   const reviewedRun = (id: string) => {
     const session = idleRun(id);
     session.state.artifacts = ["qa-report.md"];
+    session.state.mergeRequestUrl = "https://gitlab.com/g/p/-/merge_requests/1";
     session.state.confidence = { score: 5, reasons: [] };
     return session;
   };

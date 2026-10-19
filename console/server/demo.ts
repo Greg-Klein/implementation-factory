@@ -1,7 +1,7 @@
 import { demoStepDuration } from "./config.js";
-import { now } from "./context.js";
+import { now, reportFailure } from "./context.js";
 import { demoAcceptance, demoArtifactContents, DEMO_SNAPSHOTS } from "./demo-data.js";
-import { ingestAcceptanceInput, refreshAcceptance } from "./acceptance-runtime.js";
+import { ingestAcceptanceInput, refreshAcceptance, refreshConfidence } from "./acceptance-runtime.js";
 import { agentIdentity, agentRole, pairDelegation, plannedTasks } from "./domain.js";
 import { pilotActs } from "./run-health.js";
 import type { RunSession } from "./run-session.js";
@@ -350,6 +350,7 @@ export function continueDemoRun(session: RunSession) {
     session.state.phase = 9;
     session.state.action = "Opening the merge request";
     session.state.mergeRequestUrl = `ticket-simule://${demoTicket(session).mergeRequest}`;
+    refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
     session.activity("system", "Draft merge request opened (demo)", demoTicket(session).mergeRequest);
     session.activity("system", "Review report published", "Review 2/2 · blocked on AC4");
     session.publish();

@@ -20,7 +20,7 @@ const change = (over: Partial<ChangeFacts> = {}): ChangeFacts => ({ files: 3, li
 /** A run whose review left nothing to hold against it: every test moves one fact away from it. */
 const reviewed = (over: Omit<Partial<ConfidenceInput>, "state"> & { state?: Partial<ConfidenceInput["state"]> } = {}): ConfidenceInput => ({
   acceptance: acceptance(), findings: [], gate: { failed: 0, unchecked: 0 }, change: change(), ...over,
-  state: { ...emptyState(), status: "running", artifacts: ["senior-review.md", "qa-report.md"], ...over.state },
+  state: { ...emptyState(), status: "running", artifacts: ["senior-review.md", "qa-report.md"], mergeRequestUrl: "https://gitlab.com/g/p/-/merge_requests/1", ...over.state },
 });
 
 const rules = (input: ConfidenceInput) => reviewConfidence(input)?.reasons.map((reason) => reason.rule);
@@ -29,6 +29,12 @@ const score = (input: ConfidenceInput) => reviewConfidence(input)?.score;
 describe("the review confidence of a run", () => {
   it("should give no note before a reviewer wrote its report", () => {
     expect(reviewConfidence(reviewed({ state: { artifacts: ["developer-report.md", "qa-plan.md"] } }))).toBeUndefined();
+  });
+
+  it("should give no note before the merge request is opened, even once the review reported", () => {
+    const input = reviewed();
+    delete input.state.mergeRequestUrl;
+    expect(reviewConfidence(input)).toBeUndefined();
   });
 
   it("should give the highest note when nothing observed stands against the review", () => {

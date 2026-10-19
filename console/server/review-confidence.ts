@@ -194,7 +194,7 @@ function openFindings(findings: Pick<ReviewFinding, "id" | "severity" | "fixed">
 }
 
 export type ConfidenceInput = {
-  state: Pick<RunState, "status" | "workflow" | "incidents" | "reviewNotes" | "artifacts" | "agents">;
+  state: Pick<RunState, "status" | "workflow" | "incidents" | "reviewNotes" | "artifacts" | "agents" | "mergeRequestUrl">;
   acceptance?: AcceptanceDigest;
   /** What the code review of this run wrote as data, every round together. */
   findings: Pick<ReviewFinding, "id" | "severity" | "fixed">[];
@@ -203,9 +203,13 @@ export type ConfidenceInput = {
   change?: ChangeFacts;
 };
 
-/** Undefined until a reviewer of the run wrote its report: before that there is no review to trust or doubt. */
+/**
+ * Undefined until a reviewer of the run wrote its report and the merge request
+ * is open: the note judges what is delivered, and before the merge request the
+ * review may still go on and the diff is not measured from the branch it targets.
+ */
 export function reviewConfidence({ state, acceptance, findings, gate, change }: ConfidenceInput): ReviewConfidence | undefined {
-  if (!state.artifacts.some((artifact) => REVIEW_REPORT.test(artifact))) return undefined;
+  if (!state.mergeRequestUrl || !state.artifacts.some((artifact) => REVIEW_REPORT.test(artifact))) return undefined;
   const reasons: ConfidenceReason[] = [];
   const apply = (id: ConfidenceRuleId, occurrences = 1) => {
     if (occurrences <= 0) return;

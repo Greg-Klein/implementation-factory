@@ -62,8 +62,8 @@ function rememberMergeRequest(session: RunSession, toolResponse: unknown) {
   session.markProgress();
   session.inferPhase(9);
   session.activity("system", forgeOf(url) === "github" ? "Pull request opened" : "Merge request opened", url);
-  // Until now the diff was measured from the launch commit, not from the branch the merge request
-  // targets: the summary the review comment quotes is rewritten before the pilot writes that comment.
+  // The note waits for the merge request (reviewConfidence): the summary the review comment quotes
+  // gets it here, before the pilot writes that comment.
   refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
 }
 

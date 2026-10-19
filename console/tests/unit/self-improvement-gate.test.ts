@@ -60,12 +60,28 @@ describe("what a run proved went wrong", () => {
     expect(auditReasons({ ...delivered, acceptance: { ...acceptance, qa: { status: "PASS", consistent: true, unobserved: 0 } } }, [])).toEqual([]);
   });
 
-  it("should name a workflow that ended blocked, by its state or by its blockers", () => {
+  it("should name a workflow that ended blocked, by its state or by blockers with nothing delivered", () => {
     const workflow = { schemaVersion: 1 as const, revision: 4, receivedAt: "2026-10-08T08:00:00.000Z" };
     expect(auditReasons({ ...delivered, workflow: { ...workflow, state: "blocked" } }, [])).toEqual(["The workflow ended blocked."]);
-    expect(auditReasons({ ...delivered, workflow: { ...workflow, state: "completed", result: { delivery: "draft_merge_request", blockers: ["P0 open"] } } }, []))
+    expect(auditReasons({ ...delivered, workflow: { ...workflow, state: "completed", result: { delivery: "none", blockers: ["P0 open"] } } }, []))
       .toEqual(["The workflow ended blocked."]);
     expect(auditReasons({ ...delivered, workflow: { ...workflow, state: "completed", result: { delivery: "merge_request", blockers: [] } } }, [])).toEqual([]);
+  });
+
+  it("should not name a merge request delivered with its blockers listed, as the contract asks", () => {
+    const workflow = { schemaVersion: 1 as const, revision: 4, receivedAt: "2026-10-08T08:00:00.000Z", state: "completed" as const };
+    const mergeRequestUrl = "https://gitlab.example.com/group/app/-/merge_requests/240";
+    const result = { delivery: "draft_merge_request" as const, mergeRequestUrl, blockers: ["Registry release not published"] };
+    expect(auditReasons({ ...delivered, mergeRequestUrl, workflow: { ...workflow, result } }, [])).toEqual([]);
+    expect(auditReasons({ ...delivered, workflow: { ...workflow, result } }, [])).toEqual(["The workflow ended blocked."]);
+  });
+
+  it("should still name the criteria a delivered merge request lists as blockers", () => {
+    const workflow = { schemaVersion: 1 as const, revision: 4, receivedAt: "2026-10-08T08:00:00.000Z", state: "completed" as const };
+    const mergeRequestUrl = "https://gitlab.example.com/group/app/-/merge_requests/241";
+    const result = { delivery: "merge_request" as const, mergeRequestUrl, blockers: ["AC6 to check on a deployed environment"] };
+    expect(auditReasons({ ...delivered, mergeRequestUrl, workflow: { ...workflow, result }, acceptance: { ...acceptance, counts: { ...counts, blocked: 1 } } }, []))
+      .toEqual(["1 acceptance criterion blocked."]);
   });
 
   it("should name a change asked after the final report", () => {

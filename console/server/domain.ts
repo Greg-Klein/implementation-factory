@@ -146,7 +146,7 @@ export function hasAuditableEvidence(snapshot: Pick<RunState, "status" | "agents
   return snapshot.status === "failed" || snapshot.agents.length > 0 || snapshot.artifacts.length > 0;
 }
 
-export type AuditEvidence = Pick<RunState, "status" | "incidents" | "acceptance" | "workflow" | "reopenings">;
+export type AuditEvidence = Pick<RunState, "status" | "incidents" | "acceptance" | "workflow" | "reopenings" | "mergeRequestUrl">;
 
 /**
  * What a run proved went wrong, each reason being something the console observed
@@ -166,7 +166,10 @@ export function auditReasons(run: AuditEvidence, findings: { metric: string; det
   if (counts && counts.blocked > 0) reasons.push(`${count(counts.blocked, "acceptance criterion", "acceptance criteria")} blocked.`);
   const qa = run.acceptance?.qa;
   if (qa && !qa.consistent) reasons.push(`QA declared ${qa.status} over ${count(qa.unobserved, "criterion", "criteria")} it did not observe.`);
-  if (run.workflow?.state === "blocked" || (run.workflow?.result?.blockers.length ?? 0) > 0) reasons.push("The workflow ended blocked.");
+  // A merge request delivered with its blockers listed is the end `contracts/workflow-state.md` asks for:
+  // an outside dependency, or a criterion whose own reason is already above.
+  const blockers = run.workflow?.result?.blockers.length ?? 0;
+  if (run.workflow?.state === "blocked" || (blockers > 0 && !run.mergeRequestUrl)) reasons.push("The workflow ended blocked.");
   const reopenings = run.reopenings?.length ?? 0;
   if (reopenings > 0) reasons.push(`${count(reopenings, "change", "changes")} asked after the final report.`);
   for (const finding of findings) if (finding.metric !== "rework") reasons.push(finding.detail);

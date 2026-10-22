@@ -228,6 +228,7 @@ The designer uses the highest level the brief allows and declares it at the top 
 - The dark theme and reduced motion are replayed when the application supports them. Their absence is noted in the method without becoming a finding.
 - Each label of the inventory is compared with the string of the reference, case and punctuation included.
 - The brief lists 3 to 5 routes that consume the shared components the diff modifies. The designer opens each one and adds none.
+- The brief gives the path of `acceptance-criteria.json` and the ids of the criteria and checks the design review measures, whoever writes it: the pilot at tiers 0 and 1, the orchestrator at tier 2. The rows that measure them cite them, otherwise the console counts no design evidence for a criterion such as "the rendering matches the frames", which QA cannot measure without the reference.
 - Each finding cites its reference: Figma node, mockup file, neighbouring screen and measured value, token of `design-reference.md`, WCAG threshold or named invariant. A remark with no reference goes into "Observations without a reference", a non-blocking section limited to three lines.
 
 The report contains a coverage matrix, with one row per screen, viewport and required state or content case. A cell is measured only if the designer reached it in the application, read its values and kept the pair of captures. The verdict is `INCONCLUSIVE` when a required viewport or an explicitly required state is not reached, when the measured coverage is under 80%, or when no reference level could be established.

@@ -29,6 +29,10 @@ Vérifiée le <date ISO> sur <commit court>, par le run du ticket <référence>.
 
 - Par fonctionnalité déjà pilotée : route, étapes, sélecteurs stables, état final observable
 
+## Tests de bout en bout
+
+- Ce que le dépôt exige (fichier et section qui le disent), commande qui lance une spec, ce qu'elle démarre elle-même, où vivent les specs et leurs helpers, et comment le backend y est mocké (interception, handlers, fixtures)
+
 ## Pièges
 
 - Ce qui a fait perdre du temps, et ce qui l'évite

@@ -65,6 +65,33 @@ function unreportedTasks(tasks) {
   });
 }
 
+/** The fields of `test_strategy.e2e_policy`, in the order `contracts/planner.md` writes them. */
+export const E2E_POLICY_FIELDS = ["expected", "sources", "command", "reason"];
+
+/** What is wrong with the end-to-end decision of a plan, or undefined when it holds. */
+export function e2ePolicyProblem(plan) {
+  const policy = plan?.test_strategy?.e2e_policy;
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) return "has no test_strategy.e2e_policy";
+  if (typeof policy.expected !== "boolean") return "says neither true nor false in e2e_policy.expected";
+  if (!Array.isArray(policy.sources) || policy.sources.some((source) => typeof source !== "string")) return "has no list of strings in e2e_policy.sources";
+  if (typeof policy.command !== "string") return "has no string in e2e_policy.command";
+  if (typeof policy.reason !== "string" || !policy.reason.trim()) return "gives no e2e_policy.reason";
+  if (!policy.expected) return undefined;
+  if (!policy.sources.some((source) => source.trim())) return "expects end-to-end tests but cites no source in e2e_policy.sources";
+  const command = policy.command.trim();
+  if (!command) return "expects end-to-end tests but gives no e2e_policy.command";
+  const steps = (Array.isArray(plan.tasks) ? plan.tasks : []).flatMap((task) => Array.isArray(task?.verification_steps) ? task.verification_steps : []);
+  if (!steps.some((step) => typeof step === "string" && step.includes(command))) return "expects end-to-end tests but no task's verification_steps run e2e_policy.command";
+  return undefined;
+}
+
+/** The end-to-end decision missing from the plan, or undefined when it holds or the plan cannot be read. */
+function planE2eProblem(tasks) {
+  let plan;
+  try { plan = JSON.parse(readFileSync(path.join(tasks, "planner-output.json"), "utf8")); } catch { return undefined; }
+  return e2ePolicyProblem(plan);
+}
+
 /** Whether the session works in a linked git worktree: every run the console starts, and a session opened in one by hand. */
 function inLinkedWorktree(cwd, env) {
   if (env.IMPL_RUN_WORKTREE) return true;
@@ -314,6 +341,12 @@ export function guardDecision(payload, env = process.env) {
     const agent = type.startsWith(`${NAMESPACE}:`) ? type.slice(NAMESPACE.length + 1) : "";
     if (agent === "developer" && typeof input.model === "string" && input.model && !DEVELOPER_MODELS.includes(input.model)) {
       return `Invoke \`${NAMESPACE}:developer\` without a model override, or with \`opus\` for a task the plan sizes \`L\`: the developer runs on Sonnet, the model its definition declares.`;
+    }
+    if (tasks && agent === "developer") {
+      const problem = planE2eProblem(tasks);
+      if (problem) {
+        return `The developer cannot start: planner-output.json ${problem}. Decide it as the "End-to-end tests" section of the planner output contract says, from the repository's testing instructions and its existing specs, then start the developer again.`;
+      }
     }
     if (tasks && REVIEWERS.includes(agent)) {
       const missing = unreportedTasks(tasks);

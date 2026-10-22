@@ -53,6 +53,7 @@ The native `skills:` field preloads the body of the skill. Putting it on every c
 | Decomposition and dependencies | Planner; shared files sequenced by the pilot. |
 | Simplicity and conventions | Common principles; applied within the scope of the role. |
 | Root cause and regression | Developer through `self-check`, then independent counterexamples through `review-change`. |
+| End-to-end tests | Planner (or the pilot for a minimal plan) decides from the target repository's instructions (`CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `docs/`) and its existing specs, recorded in `test_strategy.e2e_policy` (`contracts/planner.md`); every spec mocks the backend; the developer writes and runs the spec its task names, never adding a framework; the guard refuses a developer while the decision is incomplete; the senior checks the diff against the same sources. |
 | Security and data integrity | Planner, developer and senior at the modified boundaries; QA for observable behaviours. The code review adds an adversarial reading when the diff touches a trust boundary (`skills/review-change/references/code-review.md`). |
 | Concurrency, cancellation and resources | Targeted analysis of the transitions and owners; separate orchestration of the resources shared between agents. |
 | Performance, migrations and rollback | Analysis proportionate to the risk and to the real consumers, with no systematic audit. |
@@ -237,10 +238,11 @@ The "Runtime recipe" window of a repository shows, under the recipe, how many fi
 
 ## Rules enforced by a mechanism
 
-A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses six kinds of call and gives the agent the reason:
+A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses seven kinds of call and gives the agent the reason:
 
 - an agent of the workflow invoked under its bare name;
 - a `developer` invoked with a model override other than `sonnet`, the model its definition declares, or `opus`, which the pilot passes for a task the plan sizes `L`;
+- a `developer` started while `planner-output.json` lacks a complete end-to-end decision: `test_strategy.e2e_policy` absent or malformed, or `expected` with no source, no `command`, or no task whose `verification_steps` run it (`contracts/planner.md`, "End-to-end tests"). A plan that cannot be read lets it through;
 - a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
 - a `git commit`, or a `glab` or `gh` publication on a merge request, a pull request or an issue, whose command carries a `Claude-Session` trailer or a session link (the `Co-Authored-By` trailer and the "Generated with" line pass);
 - a publication that shows a credential: a `git commit`, a `glab` or `gh` publication, or a `glab api` or `gh api` call that writes (`POST`, `PUT`, `PATCH`), when its command or a file it sends (`key=@file`, `--body-file`, `-F`, `$(cat file)`) holds a GitHub, GitLab, Slack or AWS token, an API key, a JWT, a private key or a bearer token. The refusal names the kind, the file and the line, and never quotes the value. A signed address counts, since anyone who reads the page can open what it points to. The check reads shapes of 20 characters or more, so a sentence about a password or a placeholder such as `<token>` passes. Images and videos are not read;
@@ -272,7 +274,7 @@ The files an agent edited are noted from its `Edit` and `Write` calls, per agent
 | --- | --- | --- |
 | type-check | the package | its `typecheck` or `type-check` script, otherwise `tsc --noEmit` (`tsc -b` for a solution-style `tsconfig.json`) |
 | lint | the edited files | the local `eslint`, when the package or the repository has a configuration |
-| related tests | the edited files | `vitest related`, `jest --findRelatedTests` or the `react-scripts` equivalent |
+| related tests | the edited files, end-to-end specs aside (under an `e2e/`, `e2e-tests/`, `cypress/` or `playwright/` folder, or named `*.e2e.*` or `*.cy.*`): the unit runner would fail on their framework | `vitest related`, `jest --findRelatedTests` or the `react-scripts` equivalent |
 
 Each line of the file carries `at`, `agent`, `agentId`, `files` (the first twenty the agent edited, which tell a reader which task the line is about), `root`, `step`, `command`, `retry`, `handedBack` (only when true), `ms` (how long the check took, on the lines of a check that was started) and a `result`:
 

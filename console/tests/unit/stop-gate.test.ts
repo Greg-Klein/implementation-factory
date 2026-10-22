@@ -90,6 +90,27 @@ describe("the stop gate", () => {
     expect(argumentsOf("jest")).toEqual([`--findRelatedTests --passWithNoTests ${path.join(cwd, "src/cart.ts")}`]);
   });
 
+  it("should lint an end-to-end spec without handing it to the unit runner", () => {
+    mkdirSync(path.join(cwd, "e2e"));
+    for (const file of ["e2e/cart.spec.ts", "src/cart.e2e.ts", "src/cart.cy.ts"]) writeFileSync(path.join(cwd, file), "");
+    start("a1");
+    for (const file of ["e2e/cart.spec.ts", "src/cart.e2e.ts", "src/cart.cy.ts", "src/cart.ts"]) edit("a1", file);
+    stop("a1");
+    expect(argumentsOf("eslint")[0]).toContain(path.join(cwd, "e2e/cart.spec.ts"));
+    expect(argumentsOf("jest")).toEqual([`--findRelatedTests --passWithNoTests ${path.join(cwd, "src/cart.ts")}`]);
+  });
+
+  it("should run no related tests when the agent edited only end-to-end specs", () => {
+    mkdirSync(path.join(cwd, "e2e"));
+    writeFileSync(path.join(cwd, "e2e/cart.spec.ts"), "");
+    start("a1");
+    edit("a1", "e2e/cart.spec.ts");
+    stop("a1");
+    expect(argumentsOf("eslint")).toEqual([path.join(cwd, "e2e/cart.spec.ts")]);
+    expect(argumentsOf("jest")).toEqual([]);
+    expect(ledger().map((line) => line.step)).toEqual(["type-check", "lint"]);
+  });
+
   it("should check the files an agent changed through the shell, and not those already changed before it started", () => {
     writeFileSync(path.join(cwd, "src/total.ts"), "export const total = 0;\n");
     start("a1");

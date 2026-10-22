@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -43,8 +43,65 @@ describe("the hook guard", () => {
     expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "haiku" }, {})).toBeUndefined();
   });
 
+  describe("on the end-to-end decision of the plan", () => {
+    const DEVELOPER = { subagent_type: "implementation-factory:developer" };
+    const plan = (policy: unknown, steps: string[] = []) => writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({
+      tasks: [{ id: "T1", verification_steps: steps }],
+      test_strategy: policy === undefined ? {} : { e2e_policy: policy },
+    }));
+    const expected = { expected: true, sources: ["CONTRIBUTING.md#Tests"], command: "npx playwright test", reason: "Every page has a spec." };
+
+    it("should refuse a developer while the plan has no decision, or a malformed one", () => {
+      plan(undefined);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/has no test_strategy\.e2e_policy/);
+      plan({ ...expected, expected: "yes" });
+      expect(refusal("Agent", DEVELOPER)).toMatch(/neither true nor false/);
+      plan({ ...expected, sources: "README.md" });
+      expect(refusal("Agent", DEVELOPER)).toMatch(/e2e_policy\.sources/);
+      plan({ ...expected, command: null });
+      expect(refusal("Agent", DEVELOPER)).toMatch(/string in e2e_policy\.command/);
+      plan({ expected: false, sources: [], command: "", reason: " " });
+      expect(refusal("Agent", DEVELOPER)).toMatch(/no e2e_policy\.reason/);
+    });
+
+    it("should refuse a developer when the plan expects specs it gives no source, command or task for", () => {
+      plan({ ...expected, sources: [] }, ["npx playwright test e2e/cart.spec.ts"]);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/cites no source/);
+      plan({ ...expected, command: " " }, ["npx playwright test e2e/cart.spec.ts"]);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/gives no e2e_policy\.command/);
+      plan(expected, ["npm test"]);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/no task's verification_steps run/);
+    });
+
+    it("should let a developer start on a complete decision, a plan that cannot be read, or no plan", () => {
+      plan(expected, ["npx playwright test e2e/cart.spec.ts"]);
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+      plan({ expected: false, sources: [], command: "", reason: "No e2e tooling in the repository." });
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+      writeFileSync(path.join(tasks, "planner-output.json"), "{ not json");
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+      rmSync(path.join(tasks, "planner-output.json"));
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+    });
+
+    it("should leave a reviewer and a session outside a run alone", () => {
+      plan(undefined);
+      expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer" })).toMatch(/T1 of planner-output\.json has no/);
+      expect(refusal("Agent", DEVELOPER, {})).toBeUndefined();
+    });
+
+    it("should check the fields the planner contract writes", () => {
+      const contract = readFileSync(path.resolve(process.cwd(), "..", "contracts", "planner.md"), "utf8");
+      const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(contract)?.[1] ?? "null") as { test_strategy: { e2e_policy: object } };
+      const guard = path.resolve(process.cwd(), "..", "hooks", "guard.mjs");
+      const { stdout } = spawnSync(process.execPath, ["--input-type=module", "-e", `const { E2E_POLICY_FIELDS } = await import(${JSON.stringify(guard)}); console.log(JSON.stringify(E2E_POLICY_FIELDS));`], { encoding: "utf8" });
+      expect(Object.keys(example.test_strategy.e2e_policy)).toEqual(JSON.parse(stdout));
+    });
+  });
+
   it("should refuse a reviewer while a planned task has no report, naming the task", () => {
-    writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }] }));
+    const e2e_policy = { expected: false, sources: [], command: "", reason: "No e2e tooling." };
+    writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }], test_strategy: { e2e_policy } }));
     writeFileSync(path.join(tasks, "developer-report-T1.md"), "# Rapport");
     writeFileSync(path.join(tasks, "developer-report-T10.md"), "# Rapport");
     expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer" })).toMatch(/T2 of planner-output\.json has no/);

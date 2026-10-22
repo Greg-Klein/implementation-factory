@@ -263,13 +263,23 @@ export function gateSteps(root, top, files) {
   if (!sources.length) return steps;
   const eslint = binary("eslint");
   if (eslint && (findUpward(root, top, ESLINT_CONFIGS) || "eslintConfig" in manifest)) steps.push({ step: "lint", command: [eslint, ...sources] });
+  // An end-to-end spec run by the unit runner fails for its framework, not for the agent's edit.
+  const units = sources.filter((file) => !isEndToEndSpec(path.relative(root, file)));
+  if (!units.length) return steps;
   const vitest = binary("vitest");
   const jest = binary("jest");
   const reactScripts = binary("react-scripts");
-  if (vitest) steps.push({ step: "related tests", command: [vitest, "related", "--run", "--passWithNoTests", ...sources] });
-  else if (jest) steps.push({ step: "related tests", command: [jest, "--findRelatedTests", "--passWithNoTests", ...sources] });
-  else if (reactScripts) steps.push({ step: "related tests", command: [reactScripts, "test", "--watchAll=false", "--passWithNoTests", "--findRelatedTests", ...sources] });
+  if (vitest) steps.push({ step: "related tests", command: [vitest, "related", "--run", "--passWithNoTests", ...units] });
+  else if (jest) steps.push({ step: "related tests", command: [jest, "--findRelatedTests", "--passWithNoTests", ...units] });
+  else if (reactScripts) steps.push({ step: "related tests", command: [reactScripts, "test", "--watchAll=false", "--passWithNoTests", "--findRelatedTests", ...units] });
   return steps;
+}
+
+/** A file of an end-to-end suite, by where it lives or how it is named: `e2e/`, `cypress/`, `playwright/`, `*.e2e.ts`, `*.cy.ts`. */
+export function isEndToEndSpec(relativePath) {
+  const parts = relativePath.split(/[\\/]/);
+  const name = parts.pop() ?? "";
+  return parts.some((part) => /^(?:e2e|e2e-tests|cypress|playwright)$/i.test(part)) || /\.(?:e2e|cy)\.[cm]?[jt]sx?$/i.test(name);
 }
 
 /**

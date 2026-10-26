@@ -7,7 +7,7 @@ The templates and fixed phrases below are written in French. When the workflow l
 This is the GitHub counterpart of [the GitLab delivery recipe](../../glab-gitlab-api/references/merge-request.md). The content rules are the same on both forges and are written once, there. Read in that file, as they stand, with "pull request" for "merge request":
 
 - the opening paragraphs on the acceptance summary;
-- the description template, and the lists of what does not belong in a description (noise, session trace, the machine that ran the session);
+- the description template, including `## Risque et rayon d'impact` and `## Comment revenir en arrière` (`## Risk and blast radius` and `## How to revert` in English), and the lists of what does not belong in a description (noise, session trace, the machine that ran the session);
 - the review comment template and the rules for that comment.
 
 **Every command in that file is GitLab's and none applies here.** The same goes for its paragraphs on uploading screenshots and on the ticket status. The commands, and what differs on GitHub, are below.

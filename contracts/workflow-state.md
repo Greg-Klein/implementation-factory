@@ -9,6 +9,7 @@
   "state": "working | waiting | paused | completed | blocked",
   "step": "5",
   "reviewTier": 1,
+  "baseBranch": "main",
   "nextAction": {
     "kind": "run_step | await_agent | await_process | await_dependency | deliver",
     "taskIds": ["T3"],
@@ -26,7 +27,8 @@
 
 - **Never spend a turn of yours on this file alone.** Each turn rereads the whole conversation, and a run used to spend about ten of them on this file only. Write it in the same message as the tool calls it announces: chained in front of the step's first command (`… && mv workflow-state.json.tmp workflow-state.json && <command>`), or as a `Bash` call beside the `Agent` launches it declares a wait on. Only a write with nothing left to do after it, a `blocked` stop for instance, goes alone.
 - **`revision` starts at 1 and goes up by one on every write.** A lower revision is ignored.
-- **`reviewTier`** is the tier you picked at step 7 (`0`, `1` or `2`). Write it from the state that opens step 7 onwards, on every later write. The console keeps it with the run's figures, which is how two runs of the same tier get compared.
+- **`reviewTier`** is the tier you picked at step 7 (`0`, `1` or `2`), at least the floor `hooks/review-tier.mjs` prints for the diff. Write it from the state that opens step 7 onwards, on every later write. The guard refuses a reviewer, and the opening of the merge request, when it is below that floor. The console keeps it with the run's figures, which is how two runs of the same tier get compared.
+- **`baseBranch`** is the branch the merge request targets, the one step 3 recorded. Write it from step 3 on. The guard diffs against it. The console does not read this field: `RunState.baseBranch` is the stacked base the queue passed, a different fact.
 - **`working`** when you start a step (`step` is its number, `nextAction.kind` `run_step`). The console shows and times the run by this number: a step you do not declare is a step it never saw.
 - **`waiting`** right before you end a turn while something works for you: `await_agent` with the `agents` and `taskIds` of the batch you launched in the background, `await_process` for a background command or a `Monitor` you are waiting on, `await_dependency` for anything else outside the session, with `expectedArtifact` when a file will mark the end. A declared wait never hides a run for long: with no agent actually running, `await_agent` is reported as no next action, and the others turn into a doubt after the silence threshold.
 - **`paused`** when the user tells you to wait for something outside the session before going on (another ticket's merge, a decision someone else takes). Let the agents you launched finish, record the decision in `open-questions.md`, then write `paused` at the step you stopped at, with `nextAction.kind` `await_dependency` and a `description` naming what resumes the run, say so in one message and end your turn. A pause is not an end: no `completed`, no archive sync, no cleaning. The console shows the run paused, frees its slot and keeps its ticket. The user resumes it with a message: write `working` with the next revision at the step you resume, before the first tool call that acts on it.

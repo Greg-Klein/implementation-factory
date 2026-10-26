@@ -677,7 +677,7 @@ flowchart LR
     hook: {
       session: ["Pilot or agent", "Claude Code", "Every tool call and every agent stop fires a hook before the console hears of it."],
       emit: ["emit.mjs", "Hook script", "Runs the guard, then the stop gate, then posts the event with the run id. Retries once, then spools."],
-      guard: ["guard.mjs", "Hook script", "Refuses seven kinds of call during a run, decided from the tool input, never from a prompt."],
+      guard: ["guard.mjs", "Hook script", "Refuses eight kinds of call during a run, decided from the tool input, never from a prompt. One of them floors the review tier from the paths the diff touches."],
       gate: ["gate.mjs", "Hook script", "At the stop of a Dev or the Senior, type-checks, lints and tests the files it edited, including through the shell."],
       access: ["access.ts, hook-bridge.ts", "Server", "Accepts a hook only with the secret drawn at start and carried in the hook URL."],
       engine: ["server/engine", "Server", "Turns the raw Claude Code payload into an EngineEvent the rest of the server understands."],

@@ -35,6 +35,9 @@ The ones several agents rely on have a fixed English form, so that everyone name
 |---|---|
 | `## Résumé` | `## Summary` |
 | `## Changements` | `## Changes` |
+| `## Risque et rayon d'impact` | `## Risk and blast radius` |
+| `## Comment revenir en arrière` | `## How to revert` |
+| `Aucun au-delà du ticket.` | `None beyond the ticket.` |
 | `## Critères d'acceptation` | `## Acceptance criteria` |
 | `## Notes d'implémentation` | `## Implementation notes` |
 | `Hors scope selon le ticket :` | `Out of scope per the ticket:` |

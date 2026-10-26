@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+const tierScript = path.resolve(process.cwd(), "..", "hooks", "review-tier.mjs");
 
 const emitter = path.resolve(process.cwd(), "..", "hooks", "emit.mjs");
 let cwd: string;
@@ -356,5 +358,187 @@ describe("the hook guard", () => {
     expect(refusal("Bash", { command: "git commit -m 'x\n\nCo-Authored-By: someone'" }, {})).toBeUndefined();
     writeFileSync(path.join(tasks, "workflow-state.json"), "{}");
     expect(refusal("Agent", { subagent_type: "developer" }, {})).toContain("implementation-factory:developer");
+  });
+
+  describe("on the review tier the diff requires", () => {
+    const senior = { subagent_type: "implementation-factory:senior-reviewer" };
+    const orchestrator = { subagent_type: "implementation-factory:review-orchestrator" };
+    const qa = { subagent_type: "implementation-factory:qa-reviewer" };
+
+    /** The parent environment's sensitive-path list must not decide these. */
+    function tierEnv(extra: Record<string, string> = {}) {
+      const { IMPL_SENSITIVE_PATHS: _paths, IMPL_SOURCE_BRANCH: _source, IMPL_BASE_BRANCH: _base, IMPL_TICKET_BASE_BRANCH: _ticket, IMPL_JUDGE_OUTPUT: _judge, IMPL_SCHEDULE_OUTPUT: _schedule, IMPL_RUN_ID: _run, IMPL_HOOK_URL: _url, ...inherited } = process.env;
+      return { ...inherited, IMPL_RUN_ID: "run", ...extra };
+    }
+
+    function git(args: string[]) {
+      const result = spawnSync("git", args, {
+        cwd, encoding: "utf8",
+        env: { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.com", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.com" },
+      });
+      expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+    }
+
+    function commitChange(file: string, content: string) {
+      git(["init", "-b", "main"]);
+      writeFileSync(path.join(cwd, "README.md"), "base\n");
+      git(["add", "README.md"]);
+      git(["commit", "-m", "base"]);
+      git(["checkout", "-b", "feature"]);
+      mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+      writeFileSync(path.join(cwd, file), content);
+      git(["add", "--", file]);
+      git(["commit", "-m", "change"]);
+    }
+
+    function workflow(tier: number | undefined, baseBranch = "main") {
+      writeFileSync(path.join(tasks, "workflow-state.json"), JSON.stringify({ schemaVersion: 1, revision: 1, state: "working", step: "7", ...(tier === undefined ? {} : { reviewTier: tier }), baseBranch }));
+    }
+
+    function open(command: string, extra: Record<string, string> = {}) {
+      return refusal("Bash", { command }, tierEnv({ IMPL_SOURCE_BRANCH: "main", ...extra }));
+    }
+
+    /** The agent has started: the event the marker is written on, not the call that asks for it. */
+    function started(agent: string, extra: Record<string, string> = {}) {
+      const payload = { hook_event_name: "SubagentStart", agent_type: `implementation-factory:${agent}`, agent_id: agent, cwd };
+      const result = spawnSync(process.execPath, [emitter], { input: JSON.stringify(payload), encoding: "utf8", env: tierEnv({ IMPL_SOURCE_BRANCH: "main", ...extra }) });
+      expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+    }
+
+    /** A file written by an earlier round, before the agent of this one started. */
+    function written(name: string, content: string, old = false) {
+      const file = path.join(tasks, name);
+      writeFileSync(file, content);
+      if (old) utimesSync(file, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    }
+
+    it("should refuse a review below the floor and let the tier the paths require through", () => {
+      commitChange("src/auth/login.ts", "token\n");
+      workflow(0);
+      expect(refusal("Agent", senior, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toMatch(/review tier is at least 1/);
+      workflow(1);
+      expect(refusal("Agent", senior, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+      mkdirSync(path.join(cwd, ".github", "workflows"), { recursive: true });
+      writeFileSync(path.join(cwd, ".github", "workflows", "ci.yml"), "name: ci\n");
+      git(["add", "--", ".github/workflows/ci.yml"]);
+      git(["commit", "-m", "ci"]);
+      workflow(1);
+      expect(refusal("Agent", senior, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toMatch(/review tier is at least 2/);
+      workflow(2);
+      expect(refusal("Agent", orchestrator, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+    });
+
+    it("should keep a migration at tier 2 when the setting lists only auth, and let the call through when the diff cannot be read", () => {
+      commitChange("db/migrate/001.rb", "change\n");
+      workflow(1);
+      expect(refusal("Agent", senior, tierEnv({ IMPL_SOURCE_BRANCH: "main", IMPL_SENSITIVE_PATHS: "**/auth/**" }))).toMatch(/at least 2/);
+      writeFileSync(path.join(tasks, "workflow-state.json"), "{");
+      expect(refusal("Agent", senior, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+    });
+
+    it("should measure from baseBranch, and from an uncommitted file", () => {
+      commitChange("src/app.ts", "app\n");
+      workflow(0);
+      expect(refusal("Agent", senior, tierEnv())).toBeUndefined();
+      mkdirSync(path.join(cwd, "auth"), { recursive: true });
+      writeFileSync(path.join(cwd, "auth", "login.ts"), "token\n");
+      expect(refusal("Agent", senior, tierEnv())).toMatch(/auth\/login\.ts/);
+    });
+
+    it("should find every command that opens a merge request or a pull request", () => {
+      commitChange(".gitlab-ci.yml", "stages: []\n");
+      workflow(2);
+      for (const command of [
+        "gh pr create --base main --head feature --title 'feat: x' --body-file .claude/tasks/mr-description.md",
+        "sudo /usr/bin/gh pr create --title x",
+        "gh pr new --title x",
+        "glab mr new --fill",
+        "glab api --method POST \"projects/:fullpath/merge_requests\" --field description=@.claude/tasks/mr-description.md",
+        "gh api --method=POST repos/acme/shop/pulls",
+        "gh api -XPOST repos/acme/shop/pulls",
+        "gh api repos/acme/shop/pulls -f title=x -f head=feature -f base=main",
+        "glab api projects/:id/merge_requests -f source_branch=feature",
+        "gh api repos/acme/shop/pulls --input body.json",
+        "git push -o merge_request.create origin feature",
+        "git push --push-option=merge_request.create origin feature",
+      ]) expect([command, open(command)]).toEqual([command, expect.stringMatching(/review-orchestrator/)]);
+      for (const command of [
+        "git commit -m \"mention gh pr create\"",
+        "glab api --method POST projects/:fullpath/merge_requests/12/notes",
+        "gh pr comment 12 --body-file .claude/tasks/mr-review-comment.md",
+        "gh api repos/acme/shop/pulls",
+        "gh api -X GET repos/acme/shop/pulls -f state=open",
+        "git push origin feature",
+      ]) expect([command, open(command)]).toEqual([command, undefined]);
+    });
+
+    it("should refuse to publish tier 2 until the orchestrator it started writes a verdict, and a blocked one unless as a draft", () => {
+      commitChange(".gitlab-ci.yml", "stages: []\n");
+      workflow(2);
+      const create = "gh pr create --base main --head feature --title x";
+      written("review-summary.md", "## Verdict\n\nREADY\n");
+      expect(open(create)).toMatch(/review-orchestrator/);
+      // Asked for and then denied, it never started.
+      expect(refusal("Agent", orchestrator, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+      expect(open(create)).toMatch(/review-orchestrator/);
+
+      written("review-summary.md", "## Verdict\n\nREADY\n", true);
+      started("review-orchestrator");
+      expect(open(create)).toMatch(/READY or BLOCKED alone/);
+      for (const verdict of ["NOT READY", "READY | BLOCKED"]) {
+        written("review-summary.md", `## Verdict\n\n${verdict}\n`);
+        expect(open(create)).toMatch(/READY or BLOCKED alone/);
+      }
+      written("review-summary.md", "# Résumé de revue\n\n## Verdict\n\nBLOCKED\n");
+      expect(open(create)).toMatch(/draft/);
+      expect(open(`${create} --draft`)).toBeUndefined();
+      expect(open("glab mr create --title 'Draft: x'")).toBeUndefined();
+      written("review-summary.md", "# Résumé de revue\n\n## Verdict\n\n**READY**\n");
+      expect(open(create)).toBeUndefined();
+
+      // The marker belongs to the checkout, not to the directory the shell is in.
+      const root = cwd;
+      cwd = path.join(root, "packages", "web");
+      mkdirSync(cwd, { recursive: true });
+      try {
+        expect(open(create)).toBeUndefined();
+      } finally {
+        cwd = root;
+      }
+      expect(open(create, { IMPL_RUN_ID: "another-run" })).toMatch(/review-orchestrator/);
+    });
+
+    it("should refuse to publish tier 1 until the QA it started writes a verdict, and a failed one unless as a draft", () => {
+      commitChange("src/security/token.ts", "secret\n");
+      workflow(1);
+      const create = "gh pr create --title x";
+      expect(open(create)).toMatch(/qa-reviewer/);
+      expect(refusal("Agent", qa, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+      expect(open(create)).toMatch(/qa-reviewer/);
+      written("qa-report.md", "# Rapport QA\n\n## Verdict\n\nPASS\n", true);
+      started("qa-reviewer");
+      expect(open(create)).toMatch(/qa-report\.md/);
+      written("qa-report.md", " \n");
+      expect(open(create)).toMatch(/qa-report\.md/);
+      for (const verdict of ["FAIL", "INCONCLUSIVE"]) {
+        written("qa-report.md", `# Rapport QA\n\n## Verdict\n\n${verdict}\n`);
+        expect(open(create)).toMatch(/draft/);
+        expect(open(`${create} -d`)).toBeUndefined();
+      }
+      written("qa-report.md", "# Rapport QA\n\n## Verdict\n\nPASS_WITH_WARNINGS\n\nDeux avertissements.\n");
+      expect(open(create)).toBeUndefined();
+      rmSync(path.join(tasks, "qa-report.md"));
+      mkdirSync(path.join(tasks, "qa-report.md"));
+      expect(open(create)).toMatch(/cannot be read/);
+    });
+
+    it("should print the same floor the guard enforces", () => {
+      commitChange("db/migrations/004.sql", "select 1;\n");
+      workflow(0);
+      const result = spawnSync(process.execPath, [tierScript], { cwd, encoding: "utf8", env: tierEnv({ IMPL_SOURCE_BRANCH: "main" }) });
+      expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+      expect(JSON.parse(result.stdout)).toMatchObject({ floor: 2, unreadable: false, reviewTier: 0 });
+    });
   });
 });

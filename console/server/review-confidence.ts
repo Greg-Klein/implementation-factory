@@ -51,9 +51,24 @@ export const CONFIDENCE_RULES = [
   { id: "diff_large", kind: "minus", value: 0.5 },
   { id: "diff_very_large", kind: "minus", value: 1 },
   { id: "diff_many_files", kind: "minus", value: 0.5 },
-  { id: "sensitive_path", kind: "minus", value: 1 },
+  { id: "sensitive_path", kind: "cap", value: 3 },
   { id: "no_test_change", kind: "minus", value: 0.5 },
 ] as const satisfies readonly ConfidenceRule[];
+
+/**
+ * CI workflows and migrations, copied from `hooks/review-tier.mjs`. They hold
+ * the note at the sensitive-path cap even when `IMPL_SENSITIVE_PATHS` omits
+ * them, and a unit test holds the two copies equal. They are also the tier-2
+ * floor of a review.
+ */
+export const TIER_TWO_PATTERNS = [
+  ".github/workflows/**",
+  "**/.github/workflows/**",
+  ".gitlab-ci.yml",
+  "**/.gitlab-ci.yml",
+  "**/migrations/**",
+  "**/migrate/**",
+];
 
 export type ConfidenceRuleId = (typeof CONFIDENCE_RULES)[number]["id"];
 
@@ -127,7 +142,7 @@ export function changeFacts(files: ChangedFile[], patch: string, sensitivePatter
   return {
     files: files.length,
     lines: files.reduce((total, file) => total + file.added + file.removed, 0),
-    sensitive: [...new Set(files.flatMap(paths).filter((file) => sensitivePatterns.some((pattern) => pathMatches(pattern, file))))],
+    sensitive: [...new Set(files.flatMap(paths).filter((file) => sensitivePatterns.some((pattern) => pathMatches(pattern, file)) || TIER_TWO_PATTERNS.some((pattern) => pathMatches(pattern, file))))],
     removedTests: [...new Set([...removed, ...disabled])],
     codeChanged: files.some((file) => SOURCE_FILE.test(file.path) && !isTestPath(file.path)),
     testChanged: kept.some((file) => isTestPath(file.path)),

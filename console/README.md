@@ -110,7 +110,7 @@ There is no note before a reviewer wrote its report. The note of the run when it
 
 | Variable | Effect | Default |
 |---|---|---|
-| `IMPL_SENSITIVE_PATHS` | path patterns whose change lowers the note whatever the review said, separated by commas: `**` crosses directories, `*` stays inside one, a pattern without a slash matches a name at any depth | `**/migrations/**,**/auth/**,**/security/**,.github/workflows/**,.gitlab-ci.yml,**/Dockerfile*` |
+| `IMPL_SENSITIVE_PATHS` | path patterns whose change holds the note at 3, separated by commas: `**` crosses directories, `*` stays inside one, a pattern without a slash matches a name at any depth. The same list is the tier-1 floor of a review; CI and migration paths are tier 2 even when this list omits them | `**/migrations/**,**/migrate/**,**/auth/**,**/security/**,.github/workflows/**,**/.github/workflows/**,.gitlab-ci.yml,**/.gitlab-ci.yml,**/Dockerfile*` |
 
 Limits of this version: no command is yet correlated to its result by the engine's events, so every result is still declared by the agent that writes it; the server cannot check the content of a piece of evidence, only its consistency and its version.
 

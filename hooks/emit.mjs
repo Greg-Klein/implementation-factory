@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { request } from "node:http";
 import process from "node:process";
 import { gateObserve, gateStop } from "./gate.mjs";
-import { denial, guardDecision } from "./guard.mjs";
+import { denial, guardDecision, noteReviewStart } from "./guard.mjs";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -32,6 +32,14 @@ try {
   }
 } catch {
   // A gate that cannot run lets the agent go.
+}
+
+// Noted here, with or without a console: the publication check asks whether
+// the reviewer actually started, not whether its call was asked for.
+try {
+  noteReviewStart(JSON.parse(input || "{}"));
+} catch {
+  // A marker that cannot be written leaves the publication refused, not let through.
 }
 
 const endpoint = process.env.IMPL_HOOK_URL;

@@ -25,11 +25,13 @@ Six agents carry a run:
 
 A seventh agent, `ticket-scheduler`, takes part in no run. The console calls it before a batch starts, to predict what each ticket would touch (see [Launch several tickets at once](#launch-several-tickets-at-once)).
 
-The pilot picks a review tier from the size of the diff:
+The pilot picks a review tier from the size of the diff and from the paths it touches. The size can raise the tier. A floor the guard enforces cannot be lowered: a sensitive path is at least tier 1, and CI or a migration is tier 2.
 
-- tier 0: a single pass of `senior-reviewer`, with no orchestrator and no rework loop, while the pilot runs the general checks itself (lint, typecheck, tests), plus `designer-reviewer` when the design review is triggered;
-- tier 1: `senior-reviewer`, then `designer-reviewer` if the pilot triggered the design review and the application is reachable, then `qa-reviewer`, once each;
-- tier 2: `review-orchestrator` runs the full loop. `senior-reviewer` and `qa-reviewer` keep their default model there, Opus. At tiers 0 and 1, the pilot calls them with Sonnet. `designer-reviewer` runs on Sonnet at every tier.
+- tier 0, only when that floor is 0: a single pass of `senior-reviewer`, with no orchestrator and no rework loop, while the pilot runs the general checks itself (lint, typecheck, tests), plus `designer-reviewer` when the design review is triggered;
+- tier 1: `senior-reviewer`, then `designer-reviewer` if the pilot triggered the design review and the application is reachable, then `qa-reviewer`, once each. This is the floor for a sensitive path (`IMPL_SENSITIVE_PATHS`);
+- tier 2: `review-orchestrator` runs the full loop. `senior-reviewer` and `qa-reviewer` keep their default model there, Opus. At tiers 0 and 1, the pilot calls them with Sonnet. `designer-reviewer` runs on Sonnet at every tier. CI workflows and migrations are always this tier.
+
+The guard refuses a review started below that floor, and refuses to open the merge request until a tier-2 change has been through the review orchestrator or a tier-1 change through QA, and opens it only as a draft while that review is not ready. After the first review round, a recheck reads the rework diff and the findings already reported, and does not raise one again. The rework names the finding's category and fixes every occurrence of it in scope. The merge request description has two short sections, "Risk and blast radius" and "How to revert" (in French when `IMPL_LANGUAGE` is `fr`).
 
 QA writes its test plan to `qa-plan.md` before opening the author's reports, then tries to make each criterion fail. It declares a criterion met only on an observation it ran itself. When a criterion has no observation, the verdict is `INCONCLUSIVE` and the merge request is opened as a draft, with those criteria named.
 
@@ -369,7 +371,7 @@ The available settings:
 | `IMPL_TICKET_PROPOSALS_FILE` | absolute path of the file an outside watcher writes the tickets to propose in; empty for `ticket-proposals.json` in the data directory | empty |
 | `IMPL_WORKTREE_DEPENDENCY_DIRS` | names of the dependency directories Git ignores that the worktree of a run takes from the main checkout, at any depth, separated by commas; no build outputs | `node_modules` |
 | `IMPL_WORKTREE_COPY_FILES` | files copied from the main checkout to the worktree of a run, separated by commas: a name pattern such as `.env*` for files Git ignores, or a path from the root of the repository | `.env*,.claude/settings.local.json` |
-| `IMPL_SENSITIVE_PATHS` | path patterns whose change lowers the review confidence of a run whatever its review said, separated by commas: `**` crosses directories, `*` stays inside one, a pattern without a slash matches a name at any depth | `**/migrations/**,**/auth/**,**/security/**,.github/workflows/**,.gitlab-ci.yml,**/Dockerfile*` |
+| `IMPL_SENSITIVE_PATHS` | path patterns whose change holds the review confidence of a run at 3, and is the tier-1 floor of its review, separated by commas: `**` crosses directories, `*` stays inside one, a pattern without a slash matches a name at any depth. CI and migration paths are tier 2 even when this list omits them | `**/migrations/**,**/migrate/**,**/auth/**,**/security/**,.github/workflows/**,**/.github/workflows/**,.gitlab-ci.yml,**/.gitlab-ci.yml,**/Dockerfile*` |
 | `IMPL_STALL_MINUTES` | minutes without progress before the console raises a doubt about a run in progress (a doubt only: nothing is stopped or restarted) | `10` |
 | `IMPL_GITLAB_STATUS_STARTED` | name of the GitLab status a run gives its ticket when it creates the branch; status names depend on the GitLab group, and nothing is moved on GitHub | `In progress` |
 | `IMPL_GITLAB_STATUS_MERGE_REQUEST` | name of the GitLab status a run gives its ticket once the merge request is open | `In progress - Merge request` |

@@ -77,9 +77,19 @@ Reviewers receive the author's evidence (`developer-report.md`, `dev-evidence.js
 
 Independence does not guarantee the absence of bias. A diagnosis already present in the brief is declared as such, then a competing explanation is examined. Reworks necessarily expose the findings of the previous round. No quota of defects is imposed.
 
+Round 1 is the only full pass of the senior review. A later pass is a recheck of the rework: the brief carries the rework diff and the round-1 findings, and the reviewer flags only what the rework broke or left unresolved. A finding already reported is not opened again and not given a new id; one that is still there is named by its id. The rework brief names the finding's category and tells the developer to fix every occurrence of that category inside the task's file scope, not only the cited line. The pilot writes that same brief at tiers 0 and 1, where it sequences the reviewers itself.
+
 ## Review tiers
 
-The pilot picks the tier from the size of the diff (step 7 of `commands/implement.md`).
+The pilot picks the tier from the size of the diff and from the paths it touches (step 7 of `commands/implement.md`). The size can raise the tier. The floor cannot be lowered: `hooks/review-tier.mjs` reads the changed paths, and `hooks/guard.mjs` refuses a reviewer started below that floor and a publication that skipped the review the floor requires.
+
+| Floor | The diff |
+| --- | --- |
+| 0 | No sensitive path. Tier 0 is available when the diff is also small. |
+| 1 | A path matching `IMPL_SENSITIVE_PATHS` (by default auth, security, Dockerfiles, and the CI and migration paths). |
+| 2 | CI (`.github/workflows/`, `.gitlab-ci.yml`, at the root or nested in a package) or a migration (`migrations/`, `migrate/`), whether or not the setting still lists them. |
+
+The base of that diff is `baseBranch` in `workflow-state.json`, then `IMPL_BASE_BRANCH`, `IMPL_TICKET_BASE_BRANCH`, `IMPL_SOURCE_BRANCH` and `origin/HEAD`. A diff git cannot read does not floor the tier. A tier-2 publication waits until `review-orchestrator` was started in the session and `review-summary.md` carries `READY` or `BLOCKED`. A tier-1 publication waits until `qa-reviewer` or the orchestrator was started and `qa-report.md` or that summary is written. A summary or a QA report written by hand, with the agent never started, does not count.
 
 | Tier | Sequence | Reviewer model |
 | --- | --- | --- |
@@ -238,12 +248,13 @@ The "Runtime recipe" window of a repository shows, under the recipe, how many fi
 
 ## Rules enforced by a mechanism
 
-A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses seven kinds of call and gives the agent the reason:
+A rule that needs no judgment is enforced by `hooks/guard.mjs`, called by `hooks/emit.mjs` on every `PreToolUse`, and the prompt keeps one line about it. The guard speaks only during a run of the workflow (`IMPL_RUN_ID` is set, or `.claude/tasks/workflow-state.json` exists). It refuses eight kinds of call and gives the agent the reason:
 
 - an agent of the workflow invoked under its bare name;
 - a `developer` invoked with a model override other than `sonnet`, the model its definition declares, or `opus`, which the pilot passes for a task the plan sizes `L`;
 - a `developer` started while `planner-output.json` lacks a complete end-to-end decision: `test_strategy.e2e_policy` absent or malformed, or `expected` with no source, no `command`, or no task whose `verification_steps` run it (`contracts/planner.md`, "End-to-end tests"). A plan that cannot be read lets it through;
 - a reviewer or the review orchestrator started while a task of `planner-output.json` has neither its `developer-report-<id>.md` nor a line naming it in the merged `developer-report.md`;
+- a reviewer, or the opening of a merge request or a pull request, below the tier the diff requires. `hooks/review-tier.mjs` (`reviewTierFloor`) reads the changed paths: at least tier 1 when one matches `IMPL_SENSITIVE_PATHS`, at least tier 2 for a CI workflow (`.github/workflows/`, `.gitlab-ci.yml`, at the root or nested) or a migration (`migrations/`, `migrate/`), whether or not the setting still lists those. The declared tier is `reviewTier` in `workflow-state.json`. The base is `baseBranch` there, then `IMPL_BASE_BRANCH`, `IMPL_TICKET_BASE_BRANCH`, `IMPL_SOURCE_BRANCH` and `origin/HEAD`. Publishing tier 2 also requires that `review-orchestrator` actually started in the session (noted on `SubagentStart`, so a call refused afterwards does not count) and that `review-summary.md`, written after that start, has `READY` or `BLOCKED` alone under `## Verdict`. Publishing tier 1 requires that `qa-reviewer` or the orchestrator started and that `qa-report.md` or that summary, written after it, carries its verdict the same way. A review that is not ready (`BLOCKED`, `FAIL`, `INCONCLUSIVE`) is published only as a draft. A publication is `gh pr create` or `new`, `glab mr create` or `new`, `git push -o merge_request.create`, or a `gh api` or `glab api` POST to `pulls` or `merge_requests`, the POST being explicit or implied by a field. `gh` and `glab` are found among the words of the command, so a wrapper or an absolute path still counts, and a quoted mention does not. A diff or a workflow state that cannot be read lets the call through;
 - a `git commit`, or a `glab` or `gh` publication on a merge request, a pull request or an issue, whose command carries a `Claude-Session` trailer or a session link (the `Co-Authored-By` trailer and the "Generated with" line pass);
 - a publication that shows a credential: a `git commit`, a `glab` or `gh` publication, or a `glab api` or `gh api` call that writes (`POST`, `PUT`, `PATCH`), when its command or a file it sends (`key=@file`, `--body-file`, `-F`, `$(cat file)`) holds a GitHub, GitLab, Slack or AWS token, an API key, a JWT, a private key or a bearer token. The refusal names the kind, the file and the line, and never quotes the value. A signed address counts, since anyone who reads the page can open what it points to. The check reads shapes of 20 characters or more, so a sentence about a password or a placeholder such as `<token>` passes. Images and videos are not read;
 - a git command that destroys work: `git reset --hard`, `git clean -f` without a dry run, a checkout, restore or switch that discards the whole tree, a forced push without `--force-with-lease`, `git worktree prune`, the removal of a worktree under `.claude/worktrees/`. In a linked worktree, which is every run the console starts, it also refuses a stash other than `list` or `show`, and a branch deleted or overwritten (`branch -D`, `checkout -B`, `switch -C`, `--ignore-other-worktrees`).
@@ -336,12 +347,12 @@ The note starts at 5. A rule either holds it at a cap while its fact stands, or 
 | `diff_large` | minus 0.5 | more than 400 lines changed | the diff |
 | `diff_very_large` | minus 1 | more than 1000 lines changed, in place of the rule above | the diff |
 | `diff_many_files` | minus 0.5 | more than 15 files changed, when neither rule above applies | the diff |
-| `sensitive_path` | minus 1 | a file under a sensitive path changed | the diff, `IMPL_SENSITIVE_PATHS` |
+| `sensitive_path` | held at 3 | a file under a sensitive path changed, CI and migrations included | the diff, `IMPL_SENSITIVE_PATHS` and the CI and migration patterns |
 | `no_test_change` | minus 0.5 | source code changed and no test file did | the diff |
 
 A unit test holds this table equal to `CONFIDENCE_RULES`. The values are a starting point, to be moved on what the calibration below shows, never on a single run.
 
-`IMPL_SENSITIVE_PATHS` lists the paths whose change is risky whatever the review said, as patterns separated by commas: `**` crosses directories, `*` stays inside one, and a pattern without a slash matches a name at any depth. Its default is `**/migrations/**,**/auth/**,**/security/**,.github/workflows/**,.gitlab-ci.yml,**/Dockerfile*`.
+`IMPL_SENSITIVE_PATHS` lists the paths whose change holds the note at 3, whatever the review said, as patterns separated by commas: `**` crosses directories, `*` stays inside one, and a pattern without a slash matches a name at any depth. Its default is `**/migrations/**,**/migrate/**,**/auth/**,**/security/**,.github/workflows/**,**/.github/workflows/**,.gitlab-ci.yml,**/.gitlab-ci.yml,**/Dockerfile*`. CI workflows and migrations hold the note at 3 even when the setting omits them: they are the same paths that floor the review at tier 2.
 
 A finding of the code review is open when it belongs to the last round the reviewer wrote, the reviewer did not correct it, and no rework developer came after that round. Once a rework took a finding over, the QA verdict that follows decides.
 
@@ -351,7 +362,7 @@ The reading stays cheap. The diff is read again only when the code snapshot chan
 
 **Calibration.** A note is worth what follows it. `RunState.confidenceAtDelivery` keeps the note the run had when its workflow first declared its end, and a change asked later never rewrites it. `confidenceCalibration` then counts, per note, the delivered runs that were reopened after the final report and those the user wrote feedback on, from three delivered runs per note. `GET /api/metrics` serves it as `calibration`, the metrics panel and `impl metrics` show it. Only what the console sees itself counts: it does not read the comments or the commits a person adds to the merge request.
 
-The note changes nothing in the workflow. It sets no label, merges nothing and blocks nothing: it tells a person where to look first.
+The note changes nothing in the workflow. It sets no label, merges nothing and blocks nothing: it tells a person where to look first. A sensitive path holds it at 3, CI and migrations included, which is the signal to read that diff. Which review actually ran is the guard's decision, not the note's.
 
 ## Runtime recipe of a repository
 
@@ -367,7 +378,7 @@ The base branch follows the same rule. When the repository offers a single candi
 
 A `fix` ticket is reproduced before it is fixed: the developer records the failing observation, then runs the same reproduction after the fix. A defect nobody reproduced leaves its criterion unverified.
 
-Before a code finding enters rework, the orchestrator (the pilot at tiers 0 and 1) checks that it names the input, state or call site that reaches the defect. A finding without one goes back to its reviewer once, then under `## Dismissed findings` of the summary with its author and the reason. An unmet criterion, a failed check and a security finding at a changed trust boundary are never dismissed that way. At tier 0 the senior reviewer names the one fact the change is safe because of and establishes it by running code.
+Before a code finding enters rework, the orchestrator (the pilot at tiers 0 and 1) checks that it names the input, state or call site that reaches the defect. A finding without one goes back to its reviewer once, then under `## Dismissed findings` of the summary with its author and the reason. An unmet criterion, a failed check and a security finding at a changed trust boundary are never dismissed that way. At tier 0 the senior reviewer names the one fact the change is safe because of and establishes it by running code. The rework brief names the finding's category and asks for every occurrence of that category inside the task's file scope.
 
 ## Handoff and stability
 
@@ -377,7 +388,7 @@ The pilot owns the consolidated developer reports and the common browser recipe.
 
 The designer writes `design-inventory.md`, `designer-review.md` and `design-evidence.json.tmp`. Its caller adds the end snapshot actually observed, then publishes `design-evidence.json` atomically. A missing or unstable version is not presented as verified. The consumers in the console keep reading the same final files.
 
-The full loop has an initial round and at most two reworks, QA last, within the existing time limit. A fix invalidates the evidence it affects: even a dimension that was green before may have to be replayed. A QA verdict of `INCONCLUSIVE` never exits as READY. The orchestrator lifts the named obstacle and starts QA again when the round limit allows it. Otherwise the review is BLOCKED and the MR is opened as a draft, with each unobserved criterion and its obstacle.
+The full loop has an initial round and at most two reworks, QA last, within the existing time limit. After round 1 the senior recheck reads the rework diff and the round-1 findings, and does not raise a finding again. A fix invalidates the evidence it affects: even a dimension that was green before may have to be replayed. A QA verdict of `INCONCLUSIVE` never exits as READY. The orchestrator lifts the named obstacle and starts QA again when the round limit allows it. Otherwise the review is BLOCKED and the MR is opened as a draft, with each unobserved criterion and its obstacle.
 
 ## Compatibility and validation
 

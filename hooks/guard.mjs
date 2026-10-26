@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { noteReviewAgent, reviewTierRefusal } from "./review-tier.mjs";
 
 const NAMESPACE = "implementation-factory";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
@@ -323,6 +324,73 @@ function judgeRefusal(payload, output) {
   return undefined;
 }
 
+const DRAFT_TITLE = /^\s*(?:draft:|\[draft\]|\(draft\))/i;
+
+/** The values of an option among the arguments: `-o x`, `-ox`, `--option x`, `--option=x`. */
+function optionValues(args, short, long) {
+  const values = [];
+  for (let cursor = 0; cursor < args.length; cursor += 1) {
+    const arg = args[cursor] ?? "";
+    if (short.includes(arg) || long.includes(arg)) {
+      if (args[cursor + 1] !== undefined) values.push(args[cursor + 1]);
+      cursor += 1;
+      continue;
+    }
+    const glued = long.find((flag) => arg.startsWith(`${flag}=`)) ?? short.find((flag) => arg.startsWith(flag) && arg.length > flag.length);
+    if (glued) values.push(arg.slice(glued.length).replace(/^=/, ""));
+  }
+  return values;
+}
+
+/**
+ * The merge request or pull request a command opens, `{ draft }`, or undefined
+ * when it opens none. `gh` and `glab` are found among the words, as git is, so
+ * a wrapper or an absolute path still counts, and a quoted mention in a commit
+ * message does not: the quotes make it one word. Both CLIs turn an API call
+ * into a POST as soon as it carries a field, and `glab mr new`, `gh pr new` and
+ * a push with `-o merge_request.create` open one too.
+ */
+export function deliveryCommand(words) {
+  const git = gitInvocation(words);
+  if (git?.subcommand === "push") {
+    const options = optionValues(git.args, ["-o"], ["--push-option"]);
+    return options.includes("merge_request.create") ? { draft: options.includes("merge_request.draft") } : undefined;
+  }
+  const index = words.findIndex((word) => !/^\w+=/.test(word) && (word === "gh" || word === "glab" || word.endsWith("/gh") || word.endsWith("/glab")));
+  if (index < 0) return undefined;
+  const bin = words[index].endsWith("glab") ? "glab" : "gh";
+  const args = words.slice(index + 1);
+  const [sub, action] = args;
+  if (sub === (bin === "gh" ? "pr" : "mr") && (action === "create" || action === "new")) {
+    const flagged = args.includes("--draft") || (bin === "gh" && args.includes("-d")) || (bin === "glab" && args.includes("--wip"));
+    const titled = bin === "glab" && optionValues(args, ["-t"], ["--title"]).some((title) => DRAFT_TITLE.test(title));
+    return { draft: flagged || titled };
+  }
+  if (sub !== "api") return undefined;
+  const fields = optionValues(args, ["-f", "-F"], ["--field", "--raw-field"]);
+  const explicit = optionValues(args, ["-X"], ["--method"]).at(-1)?.toUpperCase();
+  const posted = explicit ? explicit === "POST" : fields.length > 0 || args.some((arg) => arg === "--input" || arg.startsWith("--input="));
+  if (!posted) return undefined;
+  const endpoint = args.some((word) => /(?:^|\/)(?:merge_requests|pulls)$/.test(word.replace(/\?.*$/, "")));
+  if (!endpoint) return undefined;
+  return { draft: fields.some((field) => /^draft=true$/i.test(field) || (field.startsWith("title=") && DRAFT_TITLE.test(field.slice(6)))) };
+}
+
+/**
+ * Called on every hook: notes that the review orchestrator or QA has started.
+ * `SubagentStart` fires once the agent runs, so a call refused afterwards, by
+ * another hook or by the user, leaves no marker.
+ */
+export function noteReviewStart(payload, env = process.env) {
+  if (payload?.hook_event_name !== "SubagentStart") return;
+  const type = typeof payload.agent_type === "string" ? payload.agent_type : "";
+  const agent = type.startsWith(`${NAMESPACE}:`) ? type.slice(NAMESPACE.length + 1) : "";
+  if (agent !== "review-orchestrator" && agent !== "qa-reviewer") return;
+  const tasks = taskDirectory(payload.cwd);
+  if (!tasks || !inWorkflow(env, tasks)) return;
+  noteReviewAgent(tasks, env, payload.session_id, agent);
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
@@ -353,6 +421,8 @@ export function guardDecision(payload, env = process.env) {
       if (missing.length) {
         return `The review cannot start: ${missing.join(", ")} of planner-output.json ${missing.length > 1 ? "have" : "has"} no developer-report-<id>.md. Run each one now with ${NAMESPACE}:developer, or name it in developer-report.md with what covers it instead and why.`;
       }
+      const tier = reviewTierRefusal({ cwd: payload.cwd, env, tasks, session: payload.session_id, publishing: false });
+      if (tier) return tier;
     }
     return undefined;
   }
@@ -367,10 +437,17 @@ export function guardDecision(payload, env = process.env) {
       if (secret) return secret;
     }
     const context = { cwd: payload.cwd, env, linked: inLinkedWorktree(payload.cwd, env) };
-    for (const words of shellCommands(command)) {
+    const commands = shellCommands(command);
+    for (const words of commands) {
       const git = gitInvocation(words);
       const refused = git && gitRefusal(git, context);
       if (refused) return refused;
+    }
+    const deliveries = tasks ? commands.map((words) => deliveryCommand(words)).filter(Boolean) : [];
+    if (deliveries.length > 0) {
+      const draft = deliveries.every((delivery) => delivery.draft);
+      const tier = reviewTierRefusal({ cwd: payload.cwd, env, tasks, session: payload.session_id, publishing: true, draft });
+      if (tier) return tier;
     }
   }
   return undefined;

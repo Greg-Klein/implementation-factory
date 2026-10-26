@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { noteReviewAgent, reviewTierRefusal } from "./review-tier.mjs";
 
 const NAMESPACE = "implementation-factory";
 const AGENTS = ["ticket-planner", "developer", "senior-reviewer", "designer-reviewer", "qa-reviewer", "review-orchestrator", "ticket-scheduler"];
@@ -323,6 +324,31 @@ function judgeRefusal(payload, output) {
   return undefined;
 }
 
+/**
+ * Whether the words run a command that opens a merge request or a pull request.
+ * `gh` and `glab` are found among the words, as git is, so a wrapper or an
+ * absolute path still counts, and a quoted mention in a commit message does
+ * not: the quotes make it one word.
+ */
+export function createsDelivery(words) {
+  const index = words.findIndex((word) => !/^\w+=/.test(word) && (word === "gh" || word === "glab" || word.endsWith("/gh") || word.endsWith("/glab")));
+  if (index < 0) return false;
+  const bin = words[index].endsWith("glab") ? "glab" : "gh";
+  const args = words.slice(index + 1);
+  const [sub, action] = args;
+  if (bin === "gh" && sub === "pr" && action === "create") return true;
+  if (bin === "glab" && sub === "mr" && action === "create") return true;
+  if (sub !== "api") return false;
+  let method = "";
+  for (let cursor = 0; cursor < args.length; cursor += 1) {
+    const glued = /^(?:--method|-X)=(\w+)$/i.exec(args[cursor] ?? "");
+    if (glued?.[1]) method = glued[1].toUpperCase();
+    if (args[cursor] === "--method" || args[cursor] === "-X") method = (args[cursor + 1] ?? "").toUpperCase();
+  }
+  if (method !== "POST") return false;
+  return args.some((word) => /(?:^|\/)merge_requests$/.test(word) || /(?:^|\/)pulls$/.test(word));
+}
+
 /** The reason a tool call is refused, or undefined when it may go. */
 export function guardDecision(payload, env = process.env) {
   if (payload?.hook_event_name !== "PreToolUse") return undefined;
@@ -353,6 +379,10 @@ export function guardDecision(payload, env = process.env) {
       if (missing.length) {
         return `The review cannot start: ${missing.join(", ")} of planner-output.json ${missing.length > 1 ? "have" : "has"} no developer-report-<id>.md. Run each one now with ${NAMESPACE}:developer, or name it in developer-report.md with what covers it instead and why.`;
       }
+      const tier = reviewTierRefusal({ cwd: payload.cwd, env, tasks, publishing: false });
+      if (tier) return tier;
+      // The publication check asks whether these agents were started, not whether a file appeared.
+      if (agent === "review-orchestrator" || agent === "qa-reviewer") noteReviewAgent(payload.cwd, env, agent);
     }
     return undefined;
   }
@@ -367,10 +397,15 @@ export function guardDecision(payload, env = process.env) {
       if (secret) return secret;
     }
     const context = { cwd: payload.cwd, env, linked: inLinkedWorktree(payload.cwd, env) };
-    for (const words of shellCommands(command)) {
+    const commands = shellCommands(command);
+    for (const words of commands) {
       const git = gitInvocation(words);
       const refused = git && gitRefusal(git, context);
       if (refused) return refused;
+    }
+    if (tasks && commands.some((words) => createsDelivery(words))) {
+      const tier = reviewTierRefusal({ cwd: payload.cwd, env, tasks, publishing: true });
+      if (tier) return tier;
     }
   }
   return undefined;

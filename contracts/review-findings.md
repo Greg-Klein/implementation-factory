@@ -14,7 +14,7 @@ The senior reviewer writes its findings twice. `senior-review.md` holds them as 
 ```
 
 - **One entry per line of `## Problèmes constatés`**, corrected or not, in every round. `"findings": []` is what a review that found nothing writes.
-- **`id`** is `SR-R<round>-<n>`, unique in the run and never reused. A later round writes its own findings under its own round number, and the console adds them to the earlier ones.
+- **`id`** is `SR-R<round>-<n>`, unique in the run and never reused. A later round writes its own findings under its own round number, and the console adds them to the earlier ones. It does not repeat an earlier id: an unresolved finding of round 1 keeps `SR-R1-<n>` and is named in the report, not filed again.
 - **`severity`** is the `P0`, `P1` or `P2` of the report.
 - **`file`** is the path the finding sits in, relative to the repository root, without a line number. Leave it out when the finding has no single place.
 - **`summary`** is one sentence a developer on another ticket can act on. It names the defect and where that kind of defect hides. It carries no ticket number, no name, no secret and no value copied from the ticket's data. "The total is recomputed in the list but not in the cart badge that reads the same store" reads well six weeks later; "AC3 fails" does not.

@@ -23,3 +23,7 @@ Read the same lines as a caller who wants to do harm, whatever the mandate. An e
 - For an added or upgraded dependency, state what it is given access to and whether the diff needs it.
 
 A finding names the value the attacker controls, the path it takes through the current code and what the attacker obtains. Without all three it is not a finding: drop it, or record it as an unknown when a consumer you could not read decides it. Do not recite a checklist, and do not report a hardening that no reachable path calls for. Pre-existing weaknesses outside the changed path are a limit to mention, not a finding of this change.
+
+## Recheck
+
+When the caller says the round is 2 or later, review the rework diff only. The report shape is the recheck section of [senior output](${CLAUDE_PLUGIN_ROOT}/contracts/senior.md): a new finding is a defect the rework introduced, and a finding already reported is not raised again.

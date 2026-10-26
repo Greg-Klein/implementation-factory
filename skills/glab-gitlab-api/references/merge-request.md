@@ -58,7 +58,7 @@ Rules:
 
 If the caller separately authorized a ticket lifecycle transition, perform that supplied transition using [work-item-status.md](work-item-status.md). MR creation alone does not authorize a status update.
 
-Description template (`.claude/tasks/mr-description.md`). **Keep it short.** A reviewer reads the code, not a report: aim for 25 lines or so, and never pad it to look thorough.
+Description template (`.claude/tasks/mr-description.md`). **Keep it short.** A reviewer reads the code, not a report: aim for 25 lines or so, the risk and revert sections included, and never pad it to look thorough.
 
 ```md
 <full ticket URL>
@@ -74,6 +74,14 @@ Two or three sentences: the user facing problem, and what happens instead now.
 ## Changements
 
 Three to five bullets, one per notable item. File names only when they help the reader find their way.
+
+## Risque et rayon d'impact
+
+What this change can break beyond the ticket: a consumer, persisted data, a permission, a job, another surface. One to three sentences. "Aucun au-delà du ticket." when that is true.
+
+## Comment revenir en arrière
+
+How to undo this change once it is merged: a revert of the merge, a flag to turn off (its name), a migration that has to be reversed or cannot be, a mobile release that cannot be pulled back. Two or three sentences, the real constraint of this change. A docs-only change still says the merge reverts cleanly. Never a generic paragraph, and never a testing section: what was run lives in the review comment.
 
 ## Critères d'acceptation
 
@@ -94,7 +102,7 @@ What does **not** belong in the description, because it is noise for the reviewe
 - follow-up ideas, out of scope discoveries, open product questions
 - the reasoning history: what was asked, what was deduced, what was arbitrated
 
-All of that either belongs in the review comment of step 9, or nowhere. The description answers "what changed and why", nothing else.
+All of that either belongs in the review comment of step 9, or nowhere. The description answers "what changed, why, what else it can break, and how to undo it", nothing else. There is no testing section: the review comment already says what was run.
 
 One more thing is banned here, for a different reason than noise: **the link to the engine's session**, and the `Claude-Session` trailer. The `Co-Authored-By` trailer and the "Generated with" line stay. That is the step 5 rule, and it holds for this description and for the step 9 comment exactly as it holds for a commit message.
 

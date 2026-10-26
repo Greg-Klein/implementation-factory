@@ -156,10 +156,14 @@ describe("the review confidence of a run", () => {
     expect(score(reviewed({ change: change({ lines: 1001, files: 16 }) }))).toBe(4);
   });
 
-  it("should lower the note on a sensitive path, a removed test and code changed without a test", () => {
+  it("should hold the note at 3 on a sensitive path, and cap a removed test and code changed without a test", () => {
     const sensitive = reviewed({ change: change({ sensitive: ["db/migrations/004.sql"] }) });
     const removed = reviewed({ change: change({ removedTests: ["tests/cart.test.ts"] }) });
-    expect([rules(sensitive), score(sensitive)]).toEqual([["sensitive_path"], 4]);
+    expect(reviewConfidence(sensitive)?.reasons).toEqual([{ rule: "sensitive_path", cap: 3, detail: "1 sensitive file changed." }]);
+    expect([rules(sensitive), score(sensitive)]).toEqual([["sensitive_path"], 3]);
+    const several = reviewed({ change: change({ sensitive: ["a/auth/x.ts", "a/security/y.ts"] }) });
+    expect(reviewConfidence(several)?.reasons).toEqual([{ rule: "sensitive_path", cap: 3, count: 2, detail: "2 sensitive files changed." }]);
+    expect(score(several)).toBe(3);
     expect([rules(removed), score(removed)]).toEqual([["test_removed"], 3]);
     expect(rules(reviewed({ change: change({ testChanged: false }) }))).toEqual(["no_test_change"]);
     expect(rules(reviewed({ change: change({ codeChanged: false, testChanged: false }) }))).toEqual([]);
@@ -239,6 +243,11 @@ describe("what a diff says of the confidence its review deserves", () => {
 
   it("should leave documentation and configuration out of the code that needs a test", () => {
     expect(facts("M\tREADME.md\nM\tconfig/app.yaml", "2\t1\tREADME.md\n1\t1\tconfig/app.yaml")).toMatchObject({ codeChanged: false, testChanged: false });
+  });
+
+  it("should hold a migration or a nested CI workflow at the sensitive cap even when the setting omits it", () => {
+    expect(changeFacts(changedFiles("A\tdb/migrate/001.rb\nA\tsrc/auth/login.ts", "1\t0\tdb/migrate/001.rb\n1\t0\tsrc/auth/login.ts"), "", []).sensitive).toEqual(["db/migrate/001.rb"]);
+    expect(changeFacts(changedFiles("A\tpackages/web/.github/workflows/ci.yml", "1\t0\tpackages/web/.github/workflows/ci.yml"), "", []).sensitive).toEqual(["packages/web/.github/workflows/ci.yml"]);
   });
 
   it("should match a sensitive path at any depth, under either name of a renamed file", () => {

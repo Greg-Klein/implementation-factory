@@ -70,11 +70,24 @@ export const proposalsHandledFile = path.join(storageRoot, "ticket-proposals-han
 export const worktreeDependencyDirectories = listSetting(process.env.IMPL_WORKTREE_DEPENDENCY_DIRS, ["node_modules"]);
 export const worktreeCopyFiles = listSetting(process.env.IMPL_WORKTREE_COPY_FILES, [".env*", ".claude/settings.local.json"]);
 /**
- * The paths whose change lowers the review confidence of a run whatever its
- * review said: `**` crosses directories, `*` stays inside one, a pattern
- * without a slash matches a name at any depth. See review-confidence.ts.
+ * The paths whose change holds the review confidence of a run at 3 whatever
+ * its review said, and the tier-1 floor of that review: `**` crosses
+ * directories, `*` stays inside one, a pattern without a slash matches a name
+ * at any depth. CI and migration paths are tier 2 even when this list omits
+ * them. Held equal to `hooks/review-tier.mjs`. See review-confidence.ts.
  */
-export const sensitivePaths = listSetting(process.env.IMPL_SENSITIVE_PATHS, ["**/migrations/**", "**/auth/**", "**/security/**", ".github/workflows/**", ".gitlab-ci.yml", "**/Dockerfile*"]);
+export const DEFAULT_SENSITIVE_PATHS = [
+  "**/migrations/**",
+  "**/migrate/**",
+  "**/auth/**",
+  "**/security/**",
+  ".github/workflows/**",
+  "**/.github/workflows/**",
+  ".gitlab-ci.yml",
+  "**/.gitlab-ci.yml",
+  "**/Dockerfile*",
+];
+export const sensitivePaths = listSetting(process.env.IMPL_SENSITIVE_PATHS, DEFAULT_SENSITIVE_PATHS);
 /**
  * The thresholds of the run health monitor (see run-health.ts). Only the
  * silence before a doubt is a user setting; the others are overridable for the

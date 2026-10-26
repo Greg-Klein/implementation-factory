@@ -464,7 +464,7 @@ flowchart TD
   sweQ("<b>Software Engineer</b><br/>settles a specification<br/>question"):::swe
   p6["<b>Pilot</b> · Opus<br/>6. starts the app, measures<br/>the change in the browser"]:::agent
   snap{"<b>code-snapshot.mjs</b><br/>identifies the code<br/>each piece of evidence measured"}:::script
-  tier["<b>Pilot</b> · Opus<br/>7. picks the review tier<br/>from the diff"]:::agent
+  tier["<b>Pilot</b> · Opus<br/>7. picks the review tier<br/>from the diff and its risk"]:::agent
 
   subgraph t0 ["Tier 0 · under 30 lines"]
     direction TB
@@ -837,7 +837,7 @@ flowchart LR
       p5: ["Pilot", "Opus", "Reads the verdict of the checks, runs the repository-wide ones and makes one commit per task."],
       p6: ["Pilot", "Opus", "Starts the application and measures the change in a browser, on frozen code."],
       snap: ["code-snapshot.mjs", "Script", "Gives a fingerprint of the code at one moment. Evidence taken on code that changed since no longer counts."],
-      tier: ["Pilot", "Opus", "Looks at the size of the diff and picks the review tier. A four-line fix does not get the review of a feature."],
+      tier: ["Pilot", "Opus", "Looks at the size of the diff and at the paths it touches. A sensitive path is at least tier 1, CI and migrations are tier 2, and the guard refuses anything lower."],
       s0: ["Senior reviewer", "Sonnet", "One focused pass on the correctness of the fix. Reports blocking defects only."],
       q0: ["QA", "Sonnet", "Runs only when the senior changed the code, to check that correction independently."],
       s1: ["Senior reviewer", "Sonnet", "Reads the code with a critical eye and corrects the justified defects."],

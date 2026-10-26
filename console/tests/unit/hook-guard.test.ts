@@ -449,6 +449,7 @@ describe("the hook guard", () => {
       expect(open(create)).toBeUndefined();
 
       rmSync(path.join(cwd, ".git"), { recursive: true, force: true });
+      rmSync(path.join(cwd, ".gitlab-ci.yml"), { force: true });
       rmSync(path.join(tasks, "review-summary.md"), { force: true });
       commitChange("src/security/token.ts", "secret\n");
       workflow(1);

@@ -1,18 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { belongsToRun, FINDING_CATEGORIES, type KeptFinding, mergeReviewFindings, readReviewFindings, recurringFindings, renderRecurringFindings, reviewFindingsStore, runtimeRecipeStore } from "../../server/domain";
+import { belongsToRun, FINDING_CATEGORIES, findingFixStore, type KeptFinding, mergeReviewFindings, readReviewFindings, recurringFindings, renderRecurringFindings, reviewFindingsStore, runtimeRecipeStore } from "../../server/domain";
 
 jest.mock("chokidar", () => ({ __esModule: true, default: { watch: () => ({ on: () => undefined, close: async () => undefined }) } }));
 
 const storage = mkdtempSync(path.join(os.tmpdir(), "factory-findings-"));
 process.env.IMPL_DATA_DIR = storage;
 let findings: typeof import("../../server/review-findings");
+let guide: typeof import("../../server/review-guide");
+let fixes: typeof import("../../server/finding-fixes");
 let RunSession: typeof import("../../server/run-session").RunSession;
 
 beforeAll(async () => {
   findings = await import("../../server/review-findings");
+  guide = await import("../../server/review-guide");
+  fixes = await import("../../server/finding-fixes");
   ({ RunSession } = await import("../../server/run-session"));
 });
 afterAll(() => rmSync(storage, { recursive: true, force: true }));
@@ -167,5 +172,176 @@ describe("handing the habits of a repository to its next run", () => {
     await findings.keepReviewFindings(session, written);
     expect(existsSync(reviewFindingsStore(storage, repository))).toBe(false);
     expect(session.state.activities.some((activity) => activity.title === "Review findings not kept")).toBe(true);
+  });
+
+  it("should copy the first review guide and date it before the run", async () => {
+    const worktree = checkout("guide-copy");
+    mkdirSync(path.join(worktree, "docs"), { recursive: true });
+    writeFileSync(path.join(worktree, "docs", "REVIEW.md"), "# later\n");
+    writeFileSync(path.join(worktree, "REVIEW.md"), "# Priorities\n\nLook at money.\n");
+    const startedAt = new Date().toISOString();
+    await expect(guide.seedReviewGuide(worktree, startedAt)).resolves.toBe("REVIEW.md");
+    const copied = path.join(worktree, ".claude", "tasks", "review-guide.md");
+    const text = readFileSync(copied, "utf8");
+    expect(text.startsWith("<!-- source: REVIEW.md -->\n")).toBe(true);
+    expect(text).toContain("Look at money.");
+    expect(text).not.toContain("# later");
+    expect(statSync(copied).mtimeMs).toBeLessThan(Date.parse(startedAt));
+    expect(guide.reviewGuideEnvironment("REVIEW.md")).toEqual({ IMPL_REVIEW_GUIDE: "REVIEW.md" });
+    expect(guide.reviewGuideEnvironment(undefined)).toEqual({});
+  });
+
+  it("should copy nothing when the repository has no review guide", async () => {
+    const worktree = checkout("guide-none");
+    await expect(guide.seedReviewGuide(worktree, new Date().toISOString())).resolves.toBeUndefined();
+    expect(existsSync(path.join(worktree, ".claude", "tasks", "review-guide.md"))).toBe(false);
+  });
+
+  it("should leave an ignored path out of the next runs and still count it for this one", async () => {
+    const repository = path.join(storage, "checkouts", "guided");
+    mkdirSync(repository, { recursive: true });
+    const worktree = checkout("run-ignored");
+    writeFileSync(path.join(worktree, ".claude", "tasks", "review-guide.md"), "<!-- source: REVIEW.md -->\n## Ignored paths\n\n- `generated/**`\n");
+    const written = path.join(worktree, ".claude", "tasks", "senior-findings.json");
+    writeFileSync(written, JSON.stringify({ findings: [
+      { id: "SR-R1-1", category: "dead-code", severity: "P2", file: "generated/out.ts", summary: "Generated.", fixed: false },
+      { id: "SR-R1-2", category: "dead-code", severity: "P2", file: "src/app.ts", summary: "Real.", fixed: false },
+      { id: "SR-R1-3", category: "dead-code", severity: "P2", summary: "No file.", fixed: false },
+    ] }));
+    const session = new RunSession("run-ignored", { status: "running", phase: 7, cwd: worktree, repository, issueUrl: "https://github.com/acme/shop/issues/8" });
+    await findings.keepReviewFindings(session, written);
+    const stored = JSON.parse(readFileSync(reviewFindingsStore(storage, repository), "utf8")) as { findings: KeptFinding[] };
+    expect(stored.findings.map(({ id }) => id).sort()).toEqual(["SR-R1-2", "SR-R1-3"]);
+    expect([...session.seniorFindings.keys()].sort()).toEqual(["SR-R1-1", "SR-R1-2", "SR-R1-3"]);
+    expect(session.state.activities.some((activity) => activity.title === "Review guide excluded findings")).toBe(true);
+  });
+});
+
+describe("ignored findings and a full store", () => {
+  it("should not let an ignored finding push a kept one out of a full store", async () => {
+    const repository = path.join(storage, "checkouts", "full");
+    mkdirSync(repository, { recursive: true });
+    const stored = reviewFindingsStore(storage, repository);
+    mkdirSync(path.dirname(stored), { recursive: true });
+    const full = Array.from({ length: 1000 }, (_, index) => ({ ...kept(`f${index}`, "edge-case", 1), at: new Date().toISOString() }));
+    writeFileSync(stored, JSON.stringify({ version: 1, findings: full }));
+    const worktree = checkout("run-full");
+    writeFileSync(path.join(worktree, ".claude", "tasks", "review-guide.md"), "## Ignored paths\n\n- dist/\n");
+    const written = path.join(worktree, ".claude", "tasks", "senior-findings.json");
+    writeFileSync(written, JSON.stringify({ findings: [{ id: "SR-R1-1", category: "dead-code", severity: "P2", file: "dist/a.js", summary: "Built.", fixed: false }] }));
+    await findings.keepReviewFindings(new RunSession("run-full", { status: "running", phase: 7, cwd: worktree, repository, issueUrl: "https://github.com/acme/shop/issues/9" }), written);
+    const after = (JSON.parse(readFileSync(stored, "utf8")) as { findings: KeptFinding[] }).findings;
+    expect(after).toHaveLength(1000);
+    expect(after[0]!.id).toBe(full[0]!.id);
+  });
+});
+
+describe("source fixes a reader cannot change", () => {
+  it("should leave an unreadable store where it is when the proposals are only read", async () => {
+    const repository = path.join(storage, "checkouts", "unreadable-store");
+    mkdirSync(repository, { recursive: true });
+    const stored = findingFixStore(storage, repository);
+    mkdirSync(path.dirname(stored), { recursive: true });
+    writeFileSync(stored, "{ broken");
+    await expect(fixes.readFindingFixViews(repository)).resolves.toEqual([]);
+    expect(readFileSync(stored, "utf8")).toBe("{ broken");
+  });
+});
+
+describe("a source fix proposed for a habit that keeps coming back", () => {
+  const previous = process.env.IMPL_FINDING_FIX_RUNS;
+  beforeAll(() => { process.env.IMPL_FINDING_FIX_RUNS = "3"; });
+  afterAll(() => {
+    if (previous === undefined) delete process.env.IMPL_FINDING_FIX_RUNS;
+    else process.env.IMPL_FINDING_FIX_RUNS = previous;
+  });
+
+  function entry(summary: string) {
+    return [{ id: "SR-R1-1", category: "test-gap", severity: "P1" as const, summary, fixed: false }];
+  }
+
+  it("should propose one only once the category spans the configured number of runs", async () => {
+    const repository = path.join(storage, "checkouts", "propose");
+    mkdirSync(repository, { recursive: true });
+    writeFileSync(path.join(repository, "AGENTS.md"), "# Agents\n");
+    await review("run-p1", repository, "https://github.com/acme/shop/issues/31", entry("Ticket 31 has no test."));
+    await review("run-p2", repository, "https://github.com/acme/shop/issues/32", entry("Ticket 32 has no test."));
+    expect(existsSync(findingFixStore(storage, repository))).toBe(false);
+    await review("run-p3", repository, "https://github.com/acme/shop/issues/33", entry("Ticket 33 has no test."));
+    const proposals = (JSON.parse(readFileSync(findingFixStore(storage, repository), "utf8")) as { proposals: { category: string; status: string; targetFile: string; body: string; title: string }[] }).proposals;
+    expect(proposals.map(({ category }) => category)).toEqual(["test-gap"]);
+    expect(proposals[0]).toMatchObject({ status: "pending", targetFile: "AGENTS.md" });
+    expect(proposals[0]!.body).toContain("<!-- implementation-factory:finding-fix test-gap -->");
+    expect(proposals[0]!.body).toMatch(/Review habit|Habitude de revue/);
+    expect(proposals[0]!.title).toMatch(/^Record test-gap/);
+
+    const accepted = await fixes.acceptFindingFix(repository, "test-gap");
+    expect(accepted.applied).toBe(true);
+    expect(readFileSync(path.join(repository, "AGENTS.md"), "utf8").match(/<!-- implementation-factory:finding-fix test-gap -->/g)).toHaveLength(1);
+    expect((await fixes.acceptFindingFix(repository, "test-gap")).applied).toBe(false);
+    expect(readFileSync(path.join(repository, "AGENTS.md"), "utf8").match(/<!-- implementation-factory:finding-fix test-gap -->/g)).toHaveLength(1);
+    await expect(fixes.acceptFindingFix(path.join(repository, ".claude", "worktrees", "run-9"), "test-gap")).rejects.toThrow(/worktree/);
+  });
+
+  it("should refuse to follow a target file that links outside the repository", async () => {
+    const repository = path.join(storage, "checkouts", "linked");
+    const outside = path.join(storage, "outside");
+    mkdirSync(repository, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(path.join(outside, "AGENTS.md"), "# Shared\n");
+    symlinkSync(path.join(outside, "AGENTS.md"), path.join(repository, "AGENTS.md"));
+    for (const ticket of ["61", "62", "63"]) {
+      await review(`run-l${ticket}`, repository, `https://github.com/acme/shop/issues/${ticket}`, entry(`Ticket ${ticket} has no test.`));
+    }
+    await expect(fixes.acceptFindingFix(repository, "test-gap")).rejects.toThrow(/outside the repository/);
+    expect(readFileSync(path.join(outside, "AGENTS.md"), "utf8")).toBe("# Shared\n");
+  });
+
+  it("should remember a dismissal and drop the proposals when the findings are forgotten", async () => {
+    const repository = path.join(storage, "checkouts", "dismissed");
+    mkdirSync(repository, { recursive: true });
+    const agents = path.join(repository, "AGENTS.md");
+    writeFileSync(agents, "# Agents\n");
+    for (const ticket of ["41", "42", "43"]) {
+      await review(`run-d${ticket}`, repository, `https://github.com/acme/shop/issues/${ticket}`, [{ id: "SR-R1-1", category: "dead-code", severity: "P2", summary: `Leftover ${ticket}.`, fixed: false }]);
+    }
+    const before = readFileSync(agents, "utf8");
+    const dismissed = await fixes.dismissFindingFix(repository, "dead-code");
+    expect(dismissed).toMatchObject({ outcome: "dismissed", applied: false });
+    expect(readFileSync(agents, "utf8")).toBe(before);
+    await review("run-d44", repository, "https://github.com/acme/shop/issues/44", [{ id: "SR-R1-1", category: "dead-code", severity: "P2", summary: "Leftover 44.", fixed: false }]);
+    const proposals = (JSON.parse(readFileSync(findingFixStore(storage, repository), "utf8")) as { proposals: { status: string }[] }).proposals;
+    expect(proposals.map(({ status }) => status)).toEqual(["dismissed"]);
+    await findings.forgetReviewFindings(repository);
+    expect(existsSync(reviewFindingsStore(storage, repository))).toBe(false);
+    expect(existsSync(findingFixStore(storage, repository))).toBe(false);
+  });
+
+  it("should stop handing a kind over once its block is on the branch new runs start from", async () => {
+    const repository = path.join(storage, "checkouts", "settled");
+    mkdirSync(repository, { recursive: true });
+    writeFileSync(path.join(repository, "AGENTS.md"), "# Agents\n");
+    const git = (...args: string[]) => execFileSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=Test", ...args], { cwd: repository, stdio: "ignore" });
+    git("init", "-q");
+    git("add", "AGENTS.md");
+    git("commit", "-q", "-m", "init");
+    for (const ticket of ["51", "52", "53"]) {
+      await review(`run-s${ticket}`, repository, `https://github.com/acme/shop/issues/${ticket}`, entry(`Ticket ${ticket} has no test.`));
+    }
+    await fixes.acceptFindingFix(repository, "test-gap");
+    // A run starts from a worktree cut from the commit, not from the files of the checkout.
+    const worktreeAt = (name: string) => {
+      const directory = path.join(storage, "worktrees", name);
+      git("worktree", "add", "-q", "--detach", directory, "HEAD");
+      return directory;
+    };
+    const before = worktreeAt("run-s-before");
+    await expect(findings.seedRecurringFindings(repository, before)).resolves.toBe(1);
+    expect(readFileSync(path.join(before, ".claude", "tasks", "recurring-findings.md"), "utf8")).toContain("test-gap");
+    git("add", "AGENTS.md");
+    git("commit", "-q", "-m", "habit");
+    const after = worktreeAt("run-s-after");
+    await expect(findings.seedRecurringFindings(repository, after)).resolves.toBe(0);
+    expect(existsSync(path.join(after, ".claude", "tasks", "recurring-findings.md"))).toBe(false);
   });
 });

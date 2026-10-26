@@ -311,6 +311,17 @@ async function metrics(context: Context, argv: string[]) {
 function repositoryMemory(kind: "recipe" | "findings") {
   return async (context: Context, argv: string[]) => {
     const { values, positionals } = parse(argv, { ...JSON_OPTION, forget: { type: "boolean" } });
+    if (kind === "findings" && (positionals[0] === "accept" || positionals[0] === "dismiss")) {
+      const category = required(positionals[1], "the finding category");
+      const checkout = absolute(positionals[2] ?? ".");
+      await act(context, async (link) => {
+        const answers = await link.request({ type: positionals[0] === "accept" ? "findings.accept" : "findings.dismiss", repository: checkout, category });
+        const result = answerOf(answers, "findings.fix");
+        if (!result) throw new CliError("The console did not answer.");
+        context.print(result.message);
+      });
+      return 0;
+    }
     const repository = absolute(positionals[0] ?? ".");
     if (values.forget) {
       await act(context, async (link) => {
@@ -320,18 +331,28 @@ function repositoryMemory(kind: "recipe" | "findings") {
       });
       return 0;
     }
-    const body = await getJson(context.base, `/api/repositories/${kind}?repository=${encodeURIComponent(repository)}`) as { recipe?: { content: string; updatedAt: string } | null; findings?: { kept: number; tickets: number; recurring: { label: string; tickets: number; findings: number; examples: { severity: string; file?: string; summary: string }[] }[] } };
+    const body = await getJson(context.base, `/api/repositories/${kind}?repository=${encodeURIComponent(repository)}`) as { recipe?: { content: string; updatedAt: string } | null; findings?: { kept: number; tickets: number; recurring: { label: string; tickets: number; findings: number; examples: { severity: string; file?: string; summary: string }[] }[]; fixes?: { category: string; title: string; status: string; settled: boolean; runs: number; targetFile: string; kind: string }[] } };
     if (values.json) { json(context, body); return 0; }
     if (kind === "recipe") {
       context.print(body.recipe ? `Written ${body.recipe.updatedAt}\n\n${body.recipe.content}` : `No runtime recipe is kept for ${repository}.`);
       return 0;
     }
     const findings = body.findings;
-    if (!findings || findings.kept === 0) { context.print(`No review finding is kept for ${repository}.`); return 0; }
-    context.print(`${findings.kept} finding${findings.kept === 1 ? "" : "s"} kept, from ${findings.tickets} ticket${findings.tickets === 1 ? "" : "s"}.`);
-    for (const group of findings.recurring) {
-      context.print(`\n${group.label}: ${group.findings} findings on ${group.tickets} tickets`);
-      for (const example of group.examples) context.print(`  ${example.severity}${example.file ? ` ${example.file}` : ""}: ${example.summary}`);
+    const fixes = findings?.fixes ?? [];
+    if ((!findings || findings.kept === 0) && fixes.length === 0) { context.print(`No review finding is kept for ${repository}.`); return 0; }
+    if (findings && findings.kept > 0) {
+      context.print(`${findings.kept} finding${findings.kept === 1 ? "" : "s"} kept, from ${findings.tickets} ticket${findings.tickets === 1 ? "" : "s"}.`);
+      for (const group of findings.recurring) {
+        context.print(`\n${group.label}: ${group.findings} findings on ${group.tickets} tickets`);
+        for (const example of group.examples) context.print(`  ${example.severity}${example.file ? ` ${example.file}` : ""}: ${example.summary}`);
+      }
+    }
+    if (fixes.length > 0) {
+      context.print("\nSource fixes");
+      for (const fix of fixes) {
+        const state = fix.status === "accepted" ? (fix.settled ? "on the branch" : "accepted, not on the branch yet") : fix.status;
+        context.print(`  ${fix.category}  ${state}  ${fix.runs} runs  ${fix.targetFile}  ${fix.title}`);
+      }
     }
     return 0;
   };
@@ -420,7 +441,7 @@ export const COMMANDS: Record<string, Command> = {
   evidence: { run: evidence, usage: "evidence <run> [--json]", summary: "shows the acceptance criteria and what verifies each" },
   metrics: { run: metrics, usage: "metrics [--json]", summary: "shows what each run cost and delivered" },
   recipe: { run: repositoryMemory("recipe"), usage: "recipe [<checkout>] [--forget]", summary: "shows or drops the runtime recipe kept for a repository" },
-  findings: { run: repositoryMemory("findings"), usage: "findings [<checkout>] [--forget]", summary: "shows or drops the review findings kept for a repository" },
+  findings: { run: repositoryMemory("findings"), usage: "findings [<checkout>] [--forget] | findings accept|dismiss <category> [<checkout>]", summary: "shows or drops review findings, or accepts or dismisses a source fix" },
   proposals: { run: proposals, usage: "proposals [--json] | proposals dismiss <ticket-url>... | proposals launch <ticket-url> -r <checkout>...", summary: "shows the watcher's tickets that were not queued, and decides on one" },
   improvements: { run: improvements, usage: "improvements [--json] | improvements diff|report|approve|reject|revert <branch>", summary: "shows the improvement branches and decides on one" },
   repos: { run: repos, usage: "repos [<ticket-url>] [--fresh]", summary: "lists the checkouts found, and the one a ticket goes to" },

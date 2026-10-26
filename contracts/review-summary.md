@@ -48,6 +48,10 @@ READY | BLOCKED
 - Ce qui reste, ce qui a été tenté, ce qu'un humain doit décider
 - Critères sans observation QA, chacun avec son blocage
 
+## Guide de revue
+
+- Fichier appliqué (`REVIEW.md`, `.claude/REVIEW.md` ou `docs/REVIEW.md`) et ce qu'il a fait écarter (chemins ignorés, détails au-delà de la limite), ou « Rien écarté ». « Aucun » quand le dépôt n'en a pas.
+
 ## Confiance
 
 - Tests : exécutés / partiellement exécutés / non exécutés

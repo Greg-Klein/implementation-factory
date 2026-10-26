@@ -54,3 +54,5 @@ The senior reviewer writes its findings twice. `senior-review.md` holds them as 
 ## Reading `recurring-findings.md`
 
 The file lists kinds of defect, each with the latest findings of that kind. A developer checks its own change against them before handing over, and names in its report the ones that applied. The file adds no requirement and widens no scope. A kind that does not concern the task is left alone, and code outside the task stays as it is even when it shows one. A reviewer does not read the file before its own diagnosis.
+
+A kind whose source fix is on the branch new runs start from is left out. The console proposes that fix once the kind has come back on enough runs (`IMPL_FINDING_FIX_RUNS`, 3 by default); a person accepts it, reviews the diff and commits it. Until that commit is on the branch, the kind stays in this file. Accepting does not by itself remove it. A finding whose file matches an ignored path of the repository's [review guide](review-guide.md) is not kept, so it never becomes a habit.

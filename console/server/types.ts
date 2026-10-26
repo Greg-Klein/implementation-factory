@@ -473,6 +473,10 @@ export type ClientMessage =
   | { type: "recipe.forget"; repository: string }
   /** Drops the review findings kept for a repository. Its next run is told of no habit. */
   | { type: "findings.forget"; repository: string }
+  /** Writes the proposed source fix into the repository. The user reviews the diff and commits it. */
+  | { type: "findings.accept"; repository: string; category: string }
+  /** Records that a proposed source fix should not be asked again. Nothing is written into the repository. */
+  | { type: "findings.dismiss"; repository: string; category: string }
   /** `scenario`: the regular workflow, the pilot handing back with nothing next, or a batch of three tickets with one conflict. */
   | { type: "demo.start"; scenario?: "workflow" | "incident" | "batch"; requestId?: string }
   /** `requestId` comes back in the `error` that refuses it, which is how the page puts the text back. */
@@ -520,6 +524,8 @@ export type ServerMessage =
   /** Answered to the page that asked to forget a recipe. `forgotten` is false when there was none. */
   | { type: "recipe.result"; repository: string; forgotten: boolean }
   | { type: "findings.result"; repository: string; forgotten: boolean }
+  /** What became of accepting or dismissing a source fix, answered to the page that asked. */
+  | { type: "findings.fix"; repository: string; category: string; outcome: "accepted" | "dismissed"; targetFile?: string; applied: boolean; message: string }
   /** What became of an incident action, answered to the page that asked. */
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 

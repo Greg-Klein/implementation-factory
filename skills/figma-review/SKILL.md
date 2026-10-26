@@ -5,7 +5,7 @@ description: Independently review a running interface against a design reference
 
 # Design review
 
-Input: application URL, setup recipe, observation/correction scope, authoritative decisions, and whatever reference exists: Figma frames, ticket mockups, `.claude/tasks/design-reference.md`, viewports, locales, consumer routes. Return measured comparisons, findings that each cite their reference, coverage, unverified cells and reproducible observations for QA. The caller owns report formats and final verdict policy.
+Input: application URL, setup recipe, observation/correction scope, authoritative decisions, and whatever reference exists: Figma frames, ticket mockups, `.claude/tasks/design-reference.md`, viewports, locales, consumer routes. When `.claude/tasks/review-guide.md` exists, read it and apply [review guide](${CLAUDE_PLUGIN_ROOT}/contracts/review-guide.md). It is a task file, not product source. Return measured comparisons, findings that each cite their reference, coverage, unverified cells and reproducible observations for QA. The caller owns report formats and final verdict policy.
 
 1. Pick the reference level with [reference-levels.md](references/reference-levels.md) and declare it. For Figma sources read the first part of [read-design.md](references/read-design.md), "Reading a Figma design".
 2. Build your own inventory from that reference and the brief, and write it down where the caller says, before reading the developer's measurements, captures or conclusions. A caller's inventory or style list never feeds or bounds yours.

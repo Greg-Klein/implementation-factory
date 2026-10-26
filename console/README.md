@@ -260,6 +260,9 @@ The unit tests inject the answers, and the integration suite replaces `claude`, 
 | `server/self-improvement.ts` | feedback, self-audit and improvement loop |
 | `server/auto-merge.ts` | automatic merge of finished improvement branches: checks, judge, decisions, revert, restart once idle |
 | `server/auto-merge-policy.ts` | pure rules of the automatic merge: protected paths, size, tests, verdict and decision validation |
+| `server/review-findings.ts` | findings kept per repository, handed to the next run, and the source fixes proposed from them |
+| `server/review-guide.ts` | copies the repository's `REVIEW.md` into the run for its reviewers |
+| `server/finding-fixes.ts` | proposes a source fix once a kind of defect spans enough runs, and writes it only when you accept |
 | `server/domain.ts` | pure logic, with no agent and no filesystem |
 
 `server/domain.ts` and `server/engine/` are the two places testable without starting anything, and most of the logic is there.
@@ -284,5 +287,7 @@ Each run is kept in `console/data/runs/<run-id>/`:
 `data/queue.json` keeps the queue and its schedule. The files of a batch analysis in progress or failed are outside the plugin, in the analysis directory described above.
 
 The `data/` directory is ignored by Git.
+
+`data/repositories/<checkout>-<digest>/` keeps what the console learned about one checkout: `runtime-recipe.md`, `review-findings.json` and `finding-fixes.json`. The review guide is not stored there. It is read from the checkout at each launch (`REVIEW.md`, `.claude/REVIEW.md` or `docs/REVIEW.md`) and copied into that run. A source fix stays a proposal until you accept it, from the Runtime recipe window or `impl findings accept`, which appends a block to the checkout for you to commit.
 
 On start, the server closes every run left on a non-terminal status (`starting`, `running`, `attention`). The registry starts empty at each launch, so a run the previous process could not close itself (a hard stop, `impl restart`) would otherwise stay marked `running`. The server reclassifies it `failed` with a message that explains it, distinct from a failure of the agent. A run reopened by a change asked after its final report is closed `completed` instead, with its first end and an attention line, since the merge request it delivered still holds.

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { concurrencyLimit, listSetting, permissionMode, positiveDuration, scheduleDirectory } from "./domain.js";
+import { concurrencyLimit, findingFixRunThreshold, listSetting, permissionMode, positiveDuration, scheduleDirectory } from "./domain.js";
 import { workflowLanguageOf } from "./acceptance-text.js";
 import { DEFAULT_HEALTH_POLICY, type HealthPolicy } from "./run-health.js";
 import { normalizeMac } from "./access.js";
@@ -47,6 +47,10 @@ export const workflowLanguage = workflowLanguageOf(process.env.IMPL_LANGUAGE);
 export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);
+/** Distinct runs a finding category spans before a source fix is proposed. Read at proposal time, so a test can set it. */
+export function findingFixRuns() {
+  return findingFixRunThreshold(process.env.IMPL_FINDING_FIX_RUNS);
+}
 /**
  * How long a scheduling session may take before its batch falls back on one
  * ticket at a time. The millisecond form is for the integration suite.

@@ -88,7 +88,7 @@ describe("the review tier a diff cannot go below", () => {
     expect(values.floors.nestedCi).toMatchObject({ floor: 2 });
     expect(values.floors.gitlab).toMatchObject({ floor: 2 });
     expect(values.floors.app).toMatchObject({ floor: 0, sensitive: [], tierTwo: [] });
-    expect(values.floors.mixed.floor).toBe(2);
+    expect(values.floors.mixed).toMatchObject({ floor: 2 });
   });
 
   it("should keep CI and migrations at tier 2 when the setting omits them, and let an auth path go", () => {

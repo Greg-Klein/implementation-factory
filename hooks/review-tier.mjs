@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -136,24 +136,14 @@ function refExists(top, ref) {
   return gitOut(top, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]) !== undefined;
 }
 
-/** `workflow-state.json` when it parses, or undefined when it is absent or unreadable. */
-function workflowState(tasks) {
-  if (!tasks) return undefined;
-  try {
-    return JSON.parse(readFileSync(path.join(tasks, "workflow-state.json"), "utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
 /**
- * The ref the diff is measured from, best first: the branch the pilot recorded,
- * then the ones the console passed, then the remote's default. Undefined when
- * none of them exist, which the guard reads as a diff it cannot check.
+ * The ref the diff is measured from, best first: the branch the pilot recorded
+ * in `state` (the parsed `workflow-state.json`), then the ones the console
+ * passed, then the remote's default. Undefined when none of them exist, which
+ * the guard reads as a diff it cannot check.
  */
-export function resolveBase(top, env, tasks) {
+export function resolveBase(top, env, state) {
   const names = [];
-  const state = workflowState(tasks);
   const recorded = plainBranch(state?.baseBranch);
   if (recorded) names.push(recorded);
   for (const key of ["IMPL_BASE_BRANCH", "IMPL_TICKET_BASE_BRANCH", "IMPL_SOURCE_BRANCH"]) {
@@ -174,10 +164,10 @@ export function resolveBase(top, env, tasks) {
  * root. Undefined when git cannot be read or no base can be resolved: the
  * guard then lets the call through.
  */
-export function changedPaths(cwd, env = process.env, tasks) {
+export function changedPaths(cwd, env = process.env, state) {
   const top = gitOut(cwd || ".", ["rev-parse", "--show-toplevel"])?.trim();
   if (!top) return undefined;
-  const base = resolveBase(top, env, tasks);
+  const base = resolveBase(top, env, state);
   if (!base) return undefined;
   const committed = gitOut(top, ["diff", "-z", "--name-status", "-M", `${base}...HEAD`]);
   const status = gitOut(top, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
@@ -186,51 +176,57 @@ export function changedPaths(cwd, env = process.env, tasks) {
 }
 
 /**
- * The tier written in `workflow-state.json`. `unreadable` is a file that is
- * there and cannot be parsed: the guard lets that call through. An absent
- * file is readable and declares no tier.
+ * `workflow-state.json`, read once: the tier written in it and the parsed
+ * state. `unreadable` is a file that is there and cannot be parsed: the guard
+ * lets that call through. An absent file is readable and declares no tier.
  */
 export function declaredReviewTier(tasks) {
-  if (!tasks) return { tier: undefined, unreadable: true };
+  if (!tasks) return { tier: undefined, state: undefined, unreadable: true };
   let text;
   try {
     text = readFileSync(path.join(tasks, "workflow-state.json"), "utf8");
   } catch (error) {
-    return { tier: undefined, unreadable: error?.code !== "ENOENT" };
+    return { tier: undefined, state: undefined, unreadable: error?.code !== "ENOENT" };
   }
   try {
-    const tier = JSON.parse(text)?.reviewTier;
-    return { tier: tier === 0 || tier === 1 || tier === 2 ? tier : undefined, unreadable: false };
+    const state = JSON.parse(text);
+    const tier = state?.reviewTier;
+    return { tier: tier === 0 || tier === 1 || tier === 2 ? tier : undefined, state, unreadable: false };
   } catch {
-    return { tier: undefined, unreadable: true };
+    return { tier: undefined, state: undefined, unreadable: true };
   }
 }
 
-/** Where this run's "the orchestrator was started" markers live, private to the checkout. */
-export function reviewMarkerDirectory(cwd, env = process.env) {
-  const key = `${env.IMPL_RUN_ID ?? ""}\0${path.resolve(cwd || ".")}`;
+/**
+ * Where the "this reviewer was started" markers of a run live: outside the
+ * checkout, so the pilot cannot write one, and keyed on the run, the session
+ * and the task directory. The task directory is the same from any directory
+ * of the checkout, and another session or run in it does not see the markers.
+ */
+export function reviewMarkerDirectory(tasks, env = process.env, session = "") {
+  const key = [env.IMPL_RUN_ID ?? "", String(session ?? ""), path.resolve(tasks || ".")].join("\0");
   const digest = createHash("sha256").update(key).digest("hex").slice(0, 24);
   return path.join(os.tmpdir(), "implementation-factory-review-tier", digest);
 }
 
-/** Notes that a review agent was actually started, so a summary written by hand does not satisfy the floor. */
-export function noteReviewAgent(cwd, env, agent) {
+/** Notes that a review agent has started, so a summary written by hand does not satisfy the floor. */
+export function noteReviewAgent(tasks, env, session, agent) {
   try {
-    const directory = reviewMarkerDirectory(cwd, env);
+    const directory = reviewMarkerDirectory(tasks, env, session);
     mkdirSync(directory, { recursive: true });
-    writeFileSync(path.join(directory, agent), "");
+    writeFileSync(path.join(directory, agent), new Date().toISOString());
     return true;
   } catch {
     return false;
   }
 }
 
-/** Whether that note is there. Undefined when the directory cannot be read. */
-export function reviewAgentNoted(cwd, env, agent) {
+/** When that agent last started, in milliseconds: 0 when it never did, undefined when the marker cannot be read. */
+export function reviewAgentStartedAt(tasks, env, session, agent) {
   try {
-    return existsSync(path.join(reviewMarkerDirectory(cwd, env), agent));
-  } catch {
-    return undefined;
+    return statSync(path.join(reviewMarkerDirectory(tasks, env, session), agent)).mtimeMs;
+  } catch (error) {
+    return error?.code === "ENOENT" ? 0 : undefined;
   }
 }
 
@@ -239,27 +235,50 @@ function listed(files) {
   return files.length > 5 ? `${shown} and ${files.length - 5} more` : shown;
 }
 
-function fileText(tasks, name) {
-  if (!tasks) return undefined;
+/**
+ * The verdict of a review file: the first line under its `## Verdict` heading
+ * when it is one of `tokens` and nothing else, so `NOT READY` or the template's
+ * `READY | BLOCKED` is no verdict. A file older than `since`, the start of the
+ * agent that writes it, was left by an earlier round and has none either.
+ * `unreadable` is a file that is there and cannot be read.
+ */
+export function reviewVerdict(tasks, name, tokens, since = 0) {
+  const file = path.join(tasks, name);
+  let text;
+  let written;
   try {
-    return readFileSync(path.join(tasks, name), "utf8");
+    text = readFileSync(file, "utf8");
+    written = statSync(file).mtimeMs;
   } catch (error) {
-    return error?.code === "ENOENT" ? "" : undefined;
+    return { verdict: undefined, unreadable: error?.code !== "ENOENT" };
   }
+  if (written < since) return { verdict: undefined, unreadable: false };
+  const lines = text.split(/\r?\n/);
+  const heading = lines.findIndex((line) => /^#{1,6}\s+verdict\s*$/i.test(line.trim()));
+  if (heading < 0) return { verdict: undefined, unreadable: false };
+  const first = lines.slice(heading + 1).find((line) => line.trim())?.trim().replace(/^[*_`]+|[*_`]+$/g, "");
+  return { verdict: tokens.includes(first) ? first : undefined, unreadable: false };
 }
+
+const SUMMARY_VERDICTS = ["READY", "BLOCKED"];
+const QA_VERDICTS = ["PASS", "PASS_WITH_WARNINGS", "INCONCLUSIVE", "FAIL"];
+const READY_VERDICTS = ["READY", "PASS", "PASS_WITH_WARNINGS"];
 
 /**
  * Why a review start or a merge request publication is below the tier the diff
  * requires, or undefined when it may go. A diff or a workflow state that cannot
- * be read lets the call through.
+ * be read lets the call through. A publication whose review is not ready has
+ * to be a draft.
  */
-export function reviewTierRefusal({ cwd, env = process.env, tasks, publishing = false }) {
-  const paths = changedPaths(cwd, env, tasks);
+export function reviewTierRefusal({ cwd, env = process.env, tasks, session = "", publishing = false, draft = false }) {
+  // The state is read before git runs: an unreadable one, or a review already at the top tier, needs no diff.
+  const declared = declaredReviewTier(tasks);
+  if (declared.unreadable) return undefined;
+  if (!publishing && declared.tier === 2) return undefined;
+  const paths = changedPaths(cwd, env, declared.state);
   if (!paths) return undefined;
   const decision = reviewTierFloor(paths, sensitivePatterns(env));
   if (decision.floor === 0) return undefined;
-  const declared = declaredReviewTier(tasks);
-  if (declared.unreadable) return undefined;
   if (declared.tier === undefined || declared.tier < decision.floor) {
     const reason = decision.floor === 2
       ? `touches ${listed(decision.tierTwo)}, CI or a migration, so the review tier is at least 2`
@@ -268,25 +287,38 @@ export function reviewTierRefusal({ cwd, env = process.env, tasks, publishing = 
     return `${where}: the diff ${reason}. Write reviewTier ${decision.floor} or higher in workflow-state.json, with baseBranch set to the branch it targets, then run that tier.`;
   }
   if (!publishing) return undefined;
+  const orchestrated = reviewAgentStartedAt(tasks, env, session, "review-orchestrator");
   if (decision.floor >= 2) {
-    if (reviewAgentNoted(cwd, env, "review-orchestrator") === false) {
-      return `This diff is tier 2 (${listed(decision.tierTwo)}): start \`implementation-factory:review-orchestrator\` before publishing. A review summary written without that agent does not count.`;
+    if (orchestrated === undefined) return undefined;
+    const files = listed(decision.tierTwo);
+    if (orchestrated === 0) {
+      return `This diff is tier 2 (${files}): start \`implementation-factory:review-orchestrator\` before publishing. A review summary written without that agent does not count.`;
     }
-    const summary = fileText(tasks, "review-summary.md");
-    if (summary === undefined) return undefined;
-    if (!/\b(?:READY|BLOCKED)\b/.test(summary)) {
-      return `This diff is tier 2 (${listed(decision.tierTwo)}): publish only after review-summary.md carries its READY or BLOCKED verdict.`;
+    const summary = reviewVerdict(tasks, "review-summary.md", SUMMARY_VERDICTS, orchestrated);
+    if (summary.unreadable) return `This diff is tier 2 (${files}): review-summary.md cannot be read, so its verdict cannot be checked.`;
+    if (!summary.verdict) {
+      return `This diff is tier 2 (${files}): publish only after the orchestrator you started last writes review-summary.md with READY or BLOCKED alone under its \`## Verdict\` heading.`;
     }
+    if (summary.verdict !== "READY" && !draft) return `This diff is tier 2 (${files}) and its review is ${summary.verdict}: open the merge request as a draft.`;
     return undefined;
   }
-  if (reviewAgentNoted(cwd, env, "qa-reviewer") === false && reviewAgentNoted(cwd, env, "review-orchestrator") === false) {
-    return `This diff is at least tier 1 (${listed(decision.sensitive)}): start \`implementation-factory:qa-reviewer\` (or the review orchestrator) before publishing. A QA report written without that agent does not count.`;
+  const checked = reviewAgentStartedAt(tasks, env, session, "qa-reviewer");
+  if (checked === undefined || orchestrated === undefined) return undefined;
+  const files = listed(decision.sensitive);
+  if (checked === 0 && orchestrated === 0) {
+    return `This diff is at least tier 1 (${files}): start \`implementation-factory:qa-reviewer\` (or the review orchestrator) before publishing. A QA report written without that agent does not count.`;
   }
-  const report = fileText(tasks, "qa-report.md");
-  const summary = fileText(tasks, "review-summary.md");
-  if (report === undefined || summary === undefined) return undefined;
-  if (report.trim() || /\b(?:READY|BLOCKED)\b/.test(summary)) return undefined;
-  return `This diff is at least tier 1 (${listed(decision.sensitive)}): publish only after qa-report.md is written, or review-summary.md carries its READY or BLOCKED verdict.`;
+  const report = checked ? reviewVerdict(tasks, "qa-report.md", QA_VERDICTS, checked) : { verdict: undefined, unreadable: false };
+  const summary = orchestrated ? reviewVerdict(tasks, "review-summary.md", SUMMARY_VERDICTS, orchestrated) : { verdict: undefined, unreadable: false };
+  if (report.unreadable || summary.unreadable) return `This diff is at least tier 1 (${files}): qa-report.md or review-summary.md cannot be read, so its verdict cannot be checked.`;
+  const verdicts = [report.verdict, summary.verdict].filter(Boolean);
+  if (verdicts.length === 0) {
+    return `This diff is at least tier 1 (${files}): publish only after the QA you started last writes qa-report.md with its verdict alone under \`## Verdict\`, or the orchestrator writes READY or BLOCKED in review-summary.md.`;
+  }
+  if (!verdicts.some((verdict) => READY_VERDICTS.includes(verdict)) && !draft) {
+    return `This diff is at least tier 1 (${files}) and its review is ${verdicts.join(", ")}: open the merge request as a draft.`;
+  }
+  return undefined;
 }
 
 function directRun() {
@@ -304,8 +336,8 @@ if (directRun()) {
     if (parent === directory) break;
     directory = parent;
   }
-  const files = changedPaths(process.cwd(), process.env, tasks);
   const declared = declaredReviewTier(tasks);
+  const files = changedPaths(process.cwd(), process.env, declared.state);
   const decision = files ? reviewTierFloor(files, sensitivePatterns(process.env)) : { floor: 0, sensitive: [], tierTwo: [] };
   process.stdout.write(`${JSON.stringify({ ...decision, unreadable: !files, reviewTier: declared.tier ?? null })}\n`);
 }

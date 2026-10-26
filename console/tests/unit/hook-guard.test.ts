@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -399,6 +399,20 @@ describe("the hook guard", () => {
       return refusal("Bash", { command }, tierEnv({ IMPL_SOURCE_BRANCH: "main", ...extra }));
     }
 
+    /** The agent has started: the event the marker is written on, not the call that asks for it. */
+    function started(agent: string, extra: Record<string, string> = {}) {
+      const payload = { hook_event_name: "SubagentStart", agent_type: `implementation-factory:${agent}`, agent_id: agent, cwd };
+      const result = spawnSync(process.execPath, [emitter], { input: JSON.stringify(payload), encoding: "utf8", env: tierEnv({ IMPL_SOURCE_BRANCH: "main", ...extra }) });
+      expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+    }
+
+    /** A file written by an earlier round, before the agent of this one started. */
+    function written(name: string, content: string, old = false) {
+      const file = path.join(tasks, name);
+      writeFileSync(file, content);
+      if (old) utimesSync(file, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    }
+
     it("should refuse a review below the floor and let the tier the paths require through", () => {
       commitChange("src/auth/login.ts", "token\n");
       workflow(0);
@@ -432,34 +446,91 @@ describe("the hook guard", () => {
       expect(refusal("Agent", senior, tierEnv())).toMatch(/auth\/login\.ts/);
     });
 
-    it("should refuse to publish tier 2 until the orchestrator has written a verdict, and tier 1 until QA has", () => {
+    it("should find every command that opens a merge request or a pull request", () => {
       commitChange(".gitlab-ci.yml", "stages: []\n");
       workflow(2);
-      const create = "gh pr create --base main --head feature --title 'feat: x' --body-file .claude/tasks/mr-description.md";
+      for (const command of [
+        "gh pr create --base main --head feature --title 'feat: x' --body-file .claude/tasks/mr-description.md",
+        "sudo /usr/bin/gh pr create --title x",
+        "gh pr new --title x",
+        "glab mr new --fill",
+        "glab api --method POST \"projects/:fullpath/merge_requests\" --field description=@.claude/tasks/mr-description.md",
+        "gh api --method=POST repos/acme/shop/pulls",
+        "gh api -XPOST repos/acme/shop/pulls",
+        "gh api repos/acme/shop/pulls -f title=x -f head=feature -f base=main",
+        "glab api projects/:id/merge_requests -f source_branch=feature",
+        "gh api repos/acme/shop/pulls --input body.json",
+        "git push -o merge_request.create origin feature",
+        "git push --push-option=merge_request.create origin feature",
+      ]) expect([command, open(command)]).toEqual([command, expect.stringMatching(/review-orchestrator/)]);
+      for (const command of [
+        "git commit -m \"mention gh pr create\"",
+        "glab api --method POST projects/:fullpath/merge_requests/12/notes",
+        "gh pr comment 12 --body-file .claude/tasks/mr-review-comment.md",
+        "gh api repos/acme/shop/pulls",
+        "gh api -X GET repos/acme/shop/pulls -f state=open",
+        "git push origin feature",
+      ]) expect([command, open(command)]).toEqual([command, undefined]);
+    });
+
+    it("should refuse to publish tier 2 until the orchestrator it started writes a verdict, and a blocked one unless as a draft", () => {
+      commitChange(".gitlab-ci.yml", "stages: []\n");
+      workflow(2);
+      const create = "gh pr create --base main --head feature --title x";
+      written("review-summary.md", "## Verdict\n\nREADY\n");
       expect(open(create)).toMatch(/review-orchestrator/);
-      expect(open("sudo /usr/bin/gh pr create --title x")).toMatch(/review-orchestrator/);
-      expect(open("glab api --method POST \"projects/:fullpath/merge_requests\" --field description=@.claude/tasks/mr-description.md")).toMatch(/review-orchestrator/);
-      expect(open("gh api --method=POST repos/acme/shop/pulls")).toMatch(/review-orchestrator/);
-      expect(open("git commit -m \"mention gh pr create\"")).toBeUndefined();
-      expect(open("glab api --method POST projects/:fullpath/merge_requests/12/notes")).toBeUndefined();
-      expect(open("gh pr comment 12 --body-file .claude/tasks/mr-review-comment.md")).toBeUndefined();
-      writeFileSync(path.join(tasks, "review-summary.md"), "## Verdict\n\nREADY\n");
-      expect(open(create)).toMatch(/review-orchestrator/);
+      // Asked for and then denied, it never started.
       expect(refusal("Agent", orchestrator, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+      expect(open(create)).toMatch(/review-orchestrator/);
+
+      written("review-summary.md", "## Verdict\n\nREADY\n", true);
+      started("review-orchestrator");
+      expect(open(create)).toMatch(/READY or BLOCKED alone/);
+      for (const verdict of ["NOT READY", "READY | BLOCKED"]) {
+        written("review-summary.md", `## Verdict\n\n${verdict}\n`);
+        expect(open(create)).toMatch(/READY or BLOCKED alone/);
+      }
+      written("review-summary.md", "# Résumé de revue\n\n## Verdict\n\nBLOCKED\n");
+      expect(open(create)).toMatch(/draft/);
+      expect(open(`${create} --draft`)).toBeUndefined();
+      expect(open("glab mr create --title 'Draft: x'")).toBeUndefined();
+      written("review-summary.md", "# Résumé de revue\n\n## Verdict\n\n**READY**\n");
       expect(open(create)).toBeUndefined();
 
-      rmSync(path.join(cwd, ".git"), { recursive: true, force: true });
-      rmSync(path.join(cwd, ".gitlab-ci.yml"), { force: true });
-      rmSync(path.join(tasks, "review-summary.md"), { force: true });
+      // The marker belongs to the checkout, not to the directory the shell is in.
+      const root = cwd;
+      cwd = path.join(root, "packages", "web");
+      mkdirSync(cwd, { recursive: true });
+      try {
+        expect(open(create)).toBeUndefined();
+      } finally {
+        cwd = root;
+      }
+      expect(open(create, { IMPL_RUN_ID: "another-run" })).toMatch(/review-orchestrator/);
+    });
+
+    it("should refuse to publish tier 1 until the QA it started writes a verdict, and a failed one unless as a draft", () => {
       commitChange("src/security/token.ts", "secret\n");
       workflow(1);
-      const tier1 = { IMPL_RUN_ID: "tier-1" };
-      expect(open("gh pr create --title x", tier1)).toMatch(/qa-reviewer/);
-      expect(refusal("Agent", qa, tierEnv({ IMPL_SOURCE_BRANCH: "main", ...tier1 }))).toBeUndefined();
-      writeFileSync(path.join(tasks, "qa-report.md"), " \n");
-      expect(open("gh pr create --title x", tier1)).toMatch(/qa-report\.md/);
-      writeFileSync(path.join(tasks, "qa-report.md"), "# QA\n\nPASS\n");
-      expect(open("gh pr create --title x", tier1)).toBeUndefined();
+      const create = "gh pr create --title x";
+      expect(open(create)).toMatch(/qa-reviewer/);
+      expect(refusal("Agent", qa, tierEnv({ IMPL_SOURCE_BRANCH: "main" }))).toBeUndefined();
+      expect(open(create)).toMatch(/qa-reviewer/);
+      written("qa-report.md", "# Rapport QA\n\n## Verdict\n\nPASS\n", true);
+      started("qa-reviewer");
+      expect(open(create)).toMatch(/qa-report\.md/);
+      written("qa-report.md", " \n");
+      expect(open(create)).toMatch(/qa-report\.md/);
+      for (const verdict of ["FAIL", "INCONCLUSIVE"]) {
+        written("qa-report.md", `# Rapport QA\n\n## Verdict\n\n${verdict}\n`);
+        expect(open(create)).toMatch(/draft/);
+        expect(open(`${create} -d`)).toBeUndefined();
+      }
+      written("qa-report.md", "# Rapport QA\n\n## Verdict\n\nPASS_WITH_WARNINGS\n\nDeux avertissements.\n");
+      expect(open(create)).toBeUndefined();
+      rmSync(path.join(tasks, "qa-report.md"));
+      mkdirSync(path.join(tasks, "qa-report.md"));
+      expect(open(create)).toMatch(/cannot be read/);
     });
 
     it("should print the same floor the guard enforces", () => {

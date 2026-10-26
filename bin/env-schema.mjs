@@ -231,6 +231,16 @@ export const schema = [
     validate: validateText,
   },
   {
+    key: "IMPL_FINDING_FIX_RUNS",
+    label: "Runs before a source fix is proposed",
+    comment: "Distinct runs a kind of defect must span on one repository before the console proposes a source fix for it. From 2 to 20. Nothing is written into the repository until you accept the proposal.",
+    help: "How many runs a kind of defect must come back on before a source fix is proposed. From 2 to 20. The repository changes only when you accept it.",
+    fallback: "3",
+    kind: "text",
+    readBy: "console",
+    validate: validateInteger(2, 20),
+  },
+  {
     key: "IMPL_STALL_MINUTES",
     label: "Silence before a doubt, in minutes",
     comment: "Minutes without any progress before the console voices a doubt about a run in progress. A doubt only: it never stops nor restarts anything.",

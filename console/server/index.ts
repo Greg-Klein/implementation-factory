@@ -10,6 +10,7 @@ import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send 
 import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken, givenHostNames, allowedMacs } from "./config.js";
 import { deviceAllowed } from "./device-access.js";
 import { readArtifact } from "./artifacts.js";
+import { acceptFindingFix, dismissFindingFix } from "./finding-fixes.js";
 import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
 import { answerQuestion, withdrawQuestion } from "./hooks.js";
@@ -158,6 +159,15 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "findings.forget") {
     if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
     send(socket, { type: "findings.result", repository: message.repository, forgotten: await forgetReviewFindings(message.repository) });
+    return;
+  }
+  if (message.type === "findings.accept" || message.type === "findings.dismiss") {
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
+    if (typeof message.category !== "string" || !/^[a-z-]+$/.test(message.category)) throw new Error("Invalid finding category.");
+    const result = message.type === "findings.accept"
+      ? await acceptFindingFix(message.repository, message.category)
+      : await dismissFindingFix(message.repository, message.category);
+    send(socket, { type: "findings.fix", repository: message.repository, ...result });
     return;
   }
   if (message.type === "recipe.forget") {

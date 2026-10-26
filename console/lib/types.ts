@@ -124,6 +124,7 @@ export type ServerMessage =
   | ({ type: "worktree.result" } & WorktreeResult)
   | { type: "recipe.result"; repository: string; forgotten: boolean }
   | { type: "findings.result"; repository: string; forgotten: boolean }
+  | { type: "findings.fix"; repository: string; category: string; outcome: "accepted" | "dismissed"; targetFile?: string; applied: boolean; message: string }
   | { type: "incident.result"; runId: string; incidentId: string; requestId: string; outcome: "done" | "refused" | "duplicate"; message: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
@@ -131,11 +132,17 @@ export type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "git" }) | null;
 };
-/** The runtime recipe the console keeps for a repository, `null` when it has none. */
 /** A kind of defect the reviews of a repository found on several tickets, with its latest examples. */
 export type RecurringFindingView = { category: string; label: string; tickets: number; findings: number; examples: { severity: string; file?: string; summary: string }[] };
-/** The review findings the console keeps for a repository: how many, over how many tickets, and the kinds its next run is told about. */
-export type FindingsResponse = { repository: string; findings?: { kept: number; tickets: number; recurring: RecurringFindingView[] }; error?: string };
+/** A source fix the console proposed for a category that kept coming back. The interface shows it; the repository changes only when the user accepts. */
+export type FindingFixView = {
+  category: string; label: string; runs: number; findings: number; kind: "lint" | "instruction"; tool?: "eslint" | "biome"; rules?: string[];
+  targetFile: string; title: string; body: string; status: "pending" | "accepted" | "dismissed"; settled: boolean;
+  examples: { severity: string; file?: string; summary: string }[];
+};
+/** The review findings the console keeps for a repository: how many, over how many tickets, the kinds its next run is told about, and the source fixes proposed for it. */
+export type FindingsResponse = { repository: string; findings?: { kept: number; tickets: number; recurring: RecurringFindingView[]; fixes?: FindingFixView[] }; error?: string };
+/** The runtime recipe the console keeps for a repository, `null` when it has none. */
 export type RecipeResponse = { repository: string; recipe: { content: string; updatedAt: string } | null; error?: string };
 export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
 export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";

@@ -197,7 +197,7 @@ export function Factory() {
         if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
         if (message.type === "batch.unresolved") setUnresolved(message.tickets);
         if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, ...defined({ risks: message.risks }) });
-        if (message.type === "recipe.result" || message.type === "findings.result") setRecipeRevision((revision) => revision + 1);
+        if (message.type === "recipe.result" || message.type === "findings.result" || message.type === "findings.fix") setRecipeRevision((revision) => revision + 1);
         if (message.type === "incident.result") setIncidentResult({ incidentId: message.incidentId, requestId: message.requestId, outcome: message.outcome, message: message.message });
       };
       socket.onclose = () => {
@@ -544,7 +544,7 @@ export function Factory() {
           )}
         </div>
       </div>
-      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => { command({ type: "recipe.forget", repository: recipeRepository }); }} onForgetFindings={() => { command({ type: "findings.forget", repository: recipeRepository }); }} onClose={() => setRecipeRepository(undefined)} />}
+      {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => { command({ type: "recipe.forget", repository: recipeRepository }); }} onForgetFindings={() => { command({ type: "findings.forget", repository: recipeRepository }); }} onAcceptFix={(category) => { command({ type: "findings.accept", repository: recipeRepository, category }); }} onDismissFix={(category) => { command({ type: "findings.dismiss", repository: recipeRepository, category }); }} onClose={() => setRecipeRepository(undefined)} />}
     </main>
   );
 }

@@ -7,6 +7,7 @@ import { admitBatch, carriesInterrupt, closeAbandonedAgents, conflictingEntries,
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRecurringFindings } from "./review-findings.js";
+import { reviewGuideEnvironment, seedReviewGuide } from "./review-guide.js";
 import { seedRuntimeRecipe } from "./runtime-recipe.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
@@ -582,6 +583,8 @@ export class RunRegistry {
     if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Runtime recipe restored", "Kept from a previous run of this repository.");
     const habits = await seedRecurringFindings(repository, worktree);
     if (habits) session.activity("system", "Recurring review findings restored", `${habits} ${habits > 1 ? "kinds" : "kind"} of defect the reviews of this repository keep finding.`);
+    const reviewGuide = await seedReviewGuide(worktree, session.state.startedAt ?? now());
+    if (reviewGuide) session.activity("system", "Review guide restored", `${reviewGuide} will steer this run's reviews.`);
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) {
@@ -613,6 +616,7 @@ export class RunRegistry {
         ...(entry.forced?.mode !== "stacked" && entry.baseBranch ? { IMPL_TICKET_BASE_BRANCH: entry.baseBranch } : {}),
         // The projects that get a merge request for this ticket when it is not only its own: the reference and the closing keyword depend on it.
         ...(entry.deliveries ? { IMPL_DELIVERY_PROJECTS: entry.deliveries.join(",") } : {}),
+        ...reviewGuideEnvironment(reviewGuide),
       },
       onData: (data) => {
         session.appendTerminal(data);

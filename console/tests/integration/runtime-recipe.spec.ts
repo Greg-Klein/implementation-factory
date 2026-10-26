@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { dataDirectory, sampleCheckout } from "../fixtures";
 import { resetRun } from "./helpers";
@@ -64,6 +64,44 @@ test("should show the review findings kept for a repository with the kinds that 
   await expect(findings).toContainText("None kept for this repository");
   await expect(findings.getByRole("button", { name: "Forget the findings" })).toHaveCount(0);
   expect(existsSync(stored)).toBe(false);
+});
+
+/** A proposal the recipe window can show. The body has to carry the markers the console checks. */
+function sourceFix(category: string, targetFile: string) {
+  const body = `<!-- implementation-factory:finding-fix ${category} -->\n\n## Review habit: ${category}\n\nHold this rule.\n\n<!-- /implementation-factory:finding-fix ${category} -->\n`;
+  return {
+    category, label: "A changed behaviour left without a test", runs: 3, findings: 4, kind: "instruction",
+    targetFile, title: `Record ${category} in ${targetFile}`, body, status: "pending", proposedAt: "2026-10-01T00:00:00.000Z",
+    examples: [{ severity: "P1", summary: `${category} came back.` }],
+  };
+}
+
+test("should accept a source fix into the checkout and dismiss another without writing it", async ({ page }) => {
+  const stored = path.join(path.dirname(recipeFile(sampleCheckout)), "finding-fixes.json");
+  const agents = path.join(sampleCheckout, "AGENTS.md");
+  const review = path.join(sampleCheckout, "REVIEW.md");
+  rmSync(agents, { force: true });
+  rmSync(review, { force: true });
+  mkdirSync(path.dirname(stored), { recursive: true });
+  writeFileSync(stored, JSON.stringify({ version: 1, proposals: [sourceFix("test-gap", "AGENTS.md"), sourceFix("dead-code", "REVIEW.md")] }));
+
+  await page.goto("/");
+  await page.getByLabel("Project directory").fill(sampleCheckout);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Runtime recipe" }).click();
+
+  const fixes = page.getByRole("dialog", { name: "Runtime recipe" }).getByRole("region", { name: "Source fixes" });
+  await expect(fixes).toContainText("test-gap");
+  await expect(fixes).toContainText("Hold this rule.");
+  await fixes.locator("div").filter({ hasText: "test-gap ·" }).getByRole("button", { name: "Accept the fix" }).click();
+  await expect(fixes).toContainText("Added to AGENTS.md");
+  expect(readFileSync(agents, "utf8")).toContain("<!-- implementation-factory:finding-fix test-gap -->");
+
+  await fixes.locator("div").filter({ hasText: "dead-code ·" }).getByRole("button", { name: "Dismiss the fix" }).click();
+  await expect(fixes).toContainText("Dismissed. It will not be proposed again.");
+  expect(existsSync(review)).toBe(false);
+
+  rmSync(agents, { force: true });
 });
 
 test("should refuse to read a recipe for anything but an absolute path", async ({ request }) => {

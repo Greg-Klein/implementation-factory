@@ -58,4 +58,8 @@ READY requires no remaining in-scope P0/P1, QA PASS or PASS_WITH_WARNINGS, and n
 
 Write `.claude/tasks/review-summary.md` using its contract and `implementation-factory:unslop`, with counts, actual review dimensions, unresolved questions and confidence limits. Rework briefs follow the same writing rules. The pilot owns commits, delivery and user interaction.
 
+## Repository review guide
+
+When `.claude/tasks/review-guide.md` exists, pass that path to every reviewer. It is the repository's [review guide](${CLAUDE_PLUGIN_ROOT}/contracts/review-guide.md). Reviewers apply it. You do not. The review summary's guide section says what they set aside, or "Aucun" when the file does not exist.
+
 Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language your caller states. If it states none, read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) and the `IMPL_LANGUAGE` variable yourself. That contract also gives the English form of the French headings and fixed phrases the templates use.

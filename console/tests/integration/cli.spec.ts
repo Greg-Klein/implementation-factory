@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { dataDirectory, sampleCheckout } from "../fixtures";
 import { resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
@@ -82,4 +85,29 @@ test("should read the queue of a batch and remove a launch from it", async ({ ba
   const again = await impl(baseURL, "queue", "cancel", held.id);
   expect(again.code).toBe(1);
   expect(again.stderr).toContain("No queued launch matches");
+});
+
+test("should list a source fix and write it when it is accepted", async ({ baseURL }) => {
+  const digest = createHash("sha256").update(path.resolve(sampleCheckout)).digest("hex").slice(0, 10);
+  const stored = path.join(dataDirectory, "repositories", `repo-${digest}`, "finding-fixes.json");
+  const agents = path.join(sampleCheckout, "AGENTS.md");
+  rmSync(agents, { force: true });
+  mkdirSync(path.dirname(stored), { recursive: true });
+  const body = "<!-- implementation-factory:finding-fix edge-case -->\n\n## Review habit: edge-case\n\nHandle the empty value.\n\n<!-- /implementation-factory:finding-fix edge-case -->\n";
+  writeFileSync(stored, JSON.stringify({ version: 1, proposals: [{
+    category: "edge-case", label: "A boundary value or an empty case mishandled", runs: 3, findings: 3, kind: "instruction",
+    targetFile: "AGENTS.md", title: "Record edge-case in AGENTS.md", body, status: "pending", proposedAt: "2026-10-01T00:00:00.000Z",
+    examples: [{ severity: "P1", summary: "Zero was not handled." }],
+  }] }));
+
+  const listed = await impl(baseURL, "findings", sampleCheckout);
+  expect(listed.code).toBe(0);
+  expect(listed.stdout).toContain("Source fixes");
+  expect(listed.stdout).toContain("edge-case");
+
+  const accepted = await impl(baseURL, "findings", "accept", "edge-case", sampleCheckout);
+  expect(accepted.code).toBe(0);
+  expect(accepted.stdout).toContain("AGENTS.md");
+  expect(readFileSync(agents, "utf8")).toContain("<!-- implementation-factory:finding-fix edge-case -->");
+  rmSync(agents, { force: true });
 });

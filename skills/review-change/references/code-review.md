@@ -1,5 +1,6 @@
 # Code review
 
+- When `.claude/tasks/review-guide.md` exists, apply [review guide](${CLAUDE_PLUGIN_ROOT}/contracts/review-guide.md) before filing a finding. It steers priorities, drops findings on ignored paths and drops nits past its limit. It adds no requirement. No such file: do not search for one.
 - Start from the authoritative behavior and the actual diff. Inspect modified code and relevant callers beyond the diff to understand impact; do not turn that into an audit or refactor of unrelated code.
 - Try to falsify the claimed fix: find an input, state transition or consumer for which the old failure remains or a new failure appears.
 - Distinguish enforced invariants from assumptions and types. Inspect validation, error propagation, shared state and resource ownership at affected boundaries.

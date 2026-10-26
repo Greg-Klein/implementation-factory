@@ -646,6 +646,19 @@ export const SENIOR_FINDINGS_FILE = "senior-findings.json";
 export const RECURRING_FINDINGS_FILE = "recurring-findings.md";
 
 /**
+ * Where a repository's owners say what a review of that repository should
+ * weigh, skip and refuse to nitpick. The first file that exists wins.
+ * Held equal to the list in `contracts/review-guide.md` by a unit test.
+ */
+export const REVIEW_GUIDE_CANDIDATES = ["REVIEW.md", ".claude/REVIEW.md", "docs/REVIEW.md"] as const;
+
+/** The copy the console leaves in the run's task directory, for every reviewer including the designer, who does not read product source. */
+export const REVIEW_GUIDE_FILE = "review-guide.md";
+
+/** How many distinct runs a category must span before the console proposes a source fix. `IMPL_FINDING_FIX_RUNS` overrides it, between 2 and 20. */
+export const DEFAULT_FINDING_FIX_RUNS = 3;
+
+/**
  * The kinds a finding is filed under, mirrored in `contracts/review-findings.md`.
  * A fixed list is what lets the same habit be counted from one run to the next:
  * two reviewers never word a defect the same way twice. `other` is counted nowhere.
@@ -686,6 +699,11 @@ const DAY_MS = 86_400_000;
 /** Where the console keeps the findings of one repository, beside its runtime recipe. */
 export function reviewFindingsStore(storageRoot: string, repository: string) {
   return path.join(path.dirname(runtimeRecipeStore(storageRoot, repository)), "review-findings.json");
+}
+
+/** Where the console keeps the source fixes it proposed for one repository, beside its findings. */
+export function findingFixStore(storageRoot: string, repository: string) {
+  return path.join(path.dirname(runtimeRecipeStore(storageRoot, repository)), "finding-fixes.json");
 }
 
 /**
@@ -1672,4 +1690,497 @@ export function scheduleDirectory(storageRoot: string, pluginRoot: string, tempo
   const fromPlugin = path.relative(pluginRoot, storageRoot);
   const inside = fromPlugin === "" || (!fromPlugin.startsWith("..") && !path.isAbsolute(fromPlugin));
   return inside ? path.join(temporaryRoot, `implementation-factory-${user}`, "schedule") : path.join(storageRoot, "schedule");
+}
+
+/** A run worktree is `<checkout>/.claude/worktrees/<id>`. A source fix is written on the checkout, never inside one. */
+export function pathIsRunWorktree(candidate: string) {
+  const parts = path.resolve(candidate).split(path.sep);
+  const at = parts.lastIndexOf("worktrees");
+  return at > 0 && parts[at - 1] === ".claude" && at < parts.length - 1;
+}
+
+/** The review guide of a repository, the first candidate that exists. Paths are relative to the root, with `/` separators. */
+export function reviewGuidePath(existing: readonly string[]) {
+  const present = new Set(existing.map(normalizeRepoPath).filter((file): file is string => Boolean(file)));
+  return REVIEW_GUIDE_CANDIDATES.find((candidate) => present.has(candidate));
+}
+
+/**
+ * The copy the console leaves for reviewers. The first line names which file
+ * was copied; the rest is the owner's text, cut off past 32 KB so a dumped
+ * file cannot fill a reviewer's context. The cut-off note is a diagnostic, in English.
+ */
+export function renderReviewGuide(source: string, content: string) {
+  const limit = 32_000;
+  const body = content.length > limit ? `${content.slice(0, limit)}\n\n[truncated]\n` : content;
+  return `<!-- source: ${source} -->\n${body.endsWith("\n") ? body : `${body}\n`}`;
+}
+
+/** The path named on the first line of a copied guide, when it is one of the candidates. */
+export function reviewGuideSource(text: string) {
+  const source = text.match(/^<!-- source: ([^<>\n]+) -->/)?.[1]?.trim();
+  return source && (REVIEW_GUIDE_CANDIDATES as readonly string[]).includes(source) ? source : undefined;
+}
+
+const IGNORED_PATH_HEADINGS = new Set(["ignored paths", "paths to ignore", "chemins ignorés", "chemins ignores"]);
+
+/**
+ * The path patterns under the guide's ignored-paths heading. A bullet's first
+ * token, with a wrapping pair of backticks or quotes removed. Anything past
+ * the next heading is not one.
+ */
+export function reviewGuideIgnoredPaths(markdown: string) {
+  const patterns: string[] = [];
+  let reading = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    const heading = line.match(/^#{1,3} +(.+?)\s*$/);
+    if (heading) {
+      reading = IGNORED_PATH_HEADINGS.has(heading[1]!.trim().toLowerCase());
+      continue;
+    }
+    if (!reading) continue;
+    const bullet = line.match(/^\s*[-*] +(.+?)\s*$/);
+    if (!bullet) continue;
+    const token = bullet[1]!.replace(/^`([^`]+)`.*$/, "$1").replace(/^"([^"]+)"\s*$/, "$1").trim().split(/\s+/)[0] ?? "";
+    if (token && token.length <= 200 && !token.startsWith("<!--")) patterns.push(token);
+  }
+  return patterns;
+}
+
+/**
+ * The glob of `IMPL_SENSITIVE_PATHS` (`pathMatches` in review-confidence.ts):
+ * `**` crosses directories, `*` stays inside one, and a pattern without a
+ * slash matches that name at any depth. A pattern that contains a slash is
+ * matched from the repository root. Duplicated here so a review guide does
+ * not import the confidence table.
+ */
+export function globPathMatches(pattern: string, file: string) {
+  const trimmed = pattern.trim();
+  if (!trimmed) return false;
+  const anchored = trimmed.includes("/") ? trimmed : `**/${trimmed}`;
+  const source = anchored.split(/(\*\*\/|\*\*|\*)/).map((part) => {
+    if (part === "**/") return "(?:.*/)?";
+    if (part === "**") return ".*";
+    if (part === "*") return "[^/]*";
+    return part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+  }).join("");
+  return new RegExp(`^${source}$`).test(file);
+}
+
+function normalizeRepoPath(file: string) {
+  const normalized = file.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..")) return undefined;
+  return normalized;
+}
+
+/** Whether a finding's file sits on a path the guide tells the review to skip. A finding with no file is kept. */
+export function guideIgnoresFile(file: string | undefined, patterns: readonly string[]) {
+  const normalized = file ? normalizeRepoPath(file) : undefined;
+  if (!normalized) return false;
+  return patterns.some((pattern) => globPathMatches(pattern, normalized));
+}
+
+/** `IMPL_FINDING_FIX_RUNS` when it is an integer from 2 to 20, the default otherwise. */
+export function findingFixRunThreshold(value: string | undefined, fallback = DEFAULT_FINDING_FIX_RUNS) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 2 && parsed <= 20 ? parsed : fallback;
+}
+
+export type SourceFixGroup = { category: string; label: string; runs: number; findings: number; examples: KeptFinding[] };
+
+/**
+ * Categories found on at least `minRuns` distinct runs in the last 90 days.
+ * Rounds of one run are that run. `other` never qualifies. One ticket that
+ * was re-run counts once per run, which is the unit a source fix is weighed on.
+ */
+export function sourceFixGroups(kept: KeptFinding[], now: number, minRuns: number): SourceFixGroup[] {
+  const recent = kept.filter((finding) => finding.category !== "other" && now - Date.parse(finding.at) < FINDINGS_RECENT_DAYS * DAY_MS);
+  const groups = new Map<string, KeptFinding[]>();
+  for (const finding of recent) groups.set(finding.category, [...(groups.get(finding.category) ?? []), finding]);
+  return [...groups]
+    .map(([category, findings]) => ({
+      category,
+      label: FINDING_CATEGORIES[category] ?? category,
+      runs: new Set(findings.map((finding) => finding.runId)).size,
+      findings: findings.length,
+      examples: [...findings].sort((left, right) => Date.parse(right.at) - Date.parse(left.at)).slice(0, 3),
+    }))
+    .filter((group) => group.runs >= minRuns)
+    .sort((left, right) => right.runs - left.runs || right.findings - left.findings);
+}
+
+/** Drops the categories whose source fix is already on the branch new runs start from. */
+export function suppressRecurring(recurring: RecurringFinding[], settled: ReadonlySet<string>) {
+  return settled.size === 0 ? recurring : recurring.filter((group) => !settled.has(group.category));
+}
+
+export type LintTool = "eslint" | "biome";
+export type LintStack = { tool?: LintTool; packages: string[] };
+
+const ESLINT_CONFIGS = new Set(["eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts", ".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.cjs"]);
+const BIOME_CONFIGS = new Set(["biome.json", "biome.jsonc"]);
+
+/** Which linter a repository already depends on. Two of them: the one that has a config file, ESLint when both or neither do. */
+export function lintStack(packageJson: string | undefined, files: readonly string[]): LintStack {
+  let packages: string[] = [];
+  if (packageJson) {
+    try {
+      const parsed = JSON.parse(packageJson) as { dependencies?: unknown; devDependencies?: unknown };
+      packages = [...new Set([parsed.dependencies, parsed.devDependencies].flatMap((group) => group && typeof group === "object" && !Array.isArray(group) ? Object.keys(group as object) : []))];
+    } catch { packages = []; }
+  }
+  const names = new Set(packages);
+  const present = new Set(files.map(normalizeRepoPath).filter((file): file is string => Boolean(file)));
+  const eslint = names.has("eslint");
+  const biome = names.has("@biomejs/biome");
+  const eslintConfig = [...ESLINT_CONFIGS].some((file) => present.has(file));
+  const biomeConfig = [...BIOME_CONFIGS].some((file) => present.has(file));
+  const tool: LintTool | undefined = eslint && biome ? (biomeConfig && !eslintConfig ? "biome" : "eslint") : eslint ? "eslint" : biome ? "biome" : undefined;
+  return { ...(tool ? { tool } : {}), packages };
+}
+
+const TYPESCRIPT_ESLINT = ["typescript-eslint", "@typescript-eslint/eslint-plugin"];
+
+/**
+ * Rules the repository can already enforce, because the plugin that owns them
+ * is installed. A category with no such rule gets an instruction instead of a
+ * linter the repository does not have.
+ */
+export function lintRulesFor(category: string, stack: LintStack): { tool: LintTool; rules: string[] } | undefined {
+  const packages = new Set(stack.packages);
+  if (stack.tool === "biome") {
+    const rules = BIOME_RULES[category];
+    return rules ? { tool: "biome", rules } : undefined;
+  }
+  if (stack.tool !== "eslint") return undefined;
+  if (category === "dead-code") {
+    return packages.has("eslint")
+      ? { tool: "eslint", rules: TYPESCRIPT_ESLINT.some((name) => packages.has(name)) ? ["@typescript-eslint/no-unused-vars"] : ["no-unused-vars"] }
+      : undefined;
+  }
+  const spec = ESLINT_RULES[category];
+  if (!spec || !spec.needs.some((name) => packages.has(name))) return undefined;
+  return { tool: "eslint", rules: spec.rules };
+}
+
+const ESLINT_RULES: Record<string, { needs: string[]; rules: string[] }> = {
+  "type-escape": { needs: TYPESCRIPT_ESLINT, rules: ["@typescript-eslint/no-explicit-any", "@typescript-eslint/no-non-null-assertion"] },
+  accessibility: { needs: ["eslint-plugin-jsx-a11y"], rules: ["jsx-a11y/alt-text", "jsx-a11y/label-has-associated-control", "jsx-a11y/click-events-have-key-events"] },
+};
+
+const BIOME_RULES: Record<string, string[]> = {
+  "type-escape": ["suspicious/noExplicitAny", "style/noNonNullAssertion"],
+  "dead-code": ["correctness/noUnusedVariables", "correctness/noUnusedImports"],
+  accessibility: ["a11y/useAltText", "a11y/noLabelWithoutControl", "a11y/useKeyWithClickEvents"],
+};
+
+/** The file a source fix is appended to: the review guide when the repository has one, then AGENTS.md, then CLAUDE.md, else a new REVIEW.md. */
+export function instructionTarget(existing: readonly string[]) {
+  const present = new Set(existing.map(normalizeRepoPath).filter((file): file is string => Boolean(file)));
+  return reviewGuidePath([...present]) ?? (present.has("AGENTS.md") ? "AGENTS.md" : present.has("CLAUDE.md") ? "CLAUDE.md" : "REVIEW.md");
+}
+
+export function findingFixMarker(category: string) {
+  return `<!-- implementation-factory:finding-fix ${category} -->`;
+}
+
+export function findingFixEndMarker(category: string) {
+  return `<!-- /implementation-factory:finding-fix ${category} -->`;
+}
+
+/** The marker is in the committed file, so the fix is on the branch new runs start from. */
+export function findingFixSettled(fileText: string | undefined, category: string) {
+  return Boolean(fileText?.includes(findingFixMarker(category)));
+}
+
+export type FindingFixExample = { severity: string; file?: string; summary: string };
+export type FindingFixDraft = {
+  category: string;
+  label: string;
+  runs: number;
+  findings: number;
+  kind: "lint" | "instruction";
+  tool?: LintTool;
+  rules?: string[];
+  targetFile: string;
+  title: string;
+  body: string;
+  examples: FindingFixExample[];
+};
+export type StoredFindingFix = FindingFixDraft & { status: "pending" | "accepted" | "dismissed"; proposedAt: string; decidedAt?: string };
+
+const HABIT_RULES: Record<string, { frLabel: string; en: string; fr: string }> = {
+  "requirement-missed": {
+    frLabel: "Un critère d'acceptation ou la consigne du run laissé sans implémentation",
+    en: "A task is not done while an acceptance criterion it was given has no implementation and no explicit out-of-scope note.",
+    fr: "Une tâche n'est pas finie tant qu'un critère d'acceptation qui lui est confié n'a ni implémentation ni mention explicite hors périmètre.",
+  },
+  "consumer-left-behind": {
+    frLabel: "Un appelant d'un contrat modifié laissé en l'état",
+    en: "When a contract changes, update every caller in the same change. Search for the old name before finishing.",
+    fr: "Quand un contrat change, mettez à jour chaque appelant dans le même changement. Cherchez l'ancien nom avant de finir.",
+  },
+  "edge-case": {
+    frLabel: "Une valeur limite ou un cas vide mal traité",
+    en: "Handle the empty collection, zero, and the missing value on every changed path that reads outside data.",
+    fr: "Traitez la collection vide, zéro et la valeur absente sur chaque chemin modifié qui lit une donnée extérieure.",
+  },
+  "error-handling": {
+    frLabel: "Une erreur avalée, non traitée ou montrée brute",
+    en: "Show or propagate an error. Do not catch it only to log and continue, and do not put a raw error in the interface.",
+    fr: "Montrez ou propagez une erreur. Ne l'attrapez pas seulement pour la journaliser et continuer, et ne mettez pas une erreur brute dans l'interface.",
+  },
+  "async-state": {
+    frLabel: "Une course, une annulation manquante, un état périmé",
+    en: "Cancel or ignore a request whose inputs changed, and do not render a response that arrived late.",
+    fr: "Annulez ou ignorez une requête dont les entrées ont changé, et n'affichez pas une réponse arrivée trop tard.",
+  },
+  "ui-state": {
+    frLabel: "Un état de chargement, vide ou d'erreur manquant",
+    en: "Every view that loads, can be empty, or can fail has those three states.",
+    fr: "Chaque vue qui charge, peut être vide ou peut échouer a ces trois états.",
+  },
+  "boundary-validation": {
+    frLabel: "Une donnée extérieure utilisée sans validation",
+    en: "Validate outside data at the boundary before it is used. A type is not validation.",
+    fr: "Validez une donnée extérieure à la frontière avant de l'utiliser. Un type n'est pas une validation.",
+  },
+  authorization: {
+    frLabel: "Un contrôle de permission ou de propriété manquant",
+    en: "A read or a write checks the caller, not only that the resource exists.",
+    fr: "Une lecture ou une écriture vérifie l'appelant, pas seulement que la ressource existe.",
+  },
+  injection: {
+    frLabel: "Une valeur extérieure qui atteint une requête, une commande, un chemin, du balisage ou une URL sans échappement",
+    en: "Escape or parameterize an outside value before it reaches a query, a command, a path, markup, or a URL.",
+    fr: "Échappez ou paramétrez une valeur extérieure avant qu'elle n'atteigne une requête, une commande, un chemin, du balisage ou une URL.",
+  },
+  "secret-exposure": {
+    frLabel: "Un secret, un jeton ou une donnée personnelle qui sort dans un journal, une erreur, une réponse ou une URL",
+    en: "Do not put a secret, a token, or personal data in a log, an error, a response, or a URL.",
+    fr: "Ne mettez pas un secret, un jeton ou une donnée personnelle dans un journal, une erreur, une réponse ou une URL.",
+  },
+  "data-integrity": {
+    frLabel: "Une écriture qui peut perdre ou corrompre des données",
+    en: "A write that can lose data is transactional, or it says which partial write it can leave behind.",
+    fr: "Une écriture qui peut perdre des données est transactionnelle, ou elle dit quelle écriture partielle elle peut laisser.",
+  },
+  "type-escape": {
+    frLabel: "Un type réduit au silence : any, conversion risquée, assertion non nulle",
+    en: "Do not silence a type with any, an unsafe cast, or a non-null assertion. Narrow the value instead.",
+    fr: "Ne réduisez pas un type au silence avec any, une conversion risquée ou une assertion non nulle. Restreignez la valeur.",
+  },
+  "test-cannot-fail": {
+    frLabel: "Un test qui ne peut pas échouer pour le défaut qu'il couvre",
+    en: "A test asserts the behaviour that would break. A mock that returns the expected value is not that assertion.",
+    fr: "Un test affirme le comportement qui casserait. Un simulacre qui renvoie la valeur attendue n'est pas cette affirmation.",
+  },
+  "test-gap": {
+    frLabel: "Un comportement modifié laissé sans test",
+    en: "Changed behaviour ships with a test that fails without the change.",
+    fr: "Un comportement modifié part avec un test qui échoue sans le changement.",
+  },
+  "repository-convention": {
+    frLabel: "Une convention ou un motif existant du dépôt non suivi",
+    en: "Follow the pattern already in the repository. A new helper needs a reason the existing one cannot be used.",
+    fr: "Suivez le motif déjà dans le dépôt. Un nouvel utilitaire exige une raison pour laquelle l'existant ne convient pas.",
+  },
+  duplication: {
+    frLabel: "Un utilitaire ou un composant existant réécrit",
+    en: "Reuse the existing helper or component. Search for it before writing another.",
+    fr: "Réutilisez l'utilitaire ou le composant existant. Cherchez-le avant d'en écrire un autre.",
+  },
+  accessibility: {
+    frLabel: "Un contrôle sans sémantique, libellé ou accès clavier",
+    en: "A control has a native element or a role, an accessible name, and a keyboard path.",
+    fr: "Un contrôle a un élément natif ou un rôle, un nom accessible et un chemin clavier.",
+  },
+  performance: {
+    frLabel: "Du travail inutile sur un chemin modifié",
+    en: "Do not add work on a changed path that runs per item or per keystroke unless the ticket asks for it.",
+    fr: "N'ajoutez pas de travail sur un chemin modifié qui s'exécute par élément ou par frappe, sauf si le ticket le demande.",
+  },
+  "dead-code": {
+    frLabel: "Du code mort, une trace de débogage ou un TODO laissé",
+    en: "Remove unused code, debug output, and TODOs the change leaves behind.",
+    fr: "Retirez le code inutilisé, les traces de débogage et les TODO que le changement laisse.",
+  },
+  "stale-documentation": {
+    frLabel: "Une documentation que le changement a rendue fausse",
+    en: "Update the documentation the change made false, in the same change.",
+    fr: "Mettez à jour la documentation que le changement a rendue fausse, dans le même changement.",
+  },
+};
+
+function countLabel(count: number, one: string, many: string) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+function lintSnippet(tool: LintTool, rules: string[]) {
+  if (tool === "eslint") return JSON.stringify({ rules: Object.fromEntries(rules.map((rule) => [rule, "error"])) }, null, 2);
+  const groups: Record<string, Record<string, string>> = {};
+  for (const rule of rules) {
+    const [group, name] = rule.split("/");
+    if (!group || !name) continue;
+    (groups[group] ??= {})[name] = "error";
+  }
+  return JSON.stringify({ linter: { rules: groups } }, null, 2);
+}
+
+function exampleLine(example: FindingFixExample) {
+  return `- ${example.severity}${example.file ? ` \`${example.file}\`` : ""}: ${example.summary}`;
+}
+
+/**
+ * The block a person accepts into the repository. The interface stays in
+ * English, so `title` does too; the block itself follows the workflow language,
+ * because it is text the repository keeps for people.
+ */
+export function draftFindingFix(group: SourceFixGroup, options: { language: WorkflowLanguage; stack: LintStack; existingFiles: readonly string[] }): FindingFixDraft {
+  const habit = HABIT_RULES[group.category];
+  const language = options.language === "fr" ? "fr" : "en";
+  const label = language === "fr" ? habit?.frLabel ?? group.label : group.label;
+  const rule = habit?.[language] ?? group.label;
+  const lint = lintRulesFor(group.category, options.stack);
+  const targetFile = instructionTarget(options.existingFiles);
+  const examples = group.examples.map(({ severity, file, summary }) => ({ severity, ...(file ? { file } : {}), summary }));
+  const toolName = lint?.tool === "biome" ? "Biome" : "ESLint";
+  const runs = countLabel(group.runs, language === "fr" ? "exécution" : "run", language === "fr" ? "exécutions" : "runs");
+  const findings = countLabel(group.findings, language === "fr" ? "constat" : "finding", language === "fr" ? "constats" : "findings");
+  const prose = language === "fr"
+    ? [
+      `Les revues senior de ce dépôt ont relevé « ${label} » sur ${runs} (${findings}). Le corriger à la source évite de le retrouver au ticket suivant.`,
+      "",
+      lint ? `Activez ces règles ${toolName} en erreur :` : "Tenez cette règle en revue et à l'implémentation :",
+      "",
+      ...(lint ? [`${lint.rules.map((ruleName) => `- \`${ruleName}\``).join("\n")}`, "", "```json", lintSnippet(lint.tool, lint.rules), "```"] : [rule]),
+      "",
+      "Derniers exemples :",
+      "",
+      ...examples.map(exampleLine),
+      "",
+      "Ajouté dans ce fichier par une personne qui l'a accepté. Aucune exécution ne l'écrit d'elle-même.",
+    ]
+    : [
+      `Senior reviews of this repository found "${label}" on ${runs} (${findings}). Stop it at the source instead of catching it again on the next ticket.`,
+      "",
+      lint ? `Enable these ${toolName} rules as errors:` : "Hold this rule in review and in implementation:",
+      "",
+      ...(lint ? [`${lint.rules.map((ruleName) => `- \`${ruleName}\``).join("\n")}`, "", "```json", lintSnippet(lint.tool, lint.rules), "```"] : [rule]),
+      "",
+      "Latest examples:",
+      "",
+      ...examples.map(exampleLine),
+      "",
+      "Accepted into this file by a person. No run writes it on its own.",
+    ];
+  const body = [findingFixMarker(group.category), "", `## ${language === "fr" ? "Habitude de revue" : "Review habit"}: ${group.category}`, "", ...prose, "", findingFixEndMarker(group.category), ""].join("\n");
+  const title = lint ? `Block ${group.category} with ${toolName}` : `Record ${group.category} in ${targetFile}`;
+  return {
+    category: group.category, label: group.label, runs: group.runs, findings: group.findings,
+    kind: lint ? "lint" : "instruction", ...(lint ? { tool: lint.tool, rules: lint.rules } : {}),
+    targetFile, title, body, examples,
+  };
+}
+
+/** Appends the block unless its marker is already in the file. */
+export function appendFindingFix(existing: string, body: string, category: string) {
+  if (existing.includes(findingFixMarker(category))) return { text: existing, applied: false };
+  const block = body.endsWith("\n") ? body : `${body}\n`;
+  if (!existing) return { text: block, applied: true };
+  const base = existing.endsWith("\n") ? existing : `${existing}\n`;
+  return { text: `${base}\n${block}`, applied: true };
+}
+
+function safeRelative(file: unknown) {
+  if (typeof file !== "string") return undefined;
+  return normalizeRepoPath(file.trim());
+}
+
+function storedExamples(value: unknown): FindingFixExample[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const examples: FindingFixExample[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const { severity, file, summary } = entry as Record<string, unknown>;
+    if (typeof summary !== "string" || !summary.trim()) continue;
+    const level = severity === "P0" || severity === "P1" || severity === "P2" ? severity : "P2";
+    const relative = typeof file === "string" ? safeRelative(file) : undefined;
+    examples.push({ severity: level, ...(relative ? { file: relative } : {}), summary: summary.trim().slice(0, 300) });
+    if (examples.length === 3) break;
+  }
+  return examples;
+}
+
+/** One stored proposal, or undefined when the entry cannot be applied safely. */
+export function readStoredFindingFix(entry: unknown): StoredFindingFix | undefined {
+  if (!entry || typeof entry !== "object") return undefined;
+  const record = entry as Record<string, unknown>;
+  const category = typeof record.category === "string" ? record.category : "";
+  if (!(category in FINDING_CATEGORIES) || category === "other") return undefined;
+  const targetFile = safeRelative(record.targetFile);
+  const body = typeof record.body === "string" ? record.body : "";
+  const status = record.status === "accepted" || record.status === "dismissed" || record.status === "pending" ? record.status : undefined;
+  const runs = record.runs;
+  const findings = record.findings;
+  const proposedAt = typeof record.proposedAt === "string" ? record.proposedAt : "";
+  const examples = storedExamples(record.examples);
+  if (!targetFile || !body.includes(findingFixMarker(category)) || body.length > 20_000 || !status || !proposedAt) return undefined;
+  if (!Number.isInteger(runs) || Number(runs) < 1 || !Number.isInteger(findings) || Number(findings) < 1 || !examples) return undefined;
+  const kind = record.kind === "lint" || record.kind === "instruction" ? record.kind : undefined;
+  if (!kind) return undefined;
+  const tool = record.tool === "eslint" || record.tool === "biome" ? record.tool : undefined;
+  const rules = Array.isArray(record.rules) ? record.rules.filter((rule): rule is string => typeof rule === "string" && rule.length > 0 && rule.length <= 120).slice(0, 8) : undefined;
+  const title = typeof record.title === "string" && record.title.trim() ? record.title.trim().slice(0, 160) : undefined;
+  const label = typeof record.label === "string" && record.label.trim() ? record.label.trim().slice(0, 200) : FINDING_CATEGORIES[category];
+  if (!title || !label) return undefined;
+  const decidedAt = typeof record.decidedAt === "string" && record.decidedAt ? record.decidedAt : undefined;
+  return {
+    category, label, runs: Number(runs), findings: Number(findings), kind,
+    ...(kind === "lint" && tool ? { tool } : {}),
+    ...(rules && rules.length > 0 ? { rules } : {}),
+    targetFile, title, body, examples, status, proposedAt, ...(decidedAt ? { decidedAt } : {}),
+  };
+}
+
+/** The proposals in a `finding-fixes.json`, or undefined when the file is not one. Faulty entries are dropped. */
+export function readFindingFixes(text: string): StoredFindingFix[] | undefined {
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return undefined; }
+  const entries = (parsed as { proposals?: unknown } | null)?.proposals;
+  if (!Array.isArray(entries)) return undefined;
+  const fixes: StoredFindingFix[] = [];
+  for (const entry of entries) {
+    const fix = readStoredFindingFix(entry);
+    if (fix && !fixes.some((kept) => kept.category === fix.category)) fixes.push(fix);
+  }
+  return fixes;
+}
+
+/**
+ * What is kept after a new reading of the findings. A pending proposal is
+ * refreshed. An accepted or dismissed one stays decided, even after the
+ * category stops qualifying, so a dismissal is not asked again. A pending
+ * proposal whose category fell back under the threshold is dropped.
+ */
+export function mergeFindingFixes(stored: StoredFindingFix[], drafts: FindingFixDraft[], proposedAt: string) {
+  const byCategory = new Map(stored.map((proposal) => [proposal.category, proposal]));
+  const draftCategories = new Set(drafts.map((draft) => draft.category));
+  const added: StoredFindingFix[] = [];
+  const proposals: StoredFindingFix[] = [];
+  for (const draft of drafts) {
+    const previous = byCategory.get(draft.category);
+    if (!previous) {
+      const created: StoredFindingFix = { ...draft, status: "pending", proposedAt };
+      added.push(created);
+      proposals.push(created);
+      continue;
+    }
+    proposals.push(previous.status === "pending" ? { ...draft, status: "pending", proposedAt: previous.proposedAt } : previous);
+  }
+  for (const previous of stored) {
+    if (draftCategories.has(previous.category) || previous.status === "pending") continue;
+    proposals.push(previous);
+  }
+  return { proposals, added };
 }

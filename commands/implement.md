@@ -83,6 +83,8 @@ Read `.claude/tasks/runtime-recipe.md` when it exists: the console keeps it from
 
 The console may also have left `.claude/tasks/recurring-findings.md`: the kinds of defect the senior reviews of earlier runs found on at least two tickets of this repository ([review findings](${CLAUDE_PLUGIN_ROOT}/contracts/review-findings.md)). Like the recipe, it is no ticket context, and it adds no requirement. Pass its path to every `developer` and to no reviewer.
 
+The console may also have left `.claude/tasks/review-guide.md`: a copy of the repository's review guide ([review guide](${CLAUDE_PLUGIN_ROOT}/contracts/review-guide.md)), present only when the repository has a `REVIEW.md`, `.claude/REVIEW.md` or `docs/REVIEW.md`. `IMPL_REVIEW_GUIDE` names the file it was copied from. It is not ticket context and it adds no requirement. Pass its path to every `senior-reviewer`, `qa-reviewer` and `designer-reviewer`, and to `review-orchestrator` when that agent runs, and to no `developer`. The reviewers read the copy even if a brief omits it. When the file is absent, pass nothing: the review is unchanged. At tier 2 the review summary records whether it was applied. At tier 0 and tier 1 the senior report's line is that record.
+
 Write a consolidated `.claude/tasks/ticket-context.md` containing: what and why, acceptance criteria, edge cases, out of scope, Figma node URLs, local paths of downloaded assets, open questions. Store binaries under `.claude/tasks/assets/`.
 
 When two sources say different things, resolve the conflict with the shared specification policy and record the arbitration in the context file. Never carry a contradiction forward untouched.

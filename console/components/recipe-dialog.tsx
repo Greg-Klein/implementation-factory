@@ -1,10 +1,11 @@
 "use client";
 
-import { CircleNotchIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, CircleNotchIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import type { FindingsResponse, RecipeResponse } from "@/lib/types";
+import type { FindingFixView, FindingsResponse, RecipeResponse } from "@/lib/types";
 
 const secondary = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--raised)] px-3.5 py-2 text-xs font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
+const acceptButton = "flex items-center gap-1.5 rounded-lg bg-[var(--ink)] px-3.5 py-2 text-xs font-medium text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40";
 
 function writtenLabel(updatedAt: string) {
   return new Date(updatedAt).toLocaleString("en-US", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -17,12 +18,14 @@ function writtenLabel(updatedAt: string) {
  * start again from nothing. `revision` moves when the server answered one of
  * those gestures, which is when the content is read again.
  */
-export function RecipeDialog({ repository, revision, connected, onForget, onForgetFindings, onClose }: {
+export function RecipeDialog({ repository, revision, connected, onForget, onForgetFindings, onAcceptFix, onDismissFix, onClose }: {
   repository: string;
   revision: number;
   connected: boolean;
   onForget: () => void;
   onForgetFindings: () => void;
+  onAcceptFix: (category: string) => void;
+  onDismissFix: (category: string) => void;
   onClose: () => void;
 }) {
   const [response, setResponse] = useState<RecipeResponse>();
@@ -104,6 +107,7 @@ export function RecipeDialog({ repository, revision, connected, onForget, onForg
               </div>
             ))}
           </section>
+          <SourceFixes fixes={kept?.fixes} error={findings?.error} connected={connected} onAccept={onAcceptFix} onDismiss={onDismissFix} />
         </div>
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] px-5 py-3">
           <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-[var(--muted)]">
@@ -113,5 +117,45 @@ export function RecipeDialog({ repository, revision, connected, onForget, onForg
         </footer>
       </section>
     </div>
+  );
+}
+
+/**
+ * A durable fix for a kind of defect that came back across runs. Accept writes
+ * the block into the repository; dismiss leaves the repository untouched.
+ * Neither one runs by itself.
+ */
+function SourceFixes({ fixes, error, connected, onAccept, onDismiss }: {
+  fixes: FindingFixView[] | undefined;
+  error: string | undefined;
+  connected: boolean;
+  onAccept: (category: string) => void;
+  onDismiss: (category: string) => void;
+}) {
+  return (
+    <section aria-label="Source fixes" className="mt-6 border-t border-[var(--line)] pt-5">
+      <h3 className="text-[10px] font-semibold uppercase tracking-[.16em] text-[var(--muted)]">Source fixes</h3>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+        {error ? <span role="alert" className="text-red-700">{error}</span>
+          : !fixes ? "Reading source fixes…"
+          : fixes.length === 0 ? "None proposed. When a kind of defect comes back across enough runs, a fix for the repository is proposed here and written only if you accept it."
+          : "A kind of defect that came back across runs. Accepting writes the block below into the repository for you to review and commit. Nothing is written until you do."}
+      </p>
+      {fixes?.map((fix) => (
+        <div key={fix.category} className="mt-4">
+          <p className="text-xs font-semibold text-[var(--ink)]">{fix.title}</p>
+          <p className="mt-0.5 font-mono text-[10px] text-[var(--muted)]">{fix.category} · {fix.runs} runs · {fix.targetFile}{fix.kind === "lint" && fix.tool ? ` · ${fix.tool}` : ""}</p>
+          {fix.status === "pending" && <pre className="mt-2 whitespace-pre-wrap break-words rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 font-mono text-[11px] leading-5 text-[var(--ink)]">{fix.body}</pre>}
+          {fix.status === "pending" && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={!connected} onClick={() => onAccept(fix.category)} className={acceptButton}><CheckIcon size={12} /> Accept the fix</button>
+              <button type="button" disabled={!connected} onClick={() => onDismiss(fix.category)} className={secondary}>Dismiss the fix</button>
+            </div>
+          )}
+          {fix.status === "accepted" && <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--ink)]">{fix.settled ? "On the branch. Developers are no longer told about this kind of defect." : `Added to ${fix.targetFile}. Developers keep hearing about it until that change is on the branch new runs start from.`}</p>}
+          {fix.status === "dismissed" && <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">Dismissed. It will not be proposed again.</p>}
+        </div>
+      ))}
+    </section>
   );
 }

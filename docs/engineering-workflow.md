@@ -244,7 +244,27 @@ When developers make the same kind of mistake on several tickets of a repository
 
 A ticket counts once, however many rework rounds or runs it took. `other` never counts. The file adds no requirement and widens no scope: a developer checks its own change against the kinds listed. Reviewers do not receive it, because they form their expectations from the specification and the code, and a list of earlier findings would steer them.
 
-The "Runtime recipe" window of a repository shows, under the recipe, how many findings are kept, from how many tickets, and each kind that recurs with its examples. "Forget the findings" deletes them all, and the next run then receives no file. A finding is deleted after 180 days.
+The "Runtime recipe" window of a repository shows, under the recipe, how many findings are kept, from how many tickets, and each kind that recurs with its examples. "Forget the findings" deletes them all, and the next run then receives no file. A finding is deleted after 180 days. Forgetting the findings also drops the source fixes proposed for that repository.
+
+### The repository's review guide
+
+The owners of a repository may write what a review of that repository should weigh, skip and stop nitpicking. The first file that exists wins, and the others are not merged with it: `REVIEW.md`, then `.claude/REVIEW.md`, then `docs/REVIEW.md` (`contracts/review-guide.md`).
+
+At launch the console copies that file to `.claude/tasks/review-guide.md`, dated before the run so it is not a document of the run, and sets `IMPL_REVIEW_GUIDE` to the source path. The pilot passes the copy to the senior reviewer, QA, the designer and the review orchestrator, and to no developer. Each reviewer reads the copy even when a brief omits it. The designer may read that task file and no product source. No file: nothing is copied, the variable is absent, and the review is unchanged.
+
+Three headings have a mechanical effect, in English or French: priorities steer attention and are not new requirements; ignored paths are globs (`**` crosses directories, `*` stays in one segment, a pattern with a slash is from the repository root, a pattern without one matches that name at any depth); nitpick limits drop low-value findings. A broken behaviour, a security finding, an unmet criterion, and any P0 or P1 are never nits. The console drops a senior finding whose file matches an ignored path, so it is not counted as a habit of the next runs. It does not judge nits. A finding with no file is kept. The review of this run still sees the finding: the review confidence reads the findings of the round, including those the store then leaves out.
+
+The senior report names the source in one line of its summary, and the review summary has a section for it. Both say "Aucun" / "None" when no guide was read.
+
+### A fix at the source
+
+Telling the next developer about a habit spends tokens on every run and leaves the repository as it was. Once a category spans enough distinct runs of the same repository in the last 90 days (`IMPL_FINDING_FIX_RUNS`, 3 by default, from 2 to 20), the console proposes a durable fix. Rounds of one run are that run. `other` never qualifies. Two tickets are still what puts a kind into `recurring-findings.md`; the source fix waits for the run threshold, which is a separate count.
+
+The proposal is a markdown block appended to the review guide when the repository has one, otherwise to `AGENTS.md`, otherwise to `CLAUDE.md`, otherwise to a new `REVIEW.md`. Its markers are `<!-- implementation-factory:finding-fix <category> -->` and the matching closing marker. When the repository already depends on ESLint or Biome and the category maps to rules whose plugin is installed (`type-escape`, `dead-code`, `accessibility`), the block names those rules and includes a JSON snippet. The console does not edit a linter config. The block follows `IMPL_LANGUAGE`. Its title in the interface stays in English.
+
+Nothing is written into the repository until you accept. The Runtime recipe window lists each proposal under "Source fixes", with "Accept the fix" and "Dismiss the fix". `impl findings` lists them, `impl findings accept <category> [<checkout>]` writes the block, and `impl findings dismiss <category> [<checkout>]` declines it. A notice says a fix was proposed. A dismissal is remembered, and the category is not proposed again unless the findings of the repository are forgotten. Accepting a second time does not write the block again. A run worktree is refused: the block is written on the main checkout, for you to review and commit.
+
+Until the marker is on `HEAD` of that checkout, developers are still handed the kind in `recurring-findings.md`. Once `git show HEAD:<file>` contains the marker, the next launch omits that kind. A dismissed proposal does not stop the injection. Forgetting the findings deletes `finding-fixes.json` with them.
 
 ## Rules enforced by a mechanism
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { belongsToRun, FINDING_CATEGORIES, findingFixStore, type KeptFinding, mergeReviewFindings, readReviewFindings, recurringFindings, renderRecurringFindings, reviewFindingsStore, runtimeRecipeStore } from "../../server/domain";
@@ -217,6 +217,37 @@ describe("handing the habits of a repository to its next run", () => {
   });
 });
 
+describe("ignored findings and a full store", () => {
+  it("should not let an ignored finding push a kept one out of a full store", async () => {
+    const repository = path.join(storage, "checkouts", "full");
+    mkdirSync(repository, { recursive: true });
+    const stored = reviewFindingsStore(storage, repository);
+    mkdirSync(path.dirname(stored), { recursive: true });
+    const full = Array.from({ length: 1000 }, (_, index) => ({ ...kept(`f${index}`, "edge-case", 1), at: new Date().toISOString() }));
+    writeFileSync(stored, JSON.stringify({ version: 1, findings: full }));
+    const worktree = checkout("run-full");
+    writeFileSync(path.join(worktree, ".claude", "tasks", "review-guide.md"), "## Ignored paths\n\n- dist/\n");
+    const written = path.join(worktree, ".claude", "tasks", "senior-findings.json");
+    writeFileSync(written, JSON.stringify({ findings: [{ id: "SR-R1-1", category: "dead-code", severity: "P2", file: "dist/a.js", summary: "Built.", fixed: false }] }));
+    await findings.keepReviewFindings(new RunSession("run-full", { status: "running", phase: 7, cwd: worktree, repository, issueUrl: "https://github.com/acme/shop/issues/9" }), written);
+    const after = (JSON.parse(readFileSync(stored, "utf8")) as { findings: KeptFinding[] }).findings;
+    expect(after).toHaveLength(1000);
+    expect(after[0]!.id).toBe(full[0]!.id);
+  });
+});
+
+describe("source fixes a reader cannot change", () => {
+  it("should leave an unreadable store where it is when the proposals are only read", async () => {
+    const repository = path.join(storage, "checkouts", "unreadable-store");
+    mkdirSync(repository, { recursive: true });
+    const stored = findingFixStore(storage, repository);
+    mkdirSync(path.dirname(stored), { recursive: true });
+    writeFileSync(stored, "{ broken");
+    await expect(fixes.readFindingFixViews(repository)).resolves.toEqual([]);
+    expect(readFileSync(stored, "utf8")).toBe("{ broken");
+  });
+});
+
 describe("a source fix proposed for a habit that keeps coming back", () => {
   const previous = process.env.IMPL_FINDING_FIX_RUNS;
   beforeAll(() => { process.env.IMPL_FINDING_FIX_RUNS = "3"; });
@@ -252,6 +283,20 @@ describe("a source fix proposed for a habit that keeps coming back", () => {
     await expect(fixes.acceptFindingFix(path.join(repository, ".claude", "worktrees", "run-9"), "test-gap")).rejects.toThrow(/worktree/);
   });
 
+  it("should refuse to follow a target file that links outside the repository", async () => {
+    const repository = path.join(storage, "checkouts", "linked");
+    const outside = path.join(storage, "outside");
+    mkdirSync(repository, { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(path.join(outside, "AGENTS.md"), "# Shared\n");
+    symlinkSync(path.join(outside, "AGENTS.md"), path.join(repository, "AGENTS.md"));
+    for (const ticket of ["61", "62", "63"]) {
+      await review(`run-l${ticket}`, repository, `https://github.com/acme/shop/issues/${ticket}`, entry(`Ticket ${ticket} has no test.`));
+    }
+    await expect(fixes.acceptFindingFix(repository, "test-gap")).rejects.toThrow(/outside the repository/);
+    expect(readFileSync(path.join(outside, "AGENTS.md"), "utf8")).toBe("# Shared\n");
+  });
+
   it("should remember a dismissal and drop the proposals when the findings are forgotten", async () => {
     const repository = path.join(storage, "checkouts", "dismissed");
     mkdirSync(repository, { recursive: true });
@@ -284,12 +329,18 @@ describe("a source fix proposed for a habit that keeps coming back", () => {
       await review(`run-s${ticket}`, repository, `https://github.com/acme/shop/issues/${ticket}`, entry(`Ticket ${ticket} has no test.`));
     }
     await fixes.acceptFindingFix(repository, "test-gap");
-    const before = checkout("run-s-before");
+    // A run starts from a worktree cut from the commit, not from the files of the checkout.
+    const worktreeAt = (name: string) => {
+      const directory = path.join(storage, "worktrees", name);
+      git("worktree", "add", "-q", "--detach", directory, "HEAD");
+      return directory;
+    };
+    const before = worktreeAt("run-s-before");
     await expect(findings.seedRecurringFindings(repository, before)).resolves.toBe(1);
     expect(readFileSync(path.join(before, ".claude", "tasks", "recurring-findings.md"), "utf8")).toContain("test-gap");
     git("add", "AGENTS.md");
     git("commit", "-q", "-m", "habit");
-    const after = checkout("run-s-after");
+    const after = worktreeAt("run-s-after");
     await expect(findings.seedRecurringFindings(repository, after)).resolves.toBe(0);
     expect(existsSync(path.join(after, ".claude", "tasks", "recurring-findings.md"))).toBe(false);
   });

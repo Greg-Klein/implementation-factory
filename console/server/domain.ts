@@ -4,6 +4,7 @@ import { defined } from "../lib/defined.js";
 import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference, withoutQuery, type Forge, type ForgeAddress } from "../lib/ticket-urls.js";
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal, WorkflowStateName } from "./types.js";
 import type { WorkflowLanguage } from "./acceptance-text.js";
+import { pathMatches } from "./path-glob.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
 export { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
@@ -756,17 +757,27 @@ export function mergeReviewFindings(kept: KeptFinding[], incoming: ReviewFinding
  * or a second run, is that ticket and not a habit of the repository.
  */
 export function recurringFindings(kept: KeptFinding[], now: number): RecurringFinding[] {
+  return recentCategoryGroups(kept, now, (finding) => finding.ticket, 2)
+    .map(({ spread, ...group }) => ({ ...group, tickets: spread }))
+    .slice(0, 5);
+}
+
+/**
+ * The findings of the last 90 days by category, `other` left out, with how
+ * many distinct `unitOf` each spans. Only those spanning `minSpread` are
+ * kept, the most widespread first, with their three latest examples.
+ */
+function recentCategoryGroups(kept: KeptFinding[], now: number, unitOf: (finding: KeptFinding) => string, minSpread: number) {
   const recent = kept.filter((finding) => finding.category !== "other" && now - Date.parse(finding.at) < FINDINGS_RECENT_DAYS * DAY_MS);
   const groups = new Map<string, KeptFinding[]>();
   for (const finding of recent) groups.set(finding.category, [...(groups.get(finding.category) ?? []), finding]);
   return [...groups]
     .map(([category, findings]) => ({
-      category, label: FINDING_CATEGORIES[category] ?? category, tickets: new Set(findings.map((finding) => finding.ticket)).size, findings: findings.length,
+      category, label: FINDING_CATEGORIES[category] ?? category, spread: new Set(findings.map(unitOf)).size, findings: findings.length,
       examples: [...findings].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 3),
     }))
-    .filter((group) => group.tickets >= 2)
-    .sort((a, b) => b.tickets - a.tickets || b.findings - a.findings)
-    .slice(0, 5);
+    .filter((group) => group.spread >= minSpread)
+    .sort((a, b) => b.spread - a.spread || b.findings - a.findings);
 }
 
 /** The file a developer reads before it writes code. */
@@ -1748,23 +1759,18 @@ export function reviewGuideIgnoredPaths(markdown: string) {
 }
 
 /**
- * The glob of `IMPL_SENSITIVE_PATHS` (`pathMatches` in review-confidence.ts):
- * `**` crosses directories, `*` stays inside one, and a pattern without a
- * slash matches that name at any depth. A pattern that contains a slash is
- * matched from the repository root. Duplicated here so a review guide does
- * not import the confidence table.
+ * A guide's ignored path, read the way owners write one: the glob of
+ * `IMPL_SENSITIVE_PATHS`, plus a leading `/` that holds the pattern to the
+ * root, and a directory (`dist`, `dist/`) that covers everything under it.
  */
-export function globPathMatches(pattern: string, file: string) {
+export function guidePathMatches(pattern: string, file: string) {
   const trimmed = pattern.trim();
-  if (!trimmed) return false;
-  const anchored = trimmed.includes("/") ? trimmed : `**/${trimmed}`;
-  const source = anchored.split(/(\*\*\/|\*\*|\*)/).map((part) => {
-    if (part === "**/") return "(?:.*/)?";
-    if (part === "**") return ".*";
-    if (part === "*") return "[^/]*";
-    return part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  }).join("");
-  return new RegExp(`^${source}$`).test(file);
+  const rooted = trimmed.startsWith("/");
+  const name = trimmed.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!name) return false;
+  // Without a slash of its own, a directory sits at any depth unless the pattern is rooted.
+  const directory = rooted || name.includes("/") ? `${name}/**` : `**/${name}/**`;
+  return pathMatches(name, file, rooted) || (!name.endsWith("**") && pathMatches(directory, file, true));
 }
 
 function normalizeRepoPath(file: string) {
@@ -1777,7 +1783,7 @@ function normalizeRepoPath(file: string) {
 export function guideIgnoresFile(file: string | undefined, patterns: readonly string[]) {
   const normalized = file ? normalizeRepoPath(file) : undefined;
   if (!normalized) return false;
-  return patterns.some((pattern) => globPathMatches(pattern, normalized));
+  return patterns.some((pattern) => guidePathMatches(pattern, normalized));
 }
 
 /** `IMPL_FINDING_FIX_RUNS` when it is an integer from 2 to 20, the default otherwise. */
@@ -1794,19 +1800,7 @@ export type SourceFixGroup = { category: string; label: string; runs: number; fi
  * was re-run counts once per run, which is the unit a source fix is weighed on.
  */
 export function sourceFixGroups(kept: KeptFinding[], now: number, minRuns: number): SourceFixGroup[] {
-  const recent = kept.filter((finding) => finding.category !== "other" && now - Date.parse(finding.at) < FINDINGS_RECENT_DAYS * DAY_MS);
-  const groups = new Map<string, KeptFinding[]>();
-  for (const finding of recent) groups.set(finding.category, [...(groups.get(finding.category) ?? []), finding]);
-  return [...groups]
-    .map(([category, findings]) => ({
-      category,
-      label: FINDING_CATEGORIES[category] ?? category,
-      runs: new Set(findings.map((finding) => finding.runId)).size,
-      findings: findings.length,
-      examples: [...findings].sort((left, right) => Date.parse(right.at) - Date.parse(left.at)).slice(0, 3),
-    }))
-    .filter((group) => group.runs >= minRuns)
-    .sort((left, right) => right.runs - left.runs || right.findings - left.findings);
+  return recentCategoryGroups(kept, now, (finding) => finding.runId, minRuns).map(({ spread, ...group }) => ({ ...group, runs: spread }));
 }
 
 /** Drops the categories whose source fix is already on the branch new runs start from. */
@@ -1820,15 +1814,16 @@ export type LintStack = { tool?: LintTool; packages: string[] };
 const ESLINT_CONFIGS = new Set(["eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts", ".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.cjs"]);
 const BIOME_CONFIGS = new Set(["biome.json", "biome.jsonc"]);
 
+/** The packages a `package.json` depends on, or undefined when it is not JSON, for the caller to report. */
+export function packageDependencies(packageJson: string): string[] | undefined {
+  let parsed: { dependencies?: unknown; devDependencies?: unknown } | null;
+  try { parsed = JSON.parse(packageJson) as typeof parsed; } catch { return undefined; }
+  if (!parsed || typeof parsed !== "object") return undefined;
+  return [...new Set([parsed.dependencies, parsed.devDependencies].flatMap((group) => group && typeof group === "object" && !Array.isArray(group) ? Object.keys(group as object) : []))];
+}
+
 /** Which linter a repository already depends on. Two of them: the one that has a config file, ESLint when both or neither do. */
-export function lintStack(packageJson: string | undefined, files: readonly string[]): LintStack {
-  let packages: string[] = [];
-  if (packageJson) {
-    try {
-      const parsed = JSON.parse(packageJson) as { dependencies?: unknown; devDependencies?: unknown };
-      packages = [...new Set([parsed.dependencies, parsed.devDependencies].flatMap((group) => group && typeof group === "object" && !Array.isArray(group) ? Object.keys(group as object) : []))];
-    } catch { packages = []; }
-  }
+export function lintStack(packages: readonly string[], files: readonly string[]): LintStack {
   const names = new Set(packages);
   const present = new Set(files.map(normalizeRepoPath).filter((file): file is string => Boolean(file)));
   const eslint = names.has("eslint");
@@ -1836,8 +1831,11 @@ export function lintStack(packageJson: string | undefined, files: readonly strin
   const eslintConfig = [...ESLINT_CONFIGS].some((file) => present.has(file));
   const biomeConfig = [...BIOME_CONFIGS].some((file) => present.has(file));
   const tool: LintTool | undefined = eslint && biome ? (biomeConfig && !eslintConfig ? "biome" : "eslint") : eslint ? "eslint" : biome ? "biome" : undefined;
-  return { ...(tool ? { tool } : {}), packages };
+  return { ...(tool ? { tool } : {}), packages: [...packages] };
 }
+
+/** The files a lint source fix is enforced from, the rules of a `package.json` included. */
+export const LINT_CONFIG_FILES = [...ESLINT_CONFIGS, ...BIOME_CONFIGS, "package.json"];
 
 const TYPESCRIPT_ESLINT = ["typescript-eslint", "@typescript-eslint/eslint-plugin"];
 
@@ -1874,10 +1872,14 @@ const BIOME_RULES: Record<string, string[]> = {
   accessibility: ["a11y/useAltText", "a11y/noLabelWithoutControl", "a11y/useKeyWithClickEvents"],
 };
 
-/** The file a source fix is appended to: the review guide when the repository has one, then AGENTS.md, then CLAUDE.md, else a new REVIEW.md. */
+/**
+ * The file a source fix is appended to: one the developers of a run read.
+ * CLAUDE.md, which Claude Code always loads, then AGENTS.md, else a new
+ * CLAUDE.md. Never the review guide: developers are not given it.
+ */
 export function instructionTarget(existing: readonly string[]) {
   const present = new Set(existing.map(normalizeRepoPath).filter((file): file is string => Boolean(file)));
-  return reviewGuidePath([...present]) ?? (present.has("AGENTS.md") ? "AGENTS.md" : present.has("CLAUDE.md") ? "CLAUDE.md" : "REVIEW.md");
+  return present.has("CLAUDE.md") ? "CLAUDE.md" : present.has("AGENTS.md") ? "AGENTS.md" : "CLAUDE.md";
 }
 
 export function findingFixMarker(category: string) {
@@ -1888,9 +1890,21 @@ export function findingFixEndMarker(category: string) {
   return `<!-- /implementation-factory:finding-fix ${category} -->`;
 }
 
-/** The marker is in the committed file, so the fix is on the branch new runs start from. */
-export function findingFixSettled(fileText: string | undefined, category: string) {
-  return Boolean(fileText?.includes(findingFixMarker(category)));
+/**
+ * The fix is on the branch new runs start from: its marker is in the target
+ * file and, for a lint fix, each of its rules is named in a linter config
+ * (a Biome rule by its name without the group). The block alone is a note,
+ * not a rule, so it does not settle a lint fix.
+ */
+export function findingFixSettled(proposal: Pick<StoredFindingFix, "category" | "kind" | "tool" | "rules">, targetText: string | undefined, lintConfigs: readonly string[] = []) {
+  if (!targetText?.includes(findingFixMarker(proposal.category))) return false;
+  if (proposal.kind !== "lint") return true;
+  const rules = proposal.rules ?? [];
+  if (!rules.length) return false;
+  return rules.every((rule) => {
+    const name = proposal.tool === "biome" ? rule.slice(rule.indexOf("/") + 1) : rule;
+    return lintConfigs.some((config) => config.includes(`"${name}"`) || config.includes(`'${name}'`));
+  });
 }
 
 export type FindingFixExample = { severity: string; file?: string; summary: string };
@@ -2051,7 +2065,7 @@ export function draftFindingFix(group: SourceFixGroup, options: { language: Work
     ? [
       `Les revues senior de ce dépôt ont relevé « ${label} » sur ${runs} (${findings}). Le corriger à la source évite de le retrouver au ticket suivant.`,
       "",
-      lint ? `Activez ces règles ${toolName} en erreur :` : "Tenez cette règle en revue et à l'implémentation :",
+      lint ? `Activez ces règles ${toolName} en erreur dans la configuration du linter. Ce bloc n'en active aucune : tant qu'elles n'y sont pas, les développeurs continuent d'être prévenus de ce défaut.` : "Tenez cette règle en revue et à l'implémentation :",
       "",
       ...(lint ? [`${lint.rules.map((ruleName) => `- \`${ruleName}\``).join("\n")}`, "", "```json", lintSnippet(lint.tool, lint.rules), "```"] : [rule]),
       "",
@@ -2064,7 +2078,7 @@ export function draftFindingFix(group: SourceFixGroup, options: { language: Work
     : [
       `Senior reviews of this repository found "${label}" on ${runs} (${findings}). Stop it at the source instead of catching it again on the next ticket.`,
       "",
-      lint ? `Enable these ${toolName} rules as errors:` : "Hold this rule in review and in implementation:",
+      lint ? `Enable these ${toolName} rules as errors in the linter config. This block enables none of them: until they are there, developers keep being told about this defect.` : "Hold this rule in review and in implementation:",
       "",
       ...(lint ? [`${lint.rules.map((ruleName) => `- \`${ruleName}\``).join("\n")}`, "", "```json", lintSnippet(lint.tool, lint.rules), "```"] : [rule]),
       "",

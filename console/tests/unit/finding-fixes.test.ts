@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  FINDING_CATEGORIES, type FindingFixDraft, type KeptFinding, appendFindingFix, draftFindingFix, findingFixMarker, findingFixRunThreshold, findingFixStore, instructionTarget, lintRulesFor, lintStack, mergeFindingFixes, readFindingFixes, reviewFindingsStore, sourceFixGroups,
+  FINDING_CATEGORIES, type FindingFixDraft, type KeptFinding, appendFindingFix, draftFindingFix, findingFixMarker, findingFixRunThreshold, findingFixSettled, findingFixStore, instructionTarget, lintRulesFor, lintStack, mergeFindingFixes, packageDependencies, readFindingFixes, reviewFindingsStore, sourceFixGroups,
 } from "../../server/domain";
 
 const DAY = 86_400_000;
@@ -39,12 +39,18 @@ describe("when a habit becomes a source fix", () => {
 
 describe("the block a person can accept", () => {
   it("should name ESLint when that config is present and Biome only when it is the one configured", () => {
-    const both = JSON.stringify({ devDependencies: { eslint: "9", "@biomejs/biome": "1" } });
+    const both = ["eslint", "@biomejs/biome"];
     expect(lintStack(both, ["eslint.config.js", "biome.json"]).tool).toBe("eslint");
     expect(lintStack(both, ["biome.json"]).tool).toBe("biome");
     expect(lintStack(both, []).tool).toBe("eslint");
-    expect(lintStack(JSON.stringify({ devDependencies: { "@biomejs/biome": "1" } }), []).tool).toBe("biome");
-    expect(lintStack("{", []).tool).toBeUndefined();
+    expect(lintStack(["@biomejs/biome"], []).tool).toBe("biome");
+    expect(lintStack([], []).tool).toBeUndefined();
+  });
+
+  it("should read the dependencies of a manifest, and tell one that is not JSON", () => {
+    expect(packageDependencies(JSON.stringify({ dependencies: { react: "19" }, devDependencies: { eslint: "9", react: "19" } }))).toEqual(["react", "eslint"]);
+    expect(packageDependencies("{")).toBeUndefined();
+    expect(packageDependencies("null")).toBeUndefined();
   });
 
   it("should name rules only when the plugin that owns them is installed", () => {
@@ -58,11 +64,23 @@ describe("the block a person can accept", () => {
     expect(lintRulesFor("edge-case", { tool: "eslint", packages: ["eslint"] })).toBeUndefined();
   });
 
-  it("should append to the review guide, then AGENTS.md, then CLAUDE.md, else a new REVIEW.md", () => {
-    expect(instructionTarget(["AGENTS.md", "docs/REVIEW.md"])).toBe("docs/REVIEW.md");
-    expect(instructionTarget(["CLAUDE.md", "AGENTS.md"])).toBe("AGENTS.md");
-    expect(instructionTarget(["CLAUDE.md"])).toBe("CLAUDE.md");
-    expect(instructionTarget([])).toBe("REVIEW.md");
+  it("should append to a file developers read, never the review guide", () => {
+    expect(instructionTarget(["AGENTS.md", "docs/REVIEW.md"])).toBe("AGENTS.md");
+    expect(instructionTarget(["CLAUDE.md", "AGENTS.md"])).toBe("CLAUDE.md");
+    expect(instructionTarget(["REVIEW.md"])).toBe("CLAUDE.md");
+    expect(instructionTarget([])).toBe("CLAUDE.md");
+  });
+
+  it("should settle a lint fix only once its rules are in a linter config", () => {
+    const marker = `${findingFixMarker("type-escape")}\n`;
+    const eslint = { category: "type-escape", kind: "lint" as const, tool: "eslint" as const, rules: ["@typescript-eslint/no-explicit-any"] };
+    expect(findingFixSettled(eslint, marker, [])).toBe(false);
+    expect(findingFixSettled(eslint, marker, ['export default [{ rules: { "@typescript-eslint/no-explicit-any": "error" } }];'])).toBe(true);
+    expect(findingFixSettled(eslint, "", ['{ "@typescript-eslint/no-explicit-any": "error" }'])).toBe(false);
+    const biome = { category: "type-escape", kind: "lint" as const, tool: "biome" as const, rules: ["suspicious/noExplicitAny"] };
+    expect(findingFixSettled(biome, marker, ['{ "linter": { "rules": { "suspicious": { "noExplicitAny": "error" } } } }'])).toBe(true);
+    expect(findingFixSettled({ category: "type-escape", kind: "instruction" }, marker)).toBe(true);
+    expect(findingFixSettled({ category: "type-escape", kind: "instruction" }, undefined)).toBe(false);
   });
 
   it("should write the habit in the workflow language and keep the title in English", () => {
@@ -84,7 +102,7 @@ describe("the block a person can accept", () => {
       if (category === "other") continue;
       const drafted = draftFindingFix({ category, label: FINDING_CATEGORIES[category]!, runs: 3, findings: 3, examples: [kept("a", category)] }, { language: "en", stack: { packages: [] }, existingFiles: [] });
       expect(drafted.body).toContain(findingFixMarker(category));
-      expect(drafted.targetFile).toBe("REVIEW.md");
+      expect(drafted.targetFile).toBe("CLAUDE.md");
     }
   });
 

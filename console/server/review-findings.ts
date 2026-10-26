@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { storageRoot } from "./config.js";
 import { type KeptFinding, REVIEW_GUIDE_FILE, guideIgnoresFile, mergeReviewFindings, readReviewFindings, RECURRING_FINDINGS_FILE, recurringFindings, renderRecurringFindings, reviewFindingsStore, reviewGuideIgnoredPaths, sourceRepository, suppressRecurring } from "./domain.js";
@@ -6,6 +6,7 @@ import { engine } from "./engine/index.js";
 import { forgetFindingFixes, readFindingFixViews, settledFindingCategories, syncFindingFixes } from "./finding-fixes.js";
 import type { RunSession } from "./run-session.js";
 import { broadcast, isMissingFile, now, reportFailure } from "./context.js";
+import { queueWrite, setAsideUnreadable, writeJsonAtomic } from "./json-store.js";
 
 const MAX_FINDINGS_BYTES = 256_000;
 
@@ -19,10 +20,7 @@ async function keptFindings(stored: string): Promise<KeptFinding[]> {
   } catch (error) {
     // Only a missing file means no finding was kept. One that cannot be read is kept
     // aside: the next write would replace the history of the repository with one run's findings.
-    if (!isMissingFile(error)) {
-      await rename(stored, `${stored}.unreadable-${Date.now()}`).catch(reportFailure("Unreadable review findings not kept aside", stored));
-      reportFailure("Review findings unreadable, started empty", stored)(error);
-    }
+    if (!isMissingFile(error)) await setAsideUnreadable(stored, "review findings", error);
     return [];
   }
 }
@@ -44,23 +42,28 @@ export async function keepReviewFindings(session: RunSession, source: string) {
   for (const finding of incoming) session.seniorFindings.set(finding.id, { id: finding.id, severity: finding.severity, fixed: finding.fixed });
   if (!incoming.length) return;
   const patterns = await ignoredPatterns(session.state.cwd);
-  const dropped = incoming.filter((finding) => guideIgnoresFile(finding.file, patterns));
+  // Left out before the merge, so they never take the place of a finding the store keeps.
+  const counted = incoming.filter((finding) => !guideIgnoresFile(finding.file, patterns));
+  const dropped = incoming.length - counted.length;
+  const ignoredIds = new Set(incoming.filter((finding) => !counted.includes(finding)).map((finding) => finding.id));
   const repository = sourceRepository(session.state);
   const stored = reviewFindingsStore(storageRoot, repository);
-  const write = (writes.get(stored) ?? Promise.resolve()).then(async () => {
-    const merged = mergeReviewFindings(await keptFindings(stored), incoming, { runId: session.id, ticket: session.state.issueUrl }, Date.now())
-      .filter((finding) => !(finding.runId === session.id && dropped.some((item) => item.id === finding.id)));
-    await mkdir(path.dirname(stored), { recursive: true });
-    await writeFile(`${stored}.tmp`, JSON.stringify({ version: 1, findings: merged }, null, 1));
-    await rename(`${stored}.tmp`, stored);
-    return merged;
-  });
-  writes.set(stored, write.catch(() => undefined));
+  let merged: KeptFinding[];
   try {
-    const merged = await write;
-    if (dropped.length) session.activity("artifact", "Review guide excluded findings", `${dropped.length} under an ignored path, not kept for the next runs.`);
-    const counted = incoming.length - dropped.length;
-    if (counted) session.activity("artifact", "Review findings kept", `${counted} for the next runs of this repository.`);
+    merged = await queueWrite(writes, stored, async () => {
+      // An earlier round of this run may have kept a finding this round now reports under an ignored path.
+      const findings = mergeReviewFindings(await keptFindings(stored), counted, { runId: session.id, ticket: session.state.issueUrl }, Date.now())
+        .filter((finding) => !(finding.runId === session.id && ignoredIds.has(finding.id)));
+      await writeJsonAtomic(stored, { version: 1, findings });
+      return findings;
+    });
+  } catch (error) {
+    session.activity("attention", "Review findings not kept", error instanceof Error ? error.message : String(error));
+    return;
+  }
+  if (dropped) session.activity("artifact", "Review guide excluded findings", `${dropped} under an ignored path, not kept for the next runs.`);
+  if (counted.length) session.activity("artifact", "Review findings kept", `${counted.length} for the next runs of this repository.`);
+  try {
     const proposed = await syncFindingFixes(repository, merged);
     if (proposed.length) {
       const detail = `${proposed.map((proposal) => proposal.category).join(", ")} came back on enough runs to fix at the source. Open the runtime recipe to accept or dismiss it. Nothing was changed in the repository.`;
@@ -68,7 +71,7 @@ export async function keepReviewFindings(session: RunSession, source: string) {
       broadcast({ type: "notice", level: "info", title: "Source fix proposed", detail: `${path.basename(repository)}: ${detail}`, at: now() });
     }
   } catch (error) {
-    session.activity("attention", "Review findings not kept", error instanceof Error ? error.message : String(error));
+    session.activity("attention", "Source fix not proposed", error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -91,7 +94,7 @@ async function ignoredPatterns(worktree: string) {
  * kinds it lists.
  */
 export async function seedRecurringFindings(repository: string, worktree: string, now = Date.now()) {
-  const settled = await settledFindingCategories(repository);
+  const settled = await settledFindingCategories(repository, worktree);
   const recurring = suppressRecurring(recurringFindings(await keptFindings(reviewFindingsStore(storageRoot, repository)), now), settled);
   if (!recurring.length) return 0;
   const target = path.join(engine.taskDirectory(worktree), RECURRING_FINDINGS_FILE);

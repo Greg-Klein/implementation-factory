@@ -1,5 +1,6 @@
 import { addedLines, AUTO_MERGE_LIMITS, type ChangedFile, DISABLED_TEST, isTestFile } from "./auto-merge-policy.js";
 import type { ReviewFinding } from "./domain.js";
+import { pathMatches } from "./path-glob.js";
 import type { AcceptanceDigest, ConfidenceReason, ReviewConfidence, RunState } from "./types.js";
 
 /**
@@ -119,19 +120,7 @@ export function isTestPath(file: string) {
   return isTestFile(file) || OTHER_TEST_FILE.test(file);
 }
 
-/** `**` crosses directories, `*` stays inside one, and a pattern without a slash matches a name at any depth. */
-export function pathMatches(pattern: string, file: string) {
-  const trimmed = pattern.trim();
-  if (!trimmed) return false;
-  const anchored = trimmed.includes("/") ? trimmed : `**/${trimmed}`;
-  const source = anchored.split(/(\*\*\/|\*\*|\*)/).map((part) => {
-    if (part === "**/") return "(?:.*/)?";
-    if (part === "**") return ".*";
-    if (part === "*") return "[^/]*";
-    return part.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-  }).join("");
-  return new RegExp(`^${source}$`).test(file);
-}
+export { pathMatches };
 
 /** Reads `changedFiles` and the patch of the same range. A renamed file is judged on both its names. */
 export function changeFacts(files: ChangedFile[], patch: string, sensitivePatterns: string[]): ChangeFacts {

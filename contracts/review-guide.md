@@ -36,7 +36,7 @@ Apply the whole file. Three parts have a mechanical effect when the owner wrote 
 
 **Evidence.** A finding names a file and a line read in the current code. A guess from a name is not a finding. The designer, who does not read product source, cites the visual place instead, and still drops a finding whose subject the ignored paths name (a generated screen, a translation file's strings).
 
-**The console** drops a senior finding whose `file` matches an ignored path from the copy, so it is not counted toward the habits of the next runs. A finding with no file is kept. The console does not judge nits: that stays with the reviewer.
+**The console** drops a senior finding whose `file` matches an ignored path from the copy (a leading `/` holds a pattern to the root, and a directory such as `dist/` covers what is under it), so it is not counted toward the habits of the next runs. A finding with no file is kept. The console does not judge nits: that stays with the reviewer.
 
 ## What the reports say
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  REVIEW_GUIDE_CANDIDATES, globPathMatches, guideIgnoresFile, pathIsRunWorktree, renderReviewGuide, reviewGuideIgnoredPaths, reviewGuidePath, reviewGuideSource,
+  REVIEW_GUIDE_CANDIDATES, guideIgnoresFile, guidePathMatches, pathIsRunWorktree, renderReviewGuide, reviewGuideIgnoredPaths, reviewGuidePath, reviewGuideSource,
 } from "../../server/domain";
 
 const root = path.resolve(process.cwd(), "..");
@@ -41,15 +41,25 @@ describe("where a repository's review guide lives", () => {
   });
 
   it("should match a glob from the repository root, and a bare name at any depth", () => {
-    expect(globPathMatches("generated/**", "generated/out.ts")).toBe(true);
-    expect(globPathMatches("generated/**", "src/generated/out.ts")).toBe(false);
-    expect(globPathMatches("locales/**/*.json", "locales/fr/common.json")).toBe(true);
-    expect(globPathMatches("**/*.generated.ts", "src/a.generated.ts")).toBe(true);
-    expect(globPathMatches("translations", "pkg/translations")).toBe(true);
-    expect(globPathMatches("translations", "pkg/translations/en.json")).toBe(false);
+    expect(guidePathMatches("generated/**", "generated/out.ts")).toBe(true);
+    expect(guidePathMatches("generated/**", "src/generated/out.ts")).toBe(false);
+    expect(guidePathMatches("locales/**/*.json", "locales/fr/common.json")).toBe(true);
+    expect(guidePathMatches("**/*.generated.ts", "src/a.generated.ts")).toBe(true);
+    expect(guidePathMatches("translations", "pkg/translations")).toBe(true);
     expect(guideIgnoresFile("generated/out.ts", ["generated/**"])).toBe(true);
     expect(guideIgnoresFile(undefined, ["generated/**"])).toBe(false);
     expect(guideIgnoresFile("../secret", ["**"])).toBe(false);
+  });
+
+  it("should read a directory the way owners write one", () => {
+    expect(guidePathMatches("dist/", "dist/bundle.js")).toBe(true);
+    expect(guidePathMatches("dist", "dist/bundle.js")).toBe(true);
+    expect(guidePathMatches("dist", "packages/web/dist/bundle.js")).toBe(true);
+    expect(guidePathMatches("/vendor/**", "vendor/x.js")).toBe(true);
+    expect(guidePathMatches("/vendor", "vendor/x.js")).toBe(true);
+    expect(guidePathMatches("/vendor", "lib/vendor/x.js")).toBe(false);
+    expect(guidePathMatches("dist", "distribution/a.js")).toBe(false);
+    expect(guidePathMatches("/", "src/a.ts")).toBe(false);
   });
 
   it("should tell a run worktree from the checkout", () => {

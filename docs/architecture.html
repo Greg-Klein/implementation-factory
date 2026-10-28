@@ -311,7 +311,7 @@
 <header>
   <span class="eyebrow"><i></i>Claude Code plugin + local console</span>
   <h1>Inside the console</h1>
-  <p>How the local console runs a ticket: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Who does what and on which model is in the <a href="agent-map.html">agent map</a>; this page shows the machinery underneath.</p>
+  <p>How the local console runs a ticket: the pieces, the path of a hook, the questions, the run worktree, run health, the evidence chain, the life of a run, the queue and its scheduling, the metrics and what each repository remembers, and what stays on disk. Who does what and on which model is in the <a href="agent-map.html">agent map</a>; this page shows the machinery underneath.</p>
 </header>
 
 <div class="legend">
@@ -329,21 +329,27 @@
 
 <section>
   <div class="head"><span class="num">00</span><h2>The pieces</h2></div>
-  <p>A Next.js page and a Node server on <code>127.0.0.1:3210</code>, started by <code>impl</code>. The server spawns the real <code>claude</code> binary in a PTY, one session per run, and learns what it does through its hooks. No direct API call and no key. The forge is read with <code>glab</code> or <code>gh</code> by the server itself, without a Claude session. In every diagram, hover a node to see what it does.</p>
+  <p>A Next.js page and a Node server on <code>127.0.0.1:3210</code>, started by <code>impl</code>. The server spawns the real <code>claude</code> binary in a PTY, one session per run, and learns what it does through its hooks. Two more sessions run headless (<code>claude -p</code>, no terminal, no run): one compares the tickets of a batch before they are scheduled, the other judges an improvement branch. A terminal client, <code>console/cli</code>, is a second client of the same server beside the page. No direct API call and no key. The forge is read with <code>glab</code> or <code>gh</code> by the server itself, without a Claude session. In every diagram, hover a node to see what it does.</p>
   <div class="canvas"><pre class="mermaid" data-tips="pieces">
 flowchart LR
-  swe("<b>Software Engineer</b><br/>the console page"):::swe
+  swe("<b>Software Engineer</b><br/>the page or the terminal"):::swe
+  cli{"<b>Terminal client</b><br/>console/cli: impl run,<br/>watch, answer, queue"}:::script
   page{"<b>Next.js page</b><br/>run view, terminal,<br/>tracking, evidence"}:::script
   server{"<b>Node server</b><br/>registry, RunSession,<br/>monitor, watchers"}:::script
   engine{"<b>server/engine</b><br/>the only code that<br/>knows Claude Code"}:::script
   session["<b>Claude Code session</b><br/>in a PTY,<br/>in the run worktree"]:::agent
+  headless["<b>Headless sessions</b><br/>claude -p: batch<br/>scheduling, judge"]:::agent
   data[("<b>console/data</b><br/>runs, queue,<br/>repositories")]:::file
   forge{"<b>glab / gh</b><br/>merge request state,<br/>blocking links"}:::script
 
   swe --> page
+  swe --> cli
   page -- "WebSocket" --> server
+  cli -- "HTTP and WebSocket" --> server
   server -- "run state" --> page
+  server -- "run state" --> cli
   server --> engine -- "spawn, keys" --> session
+  engine -- "claude -p" --> headless
   session -- "hooks" --> server
   server --> data
   server -. "no token" .-> forge
@@ -356,7 +362,8 @@ flowchart LR
   <div class="chips">
     <div class="chip"><b>Several runs at once</b>Everything a run owns lives on its <code>RunSession</code>, and every message that acts on a run names it by <code>runId</code>.</div>
     <div class="chip"><b>One boundary</b>Only <code>server/engine</code> knows the binary, the hook vocabulary and the transcript format. Nothing above it imports <code>node-pty</code>.</div>
-    <div class="chip"><b>Local only</b>Every request needs a <code>Host</code> naming the console, the WebSocket an <code>Origin</code> it served.</div>
+    <div class="chip"><b>Two clients</b>The page and the terminal client send the same WebSocket messages. The terminal client reads the same HTTP routes and names the console as its <code>Origin</code>. A message may carry an <code>ackId</code>, answered by <code>ack</code> once handled or put in the <code>error</code> that refuses it. Exit codes: 1 refused or failed, 2 usage, 3 no console.</div>
+    <div class="chip"><b>Local only</b>Every request needs a <code>Host</code> naming the console: the loopback names, the interface it binds, the machine's addresses when it binds every interface, and the names given in <code>IMPL_ALLOWED_HOSTS</code>. The WebSocket needs an <code>Origin</code> it served, <code>/api/hooks</code> the secret of the hook URL. With <code>IMPL_ALLOWED_MACS</code> set, a device other than this machine must be on the local network and listed by hardware address, read from the neighbour table; a client behind a router or a VPN has none and is refused. It is a filter, not an authentication.</div>
   </div>
 </section>
 
@@ -403,8 +410,10 @@ flowchart LR
 <svg class="xlinks" aria-hidden="true"></svg>
 </div></div>
   <div class="chips">
-    <div class="chip"><b>What the guard refuses</b>A workflow agent under its bare name, a Dev on a model other than Sonnet or Opus, a reviewer started while a task has no report, a session link in a commit or a publication, a publication that shows a credential, a git command that destroys work.</div>
-    <div class="chip"><b>What the stop gate runs</b>Per package the edited files belong to: the type-check, then the lint and the related tests of those files. A failure sends the agent back once. Every verdict is a line of <code>gate-log.jsonl</code>.</div>
+    <div class="chip"><b>What the guard refuses</b>Eight kinds of call during a run: a workflow agent under its bare name, a Dev on a model other than Sonnet or Opus, a Dev started while <code>planner-output.json</code> lacks a complete end-to-end test decision, a reviewer started while a task has no report, a reviewer or a merge request publication below the review tier the diff requires, a session trailer or link in a commit or a publication (a model credit in <code>Co-Authored-By</code> is allowed), a publication that shows a credential, a git command that destroys work.</div>
+    <div class="chip"><b>Review tier floor</b><code>review-tier.mjs</code> reads the paths the diff touches: at least tier 1 on a sensitive path, at least tier 2 on CI or a migration. Below the floor a reviewer does not start and the merge request is not published. Tier 2 needs <code>review-orchestrator</code> to have started and <code>review-summary.md</code> to say READY or BLOCKED; tier 1 needs QA or the orchestrator. A verdict that is not ready is published only as a draft.</div>
+    <div class="chip"><b>What the stop gate runs</b>Per package the edited files belong to: the type-check, then the lint and the related tests of those files. A failure sends the agent back once; the second stop always goes through, and so does a stop that follows a <code>SubagentHandback</code> call. Every check is a line of <code>gate-log.jsonl</code> with <code>pass</code>, <code>fail</code>, <code>inconclusive</code> (type errors outside the agent's files while a peer edits), <code>skipped</code> (the check could not run) or <code>none</code>, and its duration in <code>ms</code> when it ran. <code>keepGateLog</code> copies the lines to <code>data/runs/&lt;id&gt;/gate-log.jsonl</code>, since the workflow empties its task directory.</div>
+    <div class="chip"><b>Dropped hooks</b>The hooks of a run that ended or is paused are dropped, except a question, which is still raised because the engineer can keep talking to an idle session. A hook from a run the console no longer holds is answered and ignored.</div>
     <div class="chip"><b>Lost hooks</b><code>emit.mjs</code> retries once, then spools the event. The spool is replayed before the next hook and on every monitor tick, and <code>hookId</code> drops the duplicates.</div>
     <div class="chip warn"><b>Fails open</b>A guard that cannot read what it checks lets the call through, and so does a gate that cannot run a check. <code>IMPL_STOP_GATE=off</code> disables the gate.</div>
   </div>
@@ -412,7 +421,7 @@ flowchart LR
 
 <section>
   <div class="head"><span class="num">02</span><h2>Questions and decisions</h2></div>
-  <p>A question from the workflow blocks the session until the engineer answers in the console. The folder trust dialog Claude Code draws before any hook is read off the terminal and shown the same way, but it is never answered on the engineer's behalf.</p>
+  <p>A question from the workflow blocks the session until the engineer answers in the console. The folder trust dialog Claude Code draws before any hook is read off the terminal and shown the same way, but it is never answered on the engineer's behalf. The page and the terminal client both answer.</p>
   <div class="canvas"><pre class="mermaid" data-tips="questions">
 flowchart LR
   pilot["<b>Pilot</b><br/>AskUserQuestion"]:::agent
@@ -421,11 +430,14 @@ flowchart LR
   swe("<b>Software Engineer</b><br/>answers in the<br/>conversation"):::swe
   pty["<b>Claude Code</b><br/>folder trust dialog,<br/>before any hook"]:::agent
   trust{"<b>trust-prompt.ts</b><br/>reads the dialog<br/>off the PTY"}:::script
+  cli{"<b>Terminal client</b><br/>impl answer,<br/>impl trust"}:::script
 
   pilot --> hook -- "question" --> run -- "question card" --> swe
   swe -- "answer" --> run -- "updatedInput" --> hook --> pilot
   pty -- "screen text" --> trust -- "decision" --> swe
-  swe -. "accept or refuse:<br/>the engine types the keys" .-> pty
+  swe -. "sessionPrompt.answer:<br/>the engine types the keys" .-> pty
+  swe --> cli
+  cli -. "question.answer,<br/>sessionPrompt.answer" .-> run
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
   classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
@@ -434,6 +446,7 @@ flowchart LR
   </pre></div>
   <div class="chips">
     <div class="chip"><b>Never retried, never spooled</b>A question only makes sense while its session waits. Claude Code replays the hook with the answers; the engine ignores that second pass.</div>
+    <div class="chip"><b>The trust decision</b>Kept as <code>RunState.sessionPrompt</code> and answered with <code>sessionPrompt.answer</code>, a state of its own and not the question bridge. It is dropped on the first hook, when the screen moves on, or at exit. The directory it names is the run worktree, not the checkout.</div>
     <div class="chip warn"><b>Refusing the trust dialog</b>The run ends <code>stopped</code> with its reason, not <code>failed</code>, and its worktree is settled like that of any stopped run. An unknown wording shows nothing.</div>
   </div>
 </section>
@@ -465,9 +478,9 @@ flowchart LR
   settle{"<b>settleRunWorktree</b><br/>applies the<br/>removal rules"}:::script
   removed(("removed"))
   kept[("<b>kept</b><br/>with its reasons")]:::file
-  swe("<b>Software Engineer</b><br/>removes it after<br/>seeing the risks"):::swe
+  swe("<b>Software Engineer</b><br/>removes it, with force<br/>after seeing the risks"):::swe
 
-  settle -- "MR open and not a draft,<br/>archive synced, tree clean,<br/>HEAD pushed" --> removed
+  settle -- "run completed, MR not a draft,<br/>workflow not blocked, archive synced,<br/>tree clean, HEAD on a<br/>remote-tracking ref" --> removed
   settle -- "otherwise" --> kept --> swe
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
@@ -479,7 +492,9 @@ flowchart LR
 </div></div>
   <div class="chips">
     <div class="chip"><b>What the worktree receives</b>The ignored dependency directories (<code>node_modules</code> by default), copied copy-on-write or linked when the copy fails, the <code>.env*</code> files and <code>.claude/settings.local.json</code>, and the ignored git hooks helper (husky's <code>.husky/_</code>). Build outputs are not provided.</div>
-    <div class="chip"><b>What the session is told</b><code>IMPL_RUN_WORKTREE</code>, <code>IMPL_SOURCE_REPOSITORY</code>, <code>IMPL_SOURCE_BRANCH</code>, how the dependencies came over, and <code>IMPL_WORKTREE_DEPENDENCIES_STALE</code> when they lag behind the lockfile.</div>
+    <div class="chip"><b>What the session is told</b><code>IMPL_RUN_WORKTREE</code>, <code>IMPL_SOURCE_REPOSITORY</code>, <code>IMPL_SOURCE_BRANCH</code> (left out on a detached HEAD), <code>IMPL_WORKTREE_DEPENDENCIES</code> (<code>symlink</code> as soon as one directory is linked, otherwise <code>clone</code>, left out when nothing was brought over), and <code>IMPL_WORKTREE_DEPENDENCIES_STALE</code> when they lag behind the lockfile.</div>
+    <div class="chip"><b>When it is removed alone</b>The run is <code>completed</code> with a merge request that is not a draft, the workflow is not blocked, the archive sync was acknowledged, the tree is clean and HEAD sits on a remote-tracking ref. Only local refs are read, nothing is fetched. Anything else keeps it, with the reasons.</div>
+    <div class="chip"><b>Removal on request</b>Refused while the session lives. When the tree holds uncommitted or unpushed work the answer is <code>confirm</code> with the risks, until the request comes back with <code>force</code>. The page and <code>impl worktree rm</code> both ask.</div>
     <div class="chip err"><b>If the worktree cannot be created</b>The launch is aborted. The server never falls back on the main checkout.</div>
     <div class="chip warn"><b>Shutdown and restart</b>A shutdown marks the worktree kept; the same rules run again on boot. Only a path directly under <code>.claude/worktrees/</code> is ever removed, and the branch never is.</div>
   </div>
@@ -514,6 +529,9 @@ flowchart LR
     <div class="chip"><b>Five readings</b><code>healthy</code>, <code>waiting</code> (on the engineer, dated from the question), <code>suspected_stall</code> (silence alone, never an incident), <code>stalled</code>, <code>interrupted</code>.</div>
     <div class="chip err"><b>Four incidents</b><code>no_next_action</code>, <code>lost_session</code> (the session exited before a result: the run is <code>failed</code>; an exit within 5 s of a Ctrl-C typed in the run's terminal is a stop by the user), <code>missing_result</code>, <code>unresolvable_dependency</code>.</div>
     <div class="chip"><b>Actions</b>Answer, open the terminal, view the diagnostic, ask the pilot to continue, stop the run, dismiss.</div>
+    <div class="chip"><b>Paused</b>A workflow that declares <code>paused</code>, a wait the engineer asked for such as another ticket's merge, puts a run in progress whose session is open in the status <code>paused</code>, shown as "Paused". It takes no slot, keeps its ticket and the conflict holds on its repository, is healthy by definition and is never closed for a queued launch. It is not an end: no self-audit opens and no merge is watched yet. The next declared state other than <code>paused</code> puts it back to <code>running</code>; the exit of its session or a shutdown ends it <code>stopped</code>.</div>
+    <div class="chip"><b>An agent waiting on its own work</b>A subagent whose stop does not follow its <code>SubagentHandback</code> call (<code>handedBack: false</code>), after it launched a background call, has not ended: it resumes. It raises no missing-file incident and keeps the run open (<code>agentsAwaitingBackground</code>) until its next start, a stop that hands back, or a kill.</div>
+    <div class="chip"><b>Which step is the phase</b>The step the pilot declares in <code>workflow-state.json</code> is the phase, and it never goes back except during a reopening. What a document, an agent start or a command points at moves the phase only while no step is declared. A step the pilot never declares has no arrival time.</div>
     <div class="chip warn"><b>File contracts</b>An agent that ends without the file its contract requires (<code>planner-output.json</code>, the QA and design reports with their plan and evidence, <code>review-summary.md</code>), with nobody taking over, raises an incident.</div>
   </div>
 </section>
@@ -530,7 +548,7 @@ flowchart LR
   derive{"<b>acceptance.ts</b><br/>failed, blocked,<br/>unverified, verified"}:::script
   qa{"<b>qaVerdictConsistency</b><br/>QA's verdict against<br/>what QA observed"}:::script
   facts[("<b>Observed facts</b><br/>diff, gate log, findings,<br/>incidents, workflow state")]:::file
-  confidence{"<b>review-confidence.ts</b><br/>note from 0 to 5,<br/>with what lowered it"}:::script
+  confidence{"<b>review-confidence.ts</b><br/>note from 0 to 5, measured<br/>on the MR diff"}:::script
   tab{"<b>Evidence tab</b><br/>in the console,<br/>in English"}:::script
   summary[("<b>acceptance-summary.md</b><br/>in IMPL_LANGUAGE")]:::file
   mr["<b>Pilot</b><br/>merge request<br/>description"]:::agent
@@ -558,20 +576,151 @@ flowchart LR
     <div class="chip"><b>Break attempts</b>A QA item of kind <code>attempt</code> that fails counts against its criterion; any other is listed under it and verifies nothing.</div>
     <div class="chip warn"><b>QA verdict checked</b>A <code>PASS</code> over a criterion QA did not observe raises a warning in the tab and in the summary.</div>
     <div class="chip"><b>Review confidence</b>A note from 0 (a person reviews everything) to 5 (nothing observed stands against the automated review), computed by a pure function from the coverage, the diff, the stop gate's log, the findings and the incidents. No agent declares it, and what an agent declares can only lower it. Each rule that applied is listed with the note.</div>
+    <div class="chip"><b>When it exists</b>Only once the merge request is open and <code>senior-review.md</code> or <code>qa-report.md</code> is archived. The diff is read from the merge request, and the readings are kept until their source moves (code snapshot, merge request address and target branch): one forge call per merge request, never from a <code>GET</code>. A finding counts as open only in the last review round, uncorrected and with no rework after it.</div>
+    <div class="chip"><b>Where it is written</b>At the top of the review comment and of a follow-up comment, never in the description. <code>confidenceAtDelivery</code> keeps the note of the first end and is never rewritten; <code>/api/metrics</code> serves a <code>calibration</code> that counts, per note, the delivered runs later reopened or given feedback.</div>
+    <div class="chip"><b>Review order</b>When <code>qa-plan.md</code> did not arrive before <code>qa-report.md</code>, or <code>design-inventory.md</code> before <code>designer-review.md</code>, the evidence tab shows a note. It changes no verdict.</div>
+    <div class="chip"><b>Captures</b>A capture is a screenshot or, for a flow, a short video (<code>.webm</code>): an evidence item lists videos in <code>attachments</code> and the Evidence tab plays them.</div>
     <div class="chip"><b>Coverage frozen at delivery</b>The code is identified until the workflow's end is archived. A rebase or an edit made afterwards, outside a reopening, leaves the delivered coverage as it was.</div>
   </div>
 </section>
 
 <section>
-  <div class="head"><span class="num">06</span><h2>What stays on disk</h2></div>
+  <div class="head"><span class="num">06</span><h2>The life of a run</h2></div>
+  <p>A run has one status. The workflow decides when it is over, not the session: a finished run keeps its session idle at its prompt, and the engineer can still ask for a change.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="lifecycle">
+flowchart LR
+  starting{"<b>starting</b><br/>worktree made,<br/>session spawned"}:::script
+  running{"<b>running</b><br/>the workflow<br/>works"}:::script
+  attention{"<b>attention</b><br/>a decision or a<br/>permission waits"}:::script
+  paused{"<b>paused</b><br/>a wait the engineer<br/>asked for"}:::script
+  completed[("<b>completed</b><br/>the workflow<br/>reached its end")]:::file
+  stopped[("<b>stopped</b><br/>by the engineer<br/>or a refusal")]:::file
+  failed[("<b>failed</b><br/>lost_session<br/>incident")]:::file
+
+  starting -- "first hook" --> running
+  running -- "question, permission,<br/>trust dialog" --> attention
+  attention -- "answered" --> running
+  running -- "workflow declares paused" --> paused
+  paused -- "next declared state" --> running
+  running -- "pilot handed back,<br/>nothing left running" --> completed
+  completed -- "change asked after<br/>the final report" --> running
+  running -- "Ctrl-C, run.stop,<br/>trust refused" --> stopped
+  paused -- "exit or shutdown" --> stopped
+  running -- "exit before a result" --> failed
+
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips">
+    <div class="chip"><b>When a run is completed</b>The pilot handed control back, no agent or background call is still running, and either the last step was reached or the declared end holds against what the run shows. The slot is freed at once, the figures of the run are written and the self-audit may open.</div>
+    <div class="chip"><b>Reopening</b>A change asked after the final report puts the run back in progress at the step the workflow declares. The first end is kept and the duration adds the reopenings, never the idle time between them. A session that exits or a console that closes before the next end leaves it <code>completed</code> with an attention line, never <code>failed</code> or <code>stopped</code>.</div>
+    <div class="chip warn"><b>What ends a run stopped</b>A Ctrl-C typed in the run's terminal (an exit within 5 seconds of it), <code>run.stop</code>, a refused trust dialog, or the console closing. An exit before a result with none of these is <code>failed</code>, with a <code>lost_session</code> incident.</div>
+    <div class="chip"><b>After a restart</b>On boot, archived runs that were not over are read back as <code>failed</code>, except one reopened after its final report, which is closed <code>completed</code>.</div>
+  </div>
+</section>
+
+<section>
+  <div class="head"><span class="num">07</span><h2>The queue and scheduling</h2></div>
+  <p>A launch goes through the registry, which holds one run per ticket and a limited number of slots, and keeps tickets that would collide in one repository apart. What does not start at once waits in a queue with its reason.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="queue">
+flowchart TB
+  swe("<b>Software Engineer</b><br/>run.start, batch.submit,<br/>impl run"):::swe
+  proposals[("<b>ticket-proposals.json</b><br/>kept by an<br/>outside watcher")]:::file
+  intake{"<b>ticket-source.ts</b><br/>resolves each URL<br/>to its checkout"}:::script
+  registry{"<b>registry.ts</b><br/>queue, one run per ticket,<br/>IMPL_MAX_CONCURRENT_RUNS"}:::script
+  analysis["<b>Batch analysis</b><br/>headless Sonnet,<br/>output.json"]:::agent
+  forge{"<b>glab / gh</b><br/>blocking links,<br/>merge request state"}:::script
+  sched{"<b>Scheduler</b><br/>conflictBetween,<br/>describeQueue"}:::script
+  run{"<b>RunSession</b><br/>starts in<br/>its worktree"}:::script
+  watch{"<b>merge-watch.ts</b><br/>polls the merge<br/>request"}:::script
+  queue[("<b>queue.json</b><br/>restored on boot")]:::file
+
+  swe --> intake
+  proposals -. "read every 5 s" .-> intake
+  intake --> registry
+  registry --> analysis -- "predicted edges" --> sched
+  forge -- "links" --> sched
+  registry --> sched
+  sched -- "entries that may start" --> run
+  run -- "ends with a<br/>merge request" --> watch
+  forge -. "status" .-> watch
+  watch -- "merged or closed" --> registry
+  registry --> queue
+
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips wide">
+    <div class="chip"><b>Admission</b>One run per ticket identity, the same for the <code>/-/issues/</code> and <code>/-/work_items/</code> addresses, held while the run is in progress or its session is open. <code>IMPL_MAX_CONCURRENT_RUNS</code> (3 by default) counts only the runs whose workflow still works: a finished run frees its slot, and its open session is closed when a launch waits on its ticket. A launch that hits either limit is queued with its reason.</div>
+    <div class="chip"><b>Batch intake</b>Two ticket addresses or more in the launch form, or several in <code>impl run</code>, become one batch. Each address is resolved to its checkout, and one invalid address refuses the whole batch. A ticket filed in a project with no code opens the target picker: the engineer chooses the checkouts and one run starts per repository. With several delivery projects the merge request cites the full reference and closes nothing.</div>
+    <div class="chip"><b>Batch analysis</b>One headless Sonnet session per repository per batch, serialised per repository and outside the slot limit, bounded by <code>IMPL_SCHEDULE_TIMEOUT_MINUTES</code> (5 by default). It is judged by <code>output.json</code> alone, validated against <code>contracts/schedule.md</code>. A missing file, a timeout or a restart marks its tickets <code>failed</code>, and the next analysis of the repository predicts them again.</div>
+    <div class="chip"><b>Forge links</b>Beside the session, the server reads the blocking links of each ticket analysed, with one <code>glab api</code> call or two <code>gh api</code> calls. A link to another ticket the console holds in the same repository becomes a <code>depends_on</code> edge over the agent's. Unreadable links give no edge.</div>
+    <div class="chip"><b>Conflicts</b>Two tickets of one repository wait apart on an <code>overlap</code> or <code>depends_on</code> edge. A ticket whose analysis failed, or whose confidence is <code>low</code>, waits apart from every other ticket of its repository. Two repositories never conflict. A waiting entry gets the first reason that matches: ticket, slot, analysis, conflict, merge, dependency or order.</div>
+    <div class="chip"><b>Merge watch</b>When a scheduled run ends with a merge request, the entries in conflict wait for its merge. The watcher polls only the watches that hold a queued entry, every <code>IMPL_MERGE_POLL_MS</code> (60 s), with one forge call and no Claude session. <code>merged</code> or <code>closed</code> releases them; <code>opened</code> and a failed call keep holding. A run that ends without a merge request releases them at once.</div>
+    <div class="chip"><b>Overrides</b><code>queue.force</code> starts an entry from the base branch, or stacked on the branch of the ticket that blocks it. <code>queue.move</code> reorders, though a dependency still goes first, and <code>queue.cancel</code> removes. The terminal client has <code>impl queue</code> for each.</div>
+    <div class="chip"><b>Ticket proposals</b>The console never asks the forge for tickets. An outside watcher keeps <code>data/ticket-proposals.json</code> up to date; the new tickets in it are queued as a batch with no click. One that cannot be launched keeps its reason, is listed under the queue, and can be dismissed or launched on checkouts the engineer chooses.</div>
+  </div>
+</section>
+
+<section>
+  <div class="head"><span class="num">08</span><h2>Metrics and repository memory</h2></div>
+  <p>The console measures every run and keeps, per repository, what the next run on it should know. The figures come from transcripts and git, never from what an agent says about its own cost.</p>
+  <div class="canvas"><pre class="mermaid" data-tips="memory">
+flowchart LR
+  transcripts[("<b>Claude Code transcripts</b><br/>pilot and subagent<br/>files")]:::file
+  usage{"<b>engine/usage.ts</b><br/>only the bytes gained<br/>since the last reading"}:::script
+  metrics{"<b>run-metrics.ts</b><br/>timeline, tokens, diff,<br/>gate time"}:::script
+  mjson[("<b>metrics.json</b><br/>per run")]:::file
+  api{"<b>/api/metrics</b><br/>runs, calibration,<br/>improvements"}:::script
+  pilot["<b>Pilot</b><br/>runtime-recipe.md"]:::agent
+  senior["<b>Senior reviewer</b><br/>senior-findings.json"]:::agent
+  repos[("<b>data/repositories</b><br/>recipe, findings,<br/>source fixes")]:::file
+  seed{"<b>Seeding</b><br/>at the next launch<br/>on that repository"}:::script
+  guide[("<b>REVIEW.md</b><br/>in the repository")]:::file
+  next["<b>Next run</b><br/>developers, reviewers"]:::agent
+  fixes{"<b>finding-fixes.ts</b><br/>proposes a source fix"}:::script
+  swe("<b>Software Engineer</b><br/>accepts or<br/>dismisses"):::swe
+  instr[("<b>CLAUDE.md or AGENTS.md</b><br/>of the checkout")]:::file
+
+  transcripts --> usage --> metrics --> mjson --> api
+  pilot --> repos
+  senior --> repos
+  repos --> seed --> next
+  guide -- "copied at launch" --> next
+  repos --> fixes --> swe
+  swe -- "accept" --> instr
+
+  classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
+  classDef script fill:#12301f,stroke:#4ade80,stroke-width:1.6px,color:#c9cddb
+  classDef file fill:#0f2236,stroke:#60a5fa,stroke-width:1.6px,color:#c9cddb
+  classDef swe fill:#3a310a,stroke:#facc15,stroke-width:1.6px,color:#c9cddb
+  </pre></div>
+  <div class="chips wide">
+    <div class="chip"><b>Tokens</b>Read from the transcripts Claude Code keeps, at most once every 5 seconds and only the bytes a file gained. One call written on several lines counts once, with its last figures. Each subagent's file is read with the <code>agent_id</code> its hooks carry.</div>
+    <div class="chip"><b>Run metrics</b><code>metrics.json</code> is written when the workflow ends and again when the session exits. It holds the waits on the engineer, the arrival at each step, the reopenings, the tokens, the gate time and the diff, measured from the branch the merge request targets. A run is compared to the delivered runs of the same review tier once three share it, and to nothing below three. The plan sizes and the tier are an estimate; the diff is the fact.</div>
+    <div class="chip"><b>Runtime recipe</b>The pilot writes how the app is started, reached and driven. Every version is kept per repository and put back in the task directory at the next launch. It holds no secret.</div>
+    <div class="chip"><b>Review findings</b>The senior reviewer files each finding under one key of a fixed list. A category found on at least two tickets in the last 90 days is written to <code>recurring-findings.md</code> for the next run, at most five kinds with three examples each. The pilot passes it to developers, never to a reviewer. Findings older than 180 days are dropped.</div>
+    <div class="chip"><b>Review guide</b>The first of <code>REVIEW.md</code>, <code>.claude/REVIEW.md</code> and <code>docs/REVIEW.md</code> is copied to the task directory at launch and passed to the senior reviewer, QA, the design reviewer and the orchestrator, never to a developer. A finding on a path it ignores is not kept in the repository's store.</div>
+    <div class="chip"><b>Source fixes</b>When one category shows in <code>IMPL_FINDING_FIX_RUNS</code> distinct runs (3 by default) in 90 days, a pending proposal is written and the run says "Source fix proposed". Accepting appends a block to <code>CLAUDE.md</code>, else <code>AGENTS.md</code>, else a new <code>CLAUDE.md</code>, on the main checkout, never on a run worktree. A dismissal sticks until the findings are forgotten. No linter configuration is edited.</div>
+    <div class="chip warn"><b>Automatic merge of improvements</b>Every minute, <code>auto-merge.ts</code> takes each improvement branch whose report is written and tree is clean, replays it on HEAD with git alone, and rejects it on a mechanical rule (a protected path, a deleted or skipped test, over 15 files or 400 lines), on a check the console reruns in the worktree, or on the verdict of the headless judge. Otherwise it merges, unless HEAD or the branch moved meanwhile. The loop itself is drawn in the <a href="agent-map.html">agent map</a>.</div>
+  </div>
+</section>
+
+<section>
+  <div class="head"><span class="num">09</span><h2>What stays on disk</h2></div>
   <p>Everything the console keeps is under <code>console/data/</code>, ignored by git. It holds ticket content: it never goes into tracked files, commits or docs.</p>
   <div class="chips wide">
-    <div class="chip"><b><code>data/runs/&lt;run-id&gt;/</code></b><code>run.json</code> (the state, one write at a time), <code>terminal.log</code>, <code>artifacts/</code> (the workflow documents), <code>evidence/</code>, <code>metrics.json</code> (tokens, durations, diff), <code>gate-log.jsonl</code>, <code>hooks-spool.jsonl</code> while hooks wait.</div>
-    <div class="chip"><b><code>data/queue.json</code></b>The launch queue and the schedule: tickets, conflict edges and merge request watches. Written whole, then renamed.</div>
-    <div class="chip"><b><code>data/repositories/&lt;checkout&gt;-&lt;digest&gt;/</code></b>Per repository: <code>runtime-recipe.md</code> (how the app is started and driven) and <code>review-findings.json</code> (the defects the reviews keep finding), both handed to the next run.</div>
+    <div class="chip"><b><code>data/runs/&lt;run-id&gt;/</code></b><code>run.json</code> (the state, one write at a time), <code>terminal.log</code>, <code>artifacts/</code> (the workflow documents), <code>evidence/</code>, <code>metrics.json</code> (tokens, durations, diff; written when the workflow ends and again when the session exits), <code>gate-log.jsonl</code>, <code>hooks-spool.jsonl</code> while hooks wait.</div>
+    <div class="chip"><b><code>data/queue.json</code></b>Shaped <code>{ version: 2, queue, tickets, edges, watches }</code>: the launch queue and the schedule, with the conflict edges and the merge request watches. Written whole, then renamed. The bare array written before batches still loads.</div>
+    <div class="chip"><b><code>data/repositories/&lt;checkout&gt;-&lt;digest&gt;/</code></b>Per repository: <code>runtime-recipe.md</code> (how the app is started and driven), <code>review-findings.json</code> (the defects the reviews keep finding) and <code>finding-fixes.json</code> (the source fixes proposed, accepted or dismissed). The recipe and the recurring findings are handed to the next run.</div>
     <div class="chip"><b><code>data/ticket-proposals.json</code></b>The file the outside watcher writes, read every 5 seconds, and <code>ticket-proposals-handled.json</code> for the tickets already queued or dismissed.</div>
     <div class="chip"><b>Batch analyses</b>In <code>implementation-factory-&lt;user&gt;/schedule/</code> of the system's temporary directory, removed once read, kept with <code>session.log</code> on a failure, wiped on boot.</div>
     <div class="chip"><b><code>data/feedback/</code> and <code>data/self-improvement-decisions.jsonl</code></b>The feedback and self-audits the improvement loop reads, its plans and reports, and one line per decision of the automatic merge (merged, rejected with its reasons, reverted), with the duration and tokens of each judge session on the branch. The judge's files sit beside the batch analyses, in <code>improvement-judge/</code>, removed once read and kept on a failure.</div>
+    <div class="chip"><b><code>data/server.log</code></b>The output of the server started by <code>impl</code>. Every failure nobody awaits leaves a line there, with its stack when there is one.</div>
     <div class="chip warn"><b>Unreadable is not absent</b>A persisted file that cannot be read is renamed <code>*.unreadable-&lt;time&gt;</code> and reported before the console starts from nothing.</div>
   </div>
 </section>
@@ -579,7 +728,7 @@ flowchart LR
 <div class="tip" id="tip" role="tooltip"></div>
 
 <footer>
-  Drawn on 9 October 2026 from the <code>implementation-factory</code> repository; every section describes the code in place. The <a href="agent-map.html">agent map</a> covers the roles, the models, the intake and scheduling of tickets, the workflow of a run and the self-improvement loop. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
+  Drawn on 27 October 2026 from the <code>implementation-factory</code> repository; every section describes the code in place. The <a href="agent-map.html">agent map</a> covers the roles, the models, the intake and scheduling of tickets, the workflow of a run and the self-improvement loop. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
 </footer>
 
 <script type="module">
@@ -672,6 +821,8 @@ flowchart LR
       engine: ["server/engine", "Boundary", "Spawns claude in a PTY, reads its transcripts and translates its hooks. Nothing above it knows the agent is Claude Code."],
       session: ["Claude Code session", "PTY", "The pilot and its agents, started on /implementation-factory:implement in the run worktree."],
       data: ["console/data", "Files", "Runs, queue and per-repository memory. Ignored by git, holds ticket content."],
+      cli: ["Terminal client", "console/cli", "A second client with no access to the server modules: one function per command, built on the same labels as the page. A feature added to the page gets its command here."],
+      headless: ["Headless sessions", "claude -p", "Batch scheduling (Sonnet, killed after a timeout) and the judge of an improvement branch (Opus). The guard holds each to its output file and a short list of calls."],
       forge: ["glab / gh", "Forge CLI", "Called by the server to read a merge request's state or a ticket's blocking links. No Claude session, no token."],
     },
     hook: {
@@ -691,7 +842,8 @@ flowchart LR
       hook: ["PreToolUse hook", "Hook", "Holds the call until the console returns the answer, up to an hour."],
       run: ["RunSession", "Server", "Keeps the pending question with the time it was asked, so a wait on the engineer is never read as a stall."],
       pty: ["Folder trust dialog", "Claude Code", "Drawn before any hook or transcript, so no hook can report it."],
-      trust: ["trust-prompt.ts", "Engine", "Recognises the dialog in the terminal output and raises a decision. Never answers it alone."],
+      trust: ["trust-prompt.ts", "Engine", "Recognises the dialog in the terminal output and raises a decision, kept as RunState.sessionPrompt. Never answers it alone."],
+      cli: ["Terminal client", "console/cli", "impl answer answers the pending question, one answer per question; impl trust accepts or refuses the dialog; impl watch asks either one at the terminal when there is one."],
     },
     worktree: {
       registry: ["registry.ts", "Server", "Resolves a launch to the main checkout and holds one run per repository and ticket."],
@@ -699,7 +851,7 @@ flowchart LR
       provision: ["provisionWorktree", "Server", "Brings over the ignored dependencies, config files and git hooks helper. A failure is only a warning."],
       stale: ["staleDependencies", "Server", "Compares each node_modules with its lockfile. A drift tells the pilot to reinstall before the first agent."],
       session: ["Session", "Claude Code", "Works in the worktree: its .claude/tasks is the run's own, never the checkout's."],
-      settle: ["settleRunWorktree", "Server", "Removes the worktree only when nothing in it can be lost. Same rules on boot."],
+      settle: ["settleRunWorktree", "Server", "Removes the worktree only when the run delivered and nothing in it can be lost. Same rules on boot."],
       kept: ["Kept worktree", "Directory", "Listed with its reasons in the run, until the engineer removes it."],
     },
     health: {
@@ -715,7 +867,7 @@ flowchart LR
       pilot: ["Pilot", "Claude Code", "Writes the register of criteria with stable AC ids after the questions."],
       agents: ["Dev, Senior, Designer, QA", "Claude Code", "Write evidence files following contracts/evidence.md, each item citing its criteria."],
       ingest: ["acceptance-runtime.ts", "Server", "Ingests each file, identifies the code with code-snapshot.mjs and answers the archive sync before cleanup."],
-      versions: ["evidence/", "Files", "Every version of every evidence file and its captures, with the code snapshots, so a restart derives the same coverage."],
+      versions: ["evidence/", "Files", "Every version of every evidence file and its captures (screenshots, and short videos for a flow), with the code snapshots, so a restart derives the same coverage."],
       derive: ["acceptance.ts", "Server", "Pure derivation of each criterion's status from the evidence it names."],
       qa: ["qaVerdictConsistency", "Server", "Compares QA's declared status with what QA itself observed on the current code."],
       facts: ["Observed facts", "Files and state", "What the console reads itself beside the coverage: the diff since the base (size, sensitive paths, tests removed or disabled), the last verdict of each stop gate check, the findings of the code review, the incidents and the workflow's state."],
@@ -723,6 +875,43 @@ flowchart LR
       tab: ["Evidence tab", "Interface", "The full view, served by /api/runs/<id>/acceptance."],
       summary: ["acceptance-summary.md", "File", "Written back to the task directory in the workflow's language, quoted by the merge request. Carries the review confidence and its reasons, for the top of the review comment."],
       mr: ["Pilot", "Claude Code", "Prepares the description from the summary: failed or unverified criteria stay visible."],
+    },
+    lifecycle: {
+      starting: ["starting", "Status", "The run worktree is made and the session spawned. The first hook proves the session runs."],
+      running: ["running", "Status", "The pilot and its agents work. A hand-back in the middle of the workflow is not an end; the health monitor decides if nothing is going to happen."],
+      attention: ["attention", "Status", "A question, a permission or an input only the terminal can receive waits on the engineer. The run goes back to running when it is answered."],
+      paused: ["paused", "Status", "The workflow declared a wait the engineer asked for. No slot is taken, the ticket and its conflict holds stay."],
+      completed: ["completed", "Status", "The workflow reached its end. The session may stay open at its prompt; a change asked now reopens the run."],
+      stopped: ["stopped", "Status", "Ended on the engineer's decision (Ctrl-C, run.stop, a refused trust dialog) or by the console closing."],
+      failed: ["failed", "Status", "The session exited before a result, with none of the reasons above. A lost_session incident explains it."],
+    },
+    queue: {
+      swe: ["Software Engineer", "Page or CLI", "Starts one ticket, or pastes several for a batch."],
+      proposals: ["ticket-proposals.json", "File", "A snapshot of the tickets matching the watcher's filter. The console reads it and never calls the watcher."],
+      intake: ["ticket-source.ts", "Server", "The only code that knows a batch was pasted. Resolves each address to its checkout or to the targets the engineer chose."],
+      registry: ["registry.ts", "Server", "Holds every run, the queue, the schedule and the merge watches. Drains the queue whenever a run lets go."],
+      analysis: ["Batch analysis", "Headless Sonnet", "Predicts which files each ticket touches and how they relate. Judged by its output file alone."],
+      forge: ["glab / gh", "Forge CLI", "Reads a ticket's blocking links and a merge request's state. No Claude session."],
+      sched: ["Scheduler", "Server", "Pure functions of domain.ts: which tickets conflict, why each entry waits, which may start."],
+      run: ["RunSession", "Server", "A started run, in a worktree made for it."],
+      watch: ["merge-watch.ts", "Server", "Polls only the merge requests something waits on, and has no timer otherwise."],
+      queue: ["queue.json", "File", "The queue and the schedule, restored on boot."],
+    },
+    memory: {
+      transcripts: ["Transcripts", "Files", "Kept by Claude Code: one for the pilot, one per subagent."],
+      usage: ["engine/usage.ts", "Engine", "Reads the tokens, counting a call written on several lines once."],
+      metrics: ["run-metrics.ts", "Server", "Pure: turns the state, the usage and the diff into the figures of a run and compares them to the baseline."],
+      mjson: ["metrics.json", "File", "Written when the workflow ends and again when the session exits."],
+      api: ["/api/metrics", "HTTP", "Every measured run, the calibration of the review confidence and the outcome of the automatic merges."],
+      pilot: ["Pilot", "Claude Code", "Writes how the target app is started, reached and driven."],
+      senior: ["Senior reviewer", "Claude Code", "Files each finding under one key of a fixed list."],
+      repos: ["data/repositories", "Files", "One folder per checkout: recipe, findings and source fixes."],
+      seed: ["Seeding", "Server", "Puts the recipe and the recurring findings back in the task directory of the next run, dated so the watcher does not archive them."],
+      guide: ["REVIEW.md", "File", "The repository's own review guide, copied at launch. Nothing to copy, nothing set."],
+      next: ["Next run", "Claude Code", "Developers get the recurring findings; reviewers get the guide."],
+      fixes: ["finding-fixes.ts", "Server", "Counts distinct runs per category and writes a pending proposal at the threshold."],
+      swe: ["Software Engineer", "Page or CLI", "Accepts a proposal, which writes it on the main checkout, or dismisses it."],
+      instr: ["CLAUDE.md or AGENTS.md", "File", "Receives the block between its finding-fix markers."],
     },
   };
   const tip = document.getElementById("tip");

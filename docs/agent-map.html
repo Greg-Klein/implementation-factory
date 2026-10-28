@@ -347,7 +347,7 @@ flowchart LR
   </pre>
 <pre class="mermaid">
 flowchart LR
-  oAccept{"<b>acceptance-runtime.ts</b><br/>criteria<br/>coverage"}:::script
+  oAccept{"<b>acceptance-runtime.ts<br/>review-confidence.ts</b><br/>criteria coverage,<br/>review confidence"}:::script
   oMr["<b>Pilot</b> · Opus<br/>opens the MR"]:::agent
   oSwe3("<b>Software Engineer</b><br/>reviews and merges"):::swe
   oWatch{"<b>merge-watch.ts</b><br/>watches the MR,<br/>frees the queue"}:::script
@@ -377,7 +377,7 @@ flowchart LR
 
 <section>
   <div class="head"><span class="num">01</span><h2>The agents</h2></div>
-  <p>Ten roles, all played by Claude Code. Click an agent to see its model and what it does.</p>
+  <p>Eleven roles, all played by Claude Code: seven agents, the pilot that drives them, and three headless sessions the console starts to improve the factory itself. Click one to see its model and what it does.</p>
   <div class="canvas"><div class="agents">
     <div class="agent-list" role="tablist" aria-orientation="vertical" aria-label="Agents of the factory"></div>
     <article class="agent-card" role="tabpanel" id="agent-card" tabindex="0"></article>
@@ -397,11 +397,12 @@ flowchart LR
   source{"<b>ticket-source.ts</b><br/>resolves each URL<br/>to its checkout"}:::script
   sweB("<b>Software Engineer</b><br/>picks the target repository<br/>when no checkout is found"):::swe
   registry{"<b>registry.ts</b><br/>queue,<br/>one lock per ticket, slots"}:::script
-  analysis{"<b>schedule-analysis.ts</b><br/>opens the batch analysis,<br/>validates output.json"}:::script
+  analysis{"<b>schedule-analysis.ts</b><br/>opens the batch analysis,<br/>outside the run slots, 5 min limit,<br/>validates output.json"}:::script
   scheduler["<b>Ticket scheduler</b><br/>Sonnet"]:::agent
-  links{"<b>ticket.ts</b><br/>reads the blocking links<br/>on the forge"}:::script
-  sweC("<b>Software Engineer</b><br/>forces, reorders<br/>or cancels an entry"):::swe
-  order{"<b>domain.ts</b><br/>conflicts, dependencies,<br/>start order"}:::script
+  links{"<b>ticket.ts</b><br/>reads the blocking links<br/>on the forge, kept if<br/>the analysis fails"}:::script
+  sweP("<b>Software Engineer</b><br/>dismisses a proposed ticket or<br/>launches a refused one<br/>on chosen checkouts"):::swe
+  sweC("<b>Software Engineer</b><br/>forces (base or stacked),<br/>reorders or cancels an entry"):::swe
+  order{"<b>domain.ts</b><br/>conflicts, dependencies, start order;<br/>failed analysis or low confidence<br/>keeps a ticket apart"}:::script
 
   impl -- "starts" --> registry
   sweA -- "URL" --> source
@@ -409,10 +410,11 @@ flowchart LR
   source -. "no checkout" .-> sweB
   sweB -. "target repository" .-> source
   source -- "resolved ticket" --> registry
-  registry -- "2 tickets or more" --> analysis
+  registry -- "2 tickets or more, or a lone one<br/>beside known predictions" --> analysis
   analysis -- "batch" --> scheduler -- "overlaps" --> order
-  analysis --> links -- "dependencies" --> order
-  registry -- "single ticket" --> order
+  analysis -- "links read<br/>beside it" --> links -- "dependencies" --> order
+  registry -- "lone ticket, no known<br/>prediction: links only" --> links
+  proposals -. "refused ticket" .-> sweP -. "dismiss, or launch" .-> registry
   sweC -. "priority" .-> order
 
   classDef agent fill:#3a2210,stroke:#ff9d3c,stroke-width:1.6px,color:#c9cddb
@@ -421,12 +423,15 @@ flowchart LR
   </pre>
 <pre class="mermaid">
 flowchart LR
-  worktree{"<b>run-worktrees.ts</b><br/>creates the run worktree,<br/>copies node_modules and .env"}:::script
-  seed{"<b>runtime-recipe.ts<br/>review-findings.ts</b><br/>restores the recipe and the<br/>recurring defects of the repository"}:::script
+  worktree{"<b>run-worktrees.ts</b><br/>creates the run worktree, copies node_modules<br/>and .env, checks node_modules against the lockfile"}:::script
+  seed{"<b>runtime-recipe.ts, review-findings.ts<br/>review-guide.ts</b><br/>restores the recipe, the recurring defects<br/>and the repository's REVIEW.md"}:::script
+  fixes{"<b>finding-fixes.ts</b><br/>proposes a source fix when a defect<br/>kind spans enough runs"}:::script
+  sweE("<b>Software Engineer</b><br/>accepts or dismisses<br/>the proposed source fix"):::swe
   engine{"<b>engine/claude-code.ts</b><br/>starts claude<br/>in a PTY"}:::script
   sweD("<b>Software Engineer</b><br/>trusts the folder<br/>when Claude Code asks"):::swe
   pilot["<b>Pilot</b> /implement<br/>Opus"]:::agent
 
+  fixes -- "proposal" --> sweE -. "accepted: written in<br/>CLAUDE.md or AGENTS.md" .-> seed
   worktree -- "worktree ready" --> seed -- "recipe, defects" --> engine
   engine -. "trust?" .-> sweD -. "accepts" .-> pilot
   engine -- "session" --> pilot
@@ -441,7 +446,7 @@ flowchart LR
 
 <section>
   <div class="head"><span class="num">03</span><h2>The run of a ticket</h2></div>
-  <p>The pilot owns git and the dialogue with the engineer, and never writes the ticket's code. The review is sized to the diff: three tiers, only one with an orchestrator.</p>
+  <p>The pilot owns git and the dialogue with the engineer, and never writes the ticket's code. The review is sized to the diff and to its risk: three tiers, only one with an orchestrator, and every tier is bounded in time (no new round once the review has run as long as the implementation, no single reviewer past about 15 minutes, 10 at tier 0).</p>
   <div class="canvas"><pre class="mermaid" data-tips="run">
 flowchart TD
   p1["<b>Pilot</b> · Opus<br/>1. reads the ticket, Figma,<br/>attachments, lists the gaps"]:::agent
@@ -470,13 +475,14 @@ flowchart TD
     direction TB
     s0["<b>Senior reviewer</b><br/>Sonnet, one pass"]:::agent
     q0["<b>QA</b><br/>Sonnet, focused pass<br/>if the senior corrected"]:::agent
-    s0 -.-> q0
+    d0["<b>Designer</b><br/>Sonnet, with a mockup<br/>or on a shared UI change"]:::agent
+    s0 -.-> d0 -.-> q0
   end
 
   subgraph t1 ["Tier 1 · a few files"]
     direction TB
     s1["<b>Senior reviewer</b><br/>Sonnet"]:::agent
-    d1["<b>Designer</b><br/>Sonnet, if the UI changes"]:::agent
+    d1["<b>Designer</b><br/>Sonnet, with a mockup<br/>or on a shared UI change"]:::agent
     q1["<b>QA</b><br/>Sonnet"]:::agent
     r1["<b>Dev</b> rework<br/>Sonnet, P0 and P1 only"]:::agent
     s1 --> d1 --> q1
@@ -496,7 +502,7 @@ flowchart TD
     q2 -- "review-summary.md" --> orch
   end
 
-  accept{"<b>acceptance-runtime.ts</b><br/>derives the criteria coverage<br/>and the review confidence (0 to 5),<br/>writes acceptance-summary.md"}:::script
+  accept{"<b>acceptance-runtime.ts<br/>review-confidence.ts</b><br/>derive the criteria coverage<br/>and the review confidence (0 to 5),<br/>write acceptance-summary.md"}:::script
   p8["<b>Pilot</b> · Opus<br/>8-9. pushes the branch, opens the MR,<br/>publishes the consolidated review"]:::agent
   p10["<b>Pilot</b> · Opus<br/>10. final report,<br/>cleans .claude/tasks"]:::agent
   archive{"<b>evidence-archive.ts</b><br/>archives the evidence<br/>before the cleanup"}:::script
@@ -511,6 +517,7 @@ flowchart TD
   tier --> s0
   tier --> s1
   tier --> orch
+  snap -.-> d0
   snap -.-> d1
   snap -.-> d2
   q0 --> accept
@@ -534,13 +541,15 @@ flowchart TD
 flowchart LR
   session["<b>Pilot and its agents</b><br/>a tool call,<br/>an agent stop"]:::agent
   emit{"<b>emit.mjs</b><br/>receives every hook,<br/>sends it to the console"}:::script
-  guard{"<b>guard.mjs</b><br/>refuses: destructive git, published secret,<br/>wrong model, review too early"}:::script
+  guard{"<b>guard.mjs</b><br/>refuses eight kinds of call: bare agent name, wrong Dev model,<br/>no end-to-end decision, review too early or under the tier floor,<br/>session trailer, published secret, destructive git"}:::script
   gate{"<b>gate.mjs</b><br/>typecheck, lint, tests<br/>when Dev and Senior stop"}:::script
   bridge{"<b>hook-bridge.ts<br/>hooks.ts</b><br/>applies the event<br/>to the run state"}:::script
   monitor{"<b>run-monitor.ts<br/>run-health.ts</b><br/>detects a stalled run,<br/>opens an incident"}:::script
   artifacts{"<b>artifacts.ts</b><br/>copies the run documents<br/>into the archive"}:::script
   usage{"<b>engine/usage.ts</b><br/>counts the tokens<br/>in the transcripts"}:::script
   ui{"<b>Next.js console</b><br/>shows steps, agents,<br/>questions, evidence"}:::script
+  pause{"<b>workflow-state.ts</b><br/>reads the declared state:<br/>paused takes no slot"}:::script
+  sweP("<b>Software Engineer</b><br/>asks the pilot to wait, then<br/>resumes the paused run"):::swe
   sweQ("<b>Software Engineer</b><br/>answers a question<br/>asked by the pilot"):::swe
   sweI("<b>Software Engineer</b><br/>handles an incident,<br/>sends an instruction, stops the run"):::swe
 
@@ -552,6 +561,8 @@ flowchart LR
   session -. "written files" .-> artifacts --> ui
   session -. "transcripts" .-> usage --> ui
   bridge --> monitor --> ui
+  session -. "state: paused" .-> pause --> ui
+  ui -- "paused" --> sweP -- "message" --> session
   ui -- "AskUserQuestion" --> sweQ -- "answer" --> session
   ui -- "incident" --> sweI --> session
 
@@ -568,19 +579,19 @@ flowchart LR
 flowchart LR
   done["<b>Pilot</b> · Opus<br/>MR open, final report"]:::agent
   metrics{"<b>run-metrics-runtime.ts</b><br/>tokens, durations, diff,<br/>review confidence<br/>in metrics.json"}:::script
-  settle{"<b>run-worktrees.ts</b><br/>removes the worktree when the MR exists,<br/>the tree is clean, HEAD is pushed"}:::script
+  settle{"<b>run-worktrees.ts</b><br/>removes the worktree when the run completed with a non-draft MR,<br/>the workflow is not blocked, the archive is synced,<br/>the tree is clean and HEAD is on a remote ref"}:::script
   sweR("<b>Software Engineer</b><br/>reviews the MR,<br/>merges it or asks for a change"):::swe
   reopen["<b>Pilot</b> · Opus<br/>reopens the run"]:::agent
   devR["<b>Dev</b> rework<br/>Sonnet"]:::agent
   review["<b>Review</b><br/>at the tier of the new diff"]:::agent
-  watch{"<b>merge-watch.ts</b><br/>polls the forge every 60 s,<br/>releases the waiting tickets"}:::script
+  watch{"<b>merge-watch.ts</b><br/>polls the forge every 60 s while<br/>a queued entry waits, then releases it"}:::script
   queue{"<b>registry.ts</b><br/>starts the next ticket"}:::script
 
   audit{"<b>self-improvement.ts</b><br/>writes the self-audit,<br/>looks for proof of a defect"}:::script
   sweF("<b>Software Engineer</b><br/>leaves feedback<br/>on the run"):::swe
   improve["<b>Session</b> /improve<br/>Opus"]:::agent
   rebase["<b>Session</b> /rebase<br/>Sonnet"]:::agent
-  auto{"<b>auto-merge.ts</b><br/>protected files, size, tests,<br/>checks rerun by the console"}:::script
+  auto{"<b>auto-merge.ts</b><br/>protected files, 15 files or 400 lines,<br/>deleted or skipped test,<br/>checks rerun by the console"}:::script
   judge["<b>Session</b> /judge-improvement<br/>Opus, read-only"]:::agent
   retry{"<b>auto-merge.ts</b><br/>discards the branch,<br/>feedback back in pending/"}:::script
   restart{"<b>impl restart</b><br/>rebuilds and reloads the console<br/>once no run works"}:::script
@@ -610,7 +621,7 @@ flowchart LR
 <div class="tip" id="tip" role="tooltip"></div>
 
 <footer>
-  Models read from the frontmatter of <code>agents/*.md</code> and <code>commands/*.md</code>, and from <code>console/server/engine/claude-code.ts</code>. At tiers 0 and 1, the pilot runs Senior and QA on Sonnet; they keep Opus at tier 2. The Designer runs on Sonnet at every tier. The Dev runs on Sonnet, and the pilot moves it to Opus for a task the plan sizes L. The machinery underneath, from the path of a hook to the evidence chain, is on the <a href="architecture.html">architecture page</a>. The page loads Mermaid and its fonts from a CDN, so it needs a connection.
+  Models read from the frontmatter of <code>agents/*.md</code> and <code>commands/*.md</code>, and from <code>console/server/engine/claude-code.ts</code>. At tiers 0 and 1, the pilot runs Senior and QA on Sonnet; they keep Opus at tier 2. The Designer runs on Sonnet at every tier. The Dev runs on Sonnet, and the pilot moves it to Opus for a task the plan sizes L. The machinery underneath, from the path of a hook to the evidence chain, is on the <a href="architecture.html">architecture page</a>. The page loads Mermaid and its fonts from a CDN, so it needs a connection. Drawn on 27 October 2026.
 </footer>
 
 <script type="module">
@@ -640,7 +651,7 @@ flowchart LR
     {
       name: "Ticket scheduler", short: "Sonnet", kind: "Agent · ticket-scheduler", models: ["Sonnet"],
       does: "Before a batch starts, it reads each ticket and predicts the files and areas of the repository it would touch. From that it tells which tickets overlap or depend on each other, so the console does not start them together. It changes nothing in the repository.",
-      facts: [["Started by", "the console, one session per repository and per batch"], ["Writes", "output.json: predictions and links between tickets"]],
+      facts: [["Started by", "the console, one session per repository and per batch, outside the run slots and stopped after 5 minutes. A lone new ticket in a repository with no known prediction gets none"], ["Writes", "output.json: predictions and links between tickets"]],
     },
     {
       name: "Pilot", short: "Opus", kind: "Main session · /implement", models: ["Opus"],
@@ -649,33 +660,33 @@ flowchart LR
     },
     {
       name: "Planner", short: "Opus", kind: "Agent · ticket-planner", models: ["Opus"],
-      does: "It turns the ticket and the current code into an executable plan: atomic tasks with their files, their dependencies, their risks and the acceptance criteria they serve. It also surfaces the ambiguities only a reading of the code reveals.",
-      facts: [["Started by", "the pilot, on complex tickets only"], ["Writes", "planner-output.json"]],
+      does: "It turns the ticket and the current code into an executable plan: atomic tasks with their files, their dependencies, their risks and the acceptance criteria they serve. It also surfaces the ambiguities only a reading of the code reveals, and decides whether the change gets end-to-end tests (test_strategy.e2e_policy, from the repository's instructions and existing specs).",
+      facts: [["Started by", "the pilot, on complex tickets only"], ["Writes", "planner-output.json"], ["Guard", "a Dev is refused while the plan has no complete end-to-end decision; on a simple ticket the pilot writes it in its one-task plan"]],
     },
     {
       name: "Dev", short: "Sonnet / Opus", kind: "Agent · developer", models: ["Sonnet", "Opus on L tasks"],
       does: "It implements one task of the plan, or a rework the review asked for, within the files assigned to it. It checks its own change and returns versioned evidence. Several Devs run in parallel when their files are disjoint.",
-      facts: [["Started by", "the pilot, or the orchestrator for a rework"], ["Writes", "the code, developer-report-<task>.md and dev-evidence-<task>.json"], ["Guard", "a hook refuses any model other than Sonnet or Opus"]],
+      facts: [["Started by", "the pilot, or the orchestrator for a rework"], ["Writes", "the code, developer-report-<task>.md and dev-evidence-<task>.json, and a short .webm for a criterion that is a sequence of states"], ["Reads", "recurring-findings.md when the repository has one, never review-guide.md"], ["Guard", "a hook refuses any model other than Sonnet or Opus, and a Dev started before the plan carries its end-to-end decision"]],
     },
     {
       name: "Review orchestrator", short: "Sonnet", kind: "Agent · review-orchestrator", models: ["Sonnet"],
       does: "On large diffs, it sequences the code, design and QA reviews, sends the blocking defects back to a Dev and starts again, two rework rounds at most. It implements nothing, and neither commits nor pushes.",
-      facts: [["Started by", "the pilot, at tier 2 only"], ["Writes", "review-summary.md, with the verdict READY or BLOCKED"]],
+      facts: [["Started by", "the pilot, at tier 2 only"], ["Reads", "review-guide.md when the repository has one"], ["Writes", "review-summary.md, with the verdict READY or BLOCKED"]],
     },
     {
       name: "Senior reviewer", short: "Opus / Sonnet", kind: "Agent · senior-reviewer", models: ["Opus at tier 2", "Sonnet at tiers 0 and 1"],
       does: "It challenges the change independently: cause, affected consumers, regression tests, acceptance criteria. It then corrects the justified defects within the authorized scope and leaves a report for the final QA.",
-      facts: [["Started by", "the pilot, or the orchestrator at tier 2"], ["Writes", "senior-review.md and senior-findings.json"]],
+      facts: [["Started by", "the pilot, or the orchestrator at tier 2"], ["Reads", "review-guide.md, the repository's REVIEW.md copied at launch"], ["Writes", "senior-review.md and senior-findings.json, which feed the recurring findings of the repository"]],
     },
     {
       name: "Designer", short: "Sonnet", kind: "Agent · designer-reviewer", models: ["Sonnet at every tier"],
       does: "It compares the live interface with Figma, the ticket mockups or the screens already shipped. It measures visual, state, accessibility and layout defects in the running app, without reading the source code.",
-      facts: [["Started by", "the pilot, or the orchestrator, when the change is visible in the UI"], ["Writes", "design-inventory.md, designer-review.md and design-evidence.json"], ["Verdict", "a design left unverified is reported and does not block"]],
+      facts: [["Started by", "the pilot, or the orchestrator. With a mockup (Figma or attached) on any change visible in the UI, tier 0 included; with no mockup, only when the diff modifies a shared UI component or creates a screen or route"], ["Writes", "design-inventory.md, designer-review.md and design-evidence.json"], ["Verdict", "a design left unverified is reported and does not block"]],
     },
     {
       name: "QA", short: "Opus / Sonnet", kind: "Agent · qa-reviewer", models: ["Opus at tier 2", "Sonnet at tiers 0 and 1"],
-      does: "It selects its own counterexamples and acceptance checks, runs them on the final code and reports what it observed. It writes its plan before reading the Dev's conclusions and never fixes product code.",
-      facts: [["Started by", "the pilot, or the orchestrator, always last"], ["Writes", "qa-plan.md, qa-report.md and qa-evidence.json"], ["Verdict", "INCONCLUSIVE never exits as ready"]],
+      does: "It selects its own counterexamples and acceptance checks, runs them on the final code and reports what it observed. It writes its plan before reading the Dev's conclusions and never fixes product code. It may record a short video (.webm) for a criterion that is a sequence of states.",
+      facts: [["Started by", "the pilot, or the orchestrator, always last"], ["Reads", "review-guide.md when the repository has one"], ["Writes", "qa-plan.md, qa-report.md and qa-evidence.json"], ["Verdict", "INCONCLUSIVE never exits as ready"]],
     },
     {
       name: "Session /improve", short: "Opus", kind: "Session · /improve", models: ["Opus"],
@@ -794,73 +805,76 @@ flowchart LR
       oVigie: ["vigie", "Script", "Watches the forge and proposes the tickets that match its filter. The console queues them with no click."],
       oConsole: ["registry.ts", "Script", "Holds the queue. Decides when a ticket may start, then creates its worktree and opens the session."],
       oSched: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch, so two tickets that step on each other never start together."],
-      oGuard: ["guard.mjs", "Script", "Checks every tool call before it runs. Refuses what is dangerous: destructive git, a published secret, a wrong model."],
+      oGuard: ["guard.mjs", "Script", "Checks every tool call of a run before it runs and refuses eight kinds: a bare agent name, a wrong Dev model, a Dev without an end-to-end decision, a review started too early or below the tier floor, a session trailer, a published secret, destructive git. The headless judge and scheduling sessions have narrower rules of their own."],
       oPilot: ["Pilot", "Opus", "Conducts the ticket. Reads, asks, delegates, commits and opens the merge request. Never writes the code itself."],
       oPlanner: ["Planner", "Opus", "Splits the ticket into precise tasks, with their files and their dependencies."],
       oDev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the large tasks of the plan, which run on Opus."],
-      oGate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
+      oGate: ["gate.mjs", "Script", "When a Dev or a Senior stops, runs the typecheck, the lint and the related tests of what it edited. On a failure, the agent goes back once; the second stop always goes through."],
       oOrch: ["Review orchestrator", "Sonnet", "On large diffs, sequences the reviews and sends the blocking defects back to a Dev, twice at most."],
       oSenior: ["Senior reviewer", "Opus or Sonnet", "Reads the code with a critical eye and corrects the justified defects."],
-      oDesigner: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations."],
+      oDesigner: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations. With a mockup it runs on any UI change, otherwise on a shared component or a new screen."],
       oQa: ["QA", "Opus or Sonnet", "Tests the final result with its own scenarios and reports what it observes. Fixes nothing."],
-      oAccept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria and says which ones are really verified."],
+      oAccept: ["acceptance-runtime.ts, review-confidence.ts", "Script", "Matches the evidence against the acceptance criteria and says which ones are really verified. The review confidence (0 to 5) is computed by review-confidence.ts and applied from here."],
       oMr: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes the consolidated review. As a draft when something still blocks."],
-      oWatch: ["merge-watch.ts", "Script", "Watches the merge request. Once it is merged, releases the tickets that were waiting behind it."],
+      oWatch: ["merge-watch.ts", "Script", "Watches the merge request while a queued ticket waits behind it. Once it is merged or closed, releases that ticket."],
       oAudit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when something went wrong."],
       oImprove: ["Session /improve", "Opus", "Fixes the factory itself from what went wrong, in a branch of its own."],
-      oAuto: ["auto-merge.ts", "Script", "Rejects a branch that touches a protected file, removes or skips a test, or is too large, then reruns the checks itself."],
+      oAuto: ["auto-merge.ts", "Script", "Rejects a branch that touches a protected file, removes or skips a test, or passes 15 files or 400 lines, then reruns the checks itself."],
       oJudge: ["Session /judge-improvement", "Opus", "Reads the run evidence, then the plan and the diff, and decides whether the branch is merged without the engineer."],
       oRetry: ["pending/", "Feedback", "A rejected branch is discarded and its feedback goes back here with the reasons, for the next improvement session."],
     },
     intake: {
       vigie: ["vigie", "Script", "An outside tool that watches the forge. It keeps a file listing the tickets that match its filter."],
       impl: ["impl", "Script", "The command that starts the console in the background, restarts it or stops it."],
-      proposals: ["ticket-proposals.ts", "Script", "Reads vigie's file every 5 seconds and queues the new tickets, with no click."],
+      proposals: ["ticket-proposals.ts", "Script", "Reads vigie's file every 5 seconds and queues the new tickets, with no click. A ticket it cannot launch stays listed with its reason."],
       source: ["ticket-source.ts", "Script", "Finds, for each ticket URL, the local repository the code will be written in."],
-      registry: ["registry.ts", "Script", "Holds the queue. One run per ticket, and a limited number of runs at once."],
-      analysis: ["schedule-analysis.ts", "Script", "Starts the analysis of a batch of tickets and checks the answer is well formed before using it."],
+      registry: ["registry.ts", "Script", "Holds the queue. One run per ticket, and a limited number of runs at once. Queue overrides: force an entry (from the base branch or stacked on the blocking ticket's branch), reorder, cancel."],
+      analysis: ["schedule-analysis.ts", "Script", "Starts one analysis per repository and batch, outside the run slots, with a 5 minute limit, and checks the answer is well formed. A lone new ticket in a repository with no known prediction gets no session. A lone launch beside known predictions is analysed."],
       scheduler: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch and spots the ones that overlap or depend on each other."],
-      links: ["ticket.ts", "Script", "Reads the \"blocks\" and \"is blocked by\" links between tickets on the forge. No Claude session, no tokens."],
-      order: ["domain.ts", "Script", "Decides the start order: two conflicting tickets never run together, and a dependency goes first."],
-      worktree: ["run-worktrees.ts", "Script", "Creates an isolated working directory for the run and copies the dependencies and config files into it."],
-      seed: ["runtime-recipe.ts, review-findings.ts", "Script", "Hands the run what earlier ones learned about the repository: how to start the app, and the defects that keep coming back."],
+      links: ["ticket.ts", "Script", "Reads the \"blocks\" and \"is blocked by\" links between tickets on the forge, beside the session and also when it fails. No Claude session, no tokens."],
+      order: ["domain.ts", "Script", "Decides the start order: two conflicting tickets never run together, and a dependency goes first. A ticket whose analysis failed, or whose confidence is low, is kept apart from every other ticket of its repository."],
+      worktree: ["run-worktrees.ts", "Script", "Creates an isolated working directory for the run and copies the dependencies and config files into it. It compares node_modules with package-lock.json: on a mismatch the pilot reinstalls before its first agent."],
+      seed: ["runtime-recipe.ts, review-findings.ts, review-guide.ts", "Script", "Hands the run what earlier ones learned: how to start the app (recipe), the defect kinds found on at least two tickets in 90 days, five at most (recurring-findings.md, for Devs only), and the repository's guide (REVIEW.md, .claude/REVIEW.md or docs/REVIEW.md), copied to review-guide.md (for the reviewers only)."],
+      fixes: ["finding-fixes.ts", "Script", "When a defect kind spans IMPL_FINDING_FIX_RUNS runs (3 by default), proposes a block for CLAUDE.md or AGENTS.md. Nothing is written until the engineer accepts."],
       engine: ["engine/claude-code.ts", "Script", "Starts the real claude binary in a terminal. It is the only code that knows the agent is Claude Code."],
       pilot: ["Pilot", "Opus", "The main session, which drives the ticket to its merge request."],
     },
     run: {
       p1: ["Pilot", "Opus", "Reads the ticket, the designs and the attachments, then lists what the ticket does not say."],
-      p3: ["Pilot", "Opus", "Writes the list of acceptance criteria, the reference for the whole run, and creates the branch."],
-      planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size."],
-      p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself."],
+      p3: ["Pilot", "Opus", "Writes the list of acceptance criteria, the reference for the whole run, and creates the branch. The base branch goes into workflow-state.json, where the guard reads it."],
+      planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size, and decides the end-to-end tests (test_strategy.e2e_policy). Without that decision the guard refuses a Dev."],
+      p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself, end-to-end decision included, since the guard refuses a Dev without it."],
       dev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the tasks sized L, which run on Opus."],
       gate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
       p5: ["Pilot", "Opus", "Reads the verdict of the checks, runs the repository-wide ones and makes one commit per task."],
       p6: ["Pilot", "Opus", "Starts the application and measures the change in a browser, on frozen code."],
       snap: ["code-snapshot.mjs", "Script", "Gives a fingerprint of the code at one moment. Evidence taken on code that changed since no longer counts."],
-      tier: ["Pilot", "Opus", "Looks at the size of the diff and at the paths it touches. A sensitive path is at least tier 1, CI and migrations are tier 2, and the guard refuses anything lower."],
-      s0: ["Senior reviewer", "Sonnet", "One focused pass on the correctness of the fix. Reports blocking defects only."],
-      q0: ["QA", "Sonnet", "Runs only when the senior changed the code, to check that correction independently."],
-      s1: ["Senior reviewer", "Sonnet", "Reads the code with a critical eye and corrects the justified defects."],
-      d1: ["Designer", "Sonnet", "Compares the live screen with the mockups. Runs only when the change shows in the interface."],
-      q1: ["QA", "Sonnet", "Tests the final result with its own scenarios and reports what it observes."],
+      tier: ["Pilot", "Opus", "Runs review-tier.mjs for the risk floor, sizes the diff, then writes reviewTier and baseBranch in workflow-state.json. A sensitive path is at least tier 1, CI and migrations are tier 2, and the guard refuses a reviewer or the merge request below the floor."],
+      s0: ["Senior reviewer", "Sonnet", "One focused pass on the correctness of the fix. Reports blocking defects only. A second launch, if a correction needs another look, is a recheck of the delta."],
+      d0: ["Designer", "Sonnet", "Runs once, after the senior, under the same rule as at every tier: with a mockup on any UI change, otherwise on a shared component or a new screen."],
+      q0: ["QA", "Sonnet", "Runs only when the senior changed the code, to check that correction independently. Writes qa-plan.md before reading the author's evidence."],
+      s1: ["Senior reviewer", "Sonnet", "Reads the code with a critical eye and corrects the justified defects. Reads review-guide.md when there is one. A recheck after rework covers the delta only."],
+      d1: ["Designer", "Sonnet", "Compares the live screen with the mockups. With a mockup it runs on any change visible in the UI, otherwise only when the diff modifies a shared UI component or creates a screen or route. Writes design-inventory.md before reading the author's evidence."],
+      q1: ["QA", "Sonnet", "Tests the final result with its own scenarios and reports what it observes. Writes qa-plan.md before reading the author's evidence."],
       r1: ["Dev rework", "Sonnet", "Fixes the blocking defects (P0 and P1) the review raised. Minor remarks are only listed."],
       orch: ["Review orchestrator", "Sonnet", "Sequences the reviews, sends the blocking defects back to a Dev and returns the final verdict."],
-      s2: ["Senior reviewer", "Opus", "Reads the code with a critical eye and corrects the justified defects. On Opus, since a missed defect costs more here."],
-      d2: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations, without reading the code."],
-      q2: ["QA", "Opus", "Tests the final result with its own scenarios. Always runs last, on the final code."],
+      s2: ["Senior reviewer", "Opus", "Reads the code with a critical eye and corrects the justified defects. On Opus, since a missed defect costs more here. After a rework it rechecks the delta only."],
+      d2: ["Designer", "Sonnet", "Compares the live screen with the mockups and measures the visual deviations, without reading the code. Writes design-inventory.md before reading the author's evidence."],
+      q2: ["QA", "Opus", "Tests the final result with its own scenarios. Always runs last, on the final code. Writes qa-plan.md before reading the author's evidence."],
       r2: ["Dev rework", "Sonnet", "Fixes the blocking defects the review raised. Two rework rounds at most, then the run stops."],
-      accept: ["acceptance-runtime.ts", "Script", "Matches the evidence against the acceptance criteria, computes the review confidence from what the console observed, and writes the summary the merge request quotes."],
-      p8: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes a review comment. As a draft when something still blocks."],
+      accept: ["acceptance-runtime.ts, review-confidence.ts", "Script", "acceptance-runtime.ts matches the evidence against the acceptance criteria and writes the summary the merge request quotes. The review confidence comes from review-confidence.ts, fed by review-confidence-runtime.ts with what the console observed."],
+      p8: ["Pilot", "Opus", "Pushes the branch, opens the merge request and publishes a review comment. As a draft when something still blocks. A short .webm recording is embedded like a screenshot."],
       p10: ["Pilot", "Opus", "Sums up the run, says what could not be verified, then empties its working directory."],
       archive: ["evidence-archive.ts", "Script", "Puts the evidence and the captures away in the run archive before the working directory is emptied."],
     },
     live: {
       session: ["Pilot and its agents", "Opus and Sonnet", "Every action of an agent goes through a tool. That passage is what the hooks observe."],
       emit: ["emit.mjs", "Script", "The entry point of every hook. It calls the guard, then forwards the event to the console."],
-      guard: ["guard.mjs", "Script", "Blocks a dangerous call before it runs. A safety rule is decided here, never by a sentence in a prompt."],
-      gate: ["gate.mjs", "Script", "When the Dev or the Senior stops, runs the typecheck, the lint and the tests of what it edited."],
+      guard: ["guard.mjs", "Script", "Blocks eight kinds of call during a run: a workflow agent under its bare name; a Dev model other than Sonnet or Opus; a Dev while the plan lacks its end-to-end decision; a reviewer while a task has no Dev report; a reviewer or the merge request below the review tier floor; a commit or publication carrying a session trailer or link; a published secret; destructive git. The headless judge and scheduling sessions have narrower rules of their own. A rule is decided here, never by a sentence in a prompt."],
+      gate: ["gate.mjs", "Script", "When the Dev or the Senior stops, runs the typecheck, the lint and the related tests of what it edited. Each verdict is a line of gate-log.jsonl: pass, fail, inconclusive, skipped or none. A fail sends the agent back once; the second stop always goes through. It fails open, and IMPL_STOP_GATE=off disables it."],
       bridge: ["hook-bridge.ts, hooks.ts", "Script", "Receives the event on the console side and updates the state of the run it names."],
       monitor: ["run-monitor.ts, run-health.ts", "Script", "Spots a run that stopped moving or a lost session, and opens an incident."],
+      pause: ["workflow-state.ts", "Script", "When the pilot declares paused, a wait the engineer asked for such as another ticket's merge, the run shows as Paused. It takes no slot, still holds the conflicting tickets, is healthy by definition and opens no self-audit."],
       artifacts: ["artifacts.ts", "Script", "Watches the run's working directory and copies each document it produces into the archive."],
       usage: ["engine/usage.ts", "Script", "Reads the Claude Code transcripts to count the tokens of the pilot and of each agent."],
       ui: ["Next.js console", "Interface", "The local page that shows the steps, the agents, the questions and the evidence of the run, live."],
@@ -868,16 +882,16 @@ flowchart LR
     after: {
       done: ["Pilot", "Opus", "The merge request is open. The session stays available for a question or a retouch."],
       metrics: ["run-metrics-runtime.ts", "Script", "Records what the run cost: tokens, durations, diff size, and the review confidence it was delivered with. Used to compare runs with each other, and the note with the reopenings and feedback that followed."],
-      settle: ["run-worktrees.ts", "Script", "Removes the run's working directory, only when nothing would be lost. Otherwise it keeps it and says why."],
-      reopen: ["Pilot", "Opus", "A change asked after the report reopens the run. The rules stay the same: it does not code itself."],
+      settle: ["run-worktrees.ts", "Script", "Removes the run's working directory only when the run completed with a merge request that is not a draft, the workflow is not blocked, the archive sync is acknowledged, the tree is clean and HEAD is on a remote-tracking ref. Otherwise it keeps it and says why."],
+      reopen: ["Pilot", "Opus", "A change asked after the report reopens the run, which goes back to in progress at the step the workflow declares. The rules stay the same: it does not code itself."],
       devR: ["Dev rework", "Sonnet", "Applies the change asked after the final report."],
       review: ["Review", "Depends on the tier", "The retouch is reviewed like the rest, at the tier the size of its diff calls for."],
-      watch: ["merge-watch.ts", "Script", "Asks the forge, once a minute, whether the merge request is merged. No Claude session, no tokens."],
+      watch: ["merge-watch.ts", "Script", "Asks the forge, once a minute, whether the merge request is merged, and only for a watch that holds a queued entry: no timer otherwise. Merged or closed releases the entry, opened or unknown keeps holding. A watch nothing waits on is forgotten after a week, and a run that ends without a merge request releases its dependents at once. No Claude session, no tokens."],
       queue: ["registry.ts", "Script", "Once the merge request is merged, starts the tickets that were waiting behind it."],
       audit: ["self-improvement.ts", "Script", "Audits the run. Opens an improvement session only when it observed a defect or received feedback."],
       improve: ["Session /improve", "Opus", "Fixes the factory itself from what went wrong, in a branch of its own."],
       rebase: ["Session /rebase", "Sonnet", "If the factory moved in the meantime, replays the improvement on top of it and resolves the conflicts."],
-      auto: ["auto-merge.ts", "Script", "Rejects a branch on a mechanical rule or a failed check, otherwise asks the judge, and merges on its word."],
+      auto: ["auto-merge.ts", "Script", "Rejects a branch on a protected path, a deleted or skipped test, or more than 15 files or 400 lines, then reruns typecheck, unit tests and build in the worktree (and the integration suite when console/ or bin/ changed). A branch that passes goes to the judge and is merged on its word."],
       judge: ["Session /judge-improvement", "Opus", "Independent of the author: forms its expectation from the evidence first, refuses on any doubt, writes only its verdict."],
       retry: ["auto-merge.ts", "Script", "Discards a rejected branch, keeps an uncommitted change as a patch, and puts its feedback back in pending/ with the reasons. Two attempts at most."],
       restart: ["impl restart", "Script", "Rebuilds and restarts the console when the merged improvement touched its code: by itself, once no run works."],

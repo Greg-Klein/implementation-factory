@@ -83,7 +83,7 @@ describe("the block a person can accept", () => {
     expect(findingFixSettled({ category: "type-escape", kind: "instruction" }, undefined)).toBe(false);
   });
 
-  it("should write the habit in the workflow language and keep the title in English", () => {
+  it("should write the habit and its title in the language asked for", () => {
     const group = sourceFixGroups([kept("a", "type-escape"), kept("b", "type-escape"), kept("c", "type-escape", 2, { file: "src/a.ts" })], NOW, 3)[0]!;
     const stack = { tool: "eslint" as const, packages: ["eslint", "typescript-eslint"] };
     const english = draftFindingFix(group, { language: "en", stack, existingFiles: ["AGENTS.md"] });
@@ -95,7 +95,7 @@ describe("the block a person can accept", () => {
     expect(english.body).toContain("<!-- /implementation-factory:finding-fix type-escape -->");
     const french = draftFindingFix(group, { language: "fr", stack: { packages: [] }, existingFiles: ["AGENTS.md"] });
     expect(french.kind).toBe("instruction");
-    expect(french.title).toBe("Record type-escape in AGENTS.md");
+    expect(french.title).toBe("Consigner type-escape dans AGENTS.md");
     expect(french.body).toContain("## Habitude de revue: type-escape");
     expect(french.body).toContain("3 exécutions");
     for (const category of Object.keys(FINDING_CATEGORIES)) {

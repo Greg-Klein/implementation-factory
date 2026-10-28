@@ -1,17 +1,11 @@
 import { AUTO_MERGE_LIMITS } from "./auto-merge-policy.js";
 import { CONFIDENCE_DETAILS, CONFIDENCE_DIFF_LINES } from "./review-confidence.js";
 import type { AcceptanceCounts, AcceptanceStatus, EvidenceFreshness, EvidenceSource } from "./types.js";
+import { languageOf, type Language } from "../lib/i18n/index.js";
 
-/**
- * The language of what the workflow writes for people: reports, questions, the
- * merge request. The interface itself is always in English. `IMPL_LANGUAGE`
- * picks it: `fr` for French, English for anything else, unset included.
- */
-export type WorkflowLanguage = "en" | "fr";
-
-export function workflowLanguageOf(value: string | undefined): WorkflowLanguage {
-  return value?.trim().toLowerCase() === "fr" ? "fr" : "en";
-}
+/** The language of what the workflow writes for people, the interface's own (`lib/i18n`). */
+export type WorkflowLanguage = Language;
+export const workflowLanguageOf = languageOf;
 
 const plural = (count: number, one: string, many: string) => (count > 1 ? many : one);
 

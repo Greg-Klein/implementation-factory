@@ -783,16 +783,16 @@ describe("acceptance coverage in French", () => {
 });
 
 describe("the workflow language setting", () => {
-  it("should read French whatever its case and spacing", () => {
-    expect(workflowLanguageOf("fr")).toBe("fr");
-    expect(workflowLanguageOf(" FR ")).toBe("fr");
+  it("should read English whatever its case and spacing", () => {
+    expect(workflowLanguageOf("en")).toBe("en");
+    expect(workflowLanguageOf(" EN ")).toBe("en");
   });
 
-  it("should fall back on English for anything else, unset included", () => {
-    expect(workflowLanguageOf(undefined)).toBe("en");
-    expect(workflowLanguageOf("")).toBe("en");
-    expect(workflowLanguageOf("en")).toBe("en");
-    expect(workflowLanguageOf("de")).toBe("en");
+  it("should fall back on French for anything else, unset included", () => {
+    expect(workflowLanguageOf(undefined)).toBe("fr");
+    expect(workflowLanguageOf("")).toBe("fr");
+    expect(workflowLanguageOf("fr")).toBe("fr");
+    expect(workflowLanguageOf("de")).toBe("fr");
   });
 });
 

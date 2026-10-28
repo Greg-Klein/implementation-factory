@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import { lstat, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { findingFixRuns, storageRoot, workflowLanguage } from "./config.js";
+import { findingFixRuns, storageRoot } from "./config.js";
+import { currentLanguage, currentTexts } from "./language.js";
 import {
   type FindingFixDraft, type KeptFinding, type StoredFindingFix,
   appendFindingFix, draftFindingFix, findingFixMarker, findingFixSettled, findingFixStore,
@@ -134,7 +135,7 @@ export async function syncFindingFixes(repository: string, kept: KeptFinding[], 
   return enqueue(stored, async () => {
     const { existing, packages } = await repositoryFiles(repository);
     const drafts: FindingFixDraft[] = sourceFixGroups(kept, now, minRuns).map((group) => draftFindingFix(group, {
-      language: workflowLanguage, stack: lintStack(packages, existing), existingFiles: existing,
+      language: currentLanguage(), stack: lintStack(packages, existing), existingFiles: existing,
     }));
     const current = await readStore(stored, true);
     const merged = mergeFindingFixes(current, drafts, new Date(now).toISOString());
@@ -145,14 +146,14 @@ export async function syncFindingFixes(repository: string, kept: KeptFinding[], 
 
 /** The path the store is named after, and the real directory writes must stay inside. */
 async function checkoutRoot(repository: string) {
-  if (!path.isAbsolute(repository)) throw new Error("Invalid repository path.");
+  if (!path.isAbsolute(repository)) throw new Error(currentTexts().serverRun.invalidRepositoryPath);
   const resolved = path.resolve(repository);
-  if (pathIsRunWorktree(resolved)) throw new Error("A run worktree is not the place a source fix is written. Accept it on the main checkout.");
+  if (pathIsRunWorktree(resolved)) throw new Error(currentTexts().serverRun.fixInRunWorktree);
   const real = await realpath(resolved).catch((error: unknown) => {
-    if (isMissingFile(error)) throw new Error("This repository is not a directory.");
+    if (isMissingFile(error)) throw new Error(currentTexts().serverRun.repositoryNotDirectory);
     throw error;
   });
-  if (pathIsRunWorktree(real)) throw new Error("A run worktree is not the place a source fix is written. Accept it on the main checkout.");
+  if (pathIsRunWorktree(real)) throw new Error(currentTexts().serverRun.fixInRunWorktree);
   return { resolved, real };
 }
 
@@ -167,29 +168,29 @@ export async function acceptFindingFix(repository: string, category: string) {
   return enqueue(stored, async () => {
     const proposals = await readStore(stored, true);
     const proposal = proposals.find((item) => item.category === category);
-    if (!proposal) throw new Error("No source fix is waiting for this category.");
+    if (!proposal) throw new Error(currentTexts().serverRun.fixNoneWaiting);
     const target = path.resolve(resolved, proposal.targetFile);
     const relative = path.relative(resolved, target);
-    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error("The fix would be written outside the repository.");
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error(currentTexts().serverRun.fixOutside);
     // The target itself may be a link: where it really leads must stay inside the checkout, before it is read or written.
     await mkdir(path.dirname(target), { recursive: true });
     const targetReal = await realpath(target).catch(async (error: unknown) => {
       if (!isMissingFile(error)) throw error;
       // A link whose destination is missing would still be followed by the write.
       if (await lstat(target).then(() => true, (missing: unknown) => { if (isMissingFile(missing)) return false; throw missing; })) {
-        throw new Error("The target file is a link to a missing file, so the fix was not written.");
+        throw new Error(currentTexts().serverRun.fixLinkMissing);
       }
       return path.join(await realpath(path.dirname(target)), path.basename(target));
     });
     const confined = path.relative(real, targetReal);
-    if (!confined || confined.startsWith("..") || path.isAbsolute(confined)) throw new Error("The fix would be written outside the repository.");
+    if (!confined || confined.startsWith("..") || path.isAbsolute(confined)) throw new Error(currentTexts().serverRun.fixOutside);
     const existing = await readFile(targetReal, "utf8").catch((error: unknown) => {
       if (isMissingFile(error)) return "";
       throw error;
     });
     const appended = appendFindingFix(existing, proposal.body, category);
     if (appended.applied) {
-      if (!appended.text.includes(findingFixMarker(category))) throw new Error("The source fix has no marker, so it was not written.");
+      if (!appended.text.includes(findingFixMarker(category))) throw new Error(currentTexts().serverRun.fixNoMarker);
       await writeFile(targetReal, appended.text);
     }
     const decidedAt = new Date().toISOString();
@@ -201,9 +202,9 @@ export async function acceptFindingFix(repository: string, category: string) {
       applied: appended.applied,
       message: appended.applied
         ? proposal.kind === "lint"
-          ? `Added the ${category} block to ${proposal.targetFile}. Enable its rules in the linter config, review the diff and commit it. Developers keep hearing about this kind of defect until those rules are on the branch new runs start from.`
-          : `Added the ${category} block to ${proposal.targetFile}. Review the diff and commit it. Developers keep hearing about this kind of defect until that change is on the branch new runs start from.`
-        : `The ${category} block is already in ${proposal.targetFile}.`,
+          ? currentTexts().serverRun.fixAcceptedLint(category, proposal.targetFile)
+          : currentTexts().serverRun.fixAccepted(category, proposal.targetFile)
+        : currentTexts().serverRun.fixAlreadyThere(category, proposal.targetFile),
     };
   });
 }
@@ -215,8 +216,8 @@ export async function dismissFindingFix(repository: string, category: string) {
   return enqueue(stored, async () => {
     const proposals = await readStore(stored, true);
     const proposal = proposals.find((item) => item.category === category);
-    if (!proposal) throw new Error("No source fix is waiting for this category.");
-    if (proposal.status === "accepted") throw new Error("This source fix was already accepted. Remove the block from the file if it should not stay.");
+    if (!proposal) throw new Error(currentTexts().serverRun.fixNoneWaiting);
+    if (proposal.status === "accepted") throw new Error(currentTexts().serverRun.fixAlreadyAccepted);
     const decidedAt = new Date().toISOString();
     await writeStore(stored, proposals.map((item) => item.category === category ? { ...item, status: "dismissed" as const, decidedAt } : item));
     return {
@@ -224,7 +225,7 @@ export async function dismissFindingFix(repository: string, category: string) {
       category,
       targetFile: proposal.targetFile,
       applied: false,
-      message: `Dismissed ${category}. It will not be proposed again for this repository.`,
+      message: currentTexts().serverRun.fixDismissed(category),
     };
   });
 }

@@ -1,4 +1,6 @@
 import { createInterface } from "node:readline/promises";
+import type { Language } from "../lib/i18n";
+import { texts } from "../lib/i18n/texts";
 import { phaseNames, runLabel, runStatusBadge, statusLabel } from "../lib/run-state";
 import type { FactorySnapshot, PendingQuestion, RunState, RunSummary } from "../server/types.js";
 import { CliError, type Link } from "./client";
@@ -23,14 +25,15 @@ function ended(status: RunState["status"]) {
  * reads as one. Undefined when the wait was called off, the decision having
  * been taken elsewhere, or when the input closed.
  */
-export async function askQuestions(pending: PendingQuestion, signal?: AbortSignal): Promise<Record<string, string> | undefined> {
+export async function askQuestions(pending: PendingQuestion, language: Language, signal?: AbortSignal): Promise<Record<string, string> | undefined> {
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   const answers: Record<string, string> = {};
   try {
     for (const [index, question] of pending.questions.entries()) {
       for (;;) {
-        const label = pending.questions.length > 1 ? `Answer ${index + 1}` : "Answer";
-        const typed = await prompt.question(`${label} (${question.options.length > 0 ? "number of a choice, or " : ""}your own words): `, signal ? { signal } : {});
+        const text = texts(language).cli;
+        const label = text.answerLabel(index + 1, pending.questions.length > 1);
+        const typed = await prompt.question(text.answerPrompt(label, question.options.length > 0), signal ? { signal } : {});
         const answer = answerFromInput(question, typed);
         if (answer !== undefined) { answers[question.question] = answer; break; }
       }
@@ -43,11 +46,11 @@ export async function askQuestions(pending: PendingQuestion, signal?: AbortSigna
   } finally { prompt.close(); }
 }
 
-async function askTrust(signal: AbortSignal): Promise<"accept" | "refuse" | undefined> {
+async function askTrust(language: Language, signal: AbortSignal): Promise<"accept" | "refuse" | undefined> {
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   try {
     for (;;) {
-      const typed = (await prompt.question("Trust this directory? (accept or refuse): ", { signal })).trim().toLowerCase();
+      const typed = (await prompt.question(texts(language).cli.trustQuestion, { signal })).trim().toLowerCase();
       if (typed === "accept" || typed === "refuse") return typed;
     }
   } catch (error) {
@@ -62,6 +65,8 @@ async function askTrust(signal: AbortSignal): Promise<"accept" | "refuse" | unde
  * person is at the terminal. Ends 0 on a completed run, 1 otherwise.
  */
 export function follow(context: Context, link: Link, runId: string): Promise<number> {
+  const { language } = context;
+  const text = texts(language).cli;
   return new Promise((resolve, reject) => {
     const reference = shortId(runId);
     const seen = new Set<string>();
@@ -83,25 +88,25 @@ export function follow(context: Context, link: Link, runId: string): Promise<num
       held = [];
       ask(cancel.signal).then(async (send) => {
         release();
-        if (!send) { if (cancel.signal.aborted) context.print("Decided elsewhere."); return; }
+        if (!send) { if (cancel.signal.aborted) context.print(text.decidedElsewhere); return; }
         await send();
       }).catch((error: unknown) => { release(); context.print(error instanceof CliError ? error.message : String(error)); });
     };
 
     const apply = (state: RunState) => {
       const events = [
-        ...state.activities.filter((activity) => !seen.has(`a:${activity.id}`)).map((activity) => ({ key: `a:${activity.id}`, at: activity.at, text: activityLine(activity) })),
-        ...state.messages.filter((message) => !message.pending && !seen.has(`m:${message.id}`)).map((message) => ({ key: `m:${message.id}`, at: message.at, text: messageLine(message) })),
+        ...state.activities.filter((activity) => !seen.has(`a:${activity.id}`)).map((activity) => ({ key: `a:${activity.id}`, at: activity.at, text: activityLine(activity, language) })),
+        ...state.messages.filter((message) => !message.pending && !seen.has(`m:${message.id}`)).map((message) => ({ key: `m:${message.id}`, at: message.at, text: messageLine(message, language) })),
       ].sort((left, right) => left.at.localeCompare(right.at));
       for (const event of events) seen.add(event.key);
       if (first) {
-        print(`${runLabel(state)}${state.ticketTitle ? `: ${state.ticketTitle}` : ""}`);
-        if (events.length > BACKLOG) print(`  (${events.length - BACKLOG} earlier events not shown)`);
+        print(`${runLabel(state)}${state.ticketTitle ? `${text.colon}${state.ticketTitle}` : ""}`);
+        if (events.length > BACKLOG) print(text.earlierEvents(events.length - BACKLOG));
       }
       if (state.phase !== phase) {
         phase = state.phase;
-        const names = phaseNames(state.issueUrl);
-        if (names[phase - 1]) print(`--- Step ${phase}/${names.length}: ${names[phase - 1]}`);
+        const names = phaseNames(state.issueUrl, language);
+        if (names[phase - 1]) print(text.stepLine(phase, names.length, names[phase - 1]!));
       }
       for (const event of first ? events.slice(-BACKLOG) : events) print(event.text);
       first = false;
@@ -109,7 +114,7 @@ export function follow(context: Context, link: Link, runId: string): Promise<num
       const incident = state.incidents?.findLast((entry) => entry.status === "open");
       if (incident && incident.id !== incidentId) {
         const words = incidentWords(state);
-        print(`! ${incident.title}: ${incident.reason}${words.length > 0 ? `\n  Act on it: ${context.program} incident ${reference} ${words.join("|")}` : ""}`);
+        print(`! ${incident.title}${text.colon}${incident.reason}${words.length > 0 ? `\n  ${text.actOnIt(`${context.program} incident ${reference} ${words.join("|")}`)}` : ""}`);
       }
       incidentId = incident?.id;
 
@@ -118,25 +123,25 @@ export function follow(context: Context, link: Link, runId: string): Promise<num
       if (waiting && !decision) {
         const question = state.pendingQuestion;
         const prompt = state.sessionPrompt;
-        context.print(`\u0007\nDecision required\n${question ? renderQuestion(question) : renderSessionPrompt(prompt!)}`);
+        context.print(`\u0007\n${text.decisionRequired}\n${question ? renderQuestion(question, language) : renderSessionPrompt(prompt!, language)}`);
         if (!context.interactive) {
           decision = { id: waiting, cancel: new AbortController() };
-          context.print(`Answer: ${context.program} ${question ? "answer" : "trust"} ${reference}${question ? "" : " accept|refuse"}`);
+          context.print(text.answerWith(`${context.program} ${question ? "answer" : "trust"} ${reference}${question ? "" : " accept|refuse"}`));
         } else if (question) {
           decide(waiting, async (signal) => {
-            const answers = await askQuestions(question, signal);
+            const answers = await askQuestions(question, language, signal);
             return answers && (() => link.request({ type: "question.answer", runId, answers }));
           });
         } else if (prompt) {
           decide(waiting, async (signal) => {
-            const answer = await askTrust(signal);
+            const answer = await askTrust(language, signal);
             return answer && (() => link.request({ type: "sessionPrompt.answer", runId, promptId: prompt.id, decision: answer }));
           });
         }
       }
 
       if (ended(state.status)) {
-        print(`--- ${runStatusBadge(state).label}${state.error ? `: ${state.error}` : ""}${state.mergeRequestUrl ? `\n${state.mergeRequestUrl}` : ""}`);
+        print(`--- ${runStatusBadge(state, language).label}${state.error ? `${text.colon}${state.error}` : ""}${state.mergeRequestUrl ? `\n${state.mergeRequestUrl}` : ""}`);
         finish(state.status === "completed" || state.status === "paused" ? 0 : 1);
       }
     };
@@ -145,35 +150,38 @@ export function follow(context: Context, link: Link, runId: string): Promise<num
       if (message.type !== "run" || message.state.id !== runId) return;
       try { apply(message.state); } catch (error) { stop(); reject(error instanceof Error ? error : new Error(String(error))); }
     });
-    link.closed.then(() => { print("The console closed the connection. The run is in the state it left it in."); finish(1); }, reject);
+    link.closed.then(() => { print(text.consoleClosedRun); finish(1); }, reject);
     link.send({ type: "run.subscribe", runId });
   });
 }
 
 /** What a row of the list says, compared from one list to the next to tell what moved. */
-function rowState(run: RunSummary) {
-  const names = phaseNames(run.issueUrl);
-  const waits = run.pendingQuestionCount > 0 || run.sessionPromptId ? ", decision required" : run.incident ? `, ${run.incident.title}` : "";
-  return `${statusLabel(run.status)}${waits}${names[run.phase - 1] ? ` (step ${run.phase}/${names.length}: ${names[run.phase - 1]})` : ""}`;
+function rowState(run: RunSummary, language: Language) {
+  const text = texts(language).cli;
+  const names = phaseNames(run.issueUrl, language);
+  const waits = run.pendingQuestionCount > 0 || run.sessionPromptId ? `, ${text.decisionRequiredList}` : run.incident ? `, ${run.incident.title}` : "";
+  return `${statusLabel(run.status, language)}${waits}${names[run.phase - 1] ? ` (${text.stepInRow(run.phase, names.length, names[run.phase - 1]!)})` : ""}`;
 }
 
 /** Follows every run: the list as it stands, then one line each time a run or the queue moves, and the console's notices. Runs until interrupted. */
 export function watchFactory(context: Context, link: Link): Promise<number> {
+  const { language } = context;
+  const text = texts(language).cli;
   return new Promise((resolve, reject) => {
     const clock = () => new Date().toTimeString().slice(0, 8);
     let rows = new Map<string, string>();
     let queued = new Set<string>();
     const read = (snapshot: FactorySnapshot, announce: boolean) => {
-      const next = new Map(snapshot.runs.map((run) => [run.id, rowState(run)]));
+      const next = new Map(snapshot.runs.map((run) => [run.id, rowState(run, language)]));
       if (announce) {
         for (const run of snapshot.runs) {
           const state = next.get(run.id)!;
           if (rows.get(run.id) === state) continue;
           const decides = run.pendingQuestionCount > 0 || run.sessionPromptId;
-          context.print(`${clock()}  ${decides ? "\u0007" : ""}${shortId(run.id)}  ${runLabel(run)}: ${state}`);
+          context.print(`${clock()}  ${decides ? "\u0007" : ""}${shortId(run.id)}  ${runLabel(run)}${text.colon}${state}`);
         }
-        for (const id of rows.keys()) if (!next.has(id)) context.print(`${clock()}  ${shortId(id)}  removed from the list`);
-        for (const entry of snapshot.queued) if (!queued.has(entry.id)) context.print(`${clock()}  ${shortId(entry.id)}  ${runLabel(entry)}: queued`);
+        for (const id of rows.keys()) if (!next.has(id)) context.print(`${clock()}  ${shortId(id)}  ${text.removedFromList}`);
+        for (const entry of snapshot.queued) if (!queued.has(entry.id)) context.print(`${clock()}  ${shortId(entry.id)}  ${runLabel(entry)}${text.colon}${text.queuedWord}`);
       }
       rows = next;
       queued = new Set(snapshot.queued.map((entry) => entry.id));
@@ -183,9 +191,9 @@ export function watchFactory(context: Context, link: Link): Promise<number> {
     read(link.snapshot(), false);
     link.listen((message) => {
       if (message.type === "factory") read(message.snapshot, true);
-      if (message.type === "notice") context.print(`${clock()}  ${message.level === "attention" ? "! " : ""}${message.title}${message.detail ? `: ${message.detail}` : ""}`);
+      if (message.type === "notice") context.print(`${clock()}  ${message.level === "attention" ? "! " : ""}${message.title}${message.detail ? `${text.colon}${message.detail}` : ""}`);
     });
-    link.closed.then(() => { context.print("The console closed the connection."); resolve(1); }, reject);
+    link.closed.then(() => { context.print(text.consoleClosed); resolve(1); }, reject);
   });
 }
 
@@ -194,13 +202,14 @@ export function watchFactory(context: Context, link: Link): Promise<number> {
  * printed so far, then every key typed here, until the session ends or the
  * user leaves with Ctrl-]. Without a keyboard it only reads.
  */
-export function attach(link: Link, summary: RunSummary): Promise<number> {
+export function attach(link: Link, summary: RunSummary, language: Language): Promise<number> {
+  const text = texts(language).cli;
   return new Promise((resolve, reject) => {
     const input = process.stdin;
     const keyboard = input.isTTY === true && process.stdout.isTTY === true;
     const resize = () => link.send({ type: "terminal.resize", runId: summary.id, cols: process.stdout.columns, rows: process.stdout.rows });
     const onKey = (data: Buffer) => {
-      if (data.includes(DETACH_KEY)) { finish("Detached. The session goes on."); return; }
+      if (data.includes(DETACH_KEY)) { finish(text.detached); return; }
       link.send({ type: "terminal.input", runId: summary.id, data: data.toString("utf8") });
     };
     let done = false;
@@ -215,10 +224,10 @@ export function attach(link: Link, summary: RunSummary): Promise<number> {
     const stop = link.listen((message) => {
       if (message.type === "terminal.output" && message.runId === summary.id) process.stdout.write(message.data);
       // The state of a run arrives before what its terminal printed: an ended session is left once that was shown.
-      if (message.type === "run" && message.state.id === summary.id && !message.state.sessionActive) setTimeout(() => finish("The session has ended."), ENDED_SESSION_GRACE_MS);
+      if (message.type === "run" && message.state.id === summary.id && !message.state.sessionActive) setTimeout(() => finish(text.sessionEnded), ENDED_SESSION_GRACE_MS);
     });
-    link.closed.then(() => finish("The console closed the connection."), reject);
-    process.stderr.write(`Terminal of ${runLabel(summary)}.${keyboard ? " Leave it running with Ctrl-]." : ""}\r\n`);
+    link.closed.then(() => finish(text.consoleClosed), reject);
+    process.stderr.write(`${text.terminalOf(runLabel(summary), keyboard)}\r\n`);
     if (keyboard) {
       input.setRawMode(true);
       input.resume();

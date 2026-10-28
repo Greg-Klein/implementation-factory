@@ -17,14 +17,12 @@ import type { RunSession } from "./run-session.js";
  * engine only types what they chose.
  */
 
-const TRUST_REFUSED = "The folder was not trusted: the session closed before starting the workflow.";
-
 function show(session: RunSession, event: Extract<EngineEvent, { kind: "session.prompt" }>) {
   if (session.state.sessionPrompt || !session.state.sessionActive || !runInProgress(session.state.status)) return false;
   session.state.sessionPrompt = { id: crypto.randomUUID(), kind: event.prompt, directory: event.directory, since: now() };
   session.state.status = "attention";
   session.state.action = undefined;
-  session.activity("attention", `${engine.label} asks to trust this folder`, event.directory);
+  session.activity("attention", session.texts.serverRun.trustAsks(engine.label), event.directory);
   return true;
 }
 
@@ -33,7 +31,7 @@ function drop(session: RunSession, started: boolean) {
   if (!session.state.sessionPrompt) return false;
   session.state.sessionPrompt = undefined;
   if (session.state.status === "attention" && !session.state.pendingQuestion) session.state.status = "running";
-  if (started) session.activity("system", "Folder trusted in the terminal");
+  if (started) session.activity("system", session.texts.serverRun.trustedInTerminal);
   return true;
 }
 
@@ -53,8 +51,8 @@ export function sessionStarted(session: RunSession) {
 
 export function answerSessionPrompt(session: RunSession, promptId: string, decision: SessionPromptDecision) {
   const prompt = session.state.sessionPrompt;
-  if (!prompt || prompt.id !== promptId) throw new Error("This request is no longer waiting for an answer.");
-  if (!session.engine) throw new Error(`No ${engine.label} session is active.`);
+  if (!prompt || prompt.id !== promptId) throw new Error(session.texts.serverRun.promptGone);
+  if (!session.engine) throw new Error(session.texts.serverRun.noSession(engine.label));
   // Said before the keystrokes leave: the exit that follows a refusal must find its reason.
   if (decision === "refuse") session.endedBy = "trust_refused";
   const typed = session.engine.answerPrompt(decision);
@@ -63,9 +61,9 @@ export function answerSessionPrompt(session: RunSession, promptId: string, decis
     session.endedBy = null;
     session.publish();
     session.signal();
-    throw new Error("The request is no longer on screen. Check the Terminal tab.");
+    throw new Error(session.texts.serverRun.promptNotOnScreen);
   }
-  session.activity("system", decision === "accept" ? "Folder trusted" : "Trust declined, the session is closing", prompt.directory);
+  session.activity("system", decision === "accept" ? session.texts.serverRun.trustedFolder : session.texts.serverRun.trustDeclined, prompt.directory);
   session.markExecution();
   session.publish();
   session.signal();
@@ -80,5 +78,5 @@ export function closeSessionPrompt(session: RunSession) {
   const refused = session.endedBy === "trust_refused" || (Boolean(session.state.sessionPrompt) && session.stoppedBy === null);
   session.state.sessionPrompt = undefined;
   if (refused) session.endedBy = "trust_refused";
-  return refused ? TRUST_REFUSED : undefined;
+  return refused ? session.texts.serverRun.trustRefusedError : undefined;
 }

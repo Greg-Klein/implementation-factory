@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, confidenceChip, confidenceReasonLine, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, pendingAnswerLabel, statusLabel, confidenceChip, confidenceReasonLine, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 import { attachmentPaths } from "../../server/acceptance";
 
@@ -120,20 +120,20 @@ describe("the Progression badge", () => {
   });
 
   it("should keep \"Your turn\" for a real question", () => {
-    expect(runStatusBadge({ status: "attention", pendingQuestion: { id: "q", questions: [] }, incidents: [incident("no_next_action")] })).toEqual({ label: "Your turn", tone: "decision" });
+    expect(runStatusBadge({ status: "attention", pendingQuestion: { id: "q", questions: [] }, incidents: [incident("no_next_action")] }, "en")).toEqual({ label: "Your turn", tone: "decision" });
   });
 
   it("should keep \"Your turn\" for a prompt waiting in the terminal", () => {
-    expect(runStatusBadge({ status: "attention", health: { health: "waiting", wait: { reason: "permission", since: "" }, evaluatedAt: "" } })).toEqual({ label: "Your turn", tone: "decision" });
+    expect(runStatusBadge({ status: "attention", health: { health: "waiting", wait: { reason: "permission", since: "" }, evaluatedAt: "" } }, "en")).toEqual({ label: "Your turn", tone: "decision" });
   });
 
   it("should say a run with no next action is blocked, without implying a question", () => {
-    expect(runStatusBadge({ status: "attention", incidents: [incident("no_next_action")] })).toEqual({ label: "No next step", tone: "blocked" });
+    expect(runStatusBadge({ status: "attention", incidents: [incident("no_next_action")] }, "en")).toEqual({ label: "No next step", tone: "blocked" });
   });
 
   it("should read a lost session as an interruption, not as an error", () => {
-    expect(runStatusBadge({ status: "failed", incidents: [incident("lost_session")] })).toEqual({ label: "Interrupted", tone: "error" });
-    expect(runStatusBadge({ status: "failed" })).toEqual({ label: "Error", tone: "error" });
+    expect(runStatusBadge({ status: "failed", incidents: [incident("lost_session")] }, "en")).toEqual({ label: "Interrupted", tone: "error" });
+    expect(runStatusBadge({ status: "failed" }, "en")).toEqual({ label: "Error", tone: "error" });
   });
 });
 
@@ -141,14 +141,14 @@ describe("the acceptance chip of a run row", () => {
   const counts = { total: 5, verified: 2, failed: 1, blocked: 1, unverified: 1, stale: 0 };
 
   it("should show nothing without a registry of criteria", () => {
-    expect(acceptanceChip(undefined)).toBeUndefined();
-    expect(acceptanceChip({ ...counts, total: 0, verified: 0, failed: 0, blocked: 0, unverified: 0 })).toBeUndefined();
+    expect(acceptanceChip(undefined, "en")).toBeUndefined();
+    expect(acceptanceChip({ ...counts, total: 0, verified: 0, failed: 0, blocked: 0, unverified: 0 }, "en")).toBeUndefined();
   });
 
   it("should show verified over total, coloured by the worst state left", () => {
-    expect(acceptanceChip(counts)).toEqual({ label: "2/5 AC", title: "2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified", tone: "error" });
-    expect(acceptanceChip({ ...counts, failed: 0, unverified: 2 })?.tone).toBe("attention");
-    expect(acceptanceChip({ ...counts, verified: 5, failed: 0, blocked: 0, unverified: 0 })).toMatchObject({ label: "5/5 AC", tone: "verified" });
+    expect(acceptanceChip(counts, "en")).toEqual({ label: "2/5 AC", title: "2 of 5 criteria verified · 1 failed · 1 blocked · 1 unverified", tone: "error" });
+    expect(acceptanceChip({ ...counts, failed: 0, unverified: 2 }, "en")?.tone).toBe("attention");
+    expect(acceptanceChip({ ...counts, verified: 5, failed: 0, blocked: 0, unverified: 0 }, "en")).toMatchObject({ label: "5/5 AC", tone: "verified" });
   });
 });
 
@@ -161,9 +161,9 @@ describe("a session waiting on the folder trust prompt", () => {
 
   it("should read as the user's turn, and as a stop once refused", () => {
     const prompt = { id: "p1", kind: "folder_trust" as const, directory: "/tmp/repo", since: "2026-10-03T09:00:00.000Z" };
-    expect(runStatusBadge({ status: "attention", sessionPrompt: prompt })).toEqual({ label: "Your turn", tone: "decision" });
+    expect(runStatusBadge({ status: "attention", sessionPrompt: prompt }, "en")).toEqual({ label: "Your turn", tone: "decision" });
     expect(terminalExitStatus(1, true)).toBe("stopped");
-    expect(runStatusBadge({ status: "stopped" })).toEqual({ label: "Stopped", tone: "stopped" });
+    expect(runStatusBadge({ status: "stopped" }, "en")).toEqual({ label: "Stopped", tone: "stopped" });
   });
 });
 
@@ -180,13 +180,13 @@ describe("a run working in a worktree", () => {
   });
 
   it("should show where the active worktree is, from the repository", () => {
-    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "active" } })).toBe(".claude/worktrees/2026-10-03T08-00-00-000Z-abcd1234");
-    expect(worktreeLabel({ cwd: "/work/legacy" })).toBeUndefined();
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "active" } }, "en")).toBe(".claude/worktrees/2026-10-03T08-00-00-000Z-abcd1234");
+    expect(worktreeLabel({ cwd: "/work/legacy" }, "en")).toBeUndefined();
   });
 
   it("should say why a worktree is kept, and that a removed one is gone", () => {
-    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "kept", detail: "Worktree kept: unpushed changes" } })).toBe("Worktree kept: unpushed changes");
-    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "removed" } })).toBe("Worktree removed");
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "kept", detail: "Worktree kept: unpushed changes" } }, "en")).toBe("Worktree kept: unpushed changes");
+    expect(worktreeLabel({ ...run, worktree: { path: worktree, state: "removed" } }, "en")).toBe("Worktree removed");
   });
 
   it("should offer the removal only for a worktree still on disk whose session is gone", () => {
@@ -198,8 +198,8 @@ describe("a run working in a worktree", () => {
   });
 
   it("should tell a launch waiting on its own ticket from one waiting on a slot", () => {
-    expect(queueReason({ reason: "ticket" })).toBe("ticket already running");
-    expect(queueReason({ reason: "slot" })).toBe("all slots are taken");
+    expect(queueReason({ reason: "ticket" }, "en")).toBe("ticket already running");
+    expect(queueReason({ reason: "slot" }, "en")).toBe("all slots are taken");
   });
 });
 
@@ -207,41 +207,41 @@ describe("what a queued ticket waits for", () => {
   const blocking = { issueUrl: "https://gitlab.com/acme/shop/-/issues/217", mergeRequestUrl: "https://gitlab.com/acme/shop/-/merge_requests/12", branch: "feat/217" };
 
   it("should name the ticket it is in conflict with while that one runs", () => {
-    expect(queueStatus({ reason: "conflict", blocking })).toBe("Waiting, conflict with #217, which is running");
+    expect(queueStatus({ reason: "conflict", blocking }, "en")).toBe("Waiting, conflict with #217, which is running");
   });
 
   it("should name the merge request it waits for and the ticket behind it", () => {
-    expect(queueReason({ reason: "merge", blocking })).toBe("waits for MR !12 to be merged (#217)");
-    expect(queueStatus({ reason: "merge", blocking })).toBe("Waits for MR !12 to be merged (#217)");
+    expect(queueReason({ reason: "merge", blocking }, "en")).toBe("waits for MR !12 to be merged (#217)");
+    expect(queueStatus({ reason: "merge", blocking }, "en")).toBe("Waits for MR !12 to be merged (#217)");
     expect(mergeRequestLabel("ticket-simule://acme-dashboard/-/merge_requests/128")).toBe("MR !128");
   });
 
   it("should say so when the state of that merge request is unknown", () => {
-    expect(queueStatus({ reason: "merge_unknown", blocking })).toBe("State of MR !12 unknown (#217)");
+    expect(queueStatus({ reason: "merge_unknown", blocking }, "en")).toBe("State of MR !12 unknown (#217)");
   });
 
   it("should call it a pull request, and number it with a hash, when the ticket is on GitHub", () => {
     const onGitHub = { issueUrl: "https://github.com/acme/shop/issues/217", mergeRequestUrl: "https://github.com/acme/shop/pull/12", branch: "feat/217" };
-    expect(queueStatus({ reason: "merge", blocking: onGitHub })).toBe("Waits for PR #12 to be merged (#217)");
-    expect(queueStatus({ reason: "merge_unknown", blocking: onGitHub })).toBe("State of PR #12 unknown (#217)");
-    expect(phaseNames("https://github.com/acme/shop/issues/217")[7]).toBe("Open the PR");
-    expect(phaseNames("https://gitlab.com/acme/shop/-/issues/217")[7]).toBe("Open the MR");
-    expect(phaseNames("ticket-simule://IH-42")[7]).toBe("Open the MR");
+    expect(queueStatus({ reason: "merge", blocking: onGitHub }, "en")).toBe("Waits for PR #12 to be merged (#217)");
+    expect(queueStatus({ reason: "merge_unknown", blocking: onGitHub }, "en")).toBe("State of PR #12 unknown (#217)");
+    expect(phaseNames("https://github.com/acme/shop/issues/217", "en")[7]).toBe("Open the PR");
+    expect(phaseNames("https://gitlab.com/acme/shop/-/issues/217", "en")[7]).toBe("Open the MR");
+    expect(phaseNames("ticket-simule://IH-42", "en")[7]).toBe("Open the MR");
   });
 
   it("should tell a dependency from a plain order among queued tickets", () => {
-    expect(queueStatus({ reason: "dependency", blocking })).toBe("Depends on #217, still queued");
-    expect(queueStatus({ reason: "order", blocking })).toBe("Goes after #217");
+    expect(queueStatus({ reason: "dependency", blocking }, "en")).toBe("Depends on #217, still queued");
+    expect(queueStatus({ reason: "order", blocking }, "en")).toBe("Goes after #217");
   });
 
   it("should say the batch is being analysed", () => {
-    expect(queueStatus({ reason: "analysis" })).toBe("Analysis in progress");
+    expect(queueStatus({ reason: "analysis" }, "en")).toBe("Analysis in progress");
   });
 
   it("should say a forced ticket only waits for a place, and on which branch it is stacked", () => {
-    expect(queueStatus({ reason: "slot", forced: { mode: "base" } })).toBe("Forced start, as soon as a slot is free");
-    expect(queueStatus({ reason: "slot", forced: { mode: "stacked", baseBranch: "feat/217", onto: blocking.issueUrl } })).toBe("Stacked start on feat/217, as soon as a slot is free");
-    expect(queueStatus({ reason: "slot" })).toBe("Waiting, all slots are taken");
+    expect(queueStatus({ reason: "slot", forced: { mode: "base" } }, "en")).toBe("Forced start, as soon as a slot is free");
+    expect(queueStatus({ reason: "slot", forced: { mode: "stacked", baseBranch: "feat/217", onto: blocking.issueUrl } }, "en")).toBe("Stacked start on feat/217, as soon as a slot is free");
+    expect(queueStatus({ reason: "slot" }, "en")).toBe("Waiting, all slots are taken");
   });
 
   it("should offer an override only when the schedule is what holds the ticket", () => {
@@ -251,9 +251,9 @@ describe("what a queued ticket waits for", () => {
   });
 
   it("should mark a ticket that runs alone on its repository, and say why", () => {
-    expect(scheduleMark({ analysisFailure: "5 min timeout exceeded" })).toMatchObject({ label: "Analysis failed", title: expect.stringContaining("5 min timeout exceeded") });
-    expect(scheduleMark({ confidence: "low" })?.label).toBe("Unreliable prediction");
-    expect(scheduleMark({ confidence: "high" })).toBeUndefined();
+    expect(scheduleMark({ analysisFailure: "5 min timeout exceeded" }, "en")).toMatchObject({ label: "Analysis failed", title: expect.stringContaining("5 min timeout exceeded") });
+    expect(scheduleMark({ confidence: "low" }, "en")?.label).toBe("Unreliable prediction");
+    expect(scheduleMark({ confidence: "high" }, "en")).toBeUndefined();
   });
 });
 
@@ -313,16 +313,52 @@ describe("the queue as it is shown", () => {
 
 describe("the review confidence as the interface words it", () => {
   it("should show nothing before the run has a note, and a zero as a note", () => {
-    expect(confidenceChip(undefined)).toBeUndefined();
-    expect(confidenceChip(0)).toMatchObject({ label: "0/5", tone: "error" });
+    expect(confidenceChip(undefined, "en")).toBeUndefined();
+    expect(confidenceChip(0, "en")).toMatchObject({ label: "0/5", tone: "error" });
   });
 
   it("should colour the note by how much is left for a person to review", () => {
-    expect([0, 1, 2, 3, 4, 5].map((score) => confidenceChip(score)!.tone)).toEqual(["error", "error", "attention", "attention", "neutral", "verified"]);
+    expect([0, 1, 2, 3, 4, 5].map((score) => confidenceChip(score, "en")!.tone)).toEqual(["error", "error", "attention", "attention", "neutral", "verified"]);
   });
 
   it("should word a rule by what it did to the note", () => {
-    expect(confidenceReasonLine({ rule: "incident_open", cap: 2, detail: "1 incident still open." })).toBe("Held at 2: 1 incident still open.");
-    expect(confidenceReasonLine({ rule: "sensitive_path", minus: 1, detail: "1 sensitive file changed." })).toBe("Minus 1: 1 sensitive file changed.");
+    expect(confidenceReasonLine({ rule: "incident_open", cap: 2, detail: "1 incident still open." }, "en")).toBe("Held at 2: 1 incident still open.");
+    expect(confidenceReasonLine({ rule: "sensitive_path", minus: 1, detail: "1 sensitive file changed." }, "en")).toBe("Minus 1: 1 sensitive file changed.");
+  });
+});
+
+describe("run state in French", () => {
+  it("should say the status of a run in French", () => {
+    expect(statusLabel("attention", "fr")).toBe("À vous");
+    expect(runStatusBadge({ status: "failed", health: { health: "interrupted", evaluatedAt: "" } }, "fr")).toEqual({ label: "Interrompu", tone: "error" });
+  });
+
+  it("should name the steps after the forge of the ticket", () => {
+    expect(phaseNames("https://gitlab.example.com/acme/shop/-/issues/12", "fr")[7]).toBe("Ouvrir la MR");
+    expect(phaseNames("https://github.com/acme/shop/issues/12", "fr")[7]).toBe("Ouvrir la PR");
+  });
+
+  it("should say why a queued launch waits in French", () => {
+    expect(queueReason({ reason: "conflict", blocking: { issueUrl: "https://gitlab.example.com/acme/shop/-/issues/12" } }, "fr")).toBe("conflit avec #12, en cours");
+    expect(queueStatus({ reason: "slot" }, "fr")).toBe("En attente, tous les slots sont pris");
+  });
+
+  it("should write the confidence reasons in French from the rule, whatever English detail came with it", () => {
+    expect(confidenceReasonLine({ rule: "incident_open", cap: 2, count: 2, detail: "2 incidents still open." }, "fr")).toBe("Plafonnée à 2 : 2 incidents encore ouverts.");
+    expect(confidenceReasonLine({ rule: "gate_unchecked", minus: 0.5, detail: "A check of the stop gate could not conclude." }, "fr")).toBe("Moins 0,5 : Un contrôle du stop gate n'a pas pu conclure.");
+    expect(confidenceReasonLine({ rule: "diff_large", minus: 1, count: 520, detail: "520 lines changed, more than 400." }, "fr")).toBe("Moins 1 : 520 lignes modifiées, plus de 400.");
+  });
+
+  it("should fall back on the English detail for a rule it does not know", () => {
+    expect(confidenceReasonLine({ rule: "future_rule", minus: 1, detail: "Something new." }, "fr")).toBe("Moins 1 : Something new.");
+  });
+
+  it("should give the confidence chip and the acceptance chip a French tooltip", () => {
+    expect(confidenceChip(0, "fr")?.title).toBe("Confiance de la revue 0 sur 5 : une personne doit tout relire");
+    expect(acceptanceChip({ total: 5, verified: 2, failed: 1, blocked: 0, unverified: 2 } as never, "fr")?.title).toBe("2 critères vérifiés sur 5 · 1 échoué · 2 non vérifiés");
+  });
+
+  it("should say the pending answers in French", () => {
+    expect(pendingAnswerLabel(3, "fr")).toBe("Claude attend 3 réponses");
   });
 });

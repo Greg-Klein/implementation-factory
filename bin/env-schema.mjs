@@ -65,7 +65,7 @@ function validateOptionalAbsolutePath(value) {
 export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"];
 
 /** The languages a run can write in. Anything else is read as English by the console. */
-export const workflowLanguages = ["en", "fr"];
+export const workflowLanguages = ["fr", "en"];
 
 export const schema = [
   {
@@ -91,10 +91,10 @@ export const schema = [
   },
   {
     key: "IMPL_LANGUAGE",
-    label: "Language of what the workflow writes",
-    comment: "Language of what the workflow writes for people (questions, reports, merge request text): 'en' or 'fr'. The interface itself is in English.",
-    help: "Language of the questions, the reports and the merge request text a run writes: 'en' for English, 'fr' for French. The interface stays in English.",
-    fallback: "en",
+    label: "Language of the interface and of the runs",
+    comment: "Language of the interface, of the terminal client and of what the runs write (questions, reports, merge request text): 'fr' or 'en'. Also chosen from the page. A rule of the target repository on the language of its merge requests wins.",
+    help: "Language of the page, of the impl commands and of what a run writes: 'fr' for French, 'en' for English. The page changes it too. A run keeps the language it was launched in.",
+    fallback: "fr",
     kind: "choice",
     options: workflowLanguages,
     readBy: "console",

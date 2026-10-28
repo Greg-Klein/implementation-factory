@@ -1,8 +1,10 @@
 "use client";
 
+import { useLanguage, useTexts } from "./language";
 import { ArrowDownIcon, ArrowUpIcon, CaretRightIcon, DotsSixVerticalIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useState, type DragEvent } from "react";
 import { heldBySchedule, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueStatus, runLabel, scheduleMark } from "@/lib/run-state";
+import { clockTime, type Language } from "@/lib/i18n";
 import { forgeOf, forgeWords, ticketReference } from "@/lib/ticket-urls";
 import type { QueuedRunView } from "@/lib/types";
 
@@ -16,9 +18,9 @@ export type QueueActions = {
 const iconButton = "grid size-5 shrink-0 place-items-center rounded-md text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent";
 const override = "w-full rounded-lg border border-[var(--line)] bg-[var(--raised)] px-2.5 py-1.5 text-left text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] active:translate-y-px";
 
-function batchTime(queuedAt: string) {
-  const date = new Date(queuedAt);
-  return Number.isNaN(date.getTime()) ? "" : ` of ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}`;
+function batchTime(queuedAt: string, language: Language, of: (time: string) => string) {
+  const time = clockTime(language, queuedAt);
+  return time ? of(time) : "";
 }
 
 /**
@@ -27,6 +29,7 @@ function batchTime(queuedAt: string) {
  * for, and an override is a decision, not a habit.
  */
 function Justification({ entry, label, actions }: { entry: QueuedRunView; label: string; actions: QueueActions }) {
+  const t = useTexts().rail;
   const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : undefined;
   const branch = entry.blocking?.branch;
   const words = forgeWords(forgeOf(entry.issueUrl));
@@ -35,27 +38,27 @@ function Justification({ entry, label, actions }: { entry: QueuedRunView; label:
     <details className="group/why mt-1">
       <summary className="flex cursor-pointer list-none items-center gap-1 text-[10px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] [&::-webkit-details-marker]:hidden">
         <CaretRightIcon size={9} weight="bold" aria-hidden className="transition-transform group-open/why:rotate-90" />
-        Why it waits
+        {t.whyItWaits}
       </summary>
       <div className="mt-1.5 space-y-2">
         {entry.detail && <p className="text-[10px] leading-4 text-[var(--ink)]">{entry.detail}</p>}
-        {entry.summary && <p className="text-[10px] leading-4 text-[var(--muted)]">This ticket: {entry.summary}</p>}
-        {entry.reason === "analysis" && <p className="text-[10px] leading-4 text-[var(--muted)]">The tickets of the batch are compared to find which can run at the same time.</p>}
-        {entry.reason === "merge_unknown" && <p className="text-[10px] leading-4 text-amber-800">{blockingWords.name} does not answer: the ticket keeps waiting until the state of the {blockingWords.delivery} is known.</p>}
+        {entry.summary && <p className="text-[10px] leading-4 text-[var(--muted)]">{t.thisTicket(entry.summary)}</p>}
+        {entry.reason === "analysis" && <p className="text-[10px] leading-4 text-[var(--muted)]">{t.analysisCompare}</p>}
+        {entry.reason === "merge_unknown" && <p className="text-[10px] leading-4 text-amber-800">{t.mergeUnknown(blockingWords.name, blockingWords.delivery)}</p>}
         <div>
-          <button type="button" className={override} onClick={() => actions.force(entry.id, "base")} aria-label={`Start ${label} from the base`}>Start from the base</button>
+          <button type="button" className={override} onClick={() => actions.force(entry.id, "base")} aria-label={t.startFromBaseLabel(label)}>{t.startFromBase}</button>
           <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
             {other
-              ? <>Starts without waiting for {other}. Both tickets touch the same code: the second {words.delivery} will probably have to be reworked by hand.</>
-              : <>Starts without waiting for the analysis to end. Nothing says yet whether it touches the same code as another ticket.</>}
+              ? t.startWithoutWaiting(other, words.delivery)
+              : t.startWithoutAnalysis}
           </p>
         </div>
         {other && branch && (
           <div>
-            <button type="button" className={override} onClick={() => actions.force(entry.id, "stacked", entry.blocking?.issueUrl)} aria-label={`Stack ${label} on ${branch}`}>
-              Stack on <span className="font-mono text-[10px]">{branch}</span>
+            <button type="button" className={override} onClick={() => actions.force(entry.id, "stacked", entry.blocking?.issueUrl)} aria-label={t.stackOnLabel(label, branch)}>
+              {t.stackOn} <span className="font-mono text-[10px]">{branch}</span>
             </button>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Starts from the branch of {other} and opens its {words.delivery} against that branch. It can only be merged after the one of {other}.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">{t.stackExplain(other, words.delivery)}</p>
           </div>
         )}
       </div>
@@ -72,6 +75,8 @@ type Dragging = { drag: Drag | null; setDrag: (drag: Drag | null) => void };
  * A row is dragged among the rows of its scope (`queueDragScope`) when there are several; the arrows do the same from the keyboard.
  */
 function QueuedRow({ entry, label, title, index, queued, siblings, draggable, dragging, actions }: { entry: QueuedRunView; label: string; title: string; index: number; queued: QueuedRunView[]; siblings: QueuedRunView[]; draggable: boolean; dragging: Dragging; actions: QueueActions }) {
+  const language = useLanguage();
+  const t = useTexts().rail;
   const { drag, setDrag } = dragging;
   const scope = queueDragScope(entry);
   const accepts = drag !== null && drag.id !== entry.id && drag.scope === scope;
@@ -107,7 +112,7 @@ function QueuedRow({ entry, label, title, index, queued, siblings, draggable, dr
     },
   };
   const dropMark = over === "before" ? "shadow-[inset_0_2px_0_var(--ink)]" : over === "after" ? "shadow-[inset_0_-2px_0_var(--ink)]" : "";
-  const mark = scheduleMark(entry);
+  const mark = scheduleMark(entry, language);
   const up = queueMoveTarget(queued, siblings, entry.id, "up");
   const down = queueMoveTarget(queued, siblings, entry.id, "down");
   const held = heldBySchedule(entry);
@@ -118,16 +123,16 @@ function QueuedRow({ entry, label, title, index, queued, siblings, draggable, dr
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1">
           <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-[var(--ink)]" title={label}>{title}</p>
-          {draggable && <span title="Drag to reorder" className="grid size-5 shrink-0 place-items-center text-[var(--muted)]"><DotsSixVerticalIcon size={11} weight="bold" aria-hidden /></span>}
+          {draggable && <span title={t.dragToReorder} className="grid size-5 shrink-0 place-items-center text-[var(--muted)]"><DotsSixVerticalIcon size={11} weight="bold" aria-hidden /></span>}
           {siblings.length > 1 && <>
-            <button type="button" disabled={up === undefined} onClick={() => up !== undefined && actions.move(entry.id, up)} aria-label={`Move ${label} up in the queue`} className={iconButton}><ArrowUpIcon size={10} /></button>
-            <button type="button" disabled={down === undefined} onClick={() => down !== undefined && actions.move(entry.id, down)} aria-label={`Move ${label} down in the queue`} className={iconButton}><ArrowDownIcon size={10} /></button>
+            <button type="button" disabled={up === undefined} onClick={() => up !== undefined && actions.move(entry.id, up)} aria-label={t.moveUp(label)} className={iconButton}><ArrowUpIcon size={10} /></button>
+            <button type="button" disabled={down === undefined} onClick={() => down !== undefined && actions.move(entry.id, down)} aria-label={t.moveDown(label)} className={iconButton}><ArrowDownIcon size={10} /></button>
           </>}
-          <button type="button" onClick={() => actions.cancel(entry.id)} aria-label={`Remove ${label} from the queue`} className={iconButton}><XIcon size={11} /></button>
+          <button type="button" onClick={() => actions.cancel(entry.id)} aria-label={t.removeFromQueue(label)} className={iconButton}><XIcon size={11} /></button>
         </div>
-        <p className={`mt-0.5 flex items-start gap-1 text-[10px] leading-4 ${tone}`} title={entry.blockedBy ? `Blocked by run ${entry.blockedBy}` : undefined}>
+        <p className={`mt-0.5 flex items-start gap-1 text-[10px] leading-4 ${tone}`} title={entry.blockedBy ? t.blockedBy(entry.blockedBy) : undefined}>
           {entry.reason === "merge_unknown" && <WarningIcon size={10} weight="fill" aria-hidden className="mt-0.5 shrink-0" />}
-          <span>{queueStatus(entry)}</span>
+          <span>{queueStatus(entry, language)}</span>
         </p>
         {mark && <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-amber-800" title={mark.title}><WarningIcon size={10} weight="fill" aria-hidden className="shrink-0" />{mark.label}</p>}
         {held && !entry.forced && <Justification entry={entry} label={label} actions={actions} />}
@@ -143,17 +148,19 @@ function QueuedRow({ entry, label, title, index, queued, siblings, draggable, dr
  */
 export function QueueList({ queued, actions }: { queued: QueuedRunView[]; actions: QueueActions }) {
   const [drag, setDrag] = useState<Drag | null>(null);
+  const language = useLanguage();
+  const t = useTexts().rail;
   if (queued.length === 0) return null;
   let index = 0;
   const scopes = queued.map(queueDragScope);
   const draggable = (entry: QueuedRunView) => scopes.filter((scope) => scope === queueDragScope(entry)).length > 1;
   return (
-    <div role="group" aria-label="Queued runs" className="border-t border-[var(--line)] bg-[var(--sunken)]">
-      <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">Queued · {queued.length}</p>
+    <div role="group" aria-label={t.queuedGroup} className="border-t border-[var(--line)] bg-[var(--sunken)]">
+      <p className="px-3.5 pb-1 pt-2.5 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">{t.queued} · {queued.length}</p>
       <div className="divide-y divide-[var(--line)]">
         {queueGroups(queued).map((group) => (
-          <div key={group.key} role={group.batchId ? "group" : undefined} aria-label={group.batchId ? `Batch${batchTime(group.queuedAt)}` : undefined}>
-            {group.batchId && <p className="px-3.5 pt-2 text-[10px] font-semibold text-[var(--ink)]">Batch{batchTime(group.queuedAt)} <span className="font-normal text-[var(--muted)]">· {group.count} ticket{group.count > 1 ? "s" : ""} queued</span></p>}
+          <div key={group.key} role={group.batchId ? "group" : undefined} aria-label={group.batchId ? `${t.batch}${batchTime(group.queuedAt, language, t.batchOf)}` : undefined}>
+            {group.batchId && <p className="px-3.5 pt-2 text-[10px] font-semibold text-[var(--ink)]">{t.batch}{batchTime(group.queuedAt, language, t.batchOf)} <span className="font-normal text-[var(--muted)]">· {t.batchTickets(group.count)}</span></p>}
             {group.repositories.map((bucket) => (
               <div key={bucket.repository}>
                 {group.batchId && <p className="truncate px-3.5 pt-1.5 font-mono text-[9px] text-[var(--muted)]" title={bucket.repository}>{bucket.name}</p>}

@@ -1,11 +1,17 @@
 # Workflow language
 
-One setting decides the language of everything this workflow writes for a person: `IMPL_LANGUAGE` in the environment.
+One setting decides the language of everything this workflow writes for a person: `IMPL_LANGUAGE` in the environment. The console sets it for each run, from the language chosen in its interface when the run was launched.
 
-- `fr`: French.
-- anything else, or unset: English.
+- `en`: English.
+- anything else, or unset: French.
 
-Read it once, at the start (`echo "${IMPL_LANGUAGE:-en}"`), and keep it for the whole run. The pilot states the language in every delegation ("workflow language: French" or "workflow language: English"); an agent that was not told reads the variable itself. Never switch language halfway, and never follow the language of the ticket, of the repository or of these instructions instead: they are in English whatever the setting.
+Read it once, at the start (`echo "${IMPL_LANGUAGE:-fr}"`), and keep it for the whole run. The pilot states the language in every delegation ("workflow language: French" or "workflow language: English"); an agent that was not told reads the variable itself. Never switch language halfway, and never follow the language the ticket or these instructions happen to be written in: these instructions are in English whatever the setting. Only a written rule of the repository changes it, below.
+
+## A rule of the repository wins
+
+The setting is the user's preference; the repository's own rules come first. Before writing anything, the pilot reads the instruction files of the target repository (`CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, the review guide when the console left one) and looks for an explicit rule on the language of something this workflow writes: merge request or pull request title and description, review comments, commit messages, code comments, documentation. Such a rule wins over the setting, and over the fixed English of commit messages and merge request titles below, for exactly what it names; everything it does not name follows the setting. The language a file happens to be written in is not a rule: only a sentence that says which language to use is.
+
+The pilot settles this once, at the start, and passes it in every delegation beside the language, with its source: "workflow language: French; merge request text: English (repository rule, `AGENTS.md`)". An agent never looks for such a rule itself. The final report says which repository rule overrode the setting, when one did.
 
 ## What follows the workflow language
 
@@ -17,7 +23,7 @@ Read it once, at the start (`echo "${IMPL_LANGUAGE:-en}"`), and keep it for the 
 ## What never changes
 
 - code, identifiers, commands, file names, branch names
-- commit messages and the title of the merge request or pull request: English, conventional prefix
+- commit messages and the title of the merge request or pull request: English, conventional prefix, unless a repository rule says otherwise
 - JSON field names, enum values and verdict tokens: the console and the other agents read them. That covers the review verdicts (`PASS`, `PASS_WITH_WARNINGS`, `PASS_WITH_CHANGES`, `INCONCLUSIVE`, `FAIL`, `READY`, `BLOCKED`), the evidence verdicts (`pass`, `fail`, `not_run`, `measured`, `confirmed`, `unverified`), the criterion statuses of the QA report (`MET`, `NOT MET`, `UNVERIFIED`) and the severities (`P0`, `P1`, `P2`)
 - a comment or a correction written on another ticket: it follows the language that ticket is already written in, whatever this setting says, so the ticket stays in one language for the people who read it
 - the strings of the product being built: they follow the ticket and the repository, not this setting

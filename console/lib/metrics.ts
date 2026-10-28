@@ -1,9 +1,14 @@
 import { defined } from "./defined";
+import type { Language } from "./i18n";
+import { texts } from "./i18n/texts";
 import type { ImprovementMetrics, RunMetrics } from "./types";
 
 /** Tokens in the unit a person compares: thousands below a million, millions above: "412k", "1.61M". */
-export function formatTokens(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+export function formatTokens(value: number, language: Language) {
+  if (value >= 1_000_000) {
+    const millions = (value / 1_000_000).toFixed(2);
+    return `${language === "fr" ? millions.replace(".", ",") : millions}M`;
+  }
   if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
   return String(value);
 }
@@ -31,19 +36,18 @@ export function median(values: number[]) {
   return sorted.length % 2 || lower === undefined ? upper : (lower + upper) / 2;
 }
 
-const ROLES: Record<string, string> = {
-  "ticket-planner": "Planning", developer: "Development", "senior-reviewer": "Technical review", "qa-reviewer": "QA",
-  "designer-reviewer": "Design review", "review-orchestrator": "Review orchestration",
-};
-
-export function sessionLabel(name: string) {
-  return ROLES[name] ?? name;
+export function sessionLabel(name: string, language: Language) {
+  const t = texts(language).metrics;
+  const roles: Record<string, string> = {
+    "ticket-planner": t.rolePlanner, developer: t.roleDeveloper, "senior-reviewer": t.roleSenior, "qa-reviewer": t.roleQa,
+    "designer-reviewer": t.roleDesigner, "review-orchestrator": t.roleOrchestrator,
+  };
+  return roles[name] ?? name;
 }
 
-const WAITS = { question: "Decisions", session_prompt: "Folder trust", terminal: "Terminal input" } as const;
-
-export function waitLabel(reason: keyof typeof WAITS) {
-  return WAITS[reason];
+export function waitLabel(reason: "question" | "session_prompt" | "terminal", language: Language) {
+  const t = texts(language).metrics;
+  return { question: t.waitQuestion, session_prompt: t.waitSessionPrompt, terminal: t.waitTerminal }[reason];
 }
 
 /** How many times the reviewers were launched beyond a single pass each, plus the developers sent to correct. */
@@ -53,10 +57,10 @@ export function reworkCount(metrics: Pick<RunMetrics, "rework">) {
 }
 
 /** What the plan predicted, in one short string: "2 S · 1 M". Empty without a plan. */
-export function planSizes(metrics: Pick<RunMetrics, "complexity">) {
+export function planSizes(metrics: Pick<RunMetrics, "complexity">, language: Language) {
   const { sizes, tasks } = metrics.complexity;
   const parts = (["S", "M", "L"] as const).flatMap((size) => (sizes[size] > 0 ? [`${sizes[size]} ${size}`] : []));
-  return parts.length > 0 ? parts.join(" · ") : tasks > 0 ? `${tasks} task${tasks > 1 ? "s" : ""}` : "";
+  return parts.length > 0 ? parts.join(" · ") : tasks > 0 ? texts(language).metrics.tasks(tasks) : "";
 }
 
 export type MetricsSummary = { runs: number; tokens?: number; activeMs?: number; userWaitMs?: number; pilotShare?: number };
@@ -107,6 +111,7 @@ export function judgeSummary(rows: ReturnType<typeof judgeRows>) {
   };
 }
 
-export function formatCost(usd: number) {
-  return `$${usd < 10 ? usd.toFixed(2) : Math.round(usd)}`;
+export function formatCost(usd: number, language: Language) {
+  const amount = usd < 10 ? usd.toFixed(2) : String(Math.round(usd));
+  return language === "fr" ? `${amount.replace(".", ",")} $` : `$${amount}`;
 }

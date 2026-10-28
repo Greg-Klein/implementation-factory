@@ -1,4 +1,6 @@
 import { defined } from "../lib/defined.js";
+import { texts } from "../lib/i18n/texts.js";
+import { runLanguage } from "./language.js";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FSWatcher } from "chokidar";
@@ -130,6 +132,9 @@ export class RunSession {
 
   summary() { return summarizeRun(this.state); }
 
+  /** What this run says to people, in the language it was launched in. */
+  get texts() { return texts(runLanguage(this.state)); }
+
   activity(kind: Activity["kind"], title: string, detail?: string) {
     const entry: Activity = { id: crypto.randomUUID(), at: now(), kind, title, ...defined({ detail }) };
     this.archive = [entry, ...this.archive].slice(0, ARCHIVED_ACTIVITIES);
@@ -144,7 +149,7 @@ export class RunSession {
   artifactArrived(relativePath: string, at: string) {
     if (this.state.artifactArrivals?.[relativePath]) return;
     this.state.artifactArrivals = { ...this.state.artifactArrivals, [relativePath]: at };
-    const notes = reviewPlanNotes(this.state.artifactArrivals);
+    const notes = reviewPlanNotes(this.state.artifactArrivals, runLanguage(this.state));
     if (notes.length > 0 || this.state.reviewNotes?.length) this.state.reviewNotes = notes;
   }
 

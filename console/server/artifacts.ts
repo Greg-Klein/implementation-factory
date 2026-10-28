@@ -4,7 +4,7 @@ import chokidar from "chokidar";
 import type { Stats } from "node:fs";
 import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, pauseTransition, phaseForArtifact, phaseOfWorkflow, plannedTasks, reopeningOpen, resolveArtifactPath, runInProgress, RUNTIME_RECIPE_FILE, SENIOR_FINDINGS_FILE, watchedForArtifacts } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { demoArtifactContents } from "./demo-data.js";
+import { demoArtifactContentsOf } from "./demo-data.js";
 import { dataRoot } from "./config.js";
 import { attachmentPaths } from "./acceptance.js";
 import { attachmentArrived, confirmArchiveSync, ingestAcceptanceInput, refreshConfidence } from "./acceptance-runtime.js";
@@ -18,6 +18,7 @@ import { declaredDelivery, parseWorkflowState, WORKFLOW_STATE_FILE } from "./wor
 import { pilotActs } from "./run-health.js";
 import type { RunSession } from "./run-session.js";
 import { reportFailure } from "./context.js";
+import { runLanguage } from "./language.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 const VIDEO_CONTENT_TYPES: Record<string, string> = { ".webm": "video/webm", ".mp4": "video/mp4" };
@@ -32,30 +33,30 @@ export function videoContentType(artifactPath: string): string | undefined {
 async function artifactBytes(session: RunSession, artifactPath: string): Promise<Buffer> {
   if (artifactPath.startsWith("evidence/")) {
     const buffer = await session.evidence.read(artifactPath);
-    if (!buffer) throw new Error("Document not found for this run.");
+    if (!buffer) throw new Error(session.texts.serverRun.documentNotFound);
     return buffer;
   }
-  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
+  if (!session.state.artifacts.includes(artifactPath)) throw new Error(session.texts.serverRun.documentNotFound);
   const root = path.resolve(dataRoot, session.id, "artifacts");
   // The lexical check refuses `..`; the real path refuses a symbolic link
   // planted in the archive that points outside it.
   const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
-  if (!target) throw new Error("Invalid document path.");
+  if (!target) throw new Error(session.texts.serverRun.documentInvalidPath);
   return readFile(target);
 }
 
 export async function readArtifact(session: RunSession, artifactPath: string) {
-  if (videoContentType(artifactPath)) throw new Error("A video is played from its own address, not previewed as a document.");
+  if (videoContentType(artifactPath)) throw new Error(session.texts.serverRun.videoNotPreviewed);
   if (session.demo && !artifactPath.startsWith("evidence/")) {
-    if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
-    const content = demoArtifactContents[artifactPath];
-    if (content === undefined) throw new Error("Demo document not found.");
+    if (!session.state.artifacts.includes(artifactPath)) throw new Error(session.texts.serverRun.documentNotFound);
+    const content = demoArtifactContentsOf(runLanguage(session.state))[artifactPath];
+    if (content === undefined) throw new Error(session.texts.serverRun.demoDocumentNotFound);
     const demoContentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
     if (demoContentType) return { path: artifactPath, content, encoding: "base64" as const, contentType: demoContentType };
     return { path: artifactPath, content };
   }
   const buffer = await artifactBytes(session, artifactPath);
-  if (buffer.byteLength > PREVIEW_LIMIT) throw new Error("This document exceeds the 2 MB preview limit.");
+  if (buffer.byteLength > PREVIEW_LIMIT) throw new Error(session.texts.serverRun.previewLimit);
   const contentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
   if (contentType) return { path: artifactPath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: artifactPath, content: buffer.toString("utf8") };
@@ -64,10 +65,10 @@ export async function readArtifact(session: RunSession, artifactPath: string) {
 /** A video capture, as bytes the page's player reads from its address. */
 export async function readVideo(session: RunSession, artifactPath: string): Promise<{ content: Buffer; contentType: string }> {
   const contentType = videoContentType(artifactPath);
-  if (!contentType) throw new Error("This document is not a video.");
-  if (session.demo && !artifactPath.startsWith("evidence/")) throw new Error("Demo document not found.");
+  if (!contentType) throw new Error(session.texts.serverRun.notAVideo);
+  if (session.demo && !artifactPath.startsWith("evidence/")) throw new Error(session.texts.serverRun.demoDocumentNotFound);
   const content = await artifactBytes(session, artifactPath);
-  if (content.byteLength > VIDEO_LIMIT) throw new Error("This video exceeds the 15 MB limit.");
+  if (content.byteLength > VIDEO_LIMIT) throw new Error(session.texts.serverRun.videoLimit);
   return { content, contentType };
 }
 
@@ -95,7 +96,7 @@ async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: s
     const copied = await copyFile(source, target).then(() => true, () => false);
     if (copied && !session.state.artifacts.includes(relative)) {
       session.state.artifacts = [...session.state.artifacts, relative];
-      session.activity("artifact", "Screenshot archived", relative);
+      session.activity("artifact", session.texts.serverRun.screenshotArchived, relative);
     }
   }
 }
@@ -113,7 +114,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
   await copyFile(source, target);
   if (!session.state.artifacts.includes(relative)) {
     session.state.artifacts = [...session.state.artifacts, relative];
-    session.activity("artifact", "New artifact", relative);
+    session.activity("artifact", session.texts.serverRun.newArtifact, relative);
   }
   session.artifactArrived(relative, new Date(writtenAt).toISOString());
   // Every reviewer overwrites its own file on each round, so the list of
@@ -151,7 +152,7 @@ async function archiveArtifact(session: RunSession, source: string, stats?: Stat
 export function readWorkflowState(session: RunSession, content: string) {
   const reading = parseWorkflowState(content, new Date().toISOString());
   if ("error" in reading) {
-    if (session.workflowDiagnostic !== reading.error) session.activity("attention", "workflow-state.json ignored", reading.error);
+    if (session.workflowDiagnostic !== reading.error) session.activity("attention", session.texts.serverRun.workflowIgnored, reading.error);
     session.workflowDiagnostic = reading.error;
     return;
   }
@@ -161,18 +162,18 @@ export function readWorkflowState(session: RunSession, content: string) {
   // The merge request it names is kept in the one field everything reads, when the run
   // did not see it open itself (opened by a command the hooks do not recognise, or before
   // a restart). One that cannot be the delivery of this ticket is dropped from the declaration.
-  const delivery = declaredDelivery(reading.state, session.state.issueUrl);
+  const delivery = declaredDelivery(reading.state, session.state.issueUrl, runLanguage(session.state));
   if (delivery.refused && reading.state.result) {
     const { mergeRequestUrl: _ignored, ...result } = reading.state.result;
     reading.state.result = result;
-    if (previous?.revision !== reading.state.revision) session.activity("attention", "Declared merge request ignored", delivery.refused);
+    if (previous?.revision !== reading.state.revision) session.activity("attention", session.texts.serverRun.declaredDeliveryIgnored, delivery.refused);
   } else if (delivery.url && !session.state.mergeRequestUrl) {
     session.state.mergeRequestUrl = delivery.url;
-    session.activity("system", "Merge request declared by the workflow", delivery.url);
+    session.activity("system", session.texts.serverRun.declaredDeliveryKept, delivery.url);
   }
   session.state.workflow = reading.state;
   const reopened = reopeningOpen(session.state);
-  if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", reopened ? "Change after the final report delivered" : "Change asked after the final report");
+  if (trackReopening(session.state, previous, reading.state, reading.state.receivedAt)) session.activity("system", reopened ? session.texts.serverRun.changeAfterReportDelivered : session.texts.serverRun.changeAfterReportAsked);
   // Back in progress, so the hooks of the change are applied again and the run closes once more when it is delivered.
   if (!reopened && reopeningOpen(session.state) && session.state.status === "completed" && session.state.sessionActive) session.state.status = "running";
   const pause = pauseTransition(session.state.status, session.state.sessionActive, reading.state.state);
@@ -182,7 +183,7 @@ export function readWorkflowState(session: RunSession, content: string) {
   // Declared once at step 7: a later state that leaves it out does not take it back.
   if (reading.state.reviewTier !== undefined) session.state.reviewTier = reading.state.reviewTier;
   session.state.phase = phaseOfWorkflow(session.state.phase, reading.state, reopeningOpen(session.state) && runInProgress(session.state.status));
-  if (!previous || previous.state !== reading.state.state) session.activity("system", `Workflow: ${reading.state.state}${reading.state.step ? `, step ${reading.state.step}` : ""}`, reading.state.nextAction?.description);
+  if (!previous || previous.state !== reading.state.state) session.activity("system", session.texts.serverRun.workflowState(reading.state.state, reading.state.step ? String(reading.state.step) : undefined), reading.state.nextAction?.description);
   closeWorkflowIfDone(session);
 }
 
@@ -223,7 +224,7 @@ export async function startArtifactWatcher(session: RunSession) {
   const archive = (file: string, stats?: Stats) => {
     archiveArtifact(session, file, stats).catch((error: unknown) => {
       reportFailure("Document not archived", session.id)(error);
-      session.activity("attention", "Document not archived", `${path.basename(file)}: ${error instanceof Error ? error.message : String(error)}`);
+      session.activity("attention", session.texts.serverRun.documentNotArchived, `${path.basename(file)}: ${error instanceof Error ? error.message : String(error)}`);
       session.publish();
     });
   };

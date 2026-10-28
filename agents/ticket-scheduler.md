@@ -58,4 +58,4 @@ The repository is somebody's working checkout, and other runs may be using it.
 
 Your final message is one line: the number of tickets predicted and the number of edges. No ticket content in it.
 
-Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language the input's `language` field gives, `fr` or `en`, English when the field is absent. Never read the environment for it: the shell of this session refuses `echo` and `printenv`. That contract also gives the English form of the French headings and fixed phrases the templates use.
+Everything you write for a person, reports and free-text JSON fields alike, is in the workflow language the input's `language` field gives, `fr` or `en`, French when the field is absent. Never read the environment for it: the shell of this session refuses `echo` and `printenv`. That contract also gives the English form of the French headings and fixed phrases the templates use.

@@ -1,4 +1,6 @@
 import { defined } from "../lib/defined.js";
+import { clockTime, type Language } from "../lib/i18n/index.js";
+import { texts as languageTexts } from "../lib/i18n/texts.js";
 import path from "node:path";
 import type { EngineEvent } from "./engine/types.js";
 import type { AgentState, IncidentAction, IncidentKind, IncidentObservation, PlanDelegation, PlanTask, RunHealth, RunStatus, RunWait, WaitReason, WorkflowState } from "./types.js";
@@ -196,6 +198,8 @@ export function blockedDependencies(tasks: Pick<PlanTask, "id" | "status" | "dep
 }
 
 export type HealthInput = {
+  /** The language of the texts the verdict carries: the run's. English when absent. */
+  language?: Language;
   status: RunStatus;
   sessionActive: boolean;
   stoppedBy: "user" | "queue" | null;
@@ -227,15 +231,15 @@ export type IncidentCandidate = {
   suggestedActions: IncidentAction[];
 };
 
+type Ops = ReturnType<typeof languageTexts>["serverOps"];
+
 export type HealthVerdict = { health: RunHealth; wait?: RunWait; title?: string; detail?: string; incident?: IncidentCandidate };
 
-const clock = (at: number) => new Date(at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 const iso = (at: number) => new Date(at).toISOString();
 /** "10 minutes", "1 minute", "40 seconds": the silence as a duration. */
-function duration(ms: number) {
-  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1_000))} second${ms >= 1_500 ? "s" : ""}`;
-  const count = Math.round(ms / 60_000);
-  return `${count} minute${count > 1 ? "s" : ""}`;
+function duration(t: Ops, ms: number) {
+  if (ms < 60_000) return t.seconds(Math.max(1, Math.round(ms / 1_000)), ms >= 1_500);
+  return t.minutes(Math.round(ms / 60_000));
 }
 
 function waiting(reason: WaitReason, since: number, title: string, detail: string, on?: string, liftedBy?: string): HealthVerdict {
@@ -243,15 +247,15 @@ function waiting(reason: WaitReason, since: number, title: string, detail: strin
 }
 
 /** "developer-report-T3.md" reads better as the report it is. */
-function fileLabel(file: string) {
+function fileLabel(t: Ops, file: string) {
   const name = path.basename(file);
-  if (name === "qa-plan.md") return "QA test plan";
-  if (name === "design-inventory.md") return "Design inventory";
-  if (name.startsWith("qa-")) return "QA report";
-  if (name.startsWith("design")) return "Design report";
-  if (name.startsWith("developer-report-")) return `Report of ${name.slice("developer-report-".length, -".md".length)}`;
-  if (name === "planner-output.json") return "Plan";
-  if (name === "review-summary.md") return "Review summary";
+  if (name === "qa-plan.md") return t.fileQaPlan;
+  if (name === "design-inventory.md") return t.fileDesignInventory;
+  if (name.startsWith("qa-")) return t.fileQaReport;
+  if (name.startsWith("design")) return t.fileDesignReport;
+  if (name.startsWith("developer-report-")) return t.fileTaskReport(name.slice("developer-report-".length, -".md".length));
+  if (name === "planner-output.json") return t.filePlan;
+  if (name === "review-summary.md") return t.fileReviewSummary;
   return name;
 }
 
@@ -265,6 +269,9 @@ const LIVE_ACTIONS: IncidentAction[] = ["open_terminal", "request_continuation",
  */
 export function evaluateRunHealth(input: HealthInput, now: number, policy: HealthPolicy = DEFAULT_HEALTH_POLICY): HealthVerdict {
   const signals = input.signals;
+  const language = input.language ?? "en";
+  const t = languageTexts(language).serverOps;
+  const clock = (at: number) => clockTime(language, at);
   // No grace is ever measured across a sleep of the machine.
   const after = (at: number) => Math.max(at, signals.resumedAt ?? 0);
   const quietFor = now - after(Math.max(signals.lastExecutionAt, signals.lastProgressAt));
@@ -274,18 +281,18 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
     if (!signals.exit || input.stoppedBy) return { health: "healthy" };
     const exit = signals.exit;
     return {
-      health: "interrupted", title: "Session interrupted",
-      detail: `The session stopped at ${clock(exit.at)} before the workflow reached a result.`,
+      health: "interrupted", title: t.sessionInterrupted,
+      detail: t.sessionStoppedAt(clock(exit.at)),
       incident: {
         kind: "lost_session", fingerprint: `lost_session:${exit.at}`,
-        title: "Session interrupted",
-        reason: `The Claude Code session stopped with code ${exit.code} before the workflow reached a result.`,
+        title: t.sessionInterrupted,
+        reason: t.lostSessionReason(exit.code),
         observations: [
-          { kind: "exit", at: iso(exit.at), detail: `Process exit, code ${exit.code}.` },
-          ...(signals.pilotIdleSince !== undefined ? [{ kind: "turn", at: iso(signals.pilotIdleSince), detail: "Last pilot turn ended." }] : []),
-          { kind: "progress", at: iso(signals.lastProgressAt), detail: "Last progress observed." },
+          { kind: "exit", at: iso(exit.at), detail: t.processExit(exit.code) },
+          ...(signals.pilotIdleSince !== undefined ? [{ kind: "turn", at: iso(signals.pilotIdleSince), detail: t.lastPilotTurnEnded }] : []),
+          { kind: "progress", at: iso(signals.lastProgressAt), detail: t.lastProgress },
         ],
-        expectedNextAction: "Read the diagnostic, then relaunch the ticket if the work must continue.",
+        expectedNextAction: t.readDiagnosticThenRelaunch,
         suggestedActions: ["view_diagnostic", "dismiss"],
       },
     };
@@ -293,29 +300,29 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   if (input.status === "starting" || !input.sessionActive) return { health: "healthy" };
 
   const waitingSince = Number.isFinite(input.waitingSince) ? input.waitingSince! : now;
-  if (input.sessionPrompt) return waiting("user_question", waitingSince, "Waiting for a decision", "Claude Code asks to trust the folder before starting.", "you", "your answer");
-  if (input.pendingQuestion) return waiting("user_question", waitingSince, "Waiting for a decision", "The workflow is waiting for your answer to continue.", "you", "your answer");
-  if (signals.permission) return waiting("permission", signals.permission.since, "Waiting for permission", signals.permission.message ?? "Claude Code is waiting for your approval in the terminal.", "you", "your approval in the terminal");
-  if (signals.terminalInteraction) return waiting("terminal_interaction", signals.terminalInteraction.since, "Waiting for input in the terminal", signals.terminalInteraction.message ?? "Claude Code is waiting for an answer only the terminal can receive.", "you", "your input in the terminal");
-  if (signals.unexplainedAttention) return waiting("unknown", signals.unexplainedAttention.since, "Claude Code asks for your attention", signals.unexplainedAttention.message ?? "The signal does not say why: look at the terminal.", "you");
+  if (input.sessionPrompt) return waiting("user_question", waitingSince, t.waitingForDecision, t.trustFolderDetail, t.waitOnYou, t.liftedByAnswer);
+  if (input.pendingQuestion) return waiting("user_question", waitingSince, t.waitingForDecision, t.waitingForYourAnswerDetail, t.waitOnYou, t.liftedByAnswer);
+  if (signals.permission) return waiting("permission", signals.permission.since, t.waitingForPermission, signals.permission.message ?? t.permissionDefault, t.waitOnYou, t.liftedByApproval);
+  if (signals.terminalInteraction) return waiting("terminal_interaction", signals.terminalInteraction.since, t.waitingForTerminalInput, signals.terminalInteraction.message ?? t.terminalInputDefault, t.waitOnYou, t.liftedByTerminalInput);
+  if (signals.unexplainedAttention) return waiting("unknown", signals.unexplainedAttention.since, t.asksForAttention, signals.unexplainedAttention.message ?? t.attentionDefault, t.waitOnYou);
 
   const running = input.agents.filter((agent) => agent.status === "running");
-  const suspicion = (detail: string): HealthVerdict => ({ health: "suspected_stall", title: "No progress observed", detail: `No new progress observed for ${duration(quietFor)}. ${detail}` });
+  const suspicion = (detail: string): HealthVerdict => ({ health: "suspected_stall", title: t.noProgressTitle, detail: t.noProgressDetail(duration(t, quietFor), detail) });
 
   if (running.length > 0) {
-    if (quietFor >= policy.suspicionMs) return suspicion(running.length > 1 ? `${running.length} agents are still declared active.` : "One agent is still declared active.");
+    if (quietFor >= policy.suspicionMs) return suspicion(running.length > 1 ? t.agentsStillActive(running.length) : t.oneAgentStillActive);
     const names = running.map((agent) => agentType(agent.name)).join(", ");
     return signals.pilotIdleSince !== undefined
-      ? waiting("agent", signals.pilotIdleSince, running.length > 1 ? `Waiting for ${running.length} agents` : "Waiting for an agent", names, names, "the agent finishing")
+      ? waiting("agent", signals.pilotIdleSince, running.length > 1 ? t.waitingForAgents(running.length) : t.waitingForAnAgent, names, names, t.liftedByAgentFinishing)
       : { health: "healthy" };
   }
   const [activeTool] = signals.activeTools;
   if (activeTool) {
-    if (quietFor >= policy.suspicionMs) return suspicion(`A command is still running (${activeTool.label ?? activeTool.tool}).`);
+    if (quietFor >= policy.suspicionMs) return suspicion(t.commandStillRunning(activeTool.label ?? activeTool.tool));
     return { health: "healthy" };
   }
   if (signals.pilotIdleSince === undefined) {
-    if (quietFor >= policy.suspicionMs) return suspicion("Claude Code has not handed back, but has not reported anything either.");
+    if (quietFor >= policy.suspicionMs) return suspicion(t.notHandedBack);
     return { health: "healthy" };
   }
 
@@ -328,32 +335,32 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   const declared = workflow?.nextAction;
   const [wait] = signals.backgroundWaits;
   if (wait) {
-    if (quietFor >= policy.suspicionMs) return suspicion(`Claude Code is still waiting for ${wait.label ?? wait.tool} in the background.`);
-    return waiting("tool", wait.since, "Waiting for a background task", wait.label ?? wait.tool, wait.label ?? wait.tool, "the background task finishing");
+    if (quietFor >= policy.suspicionMs) return suspicion(t.stillWaitingBackground(wait.label ?? wait.tool));
+    return waiting("tool", wait.since, t.waitingBackgroundTask, wait.label ?? wait.tool, wait.label ?? wait.tool, t.liftedByBackgroundTask);
   }
   const [awaiting] = signals.agentsAwaitingBackground;
   if (awaiting) {
     const name = agentType(awaiting.name);
-    if (quietFor >= policy.suspicionMs) return suspicion(`The ${name} agent is still waiting on its own background work.`);
-    return waiting("agent", awaiting.since, "Waiting for an agent", `The ${name} agent waits on its own background work and resumes when it ends.`, name, "the agent finishing");
+    if (quietFor >= policy.suspicionMs) return suspicion(t.agentStillWaitingOwn(name));
+    return waiting("agent", awaiting.since, t.waitingForAnAgent, t.agentWaitsOwnResumes(name), name, t.liftedByAgentFinishing);
   }
   // A wait the workflow declares on something the console cannot see: a process, a dependency. Trusted until the doubt threshold, never beyond.
   if (workflow?.state === "waiting" && declared && (declared.kind === "await_process" || declared.kind === "await_dependency") && !(declared.expectedArtifact && input.artifacts.includes(declared.expectedArtifact))) {
     const reason: WaitReason = declared.kind === "await_process" ? "tool" : "dependency";
-    if (quietFor >= policy.suspicionMs) return suspicion(`The workflow declares it is waiting: ${declared.description ?? declared.kind}.`);
-    return waiting(reason, idleSince, "Wait declared by the workflow", declared.description ?? declared.kind, declared.description, declared.expectedArtifact);
+    if (quietFor >= policy.suspicionMs) return suspicion(t.workflowDeclaresWaiting(declared.description ?? declared.kind));
+    return waiting(reason, idleSince, t.waitDeclaredByWorkflow, declared.description ?? declared.kind, declared.description, declared.expectedArtifact);
   }
   const completion = declaredCompletion(workflow, input.mergeRequestUrl);
   if (completion.complete) return { health: "healthy" };
 
   const observations: IncidentObservation[] = [
-    { kind: "turn", at: iso(idleSince), detail: `Claude Code handed back at ${clock(idleSince)}.` },
-    { kind: "agents", detail: "No active agent." },
-    { kind: "question", detail: "No pending question or permission." },
+    { kind: "turn", at: iso(idleSince), detail: t.handedBackAt(clock(idleSince)) },
+    { kind: "agents", detail: t.noActiveAgent },
+    { kind: "question", detail: t.noPendingQuestion },
   ];
-  if (!workflow) observations.push({ kind: "workflow", detail: "No workflow-state.json: the workflow does not declare its next step (old or custom prompt)." });
-  else observations.push({ kind: "workflow", at: workflow.receivedAt, detail: `The workflow declares itself "${workflow.state}"${workflow.step ? ` at step ${workflow.step}` : ""}${declared ? `, next action ${declared.kind}${declared.description ? `: ${declared.description}` : ""}` : ""}.` });
-  if (declared?.kind === "await_agent") observations.push({ kind: "declared_wait", detail: `Wait declared${declared.agents.length ? ` on ${declared.agents.join(", ")}` : ""}${declared.taskIds.length ? ` for ${declared.taskIds.join(", ")}` : ""}, but no agent is running.` });
+  if (!workflow) observations.push({ kind: "workflow", detail: t.noWorkflowState });
+  else observations.push({ kind: "workflow", at: workflow.receivedAt, detail: t.workflowDeclares(workflow.state, workflow.step, declared ? { kind: declared.kind, ...(declared.description ? { description: declared.description } : {}) } : undefined) });
+  if (declared?.kind === "await_agent") observations.push({ kind: "declared_wait", detail: t.declaredWaitNoAgent(declared.agents, declared.taskIds) });
   if (completion.problem) observations.push({ kind: "completion", detail: completion.problem });
 
   // A producer finished without the file its contract requires, and nobody took over.
@@ -367,14 +374,14 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
     const [file] = missing;
     if (!file) continue;
     return {
-      health: "stalled", title: `${fileLabel(file)} expected`,
-      detail: `${agentType(agent.name)} finished without writing ${file}, and nothing takes over.`,
+      health: "stalled", title: t.resultExpected(fileLabel(t, file)),
+      detail: t.finishedWithoutWriting(agentType(agent.name), file),
       incident: {
         kind: "missing_result", fingerprint: `missing_result:${agent.id}:${file}`,
-        title: `${fileLabel(file)} expected`,
-        reason: `The ${agentType(agent.name)} agent finished at ${clock(endedAt)} without writing ${file}, which its contract requires, and Claude Code has started nothing since.`,
-        observations: [{ kind: "producer", at: agent.endedAt, detail: `${agentType(agent.name)} finished.` }, { kind: "missing", detail: `Missing file: ${missing.join(", ")}.` }, ...observations],
-        expectedNextAction: `Relaunch ${agentType(agent.name)} or write ${file}, then resume the workflow.`,
+        title: t.resultExpected(fileLabel(t, file)),
+        reason: t.missingResultReason(agentType(agent.name), clock(endedAt), file),
+        observations: [{ kind: "producer", at: agent.endedAt, detail: t.producerFinished(agentType(agent.name)) }, { kind: "missing", detail: t.missingFiles(missing) }, ...observations],
+        expectedNextAction: t.relaunchOrWrite(agentType(agent.name), file),
         suggestedActions: LIVE_ACTIONS,
       },
     };
@@ -384,32 +391,32 @@ export function evaluateRunHealth(input: HealthInput, now: number, policy: Healt
   const blocked = input.planTasks ? blockedDependencies(input.planTasks) : undefined;
   if (blocked) {
     const parts = [
-      ...blocked.unknown.map((entry) => `${entry.task} depends on ${entry.missing}, which is not in the plan`),
-      ...(blocked.cycle.length ? [`${blocked.cycle.join(", ")} depend on each other`] : []),
+      ...blocked.unknown.map((entry) => t.dependsOnMissing(entry.task, entry.missing)),
+      ...(blocked.cycle.length ? [t.dependOnEachOther(blocked.cycle.join(", "))] : []),
     ];
     return {
-      health: "stalled", title: "Plan blocked by its dependencies",
-      detail: `No remaining task can run: ${parts.join("; ")}.`,
+      health: "stalled", title: t.planBlocked,
+      detail: t.noRemainingTaskCanRun(parts.join("; ")),
       incident: {
         kind: "unresolvable_dependency",
         fingerprint: `unresolvable_dependency:${[...blocked.unknown.map((entry) => `${entry.task}>${entry.missing}`), ...blocked.cycle].sort().join(",")}`,
-        title: "Plan blocked by its dependencies",
-        reason: `No remaining task can run: ${parts.join("; ")}.`,
+        title: t.planBlocked,
+        reason: t.noRemainingTaskCanRun(parts.join("; ")),
         observations: [{ kind: "plan", detail: parts.join("; ") }, ...observations],
-        expectedNextAction: "Fix the plan (missing or circular dependency), then resume the implementation.",
+        expectedNextAction: t.fixPlan,
         suggestedActions: LIVE_ACTIONS,
       },
     };
   }
 
-  const expected = declared?.description ?? (workflow?.step ? `The rest of the workflow after step ${workflow.step}.` : "The rest of the workflow.");
+  const expected = declared?.description ?? (workflow?.step ? t.afterStep(workflow.step) : t.restOfWorkflow);
   return {
-    health: "stalled", title: "Nothing in progress",
-    detail: "Claude Code handed back with no active agent, no question and no next step in progress. It may be waiting for an answer written in the conversation.",
+    health: "stalled", title: t.nothingInProgress,
+    detail: t.nothingInProgressDetail,
     incident: {
       kind: "no_next_action", fingerprint: `no_next_action:${idleSince}`,
-      title: "Nothing in progress",
-      reason: `Claude Code handed back at ${clock(idleSince)} with no active agent, no question and no next step in progress, while the workflow is not finished.`,
+      title: t.nothingInProgress,
+      reason: t.nothingInProgressReason(clock(idleSince)),
       observations,
       expectedNextAction: expected,
       suggestedActions: LIVE_ACTIONS,

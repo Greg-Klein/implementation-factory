@@ -4,6 +4,8 @@ import { WebSocket } from "ws";
 import { reopeningOpen, runInProgress } from "./domain.js";
 import { interruptRun, normalizeArchivedRun } from "./run-incidents.js";
 import type { Activity, RunState, ServerMessage } from "./types.js";
+import { texts } from "../lib/i18n/texts.js";
+import { runLanguage } from "./language.js";
 
 /**
  * Every open page, with the run it has opened. The list of runs goes to all of
@@ -89,9 +91,10 @@ export async function reconcileInterruptedRuns(runsDirectory: string) {
     if (!state || !runInProgress(state.status)) return;
     // The question it was waiting on is gone with its session, but it says where the run stood.
     const interrupted = interruptRun({ ...state, pendingQuestion: raw.pendingQuestion }, now());
+    const t = texts(runLanguage(state)).serverRun;
     const closingEntry: Activity = reopeningOpen(state)
-      ? { id: crypto.randomUUID(), at: now(), kind: "attention", title: "Change after the final report not delivered", detail: "The console restarted before the workflow completed again." }
-      : { id: crypto.randomUUID(), at: now(), kind: "system", title: "Run interrupted by a server restart" };
+      ? { id: crypto.randomUUID(), at: now(), kind: "attention", title: t.changeNotDelivered, detail: t.changeNotDeliveredRestart }
+      : { id: crypto.randomUUID(), at: now(), kind: "system", title: t.runInterruptedRestart };
     interrupted.activities = [closingEntry, ...interrupted.activities].slice(0, ARCHIVED_ACTIVITIES);
     const temporary = `${runFile}.reconcile.tmp`;
     await writeFile(temporary, JSON.stringify(interrupted, null, 2)).then(() => rename(temporary, runFile)).catch(reportFailure("Interrupted run not saved", runId));

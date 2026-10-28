@@ -1,9 +1,12 @@
 import { demoStepDuration } from "./config.js";
 import { now, reportFailure } from "./context.js";
-import { demoAcceptance, demoArtifactContents, DEMO_SNAPSHOTS } from "./demo-data.js";
+import { demoAcceptanceOf, demoArtifactContentsOf, DEMO_SNAPSHOTS } from "./demo-data.js";
 import { ingestAcceptanceInput, refreshAcceptance, refreshConfidence } from "./acceptance-runtime.js";
 import { agentIdentity, agentRole, pairDelegation, plannedTasks } from "./domain.js";
+import { runLanguage } from "./language.js";
 import { pilotActs } from "./run-health.js";
+import { texts } from "../lib/i18n/texts.js";
+import type { Language } from "../lib/i18n/index.js";
 import type { RunSession } from "./run-session.js";
 import type { AgentState, PendingSelfImprovementReview } from "./types.js";
 
@@ -24,10 +27,12 @@ function demoTerminal(session: RunSession, message: string) {
 /** A developer handed one plan task, named and paired the way hooks.ts does it for a real run. */
 function delegateDemoTask(session: RunSession, taskId: string) {
   const id = `demo-developer-${taskId}`;
-  const agent: AgentState = { id, name: "developer", ...agentIdentity(session.state.agents.length), role: agentRole("developer"), status: "running", startedAt: now() };
+  const role = agentRole("developer");
+  const identity = agentIdentity(session.state.agents.length);
+  const agent: AgentState = { id, name: "developer", ...identity, role, status: "running", startedAt: now() };
   session.state.agents = [agent, ...session.state.agents];
   session.state.planDelegations = pairDelegation([...session.state.planDelegations ?? [], { agentType: "developer", taskIds: [taskId] }], "developer", id);
-  session.activity("agent", `${agent.nickname} · ${agent.role} starts`, taskId);
+  session.activity("agent", session.texts.demo.agentStarts(identity.nickname, role), taskId);
 }
 
 function finishDemoTask(session: RunSession, taskId: string) {
@@ -40,8 +45,8 @@ function startDemoReviewer(session: RunSession) {
 }
 
 /** A document of the demo data. A name it does not hold is a mistake in this file, said at once. */
-function demoDocument(name: string) {
-  const content = demoArtifactContents[name];
+function demoDocument(session: RunSession, name: string) {
+  const content = demoArtifactContentsOf(runLanguage(session.state))[name];
   if (content === undefined) throw new Error(`The demo has no document named ${name}.`);
   return content;
 }
@@ -60,7 +65,7 @@ function writeDemoDocument(session: RunSession, name: string, content: string | 
 const png = (base64: string) => Buffer.from(base64, "base64");
 
 export function acknowledgeDemoInstruction(session: RunSession) {
-  demoTerminal(session, "Instruction noted. The demonstration does not modify any repository.");
+  demoTerminal(session, session.texts.demo.instructionNoted);
 }
 
 /**
@@ -72,17 +77,30 @@ export const DEMO_CWD = "~/workspace/acme-dashboard";
 /** The incident scenario runs on a checkout of its own, so it can play beside the main demonstration. */
 export const INCIDENT_DEMO_CWD = "~/workspace/acme-exports";
 
-export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") {
+export function demoLaunchState(scenario: "workflow" | "incident" = "workflow", language: Language = "en") {
+  const t = texts(language).demo;
   if (scenario === "incident") return {
-    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, repository: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: "Export the invoices table as CSV",
-    instruction: "Incident demonstration: no repository will be modified.", startedAt: now(),
-    action: "Reading the GitLab ticket",
+    status: "running" as const, phase: 1, cwd: INCIDENT_DEMO_CWD, repository: INCIDENT_DEMO_CWD, issueUrl: "ticket-simule://IH-57", ticketTitle: t.incidentTicketTitle,
+    instruction: t.incidentInstruction, startedAt: now(),
+    action: t.actionReadingTicket,
   };
   return {
-    status: "running" as const, phase: 1, cwd: DEMO_CWD, repository: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Add notification preferences",
-    instruction: "Demo mode, no repository will be modified.", startedAt: now(),
-    action: "Reading the GitLab ticket",
+    status: "running" as const, phase: 1, cwd: DEMO_CWD, repository: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: t.ticketTitle,
+    instruction: t.workflowInstruction, startedAt: now(),
+    action: t.actionReadingTicket,
   };
+}
+
+/**
+ * What the registry stamped on a launch before the session existed was written
+ * in English; the run's own language replaces it once the session is there.
+ */
+function localizeLaunch(session: RunSession, scenario: "workflow" | "incident") {
+  const language = runLanguage(session.state);
+  const launch = scenario === "incident" ? demoLaunchState("incident", language) : demoBatchLaunchState(session.state.issueUrl, language);
+  session.state.ticketTitle = launch.ticketTitle;
+  session.state.instruction = launch.instruction;
+  session.state.action = launch.action;
 }
 
 /**
@@ -91,14 +109,20 @@ export function demoLaunchState(scenario: "workflow" | "incident" = "workflow") 
  * them. Two of them touch the same file, so one waits for the other's merge
  * request; the third runs beside them.
  */
-export const DEMO_BATCH = {
-  tickets: [
-    { issueUrl: "ticket-simule://IH-42", title: "Add notification preferences", confidence: "high" as const, files: ["src/settings/notification-preferences.tsx", "src/settings/notification-preferences.test.tsx"], summary: "Adds a notification preferences panel to the account settings." },
-    { issueUrl: "ticket-simule://IH-43", title: "Offer a weekly summary by email", confidence: "medium" as const, files: ["src/settings/notification-preferences.tsx", "src/emails/weekly-digest.tsx"], summary: "Adds the choice of a weekly summary by email to the preferences panel." },
-    { issueUrl: "ticket-simule://IH-44", title: "Export the audit log as CSV", confidence: "high" as const, files: ["src/audit/export.ts", "src/audit/export.test.ts"], summary: "Adds a CSV export to the audit log." },
-  ],
-  edges: [{ a: "ticket-simule://IH-42", b: "ticket-simule://IH-43", kind: "overlap" as const, reason: "Both tickets modify the notification preferences panel." }],
-};
+export function demoBatch(language: Language) {
+  const t = texts(language).demo;
+  return {
+    tickets: [
+      { issueUrl: "ticket-simule://IH-42", title: t.batchTitle42, confidence: "high" as const, files: ["src/settings/notification-preferences.tsx", "src/settings/notification-preferences.test.tsx"], summary: t.batchSummary42 },
+      { issueUrl: "ticket-simule://IH-43", title: t.batchTitle43, confidence: "medium" as const, files: ["src/settings/notification-preferences.tsx", "src/emails/weekly-digest.tsx"], summary: t.batchSummary43 },
+      { issueUrl: "ticket-simule://IH-44", title: t.batchTitle44, confidence: "high" as const, files: ["src/audit/export.ts", "src/audit/export.test.ts"], summary: t.batchSummary44 },
+    ],
+    edges: [{ a: "ticket-simule://IH-42", b: "ticket-simule://IH-43", kind: "overlap" as const, reason: t.batchOverlap }],
+  };
+}
+
+/** The batch in English: the tickets' addresses and files are what callers key on, whatever the language. */
+export const DEMO_BATCH = demoBatch("en");
 
 function demoTicket(session: RunSession) {
   const reference = session.state.issueUrl.replace("ticket-simule://", "");
@@ -112,9 +136,9 @@ function demoTicket(session: RunSession) {
 }
 
 /** The state one ticket of the demonstration batch starts from: the regular simulated workflow, under its own ticket. */
-export function demoBatchLaunchState(issueUrl: string) {
-  const ticket = DEMO_BATCH.tickets.find((candidate) => candidate.issueUrl === issueUrl);
-  return { ...demoLaunchState("workflow"), issueUrl, ...(ticket ? { ticketTitle: ticket.title } : {}) };
+export function demoBatchLaunchState(issueUrl: string, language: Language = "en") {
+  const ticket = demoBatch(language).tickets.find((candidate) => candidate.issueUrl === issueUrl);
+  return { ...demoLaunchState("workflow", language), issueUrl, ...(ticket ? { ticketTitle: ticket.title } : {}) };
 }
 
 /**
@@ -123,25 +147,27 @@ export function demoBatchLaunchState(issueUrl: string) {
  * staged here; the detector finds it on its own, after its grace period.
  */
 export function startIncidentDemoRun(session: RunSession) {
-  session.activity("system", "Simulated ticket loaded", "IH-57 · Export the invoices table as CSV");
+  localizeLaunch(session, "incident");
+  const t = session.texts.demo;
+  session.activity("system", t.ticketLoaded, `IH-57 · ${t.incidentTicketTitle}`);
   session.publish();
-  demoTerminal(session, "Reading the simulated GitLab ticket…");
+  demoTerminal(session, t.readingTicket);
   scheduleDemo(session, demoStepDuration, () => {
     pilotActs(session.signals, Date.now());
     session.state.phase = 4;
     session.state.branch = "feat/ih-57-export-csv";
     session.state.artifacts = ["ticket-context.md", "implementation-plan.md"];
     session.state.planTasks = [
-      { id: "T1", title: "Serialize the table rows", status: "todo" },
-      { id: "T2", title: "Add the export button", status: "todo", dependencies: ["T1"] },
+      { id: "T1", title: t.incidentTaskSerialize, status: "todo" },
+      { id: "T2", title: t.incidentTaskButton, status: "todo", dependencies: ["T1"] },
     ];
-    session.state.action = "Delegating to developer";
+    session.state.action = t.actionDelegating;
     delegateDemoTask(session, "T1");
     session.refreshPlanTasks();
     session.markProgress();
     session.publish();
     session.signal();
-    demoTerminal(session, "Plan ready. T1 handed to a developer.");
+    demoTerminal(session, t.incidentPlanReady);
   });
   scheduleDemo(session, demoStepDuration * 2, () => {
     finishDemoTask(session, "T1");
@@ -151,10 +177,10 @@ export function startIncidentDemoRun(session: RunSession) {
     session.markProgress();
     // The pilot ends its turn here and launches nothing: T2 is left waiting.
     session.signals.pilotIdleSince = Date.now();
-    session.activity("system", "Claude Code handed back");
+    session.activity("system", t.incidentHandedBack);
     session.publish();
     session.signal();
-    demoTerminal(session, "T1 done. (The session waits at its prompt, without starting T2.)");
+    demoTerminal(session, t.incidentT1Done);
   });
   // The monitor ticks every fifteen seconds; the demonstration asks for a look right after its shortened grace.
   scheduleDemo(session, demoStepDuration * 2 + demoHealthGraceMs() + 50, () => session.signal());
@@ -167,15 +193,16 @@ export function demoHealthGraceMs() {
 
 /** What the simulated pilot does once the user asks it to go on: T2, then the end of the run. */
 export function resumeDemoAfterContinuation(session: RunSession) {
+  const t = session.texts.demo;
   scheduleDemo(session, Math.max(200, demoStepDuration / 2), () => {
     pilotActs(session.signals, Date.now());
-    session.state.action = "Delegating to developer";
+    session.state.action = t.actionDelegating;
     delegateDemoTask(session, "T2");
     session.refreshPlanTasks();
     session.markProgress();
     session.publish();
     session.signal();
-    demoTerminal(session, "Resuming: the plan shows T2 remaining, delegating to the developer.");
+    demoTerminal(session, t.incidentResuming);
   });
   scheduleDemo(session, demoStepDuration * 1.5, () => {
     finishDemoTask(session, "T2");
@@ -185,25 +212,27 @@ export function resumeDemoAfterContinuation(session: RunSession) {
     session.state.endedAt = now();
     session.refreshPlanTasks();
     session.markProgress();
-    session.activity("system", "Incident demonstration completed", "No repository or ticket was modified.");
+    session.activity("system", t.incidentCompleted, t.noRepositoryModified);
     session.publish();
     session.signal();
-    demoTerminal(session, "T2 done. End of the incident demonstration.");
+    demoTerminal(session, t.incidentT2Done);
   });
 }
 
 export function startDemoRun(session: RunSession) {
+  localizeLaunch(session, "workflow");
+  const t = session.texts.demo;
   // The simulated code has two versions: the one the first review measured, and the one after the rework.
   for (const id of Object.values(DEMO_SNAPSHOTS)) session.evidence.rememberSnapshot(id, session.state.startedAt ?? now());
   session.evidence.currentSnapshot = { id: DEMO_SNAPSHOTS.implementation, capturedAt: now() };
-  session.activity("system", "Simulated ticket loaded", `${demoTicket(session).reference} · ${session.state.ticketTitle ?? "Add notification preferences"}`);
+  session.activity("system", t.ticketLoaded, `${demoTicket(session).reference} · ${session.state.ticketTitle ?? t.ticketTitle}`);
   session.publish();
-  demoTerminal(session, "Reading the simulated GitLab ticket…");
+  demoTerminal(session, t.readingTicket);
   scheduleDemo(session, demoStepDuration, () => {
     session.state.artifacts = ["ticket-context.md"];
-    session.activity("artifact", "Ticket context consolidated", "ticket-context.md");
+    session.activity("artifact", t.ticketContextConsolidated, "ticket-context.md");
     session.publish();
-    demoTerminal(session, "Acceptance criteria and edge cases extracted.");
+    demoTerminal(session, t.criteriaExtracted);
   });
   scheduleDemo(session, demoStepDuration * 2, () => {
     session.state.phase = 2;
@@ -213,59 +242,61 @@ export function startDemoRun(session: RunSession) {
       id: `demo-question-${session.id}`,
       questions: [
         {
-          header: "Base branch",
-          question: "Which branch should this implementation be built on?",
+          header: t.questionBaseHeader,
+          question: t.questionBase,
           options: [
-            { label: "develop", description: "Follows the existing integration flow." },
-            { label: "main", description: "Starts directly from the stable branch." },
+            { label: "develop", description: t.optionDevelop },
+            { label: "main", description: t.optionMain },
           ],
           multiSelect: false,
         },
         {
-          header: "Notifications",
-          question: "What behavior should apply when notifications are turned off?",
+          header: t.questionNotificationsHeader,
+          question: t.questionNotifications,
           options: [
-            { label: "Hide everything", description: "No notification is shown." },
-            { label: "Keep critical alerts", description: "Security alerts stay visible." },
+            { label: t.optionHideEverything, description: t.optionHideEverythingDescription },
+            { label: t.optionKeepCritical, description: t.optionKeepCriticalDescription },
           ],
           multiSelect: false,
         },
       ],
     };
-    session.activity("attention", "Two decisions are waiting for your answer");
+    session.activity("attention", t.decisionsWaiting);
     session.publish();
-    demoTerminal(session, "Claude is waiting for your decisions in the right-hand panel.");
+    demoTerminal(session, t.waitingForDecisions);
   });
 }
 
 export function continueDemoRun(session: RunSession) {
+  const t = session.texts.demo;
+  const acceptance = demoAcceptanceOf(runLanguage(session.state));
   scheduleDemo(session, 0, () => {
     session.state.phase = 3;
-    session.state.action = "Creating the branch";
+    session.state.action = t.actionCreatingBranch;
     session.state.branch = demoTicket(session).branch;
-    writeDemoDocument(session, "acceptance-criteria.json", JSON.stringify(demoAcceptance.criteria, null, 2));
-    session.activity("system", "Demonstration branch prepared", session.state.branch);
+    writeDemoDocument(session, "acceptance-criteria.json", JSON.stringify(acceptance.criteria, null, 2));
+    session.activity("system", t.branchPrepared, session.state.branch);
     session.publish();
-    demoTerminal(session, "Branch and work plan prepared.");
+    demoTerminal(session, t.branchAndPlanPrepared);
   });
   scheduleDemo(session, demoStepDuration, () => {
     session.state.phase = 4;
     session.state.artifacts = [...session.state.artifacts, "implementation-plan.md", "planner-output.json"];
-    session.state.planTasks = plannedTasks(demoDocument("planner-output.json"));
-    writeDemoDocument(session, "planner-output.json", demoDocument("planner-output.json"));
-    session.activity("artifact", "Implementation plan approved", "implementation-plan.md");
+    session.state.planTasks = plannedTasks(demoDocument(session, "planner-output.json"));
+    writeDemoDocument(session, "planner-output.json", demoDocument(session, "planner-output.json"));
+    session.activity("artifact", t.planApproved, "implementation-plan.md");
     session.refreshPlanTasks();
     session.publish();
-    demoTerminal(session, "Plan split into components, tests and data migration.");
+    demoTerminal(session, t.planSplit);
   });
   scheduleDemo(session, demoStepDuration * 2, () => {
     session.state.phase = 5;
-    session.state.action = "Delegating to developer";
+    session.state.action = t.actionDelegating;
     delegateDemoTask(session, "T1");
     delegateDemoTask(session, "T2");
     session.refreshPlanTasks();
     session.publish();
-    demoTerminal(session, "Delegating the implementation to the developer agent…");
+    demoTerminal(session, t.delegatingImplementation);
   });
   scheduleDemo(session, demoStepDuration * 2.5, () => {
     finishDemoTask(session, "T1");
@@ -278,36 +309,36 @@ export function continueDemoRun(session: RunSession) {
     finishDemoTask(session, "T2");
     finishDemoTask(session, "T3");
     startDemoReviewer(session);
-    session.state.action = "Running the tests";
+    session.state.action = t.actionRunningTests;
     session.refreshPlanTasks();
     // The reviewers write their plan before they read what the authors concluded.
     session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "assets/panneau-preferences.png", "qa-plan.md", "design-inventory.md"];
     session.artifactArrived("qa-plan.md", now());
     session.artifactArrived("design-inventory.md", now());
-    writeDemoDocument(session, "assets/panneau-preferences.png", png(demoDocument("assets/panneau-preferences.png")), false);
-    writeDemoDocument(session, "dev-evidence.json", JSON.stringify(demoAcceptance.developer, null, 2));
+    writeDemoDocument(session, "assets/panneau-preferences.png", png(demoDocument(session, "assets/panneau-preferences.png")), false);
+    writeDemoDocument(session, "dev-evidence.json", JSON.stringify(acceptance.developer, null, 2));
     session.state.evidenceUpdatedAt = now();
-    session.activity("agent", "Implementation done, checks in progress");
+    session.activity("agent", t.implementationDone);
     session.publish();
-    demoTerminal(session, "Unit tests and TypeScript check done. Moving on to review…");
+    demoTerminal(session, t.checksDone);
   });
   scheduleDemo(session, demoStepDuration * 4, () => {
     session.state.phase = 7;
     session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "failed" as const, endedAt: now() } : agent);
     session.state.artifacts = [...session.state.artifacts, "senior-review-round-1.md"];
-    writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundOne), false);
-    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
-    session.activity("attention", "Review: fixes requested", "The critical fallback ignores the time zone · a regression test is missing");
+    writeDemoDocument(session, "assets/alerte-critique.png", png(acceptance.captures.roundOne), false);
+    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(acceptance.qaRoundOne, null, 2));
+    session.activity("attention", t.reviewFixesRequested, t.reviewFixesDetail);
     session.publish();
-    demoTerminal(session, "Review 1/2: changes requested on the fallback and its test coverage.");
+    demoTerminal(session, t.reviewOneTerminal);
   });
   scheduleDemo(session, demoStepDuration * 5, () => {
     session.state.phase = 5;
     delegateDemoTask(session, "T4");
     session.refreshPlanTasks();
-    session.activity("agent", "developer resumes the implementation", "Applying the two review findings");
+    session.activity("agent", t.developerResumes, t.applyingFindings);
     session.publish();
-    demoTerminal(session, "Looping back to implementation: fixing the fallback and adding the missing test…");
+    demoTerminal(session, t.loopingBack);
   });
   scheduleDemo(session, demoStepDuration * 6, () => {
     session.state.phase = 6;
@@ -318,9 +349,9 @@ export function continueDemoRun(session: RunSession) {
     // The rework changed the code: everything measured before it is now stale.
     session.evidence.currentSnapshot = { id: DEMO_SNAPSHOTS.final, capturedAt: now() };
     void refreshAcceptance(session);
-    session.activity("agent", "Fixes verified", "12 tests pass, including the new regression test");
+    session.activity("agent", t.fixesVerified, t.fixesVerifiedDetail);
     session.publish();
-    demoTerminal(session, "Fixes done. All 12 tests pass, new review requested.");
+    demoTerminal(session, t.fixesDone);
   });
   scheduleDemo(session, demoStepDuration * 7, () => {
     session.state.phase = 7;
@@ -328,48 +359,48 @@ export function continueDemoRun(session: RunSession) {
     session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md", "designer-review.md", "assets/reference-panneau-preferences.png"];
     session.artifactArrived("qa-report.md", now());
     session.artifactArrived("designer-review.md", now());
-    writeDemoDocument(session, "assets/reference-panneau-preferences.png", png(demoDocument("assets/reference-panneau-preferences.png")), false);
-    writeDemoDocument(session, "design-evidence.json", JSON.stringify(demoAcceptance.design, null, 2));
-    writeDemoDocument(session, "qa-evidence-round1.json", JSON.stringify(demoAcceptance.qaRoundOne, null, 2));
-    writeDemoDocument(session, "assets/alerte-critique.png", png(demoAcceptance.captures.roundTwo), false);
-    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(demoAcceptance.qaRoundTwo, null, 2));
+    writeDemoDocument(session, "assets/reference-panneau-preferences.png", png(demoDocument(session, "assets/reference-panneau-preferences.png")), false);
+    writeDemoDocument(session, "design-evidence.json", JSON.stringify(acceptance.design, null, 2));
+    writeDemoDocument(session, "qa-evidence-round1.json", JSON.stringify(acceptance.qaRoundOne, null, 2));
+    writeDemoDocument(session, "assets/alerte-critique.png", png(acceptance.captures.roundTwo), false);
+    writeDemoDocument(session, "qa-evidence.json", JSON.stringify(acceptance.qaRoundTwo, null, 2));
     // A second write, the way a review round overwrites the file: the badge has to light again.
     session.state.evidenceUpdatedAt = now();
-    session.activity("agent", "Review 2/2 blocked", "Findings from the first round resolved, AC4 still failed");
+    session.activity("agent", t.reviewTwoBlocked, t.reviewTwoBlockedDetail);
     session.publish();
-    demoTerminal(session, "Review 2/2: the findings from the first round are resolved, but AC4 is still failed. Loop limit reached: the merge request will go out as a draft.");
+    demoTerminal(session, t.reviewTwoTerminal);
   });
   scheduleDemo(session, demoStepDuration * 8, () => {
     session.state.phase = 8;
     session.state.artifacts = [...session.state.artifacts, "mr-description.md"];
-    session.activity("artifact", "Draft merge request prepared", "mr-description.md");
+    session.activity("artifact", t.draftPrepared, "mr-description.md");
     session.publish();
-    demoTerminal(session, "Merge request description generated, with a Blocked section for AC4.");
+    demoTerminal(session, t.descriptionGenerated);
   });
   scheduleDemo(session, demoStepDuration * 9, () => {
     session.state.phase = 9;
-    session.state.action = "Opening the merge request";
+    session.state.action = t.actionOpeningMergeRequest;
     session.state.mergeRequestUrl = `ticket-simule://${demoTicket(session).mergeRequest}`;
     refreshConfidence(session).catch(reportFailure("Review confidence not computed", session.id));
-    session.activity("system", "Draft merge request opened (demo)", demoTicket(session).mergeRequest);
-    session.activity("system", "Review report published", "Review 2/2 · blocked on AC4");
+    session.activity("system", t.draftOpened, demoTicket(session).mergeRequest);
+    session.activity("system", t.reportPublished, t.reportPublishedDetail);
     session.publish();
-    demoTerminal(session, "Final report published in the simulated merge request.");
+    demoTerminal(session, t.finalReportPublished);
   });
   scheduleDemo(session, demoStepDuration * 10, () => {
     session.state.phase = 10;
     session.state.action = undefined;
     session.state.status = "completed";
     session.state.endedAt = now();
-    session.activity("system", "Demonstration completed", "No repository or ticket was modified.");
+    session.activity("system", t.demoCompleted, t.noRepositoryModified);
     session.publish();
-    demoTerminal(session, "Simulated draft merge request ready. End of the demonstration.");
+    demoTerminal(session, t.draftReady);
   });
   scheduleDemo(session, demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;
     demoState.pendingImprovement = { worktreeName, commits: 1, status: "ready" };
-    session.activity("agent", "Improvements ready, awaiting approval");
+    session.activity("agent", t.improvementsReady);
     session.publish();
-    demoTerminal(session, "Self-audit completed. Improvements are proposed in the right-hand panel.");
+    demoTerminal(session, t.selfAuditCompleted);
   });
 }

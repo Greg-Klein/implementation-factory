@@ -1,4 +1,6 @@
 import { normalizeTicketUrl, ticketIdentity, ticketReference } from "../lib/ticket-urls";
+import type { Language } from "../lib/i18n";
+import { texts } from "../lib/i18n/texts";
 import { runLabel } from "../lib/run-state";
 import type { FactorySnapshot, PendingQuestion, QueuedRunView, RunSummary } from "../server/types.js";
 import { CliError } from "./client";
@@ -25,7 +27,8 @@ function namesId(reference: string, id: string) {
  * then the ones still at work; a reference that still names several is refused
  * with the list, never resolved to the first.
  */
-export function resolveRun(reference: string, snapshot: Pick<FactorySnapshot, "runs" | "archived">): RunSummary {
+export function resolveRun(reference: string, snapshot: Pick<FactorySnapshot, "runs" | "archived">, language: Language): RunSummary {
+  const text = texts(language).cli;
   const all = [...snapshot.runs, ...snapshot.archived.map((run) => ({ ...run, archived: true }))];
   const exact = all.filter((run) => run.id === reference);
   let matches = exact.length > 0 ? exact : all.filter((run) => namesId(reference, run.id));
@@ -33,18 +36,19 @@ export function resolveRun(reference: string, snapshot: Pick<FactorySnapshot, "r
   if (matches.length > 1 && matches.some((run) => !run.archived)) matches = matches.filter((run) => !run.archived);
   if (matches.length > 1 && matches.some((run) => run.takesSlot || run.sessionActive)) matches = matches.filter((run) => run.takesSlot || run.sessionActive);
   const [run, ...others] = matches;
-  if (!run) throw new CliError(`No run matches "${reference}". List them: impl runs`);
-  if (others.length > 0) throw new CliError(`"${reference}" names several runs:\n${matches.map((match) => `  ${shortId(match.id)}  ${runLabel(match)}`).join("\n")}\nName one by its id.`);
+  if (!run) throw new CliError(text.noRun(reference));
+  if (others.length > 0) throw new CliError(text.severalRuns(reference, matches.map((match) => `  ${shortId(match.id)}  ${runLabel(match)}`).join("\n")));
   return run;
 }
 
 /** The queued launch a reference names: its id, the end of its id, or its ticket. */
-export function resolveQueued(reference: string, queued: QueuedRunView[]): QueuedRunView {
+export function resolveQueued(reference: string, queued: QueuedRunView[], language: Language): QueuedRunView {
+  const text = texts(language).cli;
   let matches = queued.filter((entry) => namesId(reference, entry.id));
   if (matches.length === 0) matches = queued.filter((entry) => namesTicket(reference, entry.issueUrl));
   const [entry, ...others] = matches;
-  if (!entry) throw new CliError(`No queued launch matches "${reference}". List them: impl queue`);
-  if (others.length > 0) throw new CliError(`"${reference}" names several queued launches:\n${matches.map((match) => `  ${shortId(match.id)}  ${runLabel(match)}`).join("\n")}\nName one by its id.`);
+  if (!entry) throw new CliError(text.noQueued(reference));
+  if (others.length > 0) throw new CliError(text.severalQueued(reference, matches.map((match) => `  ${shortId(match.id)}  ${runLabel(match)}`).join("\n")));
   return entry;
 }
 
@@ -68,11 +72,12 @@ export function answerFromInput(question: Asked, input: string): string | undefi
 }
 
 /** One input per question, in the order asked. The whole decision is refused when one of them does not answer its question. */
-export function answersFromInputs(pending: PendingQuestion, inputs: string[]): Record<string, string> {
-  if (inputs.length !== pending.questions.length) throw new CliError(`This decision has ${pending.questions.length} question${pending.questions.length === 1 ? "" : "s"}, ${inputs.length} answer${inputs.length === 1 ? " was" : "s were"} given.`);
+export function answersFromInputs(pending: PendingQuestion, inputs: string[], language: Language): Record<string, string> {
+  const text = texts(language).cli;
+  if (inputs.length !== pending.questions.length) throw new CliError(text.answerCount(pending.questions.length, inputs.length));
   return Object.fromEntries(pending.questions.map((question, index) => {
     const answer = answerFromInput(question, inputs[index] ?? "");
-    if (answer === undefined) throw new CliError(`"${inputs[index]}" does not answer "${question.question}": give the number of a choice${question.multiSelect ? ", several separated by commas," : ""} or your own words.`);
+    if (answer === undefined) throw new CliError(text.answerInvalid(inputs[index] ?? "", question.question, question.multiSelect));
     return [question.question, answer];
   }));
 }

@@ -2,6 +2,7 @@
 
 import { InfoIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import type { Notice } from "@/lib/types";
+import { useTexts } from "./language";
 
 /**
  * What the factory itself did, as opposed to what a run did: a launch put in the
@@ -11,6 +12,7 @@ import type { Notice } from "@/lib/types";
  * their own line above the runs instead.
  */
 export function NoticeStrip({ notice, onDismiss }: { notice?: Notice | undefined; onDismiss: () => void }) {
+  const t = useTexts().shell;
   if (!notice) return null;
   const attention = notice.level === "attention";
   return (
@@ -23,7 +25,7 @@ export function NoticeStrip({ notice, onDismiss }: { notice?: Notice | undefined
         {attention ? <WarningIcon className="mt-0.5 shrink-0" size={13} weight="fill" /> : <InfoIcon className="mt-0.5 shrink-0" size={13} weight="fill" />}
         <span className="min-w-0"><span className="font-semibold">{notice.title}</span>{notice.detail && <span className="ml-1.5 break-words opacity-80">{notice.detail}</span>}</span>
       </p>
-      <button type="button" onClick={onDismiss} aria-label="Hide this message" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
+      <button type="button" onClick={onDismiss} aria-label={t.hideMessage} className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
     </div>
   );
 }

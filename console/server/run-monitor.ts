@@ -8,6 +8,7 @@ import { reconcileIncidents, resolutionOutcome } from "./run-incidents.js";
 import type { RunSession } from "./run-session.js";
 import type { RunHealthView, WaitReason } from "./types.js";
 import { reportFailure } from "./context.js";
+import { runLanguage } from "./language.js";
 
 /**
  * The one scheduler behind run health: a tick for every live run, plus a look
@@ -24,6 +25,7 @@ export function healthInput(session: RunSession): HealthInput {
   const state = session.state;
   return {
     status: state.status,
+    language: runLanguage(state),
     // The simulated run has no session process: while it plays, it is live.
     sessionActive: state.sessionActive || (session.demo && runInProgress(state.status)),
     stoppedBy: session.stoppedBy,
@@ -82,7 +84,7 @@ export async function applyHealth(session: RunSession, now: number, policy: Heal
     if (status !== session.state.status) { session.state.status = status; changed = true; }
   }
   for (const incident of transition.opened) session.activity("attention", incident.title, incident.reason);
-  for (const incident of transition.resolved) session.activity("system", `Incident closed: ${incident.title}`, incident.resolution?.outcome);
+  for (const incident of transition.resolved) session.activity("system", session.texts.serverOps.incidentClosed(incident.title), incident.resolution?.outcome);
   if (!changed) return false;
   session.publish();
   // An incident is only worth something if it survives the next crash.

@@ -7,7 +7,7 @@ import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send } from "./context.js";
-import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken, givenHostNames, allowedMacs } from "./config.js";
+import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken, givenHostNames, allowedMacs, languageFromShell } from "./config.js";
 import { deviceAllowed } from "./device-access.js";
 import { readArtifact, readVideo, videoContentType } from "./artifacts.js";
 import { acceptFindingFix, dismissFindingFix } from "./finding-fixes.js";
@@ -17,6 +17,8 @@ import { answerQuestion, withdrawQuestion } from "./hooks.js";
 import { answerSessionPrompt } from "./session-prompt.js";
 import { drainHookSpool, receiveHook } from "./hook-bridge.js";
 import { refreshAcceptance } from "./acceptance-runtime.js";
+import { currentLanguage, currentTexts, setLanguage } from "./language.js";
+import { isLanguage } from "../lib/i18n/index.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { applySelfImprovementReview, listPendingImprovements, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
@@ -42,7 +44,7 @@ function readBody(request: IncomingMessage) {
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     let body = "";
     request.on("data", (chunk) => { body += chunk; });
-    request.on("end", () => { try { resolve(JSON.parse(body || "{}") as Record<string, unknown>); } catch { reject(new Error("Invalid JSON")); } });
+    request.on("end", () => { try { resolve(JSON.parse(body || "{}") as Record<string, unknown>); } catch { reject(new Error(currentTexts().serverRun.invalidJson)); } });
     request.on("error", reject);
   });
 }
@@ -58,7 +60,7 @@ async function respondWithArtifact(response: ServerResponse, session: Parameters
     const video = await readVideo(session, artifactPath);
     response.writeHead(200, { "content-type": video.contentType, "content-length": video.content.byteLength, "cache-control": "no-store" });
     response.end(video.content);
-  } catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
+  } catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : currentTexts().serverRun.documentNotFound }); }
 }
 
 /** The checkouts chosen per ticket, as a page sent them: anything that is not a list of paths is dropped. */
@@ -108,14 +110,14 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     }
     send(socket, {
       type: "notice", level: "info", at: now(), queuedId: outcome.queued.id, ...requestIdOf(message),
-      title: "Run queued",
+      title: currentTexts().serverRun.runQueuedTitle,
       detail: outcome.queued.reason === "ticket"
-        ? `This ticket is already running on ${path.basename(outcome.queued.repository)}. The run will start when the one holding it gives its session back.`
+        ? currentTexts().serverRun.runQueuedTicket(path.basename(outcome.queued.repository))
         : outcome.queued.reason === "slot"
-          ? `${path.basename(outcome.queued.repository)} will start as soon as a slot is free.`
+          ? currentTexts().serverRun.runQueuedSlot(path.basename(outcome.queued.repository))
           : outcome.queued.reason === "analysis"
-            ? `${path.basename(outcome.queued.repository)}: the ticket is compared with those already queued or running on this repository before it starts.`
-            : `${path.basename(outcome.queued.repository)}: the ticket is waiting for another ticket of the same repository. The queue says which one.`,
+            ? currentTexts().serverRun.runQueuedAnalysis(path.basename(outcome.queued.repository))
+            : currentTexts().serverRun.runQueuedWaiting(path.basename(outcome.queued.repository)),
     });
     return;
   }
@@ -133,7 +135,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "proposal.dismiss") {
     // Only what is listed right now: a page showing an older list decides nothing about a ticket that left it.
     const issueUrls = registry.proposals.proposed(Array.isArray(message.issueUrls) ? message.issueUrls.filter((url) => typeof url === "string") : []);
-    if (issueUrls.length === 0) throw new Error("This ticket is no longer listed.");
+    if (issueUrls.length === 0) throw new Error(currentTexts().serverRun.proposalGone);
     await registry.proposals.handle(issueUrls);
     return;
   }
@@ -141,7 +143,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     const repositories = Array.isArray(message.repositories) ? message.repositories.filter((target) => typeof target === "string" && target.trim()) : [];
     const outcome = await registry.launchProposal(String(message.issueUrl), repositories);
     // Not a `batch.result`: that one clears the launch form, which this panel is not.
-    send(socket, { type: "notice", level: "info", at: now(), title: "Ticket queued", detail: outcome.entries.map((entry) => path.basename(entry.repository)).join(", ") });
+    send(socket, { type: "notice", level: "info", at: now(), title: currentTexts().serverRun.ticketQueuedTitle, detail: outcome.entries.map((entry) => path.basename(entry.repository)).join(", ") });
     return;
   }
   if (message.type === "demo.start" && message.scenario === "batch") { registry.startDemoBatch(); return; }
@@ -158,6 +160,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "instruction.send") { registry.sendInstruction(message.runId, message.text); return; }
   if (message.type === "run.stop") { registry.stop(message.runId); return; }
   if (message.type === "run.close") { await registry.close(message.runId); return; }
+  if (message.type === "language.set") {
+    if (!isLanguage(message.language)) throw new Error(currentTexts().serverRun.unknownLanguage);
+    await setLanguage(message.language);
+    registry.publishSnapshot();
+    if (languageFromShell) send(socket, { type: "notice", level: "attention", at: now(), title: currentTexts().common.languageChanged, detail: currentTexts().common.languageFromShell });
+    return;
+  }
   if (message.type === "queue.cancel") { registry.cancelQueued(message.queuedId); return; }
   if (message.type === "queue.force") { registry.forceQueued(message.queuedId, message.mode === "stacked" ? "stacked" : "base", typeof message.onto === "string" ? message.onto : undefined); return; }
   if (message.type === "queue.move") { registry.moveQueued(message.queuedId, typeof message.before === "string" ? message.before : null); return; }
@@ -167,13 +176,13 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     return;
   }
   if (message.type === "findings.forget") {
-    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error(currentTexts().serverRun.invalidRepositoryPath);
     send(socket, { type: "findings.result", repository: message.repository, forgotten: await forgetReviewFindings(message.repository) });
     return;
   }
   if (message.type === "findings.accept" || message.type === "findings.dismiss") {
-    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
-    if (typeof message.category !== "string" || !/^[a-z-]+$/.test(message.category)) throw new Error("Invalid finding category.");
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error(currentTexts().serverRun.invalidRepositoryPath);
+    if (typeof message.category !== "string" || !/^[a-z-]+$/.test(message.category)) throw new Error(currentTexts().serverRun.invalidFindingCategory);
     const result = message.type === "findings.accept"
       ? await acceptFindingFix(message.repository, message.category)
       : await dismissFindingFix(message.repository, message.category);
@@ -181,27 +190,27 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     return;
   }
   if (message.type === "recipe.forget") {
-    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error("Invalid repository path.");
+    if (typeof message.repository !== "string" || !path.isAbsolute(message.repository)) throw new Error(currentTexts().serverRun.invalidRepositoryPath);
     send(socket, { type: "recipe.result", repository: message.repository, forgotten: await forgetRuntimeRecipe(message.repository) });
     return;
   }
   if (message.type === "question.answer") {
     const session = registry.get(message.runId);
-    if (!session) throw new Error("This run no longer exists.");
+    if (!session) throw new Error(currentTexts().serverRun.runGone);
     answerQuestion(session, message.answers);
     return;
   }
   if (message.type === "sessionPrompt.answer") {
     const session = registry.get(message.runId);
-    if (!session) throw new Error("This run no longer exists.");
-    if (message.decision !== "accept" && message.decision !== "refuse") throw new Error("Unknown decision.");
+    if (!session) throw new Error(currentTexts().serverRun.runGone);
+    if (message.decision !== "accept" && message.decision !== "refuse") throw new Error(currentTexts().serverRun.unknownDecision);
     answerSessionPrompt(session, message.promptId, message.decision);
     return;
   }
   if (message.type === "feedback.submit") {
     // An archived run is worth learning from too: feedback only writes a file, it never reaches a session.
     const session = registry.readable(message.runId);
-    if (!session) throw new Error("This run no longer exists.");
+    if (!session) throw new Error(currentTexts().serverRun.runGone);
     await saveFeedback(session, message.body);
     return;
   }
@@ -213,12 +222,12 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
   if (message.type === "selfImprovement.approve") { afterPromotion(message.worktreeName, await applySelfImprovementReview(message.worktreeName, true)); return; }
   if (message.type === "selfImprovement.reject") { await applySelfImprovementReview(message.worktreeName, false); return; }
   if (message.type === "selfImprovement.revert") {
-    if (!isImprovementWorktreeName(message.worktreeName)) throw new Error("Invalid worktree name.");
+    if (!isImprovementWorktreeName(message.worktreeName)) throw new Error(currentTexts().serverRun.invalidWorktreeName);
     await revertAutomaticMerge(message.worktreeName);
     return;
   }
   // Answered, like any refusal: a page from a newer build would otherwise wait on a message nothing read.
-  throw new Error(`Unknown message type: ${String((message as { type: unknown }).type).slice(0, 60)}.`);
+  throw new Error(currentTexts().serverRun.unknownMessage(String((message as { type: unknown }).type).slice(0, 60)));
 }
 
 await mkdir(dataRoot, { recursive: true });
@@ -246,8 +255,8 @@ await app.prepare();
 async function route(request: IncomingMessage, response: ServerResponse) {
   // A page on another site that got a name of its own resolved to this address
   // still sends that name: refused before anything is read or run.
-  if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: "Host not allowed." }); return; }
-  if (!await deviceAllowed(request.socket.remoteAddress)) { respond(response, 403, { error: "Device not allowed." }); return; }
+  if (!hostAllowed(request.headers.host, consoleHosts())) { respond(response, 403, { error: currentTexts().serverRun.hostNotAllowed }); return; }
+  if (!await deviceAllowed(request.socket.remoteAddress)) { respond(response, 403, { error: currentTexts().serverRun.deviceNotAllowed }); return; }
   const requestPath = request.url?.split("?")[0];
   if (request.method === "POST" && requestPath === "/api/hooks") {
     const token = new URL(request.url ?? "", "http://console").searchParams.get("token") ?? request.headers["x-impl-hook-token"]?.toString();
@@ -291,37 +300,41 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     try {
       const runs = await registry.metrics();
       respond(response, 200, { runs, calibration: confidenceCalibration(runs), ...defined({ improvements: improvementMetrics() }) });
-    } catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : "Metrics unavailable." }); }
+    } catch (error) { respond(response, 500, { runs: [], error: error instanceof Error ? error.message : currentTexts().serverRun.metricsUnavailable }); }
     return;
   }
   if (request.method === "GET" && requestPath === "/api/repositories/recipe") {
     const repository = new URL(request.url ?? "", `http://${hostname}:${port}`).searchParams.get("repository") ?? "";
-    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Invalid repository path." }); return; }
+    if (!path.isAbsolute(repository)) { respond(response, 400, { error: currentTexts().serverRun.invalidRepositoryPath }); return; }
     // The store is named after a digest of the path, so whatever is asked only ever reads a recipe the console wrote.
     respond(response, 200, { repository, recipe: await readRuntimeRecipe(repository) ?? null });
     return;
   }
   if (request.method === "GET" && requestPath === "/api/repositories/findings") {
     const repository = new URL(request.url ?? "", `http://${hostname}:${port}`).searchParams.get("repository") ?? "";
-    if (!path.isAbsolute(repository)) { respond(response, 400, { error: "Invalid repository path." }); return; }
-    respond(response, 200, { repository, findings: await readReviewFindingsSummary(repository) });
+    if (!path.isAbsolute(repository)) { respond(response, 400, { error: currentTexts().serverRun.invalidRepositoryPath }); return; }
+    respond(response, 200, { repository, findings: await readReviewFindingsSummary(repository, currentLanguage()) });
     return;
   }
   if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }
   const acceptanceRoute = request.method === "GET" ? requestPath?.match(/^\/api\/runs\/([^/]+)\/acceptance$/)?.[1] : undefined;
   if (acceptanceRoute) {
     const session = registry.get(decodeURIComponent(acceptanceRoute));
-    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
+    if (!session) { respond(response, 404, { error: currentTexts().serverRun.runGone }); return; }
     // Asking is also a moment to look at the code again (at most every few
     // seconds): evidence goes stale when the code moves, and nothing else
     // would say so while the run is quiet.
-    try { respond(response, 200, await refreshAcceptance(session)); }
-    catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Coverage unavailable." }); }
+    try {
+      const view = await refreshAcceptance(session);
+      const language = currentLanguage();
+      respond(response, 200, language === "en" ? view : session.evidence.view(language));
+    }
+    catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : currentTexts().serverRun.coverageUnavailable }); }
     return;
   }
   if (request.method === "GET" && requestPath?.startsWith("/api/runs/")) {
     const session = registry.get(decodeURIComponent(requestPath.slice("/api/runs/".length)));
-    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
+    if (!session) { respond(response, 404, { error: currentTexts().serverRun.runGone }); return; }
     respond(response, 200, { state: session.state });
     return;
   }
@@ -329,48 +342,49 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const archiveAcceptance = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)\/acceptance$/)?.[1] : undefined;
   if (archiveAcceptance) {
     const archived = registry.archive.get(decodeURIComponent(archiveAcceptance));
-    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
-    respond(response, 200, archived.acceptanceView ?? archived.evidence.view());
+    if (!archived) { respond(response, 404, { error: currentTexts().serverRun.archivedRunGone }); return; }
+    const language = currentLanguage();
+    respond(response, 200, language === "en" ? archived.acceptanceView ?? archived.evidence.view() : archived.evidence.view(language));
     return;
   }
   const archiveRun = request.method === "GET" ? requestPath?.match(/^\/api\/archive\/runs\/([^/]+)$/)?.[1] : undefined;
   if (archiveRun) {
     const archived = registry.archive.get(decodeURIComponent(archiveRun));
-    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
+    if (!archived) { respond(response, 404, { error: currentTexts().serverRun.archivedRunGone }); return; }
     respond(response, 200, { state: archived.state });
     return;
   }
   if (request.method === "GET" && requestPath === "/api/archive/artifacts") {
     const requestUrl = new URL(request.url ?? "", `http://${hostname}:${port}`);
     const archived = registry.archive.get(requestUrl.searchParams.get("runId") ?? undefined);
-    if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
+    if (!archived) { respond(response, 404, { error: currentTexts().serverRun.archivedRunGone }); return; }
     await respondWithArtifact(response, archived, requestUrl.searchParams.get("path") ?? "");
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const session = registry.get(requestUrl.searchParams.get("runId") ?? undefined);
-    if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
+    if (!session) { respond(response, 404, { error: currentTexts().serverRun.runGone }); return; }
     await respondWithArtifact(response, session, requestUrl.searchParams.get("path") ?? "");
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/diff")) {
     const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
-    if (!isImprovementWorktreeName(worktreeName)) { respond(response, 400, { error: "Invalid worktree name." }); return; }
+    if (!isImprovementWorktreeName(worktreeName)) { respond(response, 400, { error: currentTexts().serverRun.invalidWorktreeName }); return; }
     if (worktreeName.startsWith("demo-")) { respond(response, 200, { diff: demoSelfImprovementDiff }); return; }
     try {
       const worktree = await findWorktree(worktreeName);
-      if (!worktree) { respond(response, 404, { error: "Worktree not found." }); return; }
+      if (!worktree) { respond(response, 404, { error: currentTexts().serverRun.worktreeNotFound }); return; }
       const diff = await worktreeDiff(worktree);
-      respond(response, 200, { diff: diff || "(no change detected)" });
-    } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Git error." }); }
+      respond(response, 200, { diff: diff || currentTexts().serverRun.noChange });
+    } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : currentTexts().serverRun.gitError }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/report")) {
     const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
-    if (!isImprovementWorktreeName(worktreeName)) { respond(response, 400, { error: "Invalid worktree name." }); return; }
+    if (!isImprovementWorktreeName(worktreeName)) { respond(response, 400, { error: currentTexts().serverRun.invalidWorktreeName }); return; }
     const report = await readImprovementReport(worktreeName);
-    if (report === undefined) { respond(response, 404, { error: "Report not found." }); return; }
+    if (report === undefined) { respond(response, 404, { error: currentTexts().serverRun.reportNotFound }); return; }
     respond(response, 200, { report });
     return;
   }
@@ -382,7 +396,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
       });
       respond(response, 200, { items, merged: recentAutomaticMerges() });
     }
-    catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : "Git error." }); }
+    catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : currentTexts().serverRun.gitError }); }
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/repositories")) {
@@ -399,7 +413,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
       }
       respond(response, 200, { repositories, detected: detected ?? null });
     } catch (error) {
-      respond(response, 500, { repositories: [], detected: null, error: error instanceof Error ? error.message : "Discovery failed." });
+      respond(response, 500, { repositories: [], detected: null, error: error instanceof Error ? error.message : currentTexts().serverRun.discoveryFailed });
     }
     return;
   }
@@ -412,7 +426,7 @@ const server = createServer((request, response) => {
     const malformed = error instanceof URIError;
     if (!malformed) reportFailure("Request failed", `${request.method} ${request.url?.split("?")[0]}`)(error);
     if (response.headersSent) response.end();
-    else respond(response, malformed ? 400 : 500, { error: malformed ? "Malformed address." : "Internal error." });
+    else respond(response, malformed ? 400 : 500, { error: malformed ? currentTexts().serverRun.malformedAddress : currentTexts().serverRun.internalError });
   });
 });
 
@@ -439,18 +453,18 @@ wss.on("connection", (socket) => {
     try {
       const parsed = JSON.parse(raw.toString()) as unknown;
       // Anything that is not a message with a type is refused here, with an answer, instead of being matched against every branch.
-      if (!parsed || typeof parsed !== "object" || typeof (parsed as { type?: unknown }).type !== "string") throw new Error("Unreadable message.");
+      if (!parsed || typeof parsed !== "object" || typeof (parsed as { type?: unknown }).type !== "string") throw new Error(currentTexts().serverRun.unreadableMessage);
       message = parsed as ClientMessage;
       await handleClientMessage(socket, message);
       const { ackId } = ackIdOf(message);
       if (ackId) send(socket, { type: "ack", ackId });
     } catch (error) {
-      const text = error instanceof Error ? error.message : "Unable to run this action.";
+      const text = error instanceof Error ? error.message : currentTexts().serverRun.actionFailed;
       // Answered to the page that asked, never written into a run's state: a
       // panel action that fails must not rewrite the status of a run that
       // already ended cleanly, nor be archived as its verdict.
       send(socket, { type: "error", message: text, ...defined({ runId: message && "runId" in message ? message.runId ?? undefined : undefined }), ...requestIdOf(message), ...ackIdOf(message) });
-      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: "Launch refused", detail: text, at: now() });
+      if (message?.type === "run.start" || message?.type === "demo.start" || message?.type === "batch.submit" || message?.type === "proposal.launch") broadcast({ type: "notice", level: "attention", title: currentTexts().serverRun.launchRefused, detail: text, at: now() });
     }
   });
   socket.on("close", () => clients.delete(socket));

@@ -10,5 +10,7 @@ module.exports = {
       module: { type: "commonjs" },
     }],
   },
+  // The suites assert the English texts; a suite on the French ones sets the language itself.
+  setupFiles: ["<rootDir>/tests/unit/setup-language.ts"],
   clearMocks: true,
 };

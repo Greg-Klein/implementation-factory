@@ -2,9 +2,11 @@
 
 import { ArrowDownIcon, ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { memo, useEffect, useRef, useState } from "react";
+import { clockTime } from "@/lib/i18n";
 import { messageBlocks } from "@/lib/conversation";
 import type { ConversationMessage, PendingQuestion, SessionPrompt } from "@/lib/types";
 import { InlineText } from "./inline-text";
+import { useLanguage, useTexts } from "./language";
 import { QuestionPanel } from "./question-panel";
 import { SessionPromptPanel } from "./session-prompt-panel";
 
@@ -17,11 +19,12 @@ const MessageBody = memo(function MessageBody({ text }: { text: string }) {
 
 /** Claude Code only writes a message to its transcript once the action that followed it has returned, so the panel says it is waiting rather than looking finished, and names the action it is waiting on. */
 function WritingHint({ action }: { action?: string | undefined }) {
+  const text = useTexts().conversation;
   return (
-    <div aria-live="polite" title="Claude Code only writes its message once the current action ends: the terminal is ahead of this panel." className="px-1">
+    <div aria-live="polite" title={text.writingHint} className="px-1">
       <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
         <span aria-hidden="true" className="status-breathe size-1.5 rounded-full bg-[var(--accent)]" />
-        Claude is thinking…
+        {text.thinking}
       </p>
       {/* Aligned on the label above, past the dot and its gap. */}
       {action && <p className="mt-1 pl-3.5 font-mono text-[9px] leading-4 text-[var(--faint)]">{action}</p>}
@@ -30,6 +33,8 @@ function WritingHint({ action }: { action?: string | undefined }) {
 }
 
 export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, connected = true, onAnswerPrompt, writing, action, stalled, live = true, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion | undefined; sessionPrompt?: SessionPrompt | undefined; connected?: boolean; onAnswerPrompt?: (promptId: string, decision: "accept" | "refuse") => void; writing: boolean; action?: string | undefined; stalled: boolean; live?: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => boolean; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
+  const language = useLanguage();
+  const text = useTexts().conversation;
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
@@ -94,22 +99,22 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
         <div
           ref={listRef}
           role="log"
-          aria-label="Conversation"
+          aria-label={text.log}
           onScroll={() => { const list = listRef.current; if (!list) return; pinnedRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; setPinned(pinnedRef.current); }}
           className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 md:px-7"
         >
           {messages.length === 0 && !decisionId ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
             {!live ? (
-              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">No exchange was read back for this run. Its session is closed: its documents and evidence can still be read.</p>
+              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">{text.emptyClosed}</p>
             ) : stalled ? (
               <>
-                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">The run is progressing but no message could be read from the transcript. The session may be waiting for a confirmation that is not visible here, such as folder trust.</p>
-                <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px">Check the Terminal tab</button>
+                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">{text.emptyStalled}</p>
+                <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px">{text.checkTerminal}</button>
               </>
             ) : (
               <>
-                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Exchanges with Claude appear here. Tool calls and agents stay in the Terminal tab.</p>
+                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">{text.emptyLive}</p>
                 {busy && <WritingHint action={action} />}
               </>
             )}
@@ -117,10 +122,10 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
             <article key={message.id} className={`reveal flex flex-col ${message.author === "user" ? "items-end" : "items-start"}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
               <div className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
                 {message.author === "claude" && <span className="size-1.5 rounded-full bg-[var(--accent)]" />}
-                <span>{message.author === "claude" ? "Claude" : "You"}</span>
+                <span>{message.author === "claude" ? text.authorClaude : text.authorUser}</span>
                 <span aria-hidden="true">·</span>
-                <span>{new Date(message.at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}</span>
-                {message.pending && <span title="Claude will take this instruction at the end of its turn" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">waiting</span>}
+                <span>{clockTime(language, message.at)}</span>
+                {message.pending && <span title={text.waitingHint} className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">{text.waiting}</span>}
               </div>
               <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-[var(--raised)] shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
                 <MessageBody text={message.text} />
@@ -135,8 +140,8 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
           <button
             type="button"
             onClick={jumpToBottom}
-            title="Go to the last message"
-            aria-label="Go to the last message"
+            title={text.jumpToLast}
+            aria-label={text.jumpToLast}
             className="reveal absolute bottom-4 right-5 grid size-9 place-items-center rounded-full border border-[var(--line)] bg-[var(--raised)] text-[var(--ink)] shadow-[0_10px_24px_-14px_rgba(30,42,35,.55)] transition hover:bg-[var(--tint)] active:translate-y-px md:right-7"
           >
             <ArrowDownIcon size={15} />
@@ -148,7 +153,7 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
         className="shrink-0 border-t border-[var(--line)] bg-[var(--sunken)] p-4 md:px-7"
       >
         <div className="flex items-end gap-2.5">
-          <label className="sr-only" htmlFor="instruction">Instruction for Claude</label>
+          <label className="sr-only" htmlFor="instruction">{text.instructionLabel}</label>
           <textarea
             id="instruction"
             ref={composerRef}
@@ -157,14 +162,14 @@ export function ConversationPanel({ messages, pendingQuestion, sessionPrompt, co
             onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }}
             rows={1}
             disabled={!canSend}
-            placeholder={canSend ? "Send an instruction to Claude…" : "No active session."}
+            placeholder={canSend ? text.instructionPlaceholder : text.noSession}
             className="field max-h-32 resize-none text-[12.5px] leading-5 disabled:opacity-50"
           />
-          <button type="submit" disabled={!draft.trim() || !canSend} aria-label="Send the instruction" className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-[var(--ink)] text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="submit" disabled={!draft.trim() || !canSend} aria-label={text.sendInstruction} className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-[var(--ink)] text-[var(--on-ink)] transition hover:bg-[var(--ink-hover)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <PaperPlaneTiltIcon size={16} weight="fill" />
           </button>
         </div>
-        <p className="mt-2 text-[10px] text-[var(--muted)]">Enter to send, Shift+Enter for a line break.</p>
+        <p className="mt-2 text-[10px] text-[var(--muted)]">{text.sendHint}</p>
       </form>
     </>
   );

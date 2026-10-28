@@ -5,6 +5,8 @@ import { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketU
 import type { AgentState, MergeWatch, PlanDelegation, PlanTask, QueueCause, QueuedRun, QueuedRunView, ResolvedTicket, RunState, RunStatus, RunSummary, ScheduleConfidence, ScheduledTicket, ScheduleEdge, TicketProposal, WorkflowStateName } from "./types.js";
 import type { WorkflowLanguage } from "./acceptance-text.js";
 import { pathMatches } from "./path-glob.js";
+import type { Language } from "../lib/i18n/index.js";
+import { texts } from "../lib/i18n/texts.js";
 
 /** How a pasted list of ticket URLs is read, shared with the launch form. See lib/ticket-urls.ts. */
 export { forgeOf, forgeWords, normalizeTicketUrl, parseDeliveryUrl, parseTicketUrl, parseTicketUrls, ticketIdentity, ticketReference };
@@ -113,12 +115,13 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
  * itself killed left the same line as a crash, which on a finished run read as
  * an incident where there was only a place given back.
  */
-export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true, trustRefused = false) {
-  if (trustRefused) return "Session closed, folder not trusted";
-  if (stoppedBy === "queue") return "Slot freed for the queue";
-  if (stoppedBy === "user") return "Session stopped by the user";
-  if (!workflowComplete) return exitCode === 0 ? "Session ended before the workflow finished" : "Session interrupted";
-  return exitCode === 0 ? "Session ended" : "Session interrupted";
+export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number, workflowComplete = true, trustRefused = false, language: Language = "en") {
+  const t = texts(language).serverRun;
+  if (trustRefused) return t.exitTrustRefused;
+  if (stoppedBy === "queue") return t.exitQueue;
+  if (stoppedBy === "user") return t.exitUser;
+  if (!workflowComplete) return exitCode === 0 ? t.exitBeforeWorkflow : t.exitInterrupted;
+  return exitCode === 0 ? t.exitEnded : t.exitInterrupted;
 }
 
 /** How long after an interrupt typed in the run's terminal the session's exit is still the user's doing. */
@@ -318,7 +321,7 @@ function forgeTicket(issueUrl: string) {
  * the addresses the console knows the tickets by, which is what the schedule
  * joins on. A link to a ticket the console does not have gives nothing.
  */
-export function linkEdges(repository: string, issueUrl: string, links: IssueLinks, others: string[]): ScheduleEdge[] {
+export function linkEdges(repository: string, issueUrl: string, links: IssueLinks, others: string[], language: Language = "en"): ScheduleEdge[] {
   const own = forgeTicket(issueUrl);
   const blockedBy = new Set(links.blockedBy.map(forgeTicket));
   const blocks = new Set(links.blocks.map(forgeTicket));
@@ -328,7 +331,7 @@ export function linkEdges(repository: string, issueUrl: string, links: IssueLink
     const key = forgeTicket(other);
     if (!key || key === own || edges.some((edge) => forgeTicket(edge.b) === key)) continue;
     const order: [string, string] | undefined = blockedBy.has(key) ? [other, issueUrl] : blocks.has(key) ? [issueUrl, other] : undefined;
-    if (order) edges.push({ repository, a: issueUrl, b: other, kind: "depends_on", order, reason: `${forge} marks ${ticketReference(order[1])} as blocked by ${ticketReference(order[0])}.` });
+    if (order) edges.push({ repository, a: issueUrl, b: other, kind: "depends_on", order, reason: texts(language).serverRun.linkBlockedBy(forge, ticketReference(order[1]), ticketReference(order[0])) });
   }
   return edges;
 }
@@ -467,60 +470,62 @@ const OPENS_MERGE_REQUEST =
 /** The same opening on GitHub, named apart only for what the interface calls it. */
 const OPENS_PULL_REQUEST = /\bgh\b[^;&|]*?(?:\bpr\s+create\b|--method\s+POST\b[^;&|]*\/pulls(?![\w/]))/;
 
+type ActionKey = {
+  [K in keyof ReturnType<typeof texts>["serverRun"]]: ReturnType<typeof texts>["serverRun"][K] extends string ? K : never;
+}[keyof ReturnType<typeof texts>["serverRun"]];
+
 /**
  * What a shell command is busy doing. Ordered, first match wins, so a rule
  * always comes before the family it belongs to: opening the merge request
  * comes before being merely a call to GitLab.
  */
-const SHELL_ACTIONS: [RegExp, string][] = [
-  [OPENS_PULL_REQUEST, "Opening the pull request"],
-  [OPENS_MERGE_REQUEST, "Opening the merge request"],
-  [/\bgh\b[^;&|]*\bpr\b/, "Reading the pull request"],
-  [/\bglab\b[^;&|]*\bmr\b/, "Reading the merge request"],
-  [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Reading the GitLab ticket"],
-  [/\bgh\b[^;&|]*\bissue\b/, "Reading the GitHub ticket"],
-  [/\bglab\b/, "Querying GitLab"],
-  [/\bgh\b/, "Querying GitHub"],
-  [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "Creating the branch"],
-  [/\bgit\b[^;&|]*\bcommit\b/, "Committing the changes"],
-  [/\bgit\b[^;&|]*\bpush\b/, "Pushing the branch"],
-  [/\bgit\b/, "Inspecting the repository"],
-  [/\b(?:jest|vitest|pytest|playwright|test:unit|test:integration)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b/, "Running the tests"],
-  [/\btsc\b|\btypecheck\b/, "Checking types"],
-  [/\b(?:eslint|biome|ruff|lint)\b/, "Linting the code"],
-  [/\b(?:build|make|cargo)\b/, "Building the project"],
-  [/\b(?:npm|pnpm|yarn)\s+(?:ci|install|add)\b/, "Installing the dependencies"],
-  [/\b(?:grep|rg|ack)\b/, "Searching the code"],
-  [/\b(?:cat|head|tail|less|sed|awk)\b/, "Reading files"],
-  [/\b(?:ls|find|tree)\b/, "Exploring the repository"],
+const SHELL_ACTIONS: [RegExp, ActionKey][] = [
+  [OPENS_PULL_REQUEST, "actionOpeningPullRequest"],
+  [OPENS_MERGE_REQUEST, "actionOpeningMergeRequest"],
+  [/\bgh\b[^;&|]*\bpr\b/, "actionReadingPullRequest"],
+  [/\bglab\b[^;&|]*\bmr\b/, "actionReadingMergeRequest"],
+  [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "actionReadingGitlabTicket"],
+  [/\bgh\b[^;&|]*\bissue\b/, "actionReadingGithubTicket"],
+  [/\bglab\b/, "actionQueryingGitlab"],
+  [/\bgh\b/, "actionQueryingGithub"],
+  [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "actionCreatingBranch"],
+  [/\bgit\b[^;&|]*\bcommit\b/, "actionCommitting"],
+  [/\bgit\b[^;&|]*\bpush\b/, "actionPushing"],
+  [/\bgit\b/, "actionInspectingRepository"],
+  [/\b(?:jest|vitest|pytest|playwright|test:unit|test:integration)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b/, "actionRunningTests"],
+  [/\btsc\b|\btypecheck\b/, "actionCheckingTypes"],
+  [/\b(?:eslint|biome|ruff|lint)\b/, "actionLinting"],
+  [/\b(?:build|make|cargo)\b/, "actionBuilding"],
+  [/\b(?:npm|pnpm|yarn)\s+(?:ci|install|add)\b/, "actionInstalling"],
+  [/\b(?:grep|rg|ack)\b/, "actionSearchingCode"],
+  [/\b(?:cat|head|tail|less|sed|awk)\b/, "actionReadingFiles"],
+  [/\b(?:ls|find|tree)\b/, "actionExploring"],
 ];
 
-function named(prefix: string, target: string | undefined, fallback: string) {
-  return target ? `${prefix} ${path.basename(target)}` : fallback;
-}
+type ServerRunTexts = ReturnType<typeof texts>["serverRun"];
 
-const TOOL_ACTIONS: Record<string, (target?: string) => string> = {
-  Read: (target) => named("Reading", target, "Reading a file"),
-  Edit: (target) => named("Editing", target, "Editing a file"),
-  NotebookEdit: (target) => named("Editing", target, "Editing a notebook"),
-  Write: (target) => named("Writing", target, "Writing a file"),
-  Grep: (target) => target ? `Searching for "${target}"` : "Searching the code",
-  Glob: () => "Listing files",
-  Task: (target) => target ? `Delegating to ${target}` : "Delegating to an agent",
-  Agent: (target) => target ? `Delegating to ${target}` : "Delegating to an agent",
-  Skill: (target) => target ? `Skill ${target}` : "Loading a skill",
-  TodoWrite: () => "Updating the plan",
-  WebSearch: () => "Searching the web",
-  WebFetch: (target) => {
+const TOOL_ACTIONS: Record<string, (t: ServerRunTexts, target?: string) => string> = {
+  Read: (t, target) => target ? t.actionReading(path.basename(target)) : t.actionReadingFile,
+  Edit: (t, target) => target ? t.actionEditing(path.basename(target)) : t.actionEditingFile,
+  NotebookEdit: (t, target) => target ? t.actionEditing(path.basename(target)) : t.actionEditingNotebook,
+  Write: (t, target) => target ? t.actionWriting(path.basename(target)) : t.actionWritingFile,
+  Grep: (t, target) => target ? t.actionSearchingFor(target) : t.actionSearchingCode,
+  Glob: (t) => t.actionListingFiles,
+  Task: (t, target) => target ? t.actionDelegatingTo(target) : t.actionDelegating,
+  Agent: (t, target) => target ? t.actionDelegatingTo(target) : t.actionDelegating,
+  Skill: (t, target) => target ? t.actionSkill(target) : t.actionLoadingSkill,
+  TodoWrite: (t) => t.actionUpdatingPlan,
+  WebSearch: (t) => t.actionSearchingWeb,
+  WebFetch: (t, target) => {
     const host = target && URL.canParse(target) ? new URL(target).host : undefined;
-    return host ? `Querying ${host}` : "Querying the web";
+    return host ? t.actionQueryingHost(host) : t.actionQueryingWeb;
   },
 };
 
-function externalToolAction(tool: string) {
-  if (tool.startsWith("mcp__playwright__")) return "Driving the browser";
-  if (/figma/i.test(tool)) return "Querying Figma";
-  return tool.startsWith("mcp__") ? "Calling an external tool" : undefined;
+function externalToolAction(t: ServerRunTexts, tool: string) {
+  if (tool.startsWith("mcp__playwright__")) return t.actionBrowser;
+  if (/figma/i.test(tool)) return t.actionFigma;
+  return tool.startsWith("mcp__") ? t.actionExternalTool : undefined;
 }
 
 /**
@@ -529,9 +534,13 @@ function externalToolAction(tool: string) {
  * feed, but between two paragraphs of the dialogue it is the only thing that
  * says a silent session is working rather than stuck.
  */
-export function actionLabel(tool: string, command?: string, target?: string) {
-  if (tool === "Bash") return SHELL_ACTIONS.find(([pattern]) => pattern.test(command ?? ""))?.[1] ?? "Shell command";
-  return TOOL_ACTIONS[tool]?.(target) ?? externalToolAction(tool);
+export function actionLabel(tool: string, command?: string, target?: string, language: Language = "en") {
+  const t = texts(language).serverRun;
+  if (tool === "Bash") {
+    const key = SHELL_ACTIONS.find(([pattern]) => pattern.test(command ?? ""))?.[1];
+    return key ? t[key] : t.actionShell;
+  }
+  return TOOL_ACTIONS[tool]?.(t, target) ?? externalToolAction(t, tool);
 }
 
 export function createsMergeRequest(command: string | undefined) {
@@ -688,6 +697,11 @@ export const FINDING_CATEGORIES: Record<string, string> = {
   other: "Anything else",
 };
 
+/** The label of a finding category in the language asked for; French only where a habit rule carries one. */
+export function findingCategoryLabel(category: string, label: string, language: Language) {
+  return language === "fr" ? HABIT_RULES[category]?.frLabel ?? label : label;
+}
+
 export type ReviewFinding = { id: string; category: string; severity: "P0" | "P1" | "P2"; summary: string; file?: string; fixed: boolean };
 export type KeptFinding = ReviewFinding & { runId: string; ticket: string; at: string };
 export type RecurringFinding = { category: string; label: string; tickets: number; findings: number; examples: KeptFinding[] };
@@ -837,9 +851,9 @@ export function phaseForArtifact(relativePath: string) {
  * report that must come after it.
  */
 const REVIEW_PLANS = [
-  { plan: "qa-plan.md", report: "qa-report.md", planLabel: "The QA test plan", reportLabel: "the QA report" },
-  { plan: "design-inventory.md", report: "designer-review.md", planLabel: "The design inventory", reportLabel: "the design review" },
-];
+  { plan: "qa-plan.md", report: "qa-report.md", planLabel: "reviewNoteQaPlan", reportLabel: "reviewNoteQaReport" },
+  { plan: "design-inventory.md", report: "designer-review.md", planLabel: "reviewNoteDesignPlan", reportLabel: "reviewNoteDesignReport" },
+] as const;
 
 /**
  * Whether each reviewer's plan was first seen before its report, from the
@@ -847,14 +861,15 @@ const REVIEW_PLANS = [
  * cannot be shown, not that the review is wrong. Nothing is said while the
  * report itself has not arrived, or when its arrival time is unknown.
  */
-export function reviewPlanNotes(arrivals: Record<string, string> | undefined) {
+export function reviewPlanNotes(arrivals: Record<string, string> | undefined, language: Language = "en") {
+  const t = texts(language).serverRun;
   const notes: string[] = [];
   for (const { plan, report, planLabel, reportLabel } of REVIEW_PLANS) {
     const reportAt = Date.parse(arrivals?.[report] ?? "");
     if (Number.isNaN(reportAt)) continue;
     const planAt = Date.parse(arrivals?.[plan] ?? "");
-    if (Number.isNaN(planAt)) notes.push(`${planLabel} (${plan}) did not arrive before ${reportLabel}: nothing shows it was written first.`);
-    else if (planAt > reportAt) notes.push(`${planLabel} (${plan}) arrived after ${reportLabel}: nothing shows it was written first.`);
+    if (Number.isNaN(planAt)) notes.push(t.reviewNoteMissing(t[planLabel], plan, t[reportLabel]));
+    else if (planAt > reportAt) notes.push(t.reviewNoteLate(t[planLabel], plan, t[reportLabel]));
   }
   return notes;
 }
@@ -929,20 +944,21 @@ const NICKNAMES = [
   { name: "Camille", avatar: "camille" }, { name: "Paul", avatar: "paul" },
 ];
 
-const ROLES: Record<string, string> = {
-  developer: "Developer",
-  "ticket-planner": "Planner",
-  "senior-reviewer": "Senior reviewer",
-  "qa-reviewer": "QA reviewer",
-  "designer-reviewer": "Design reviewer",
-  "review-orchestrator": "Review orchestrator",
-  Explore: "Explorer",
-};
+const ROLES = {
+  developer: "roleDeveloper",
+  "ticket-planner": "rolePlanner",
+  "senior-reviewer": "roleSeniorReviewer",
+  "qa-reviewer": "roleQaReviewer",
+  "designer-reviewer": "roleDesignReviewer",
+  "review-orchestrator": "roleReviewOrchestrator",
+  Explore: "roleExplorer",
+} as const;
 
 /** The role an agent type is shown under, or the bare type when it has none. */
-export function agentRole(name: string) {
+export function agentRole(name: string, language: Language = "en") {
   const type = agentType(name);
-  return ROLES[type] ?? type;
+  const key = Object.hasOwn(ROLES, type) ? ROLES[type as keyof typeof ROLES] : undefined;
+  return key ? texts(language).serverRun[key] : type;
 }
 
 /** The first name and picture of the agent started in that position of the run, the name numbered once the pool has gone round. */
@@ -1155,24 +1171,27 @@ export type WorktreeFacts = { exists: boolean; clean: boolean; pushed: boolean }
 export function worktreeRemoval(
   run: Pick<RunState, "status" | "sessionActive" | "mergeRequestUrl" | "workflow" | "archiveSyncedAt"> & { issueUrl?: string },
   facts: WorktreeFacts,
+  language: Language = "en",
 ): { allowed: boolean; automatic: boolean; reasons: string[]; risks: string[] } {
   const allowed = !runHoldsRepository(run);
-  const risks = [...(facts.clean ? [] : ["uncommitted changes"]), ...(facts.pushed ? [] : ["unpushed changes"])];
+  const t = texts(language).serverRun;
+  const risks = [...(facts.clean ? [] : [t.worktreeRiskUncommitted]), ...(facts.pushed ? [] : [t.worktreeRiskUnpushed])];
   const reasons: string[] = [];
-  if (!allowed) reasons.push("session still open");
+  if (!allowed) reasons.push(t.worktreeReasonSession);
   const draft = run.workflow?.result?.delivery === "draft_merge_request";
   const { delivery } = forgeWords(forgeOf(run.issueUrl));
-  if (!run.mergeRequestUrl) reasons.push(`no ${delivery}`);
-  else if (draft || run.workflow?.state === "blocked") reasons.push(`draft ${delivery} on a blocked run`);
-  else if (run.status !== "completed") reasons.push("run not finished");
-  if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push("evidence archive not confirmed");
+  if (!run.mergeRequestUrl) reasons.push(t.worktreeReasonNoDelivery(delivery));
+  else if (draft || run.workflow?.state === "blocked") reasons.push(t.worktreeReasonDraft(delivery));
+  else if (run.status !== "completed") reasons.push(t.worktreeReasonNotFinished);
+  if (run.mergeRequestUrl && !run.archiveSyncedAt) reasons.push(t.worktreeReasonArchive);
   reasons.push(...risks);
   return { allowed, automatic: facts.exists && reasons.length === 0, reasons, risks };
 }
 
 /** What the interface says of a worktree, in one line. */
-export function worktreeKeptDetail(reasons: string[]) {
-  return reasons.length > 0 ? `Worktree kept: ${reasons.join(", ")}` : "Worktree kept";
+export function worktreeKeptDetail(reasons: string[], language: Language = "en") {
+  const t = texts(language).serverRun;
+  return reasons.length > 0 ? t.worktreeKeptBecause(reasons) : t.worktreeKept;
 }
 
 /**
@@ -1446,18 +1465,19 @@ function scheduleIndex(context: ScheduleContext): ScheduleIndex {
  * `detail` is written for `left`, the ticket that waits: it says whether the
  * failed analysis or the vague prediction is its own or the other ticket's.
  */
-function conflictBetween(index: ScheduleIndex, left: Launch, right: Launch): Conflict | undefined {
+function conflictBetween(index: ScheduleIndex, left: Launch, right: Launch, language: Language = "en"): Conflict | undefined {
   const repository = repositoryOf(left);
   if (repository !== repositoryOf(right) || runLockKey(left) === runLockKey(right)) return undefined;
   const edge = index.edges.get(pairKey(repository, left.issueUrl, right.issueUrl));
   if (edge) return { cause: edge.kind, detail: edge.reason, ...(edge.order ? { order: edge.order } : {}) };
   const own = index.tickets.get(runLockKey(left));
   const other = index.tickets.get(runLockKey(right));
-  const because = (ticket: ScheduledTicket) => (ticket.failure ? ` (${ticket.failure})` : "");
-  if (own?.analysis === "failed") return { cause: "analysis_failed", detail: `The batch analysis failed${because(own)}: the tickets of this repository run one at a time.` };
-  if (other?.analysis === "failed") return { cause: "analysis_failed", detail: `The analysis of ${ticketReference(other.issueUrl)} failed${because(other)}: this ticket runs after it.` };
-  if (own?.confidence === "low") return { cause: "low_confidence", detail: `Unreliable prediction for this ticket: it runs alone on its repository.${own.summary ? ` ${own.summary}` : ""}` };
-  if (other?.confidence === "low") return { cause: "low_confidence", detail: `Unreliable prediction for ${ticketReference(other.issueUrl)}: this ticket runs after it.${other.summary ? ` ${ticketReference(other.issueUrl)}: ${other.summary}` : ""}` };
+  const t = texts(language).serverRun;
+  const because = (ticket: ScheduledTicket) => (ticket.failure ? ` (${failureText(ticket.failure, language)})` : "");
+  if (own?.analysis === "failed") return { cause: "analysis_failed", detail: t.conflictOwnFailed(because(own)) };
+  if (other?.analysis === "failed") return { cause: "analysis_failed", detail: t.conflictOtherFailed(ticketReference(other.issueUrl), because(other)) };
+  if (own?.confidence === "low") return { cause: "low_confidence", detail: t.conflictOwnLow(own.summary ?? "") };
+  if (other?.confidence === "low") return { cause: "low_confidence", detail: t.conflictOtherLow(ticketReference(other.issueUrl), other.summary ?? "") };
   return undefined;
 }
 
@@ -1482,7 +1502,7 @@ function priorityOrder(queue: QueuedRun[], index: ScheduleIndex) {
   return ordered;
 }
 
-function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext): QueuedRunView[] {
+function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext, language: Language = "en"): QueuedRunView[] {
   const index = scheduleIndex(context);
   const running = (context.runs ?? []).filter((run) => runHoldsConflicts(run.status));
   const ahead: QueuedRun[] = [];
@@ -1491,7 +1511,7 @@ function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: 
     const base = {
       ...entry,
       ...(own?.summary ? { summary: own.summary } : {}), ...(own?.confidence ? { confidence: own.confidence } : {}),
-      ...(own?.analysis === "failed" ? { analysisFailure: own.failure ?? "analysis failed" } : {}),
+      ...(own?.analysis === "failed" ? { analysisFailure: own.failure ? failureText(own.failure, language) : texts(language).serverRun.analysisFailedFallback } : {}),
     };
     const holder = holders.get(runLockKey(entry));
     if (holder) return { ...base, reason: "ticket", blockedBy: holder };
@@ -1499,15 +1519,15 @@ function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: 
     if (entry.forced) return { ...base, reason: "slot" };
     if (entry.analysing) return { ...base, reason: "analysis" };
     for (const run of running) {
-      const conflict = conflictBetween(index, entry, run);
+      const conflict = conflictBetween(index, entry, run, language);
       if (conflict) return { ...base, reason: "conflict", blockedBy: run.id, blocking: { issueUrl: run.issueUrl, runId: run.id, ...(run.branch ? { branch: run.branch } : {}), ...(run.mergeRequestUrl ? { mergeRequestUrl: run.mergeRequestUrl } : {}) }, cause: conflict.cause, detail: conflict.detail };
     }
     for (const watch of context.watches ?? []) {
-      const conflict = conflictBetween(index, entry, { cwd: watch.repository, issueUrl: watch.issueUrl });
+      const conflict = conflictBetween(index, entry, { cwd: watch.repository, issueUrl: watch.issueUrl }, language);
       if (conflict) return { ...base, reason: watch.state === "unknown" ? "merge_unknown" : "merge", blocking: { issueUrl: watch.issueUrl, mergeRequestUrl: watch.mergeRequestUrl, ...(watch.runId ? { runId: watch.runId } : {}), ...(watch.branch ? { branch: watch.branch } : {}) }, cause: conflict.cause, detail: conflict.detail };
     }
     for (const other of ahead) {
-      const conflict = conflictBetween(index, entry, other);
+      const conflict = conflictBetween(index, entry, other, language);
       if (conflict) return { ...base, reason: conflict.cause === "depends_on" ? "dependency" : "order", blocking: { issueUrl: other.issueUrl, queuedId: other.id }, cause: conflict.cause, detail: conflict.detail };
     }
     return { ...base, reason: "slot" };
@@ -1529,8 +1549,8 @@ function assessQueue(queue: QueuedRun[], holders: Map<string, string>, context: 
  * runLockKey) to the run holding it. An entry nothing of this holds waits on a
  * slot alone, and starts as soon as one is free.
  */
-export function describeQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext = {}): QueuedRunView[] {
-  const views = new Map(assessQueue(queue, holders, context).map((view) => [view.id, view]));
+export function describeQueue(queue: QueuedRun[], holders: Map<string, string>, context: ScheduleContext = {}, language: Language = "en"): QueuedRunView[] {
+  const views = new Map(assessQueue(queue, holders, context, language).map((view) => [view.id, view]));
   return queue.map((entry) => views.get(entry.id)!);
 }
 
@@ -1618,8 +1638,12 @@ export function pruneSchedule(tickets: ScheduledTicket[], edges: ScheduleEdge[],
 
 export type StoredQueue = { queue: QueuedRun[]; tickets: ScheduledTicket[]; edges: ScheduleEdge[]; watches: MergeWatch[] };
 
-/** Why a batch whose analysis did not survive a restart runs one ticket at a time. */
+/** Why a batch whose analysis did not survive a restart runs one ticket at a time. Stored as is; read back in the language asked for. */
 export const INTERRUPTED_ANALYSIS = "console restarted during the analysis";
+
+function failureText(failure: string, language: Language) {
+  return failure === INTERRUPTED_ANALYSIS ? texts(language).serverRun.analysisInterrupted : failure;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -2046,9 +2070,9 @@ function exampleLine(example: FindingFixExample) {
 }
 
 /**
- * The block a person accepts into the repository. The interface stays in
- * English, so `title` does too; the block itself follows the workflow language,
- * because it is text the repository keeps for people.
+ * The block a person accepts into the repository. Its title and label follow
+ * the language of the interface and the block follows the same language, since
+ * it is text the repository keeps for people.
  */
 export function draftFindingFix(group: SourceFixGroup, options: { language: WorkflowLanguage; stack: LintStack; existingFiles: readonly string[] }): FindingFixDraft {
   const habit = HABIT_RULES[group.category];
@@ -2089,9 +2113,10 @@ export function draftFindingFix(group: SourceFixGroup, options: { language: Work
       "Accepted into this file by a person. No run writes it on its own.",
     ];
   const body = [findingFixMarker(group.category), "", `## ${language === "fr" ? "Habitude de revue" : "Review habit"}: ${group.category}`, "", ...prose, "", findingFixEndMarker(group.category), ""].join("\n");
-  const title = lint ? `Block ${group.category} with ${toolName}` : `Record ${group.category} in ${targetFile}`;
+  const t = texts(language).serverRun;
+  const title = lint ? t.fixTitleLint(group.category, toolName) : t.fixTitleInstruction(group.category, targetFile);
   return {
-    category: group.category, label: group.label, runs: group.runs, findings: group.findings,
+    category: group.category, label, runs: group.runs, findings: group.findings,
     kind: lint ? "lint" : "instruction", ...(lint ? { tool: lint.tool, rules: lint.rules } : {}),
     targetFile, title, body, examples,
   };

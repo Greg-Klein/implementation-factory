@@ -22,20 +22,20 @@ describe("the lists the command line prints", () => {
   });
 
   it("should name a run by the end of its id, its repository and ticket, its step and how long it has run", () => {
-    const snapshot: FactorySnapshot = { runs: [summary()], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
+    const snapshot: FactorySnapshot = { runs: [summary()], queued: [], language: "en", maxConcurrentRuns: 3, archived: [], proposals: [] };
     const text = renderFactory(snapshot, now);
     expect(text).toContain("Runs (1/3 slots taken)");
     expect(text).toMatch(/aaaa1111 {2}shop #12 {2}Running {2}4\/10 Plan {2}5m 00s/);
   });
 
   it("should say on its row that a run waits on decisions", () => {
-    const snapshot: FactorySnapshot = { runs: [summary({ status: "attention", pendingQuestionCount: 2 })], queued: [], maxConcurrentRuns: 3, archived: [], proposals: [] };
+    const snapshot: FactorySnapshot = { runs: [summary({ status: "attention", pendingQuestionCount: 2 })], queued: [], language: "en", maxConcurrentRuns: 3, archived: [], proposals: [] };
     expect(renderFactory(snapshot, now)).toContain("Your turn (2 decisions)");
   });
 
   it("should list the queue with what each launch waits for, and leave out the sections that are empty", () => {
     const queued = { id: "queued-bbbb2222", cwd: "/work/shop", repository: "/work/shop", issueUrl: "https://gitlab.example.com/acme/shop/-/issues/13", instruction: "", queuedAt: "", reason: "conflict" as const, blocking: { issueUrl } };
-    const text = renderFactory({ runs: [], queued: [queued], maxConcurrentRuns: 3, archived: [], proposals: [] }, now);
+    const text = renderFactory({ runs: [], queued: [queued], language: "en", maxConcurrentRuns: 3, archived: [], proposals: [] }, now);
     expect(text).toContain("No run.");
     expect(text).toMatch(/bbbb2222 {2}shop #13 {2}Waiting, conflict with #12, which is running/);
     expect(text).not.toContain("Kept worktrees");
@@ -45,7 +45,7 @@ describe("the lists the command line prints", () => {
 
 describe("a decision printed on the command line", () => {
   it("should number the choices by the rank an answer picks them with", () => {
-    const text = renderQuestion({ id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [{ label: "develop", description: "The integration branch." }, { label: "main" }] }] });
+    const text = renderQuestion({ id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [{ label: "develop", description: "The integration branch." }, { label: "main" }] }] }, "en");
     expect(text).toBe("[Base] Which base?\n     1) develop: The integration branch.\n     2) main");
   });
 
@@ -53,7 +53,7 @@ describe("a decision printed on the command line", () => {
     const text = renderQuestion({ id: "q", questions: [
       { question: "Which base?", header: "Base", multiSelect: false, options: [] },
       { question: "Which checks?", header: "Checks", multiSelect: true, options: [{ label: "lint" }] },
-    ] });
+    ] }, "en");
     expect(text).toContain("1. [Base] Which base?");
     expect(text).toContain("2. [Checks] Which checks? (several choices allowed)");
   });
@@ -61,20 +61,20 @@ describe("a decision printed on the command line", () => {
 
 describe("one run printed in full", () => {
   it("should give the command that answers the decision it waits on, under the name the launcher was called by", () => {
-    const text = renderRun(state({ status: "attention", pendingQuestion: { id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [] }] } }), now, "factory");
+    const text = renderRun(state({ status: "attention", pendingQuestion: { id: "q", questions: [{ question: "Which base?", header: "Base", multiSelect: false, options: [] }] } }), now, "factory", "en");
     expect(text).toContain("Status      Your turn, session open");
     expect(text).toContain("Answer: factory answer aaaa1111");
   });
 
   it("should give the trust command for the folder trust dialog", () => {
-    const text = renderRun(state({ sessionPrompt: { id: "p", kind: "folder_trust", directory: "/work/shop/.claude/worktrees/x", since: "" } }), now, "impl");
+    const text = renderRun(state({ sessionPrompt: { id: "p", kind: "folder_trust", directory: "/work/shop/.claude/worktrees/x", since: "" } }), now, "impl", "en");
     expect(text).toContain("may trust the directory /work/shop/.claude/worktrees/x");
     expect(text).toContain("impl trust aaaa1111 accept|refuse");
   });
 
   it("should offer on an incident only the actions that have an effect from a terminal", () => {
     expect(incidentWords(state({ incidents: [incident] }))).toEqual(["continue", "stop", "dismiss"]);
-    expect(renderRun(state({ incidents: [incident] }), now, "impl")).toContain("impl incident aaaa1111 continue|stop|dismiss");
+    expect(renderRun(state({ incidents: [incident] }), now, "impl", "en")).toContain("impl incident aaaa1111 continue|stop|dismiss");
   });
 
   it("should offer only to dismiss the incident of a run whose session is gone", () => {
@@ -84,22 +84,45 @@ describe("one run printed in full", () => {
 
 describe("the review confidence the command line prints", () => {
   it("should give the note of a run and each reason under it", () => {
-    const text = renderRun(state({ confidence: { score: 2, reasons: [{ rule: "incident_open", cap: 2, detail: "1 incident still open." }, { rule: "gate_unchecked", minus: 0.5, detail: "A check of the stop gate could not conclude." }] } }), now, "impl");
+    const text = renderRun(state({ confidence: { score: 2, reasons: [{ rule: "incident_open", cap: 2, detail: "1 incident still open." }, { rule: "gate_unchecked", minus: 0.5, detail: "A check of the stop gate could not conclude." }] } }), now, "impl", "en");
     expect(text).toMatch(/Confidence {2}2\/5\n {12}Held at 2: 1 incident still open\.\n {12}Minus 0\.5: A check of the stop gate could not conclude\./);
   });
 
   it("should leave the line out of a run no reviewer reported on", () => {
-    expect(renderRun(state(), now, "impl")).not.toContain("Confidence");
+    expect(renderRun(state(), now, "impl", "en")).not.toContain("Confidence");
   });
 
   it("should open the evidence with the note, with or without criteria", () => {
     const view = { available: false } as AcceptanceView;
-    expect(renderEvidence(view, 0)).toBe("Review confidence: 0/5\nThis run wrote no acceptance criteria.");
-    expect(renderEvidence(view)).toBe("This run wrote no acceptance criteria.");
+    expect(renderEvidence(view, 0, "en")).toBe("Review confidence: 0/5\nThis run wrote no acceptance criteria.");
+    expect(renderEvidence(view, undefined, "en")).toBe("This run wrote no acceptance criteria.");
   });
 
   it("should print one row per note of the calibration, and nothing without one", () => {
-    expect(renderCalibration([])).toBe("");
-    expect(renderCalibration([{ score: 4, runs: 12, reopened: 2, feedback: 1 }])).toBe("CONFIDENCE  RUNS  REOPENED  FEEDBACK\n4/5         12    2         1");
+    expect(renderCalibration([], "en")).toBe("");
+    expect(renderCalibration([{ score: 4, runs: 12, reopened: 2, feedback: 1 }], "en")).toBe("CONFIDENCE  RUNS  REOPENED  FEEDBACK\n4/5         12    2         1");
+  });
+});
+
+describe("the command line in French", () => {
+  it("should head the lists and name the status in French", () => {
+    const snapshot: FactorySnapshot = { runs: [summary({ status: "attention", pendingQuestionCount: 2 })], queued: [], language: "fr", maxConcurrentRuns: 3, archived: [], proposals: [] };
+    const text = renderFactory(snapshot, now);
+    expect(text).toContain("Runs (1/3 slots pris)");
+    expect(text).toMatch(/^ID +RUN +STATUT +ÉTAPE +DURÉE +TOKENS +RENDU/m);
+    expect(text).toContain("À vous (2 décisions)");
+    expect(text).toContain("4/10 Planifier");
+  });
+
+  it("should print one run in French with the commands the launcher is called by", () => {
+    const text = renderRun(state({ status: "attention", pendingQuestion: { id: "q", questions: [{ question: "Quelle base ?", header: "Base", multiSelect: true, options: [] }] } }), now, "impl", "fr");
+    expect(text).toContain("Statut  ");
+    expect(text).toContain("Décision requise");
+    expect(text).toContain("(plusieurs choix possibles)");
+    expect(text).toContain("Répondre : impl answer aaaa1111");
+  });
+
+  it("should open the evidence with the note in French", () => {
+    expect(renderEvidence({ available: false } as AcceptanceView, 0, "fr")).toBe("Confiance de la revue : 0/5\nCe run n'a écrit aucun critère d'acceptation.");
   });
 });

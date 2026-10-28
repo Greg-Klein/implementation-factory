@@ -3,6 +3,8 @@
 import { CodeIcon, MoonIcon, SpeakerHighIcon, SpeakerSlashIcon, SunIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defined } from "@/lib/defined";
+import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from "@/lib/i18n";
+import { texts } from "@/lib/i18n/texts";
 import { launchAnswer } from "@/lib/launch";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
 import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
@@ -11,6 +13,7 @@ import { appendTerminalOutput } from "@/lib/terminal-output";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
 import { applyTheme, followSystemTheme, setStoredTheme, storedTheme, systemTheme, type Theme } from "@/lib/theme";
 import type { AutomaticMerge, FactorySnapshot, IncidentResult, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage, UnresolvedTicket, WorktreeResult } from "@/lib/types";
+import { LanguageContext } from "./language";
 import { LaunchForm } from "./launch-form";
 import { MetricsPanel } from "./metrics-panel";
 import { NoticeStrip } from "./notice-strip";
@@ -20,9 +23,9 @@ import { RunView, type RefusedFeedback } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
 
-function batchNotice(accepted: number, duplicates: number): Notice {
-  const left = duplicates > 0 ? ` ${duplicates} already queued, running or waiting for merge ${duplicates > 1 ? "were skipped" : "was skipped"}.` : "";
-  return { level: "info", at: new Date().toISOString(), title: "Batch queued", detail: `${accepted} ticket${accepted > 1 ? "s" : ""} added. The queue shows which start and which wait.${left}` };
+function batchNotice(accepted: number, duplicates: number, language: Language): Notice {
+  const t = texts(language).shell;
+  return { level: "info", at: new Date().toISOString(), title: t.batchQueued, detail: t.batchDetail(accepted, duplicates) };
 }
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
@@ -33,12 +36,17 @@ function requestIdentifier() {
 }
 
 /** Said when a command could not leave the page: nothing was sent, so nothing is shown as done. */
-const NOT_CONNECTED = "Not connected to the console. Nothing was sent. Try again in a moment.";
+const notConnected = (language: Language) => texts(language).shell.notConnected;
+const isNotConnected = (message: string | undefined) => LANGUAGES.some((language) => message === notConnected(language));
 
-const emptySnapshot: FactorySnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, archived: [] };
+const emptySnapshot: FactorySnapshot = { runs: [], queued: [], maxConcurrentRuns: 1, language: DEFAULT_LANGUAGE, archived: [] };
 
 export function Factory() {
   const [snapshot, setSnapshot] = useState<FactorySnapshot>(emptySnapshot);
+  const t = texts(snapshot.language).shell;
+  // The socket handlers outlive a render: they read the language through this ref.
+  const languageRef = useRef(snapshot.language);
+  languageRef.current = snapshot.language;
   const [run, setRun] = useState<RunState | null>(null);
   const [connected, setConnected] = useState(false);
   const [cwd, setCwd] = useState("");
@@ -157,7 +165,7 @@ export function Factory() {
       socket.onopen = () => {
         if (socketRef.current !== socket) return;
         setConnected(true);
-        setError((current) => (current === NOT_CONNECTED ? undefined : current));
+        setError((current) => (isNotConnected(current) ? undefined : current));
         // A reconnection has to say again which run this page is reading.
         if (openRunRef.current) socket.send(JSON.stringify({ type: "run.subscribe", runId: openRunRef.current }));
       };
@@ -194,7 +202,7 @@ export function Factory() {
           if (feedback && message.requestId === feedback.requestId) setRefusedFeedback(feedback);
         }
         // The batch went in: the form is free for the next one, and the queue says the rest.
-        if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length)); }
+        if (message.type === "batch.result") { clearLaunchFormRef.current(); setNotice(batchNotice(message.accepted, message.duplicates.length, languageRef.current)); }
         if (message.type === "batch.unresolved") setUnresolved(message.tickets);
         if (message.type === "worktree.result") setWorktreeResult({ runId: message.runId, outcome: message.outcome, message: message.message, ...defined({ risks: message.risks }) });
         if (message.type === "recipe.result" || message.type === "findings.result" || message.type === "findings.fix") setRecipeRevision((revision) => revision + 1);
@@ -306,7 +314,7 @@ export function Factory() {
     previousRunsRef.current = snapshot.runs;
     const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
     icon.href = faviconDataUri(faviconColor(snapshot.runs));
-    for (const alert of runAlerts(previous, snapshot.runs)) {
+    for (const alert of runAlerts(previous, snapshot.runs, snapshot.language)) {
       playCue(alert.cue);
       if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") continue;
       new Notification(alert.title, { body: alert.body, tag: alert.tag });
@@ -336,6 +344,12 @@ export function Factory() {
     return followSystemTheme(setTheme);
   }, []);
 
+  useEffect(() => { document.documentElement.lang = snapshot.language; }, [snapshot.language]);
+
+  const chooseLanguage = (language: Language) => {
+    if (language !== snapshot.language) command({ type: "language.set", language });
+  };
+
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
     applyTheme(next);
@@ -360,7 +374,7 @@ export function Factory() {
   /** A gesture of the user: when it could not leave, they are told, and the caller shows nothing as done. */
   const command = useCallback((message: object) => {
     const sent = send(message);
-    if (!sent) setError(NOT_CONNECTED);
+    if (!sent) setError(notConnected(languageRef.current));
     return sent;
   }, [send]);
 
@@ -438,9 +452,10 @@ export function Factory() {
   const runId = run?.id ?? "";
 
   return (
+    <LanguageContext.Provider value={snapshot.language}>
     <main className="min-h-[100dvh] bg-[var(--paper)] p-3 md:p-5">
       {/* The only title of the page. One written to `document.title` beside a title of the layout's metadata was put back to the bare name when that one hydrated late, and stayed so until the list of runs changed again. */}
-      <title>{documentTitle(snapshot.runs)}</title>
+      <title>{documentTitle(snapshot.runs, snapshot.language)}</title>
       {/* A sidebar of runs on the left, the one that is open on the right. */}
       <div className="mx-auto grid max-w-425 grid-cols-1 items-start gap-3 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-4">
         <RunRail
@@ -473,18 +488,25 @@ export function Factory() {
               <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-[var(--on-ink)]"><CodeIcon size={18} weight="bold" /></div>
               <div>
                 <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Factory</h1>
-                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Software factory on Claude Code</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[var(--faint)]">by Gregory Klein</span></p>
+                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">{t.tagline}</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[var(--faint)]">{t.byline}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-              <button type="button" role="switch" aria-checked={theme === "dark"} aria-label="Dark theme" onClick={toggleTheme} title={theme === "dark" ? "Dark theme, click to switch to light" : "Light theme, click to switch to dark"} className="mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px">
+              <div role="group" aria-label={texts(snapshot.language).common.language} className="mr-1 flex h-7 items-center rounded-lg border border-[var(--line)] p-0.5">
+                {LANGUAGES.map((language) => (
+                  <button key={language} type="button" aria-pressed={snapshot.language === language} onClick={() => chooseLanguage(language)} title={texts(language).common.switchLanguage} lang={language} aria-label={texts(language).common.languageName} className={`h-full rounded-md px-1.5 font-mono text-[10px] uppercase transition active:translate-y-px ${snapshot.language === language ? "bg-[var(--raised)] text-[var(--ink)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+                    {language}
+                  </button>
+                ))}
+              </div>
+              <button type="button" role="switch" aria-checked={theme === "dark"} aria-label={t.darkTheme} onClick={toggleTheme} title={t.darkThemeTitle(theme === "dark")} className="mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px">
                 {theme === "dark" ? <SunIcon size={14} /> : <MoonIcon size={14} />}
               </button>
-              <button type="button" role="switch" aria-checked={sound} aria-label="Alert sound" onClick={toggleSound} title={sound ? "Alert sound on, click to mute" : "Alert sound off, click to turn on"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+              <button type="button" role="switch" aria-checked={sound} aria-label={t.alertSound} onClick={toggleSound} title={t.alertSoundTitle(sound)} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-[var(--raised)] active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
                 {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
               </button>
-              <span title="Live connection between this page and the local server of the factory" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
-              <span className="hidden sm:inline">Local server</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connected" : "reconnecting…"}</span>
+              <span title={t.connectionTitle} className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
+              <span className="hidden sm:inline">{t.localServer}</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? t.connected : t.reconnecting}</span>
             </div>
           </header>
 
@@ -492,7 +514,7 @@ export function Factory() {
             {error && (
               <div role="alert" className="flex items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-red-800 md:px-7">
                 <p className="flex min-w-0 items-start gap-2.5 text-[11px] leading-5"><WarningIcon className="mt-0.5 shrink-0" size={14} weight="fill" />{error}</p>
-                <button type="button" onClick={() => setError(undefined)} aria-label="Hide the error" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
+                <button type="button" onClick={() => setError(undefined)} aria-label={t.hideError} className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-[var(--raised)]/70 active:translate-y-px"><XIcon size={12} /></button>
               </div>
             )}
             <NoticeStrip notice={notice} onDismiss={() => setNotice(undefined)} />
@@ -546,5 +568,6 @@ export function Factory() {
       </div>
       {recipeRepository && <RecipeDialog repository={recipeRepository} revision={recipeRevision} connected={connected} onForget={() => { command({ type: "recipe.forget", repository: recipeRepository }); }} onForgetFindings={() => { command({ type: "findings.forget", repository: recipeRepository }); }} onAcceptFix={(category) => { command({ type: "findings.accept", repository: recipeRepository, category }); }} onDismissFix={(category) => { command({ type: "findings.dismiss", repository: recipeRepository, category }); }} onClose={() => setRecipeRepository(undefined)} />}
     </main>
+    </LanguageContext.Provider>
   );
 }

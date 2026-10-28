@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { ticketProjectPath, gitRemoteProjects, originProject } from "./domain.js";
 import type { RepositoryOption } from "./types.js";
+import { currentTexts } from "./language.js";
 
 /** A checkout nested one level below a search root, such as ~/workspace/client/app. */
 const MAX_DEPTH = 2;
@@ -80,15 +81,15 @@ export async function detectProjectDirectory(issueUrl: string, known?: Repositor
 export async function resolveProjectDirectory(input: string, issueUrl: string) {
   if (input.trim()) {
     const explicit = path.resolve(expandHome(input.trim()));
-    if (!existsSync(explicit)) throw new Error("The project directory does not exist.");
+    if (!existsSync(explicit)) throw new Error(currentTexts().serverRun.projectDirectoryMissing);
     return explicit;
   }
   const project = ticketProjectPath(issueUrl);
-  if (!project) throw new Error("The ticket URL is not recognised: it must be a GitLab or GitHub issue.");
+  if (!project) throw new Error(currentTexts().serverRun.ticketUrlNotRecognised);
   // A checkout cloned a moment ago is not in the cached scan yet: look again before refusing.
   const detected = await detectProjectDirectory(issueUrl) ?? await detectProjectDirectory(issueUrl, await discoverRepositories({ fresh: true }));
   if (detected) return detected.resolvedPath;
-  throw new Error(`No checkout found for ${project}. Give its path or add its root to IMPL_SEARCH_ROOTS.`);
+  throw new Error(currentTexts().serverRun.noCheckoutGiven(project));
 }
 
 /** The project a checkout pushes to, read from its `origin` remote. */
@@ -104,6 +105,6 @@ export async function checkoutProject(directory: string) {
 export async function checkoutOfProject(project: string) {
   const find = (repositories: RepositoryOption[]) => repositories.find((repository) => repository.project.toLowerCase() === project.toLowerCase());
   const found = find(await discoverRepositories()) ?? find(await discoverRepositories({ fresh: true }));
-  if (!found) throw new Error(`No checkout found for ${project}. Add its root to IMPL_SEARCH_ROOTS.`);
+  if (!found) throw new Error(currentTexts().serverRun.noCheckout(project));
   return found.resolvedPath;
 }

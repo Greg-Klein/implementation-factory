@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMissingFile } from "./context.js";
-import { pluginRoot, scheduleRoot, scheduleTimeoutMs, workflowLanguage } from "./config.js";
+import { pluginRoot, scheduleRoot, scheduleTimeoutMs } from "./config.js";
+import { currentLanguage, currentTexts } from "./language.js";
 import { scheduleInput, validateSchedule, type KnownTicket, type ScheduleOutput } from "./domain.js";
 import { engine } from "./engine/index.js";
 import type { ScheduleSession } from "./engine/types.js";
@@ -31,24 +32,24 @@ export async function analyseTickets(repository: string, tickets: string[], know
   };
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    await writeFile(inputPath, JSON.stringify(scheduleInput(repository, workflowLanguage, tickets, known), null, 2));
+    await writeFile(inputPath, JSON.stringify(scheduleInput(repository, currentLanguage(), tickets, known), null, 2));
   } catch {
-    return { ok: false, failure: "input file could not be written" };
+    return { ok: false, failure: currentTexts().serverRun.analysisInputNotWritten };
   }
   const session = engine.startSchedule({ repository, pluginDir: pluginRoot, inputPath, outputPath, timeoutMs: scheduleTimeoutMs });
-  if (!session) return fail(`${engine.label} not found`);
+  if (!session) return fail(currentTexts().serverRun.analysisEngineNotFound(engine.label));
   onSession?.(session);
   const { timedOut, log } = await session.finished;
   onSession?.(null);
-  if (timedOut) return fail(`timeout of ${duration(scheduleTimeoutMs)} exceeded`, log);
+  if (timedOut) return fail(currentTexts().serverRun.analysisTimeout(duration(scheduleTimeoutMs)), log);
   let output: unknown;
   try {
     output = JSON.parse(await readFile(outputPath, "utf8"));
   } catch (error) {
-    return fail(isMissingFile(error) ? "output file missing" : "output file unreadable", log);
+    return fail(isMissingFile(error) ? currentTexts().serverRun.analysisOutputMissing : currentTexts().serverRun.analysisOutputUnreadable, log);
   }
   const validation = validateSchedule({ tickets, known: known.map(({ ticket }) => ticket.issueUrl) }, output);
-  if (!validation.ok) return fail(`output refused, ${validation.error}`, log);
+  if (!validation.ok) return fail(currentTexts().serverRun.analysisOutputRefused(validation.error), log);
   await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   return { ok: true, schedule: validation.schedule };
 }

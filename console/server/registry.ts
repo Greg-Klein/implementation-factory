@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises
 import path from "node:path";
 import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
+import { currentLanguage, currentTexts, runLanguage } from "./language.js";
 import { admitBatch, carriesInterrupt, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitFollowsInterrupt, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
@@ -12,7 +13,7 @@ import { seedRuntimeRecipe } from "./runtime-recipe.js";
 import { hookSpoolPath } from "./hook-bridge.js";
 import { clearPendingQuestion } from "./hooks.js";
 import { applySessionEvent, closeSessionPrompt } from "./session-prompt.js";
-import { acknowledgeDemoInstruction, DEMO_BATCH, DEMO_CWD, demoBatchLaunchState, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
+import { acknowledgeDemoInstruction, DEMO_CWD, demoBatch, demoBatchLaunchState, demoLaunchState, resumeDemoAfterContinuation, startDemoRun, startIncidentDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { checkoutProject, resolveProjectDirectory } from "./repository.js";
 import { fetchIssueLinks, fetchMergeRequestStatus, fetchTicketTitle } from "./ticket.js";
@@ -48,8 +49,6 @@ export type BatchOutcome = { batchId: string; entries: QueuedRun[]; duplicates: 
 const WATCH_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 /** How many steps of the demonstration a simulated merge request takes to be merged. */
 const DEMO_MERGE_STEPS = 4;
-
-const plural = (count: number, one: string, many: string) => `${count} ${count > 1 ? many : one}`;
 
 function mergeRequestReference(mergeRequestUrl: string) {
   const words = forgeWords(forgeOf(mergeRequestUrl));
@@ -154,7 +153,7 @@ export class RunRegistry {
   }
 
   private describe() {
-    return describeQueue(this.queue, this.holders(), this.context());
+    return describeQueue(this.queue, this.holders(), this.context(), currentLanguage());
   }
 
   /** Every ticket the console already has: queued, held by a run, or behind an unmerged merge request. */
@@ -180,7 +179,7 @@ export class RunRegistry {
   private async forgeEdges(repository: string, urls: string[]) {
     const edges = await Promise.all(urls.map(async (issueUrl) => {
       const links = await fetchIssueLinks(issueUrl, repository);
-      return links ? linkEdges(repository, issueUrl, links, this.repositoryTickets(repository)) : [];
+      return links ? linkEdges(repository, issueUrl, links, this.repositoryTickets(repository), currentLanguage()) : [];
     }));
     return overlayEdges([], edges.flat());
   }
@@ -234,6 +233,7 @@ export class RunRegistry {
       runs: [...this.sessions.values()].map((session) => session.summary()).sort((left, right) => (right.startedAt ?? "").localeCompare(left.startedAt ?? "")),
       queued: this.describe(),
       maxConcurrentRuns,
+      language: currentLanguage(),
       archived: this.archive.list(),
       proposals: this.proposals.open(),
     };
@@ -261,11 +261,11 @@ export class RunRegistry {
    * while the user is still looking at the form rather than an hour later.
    */
   async launch(request: LaunchRequest): Promise<LaunchOutcome> {
-    if (this.shuttingDown) throw new Error("The application is shutting down.");
-    if (!engine.locate()) throw new Error(`${engine.label} was not found in PATH.`);
+    if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
+    if (!engine.locate()) throw new Error(currentTexts().serverRun.engineNotFound(engine.label));
     // A path inside a linked worktree, or below the root, names the same repository as its main checkout.
     const repository = await mainCheckout(await resolveProjectDirectory(request.cwd, request.issueUrl));
-    if (this.shuttingDown) throw new Error("The application is shutting down.");
+    if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
     // A checkout typed by hand may belong to another project than the ticket's: the workflow is told so.
     const deliveries = deliveryProjects(request.issueUrl, [await checkoutProject(repository)]);
     const entry = this.entry({ repository, issueUrl: request.issueUrl, ...(deliveries ? { deliveries } : {}) }, request.instruction);
@@ -273,7 +273,7 @@ export class RunRegistry {
     // here, before it may start, so the page still opens the run it asked for.
     if (!this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length === 0 && this.repositoryTickets(repository).length > 0) {
       this.edges = overlayEdges(this.edges, await this.forgeEdges(repository, [entry.issueUrl]));
-      if (this.shuttingDown) throw new Error("The application is shutting down.");
+      if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
     }
     // A ticket added beside others already predicted is compared against them before it may start.
     const analysed = !this.takenTickets().includes(runLockKey(entry)) && this.knownTickets(repository).length > 0;
@@ -301,8 +301,8 @@ export class RunRegistry {
    * console has another ticket of that repository.
    */
   async enqueueBatch(tickets: ResolvedTicket[], options: { instruction?: string } = {}): Promise<BatchOutcome> {
-    if (this.shuttingDown) throw new Error("The application is shutting down.");
-    if (!engine.locate()) throw new Error(`${engine.label} was not found in PATH.`);
+    if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
+    if (!engine.locate()) throw new Error(currentTexts().serverRun.engineNotFound(engine.label));
     const outcome = this.admit(tickets, options.instruction);
     const before = new Set(this.sessions.keys());
     await this.drain();
@@ -318,7 +318,7 @@ export class RunRegistry {
     try {
       const outcome = await this.enqueueBatch(resolved);
       const queued = [...outcome.entries.map((entry) => entry.issueUrl), ...outcome.duplicates];
-      if (outcome.entries.length > 0) broadcast({ type: "notice", level: "info", title: "Tickets queued from the watcher", detail: outcome.entries.map((entry) => ticketReference(entry.issueUrl)).join(", "), at: now() });
+      if (outcome.entries.length > 0) broadcast({ type: "notice", level: "info", title: currentTexts().serverRun.queuedFromWatcher, detail: outcome.entries.map((entry) => ticketReference(entry.issueUrl)).join(", "), at: now() });
       return { started: queued, refused };
     } catch (error) {
       if (this.shuttingDown) return { started: [], refused };
@@ -335,8 +335,8 @@ export class RunRegistry {
   async launchProposal(issueUrl: string, paths: string[]): Promise<BatchOutcome> {
     const [listed] = this.proposals.proposed([issueUrl]);
     const proposal = listed === undefined ? undefined : this.proposals.open().find((candidate) => candidate.issueUrl === listed);
-    if (!proposal) throw new Error("This ticket is no longer listed.");
-    if (paths.length === 0) throw new Error("Choose at least one repository.");
+    if (!proposal) throw new Error(currentTexts().serverRun.proposalGone);
+    if (paths.length === 0) throw new Error(currentTexts().serverRun.chooseRepository);
     const outcome = await this.enqueueBatch(await resolveTargets(proposal.issueUrl, paths, proposal.baseBranch));
     await this.proposals.handle([proposal.issueUrl]);
     return outcome;
@@ -344,7 +344,7 @@ export class RunRegistry {
 
   private admit(tickets: ResolvedTicket[], instruction: string | undefined, extra: Partial<QueuedRun> = {}) {
     const { accepted, duplicates } = admitBatch(tickets, this.takenTickets());
-    if (accepted.length === 0) throw new Error(tickets.length > 1 ? "These tickets are already queued, running or waiting for a merge." : "This ticket is already queued, running or waiting for a merge.");
+    if (accepted.length === 0) throw new Error(tickets.length > 1 ? currentTexts().serverRun.alreadyQueuedMany : currentTexts().serverRun.alreadyQueuedOne);
     const batchId = `batch-${crypto.randomUUID().slice(0, 8)}`;
     const entries = accepted.map((ticket) => this.entry(ticket, instruction, { batchId, ...extra }));
     const analyses: [string, QueuedRun[], boolean][] = [];
@@ -409,7 +409,7 @@ export class RunRegistry {
       this.edges = [...this.edges.filter((edge) => edge.repository !== repository || !replaced.has(pair(edge))), ...result.schedule.edges.map((edge) => ({ ...edge, repository }))];
     } else if (result) {
       this.tickets = [...this.tickets, ...pending.map((entry) => ({ issueUrl: entry.issueUrl, repository, analysis: "failed" as const, areas: [], files: [], failure: result.failure }))];
-      broadcast({ type: "notice", level: "attention", at: now(), title: "Batch analysis failed", detail: `${path.basename(repository)}: ${result.failure}. ${pending.length > 1 ? `Its ${pending.length} tickets run` : "Its ticket runs"} one at a time, after the other tickets of the repository.` });
+      broadcast({ type: "notice", level: "attention", at: now(), title: currentTexts().serverRun.analysisFailedTitle, detail: currentTexts().serverRun.analysisFailedDetail(path.basename(repository), result.failure, pending.length) });
     }
     this.edges = overlayEdges(this.edges, stated);
     const analysed = new Set(pending.map((entry) => entry.id));
@@ -422,8 +422,8 @@ export class RunRegistry {
     await new Promise<void>((resolve) => this.later(demoStepDuration, resolve));
     const asked = new Set(urls);
     return { ok: true, schedule: {
-      tickets: DEMO_BATCH.tickets.filter((ticket) => asked.has(ticket.issueUrl)).map(({ issueUrl, files, confidence, summary }) => ({ issueUrl, areas: [], files, confidence, summary })),
-      edges: DEMO_BATCH.edges.filter((edge) => asked.has(edge.a) || asked.has(edge.b)),
+      tickets: demoBatch(currentLanguage()).tickets.filter((ticket) => asked.has(ticket.issueUrl)).map(({ issueUrl, files, confidence, summary }) => ({ issueUrl, areas: [], files, confidence, summary })),
+      edges: demoBatch(currentLanguage()).edges.filter((edge) => asked.has(edge.a) || asked.has(edge.b)),
     } };
   }
 
@@ -435,10 +435,10 @@ export class RunRegistry {
 
   /** The batch of the demonstration: three invented tickets, one conflict, no repository and no GitLab. */
   startDemoBatch() {
-    if (this.shuttingDown) throw new Error("The application is shutting down.");
-    const tickets = DEMO_BATCH.tickets.map((ticket) => ({ repository: DEMO_CWD, issueUrl: ticket.issueUrl }));
-    if (admitBatch(tickets, this.takenTickets()).accepted.length === 0) throw new Error("The demo batch is already running.");
-    const outcome = this.admit(tickets, "Demo mode, no repository will be modified.", { demo: true });
+    if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
+    const tickets = demoBatch(currentLanguage()).tickets.map((ticket) => ({ repository: DEMO_CWD, issueUrl: ticket.issueUrl }));
+    if (admitBatch(tickets, this.takenTickets()).accepted.length === 0) throw new Error(currentTexts().serverRun.demoBatchRunning);
+    const outcome = this.admit(tickets, currentTexts().demo.workflowInstruction, { demo: true });
     void this.drain();
     return outcome;
   }
@@ -448,11 +448,11 @@ export class RunRegistry {
    * `incident`: the scenario where the pilot hands back with nothing next, for the health detector.
    */
   startDemo(scenario: "workflow" | "incident" = "workflow") {
-    if (this.shuttingDown) throw new Error("The application is shutting down.");
+    if (this.shuttingDown) throw new Error(currentTexts().serverRun.shuttingDown);
     const launch = demoLaunchState(scenario);
-    if (this.holders().has(runLockKey(launch))) throw new Error("A demo is already running.");
-    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`The factory already holds ${maxConcurrentRuns} runs. Free a slot before starting the demo.`);
-    const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, launch));
+    if (this.holders().has(runLockKey(launch))) throw new Error(currentTexts().serverRun.demoRunning);
+    if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(currentTexts().serverRun.demoNoSlot(maxConcurrentRuns));
+    const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, { ...launch, language: currentLanguage() }));
     if (scenario === "incident") startIncidentDemoRun(session);
     else startDemoRun(session);
     this.publishSnapshot();
@@ -498,7 +498,7 @@ export class RunRegistry {
       // Nobody merges a simulated merge request: the demonstration does, a few steps later.
       if (isSimulatedTicket(watch.issueUrl)) this.later(demoStepDuration * DEMO_MERGE_STEPS, () => void this.applyMergeStatus(watch, "merged"));
     } else if (dependents.length > 0) {
-      broadcast({ type: "notice", level: "info", at: now(), title: `Ticket finished without a ${forgeWords(forgeOf(state.issueUrl)).delivery}`, detail: `${path.basename(repository)} ${ticketReference(state.issueUrl)} opened no ${forgeWords(forgeOf(state.issueUrl)).delivery}: ${plural(dependents.length, "ticket no longer waits for it", "tickets no longer wait for it")}.` });
+      broadcast({ type: "notice", level: "info", at: now(), title: currentTexts().serverRun.finishedNoDeliveryTitle(forgeWords(forgeOf(state.issueUrl)).delivery), detail: currentTexts().serverRun.finishedNoDeliveryDetail(path.basename(repository), ticketReference(state.issueUrl), forgeWords(forgeOf(state.issueUrl)).delivery, dependents.length) });
     }
     void this.drain();
   }
@@ -520,16 +520,16 @@ export class RunRegistry {
     const subject = `${mergeRequestReference(current.mergeRequestUrl)} (${path.basename(current.repository)} ${ticketReference(current.issueUrl)})`;
     const delivery = forgeOf(current.mergeRequestUrl) === "github" ? "Pull request" : "Merge request";
     if (step.released === "merged") {
-      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: `${delivery} merged`, detail: `${subject}: ${plural(released, "ticket starts", "tickets start")} from the updated base.` });
+      if (released > 0) broadcast({ type: "notice", level: "info", at: now(), title: currentTexts().serverRun.deliveryMergedTitle(delivery), detail: currentTexts().serverRun.deliveryMergedDetail(subject, released) });
     } else {
-      broadcast({ type: "notice", level: "attention", at: now(), title: `${delivery} closed without being merged`, detail: `${subject}: ${plural(released, "ticket no longer waits for it and starts", "tickets no longer wait for it and start")} from the base.` });
+      broadcast({ type: "notice", level: "attention", at: now(), title: currentTexts().serverRun.deliveryClosedTitle(delivery), detail: currentTexts().serverRun.deliveryClosedDetail(subject, released) });
     }
     await this.drain();
   }
 
   private async start(entry: QueuedRun) {
     if (entry.demo) {
-      const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, demoBatchLaunchState(entry.issueUrl)));
+      const session = this.register(new RunSession(`demo-${crypto.randomUUID().slice(0, 8)}`, { ...demoBatchLaunchState(entry.issueUrl), language: currentLanguage() }));
       startDemoRun(session);
       return session;
     }
@@ -539,14 +539,16 @@ export class RunRegistry {
     // ticket sees this one while git is still working. `cwd` stays the
     // repository until the worktree is there: nothing may run in a path that is not.
     const session = this.register(new RunSession(id, {
-      status: "starting", phase: 1, cwd: repository, repository, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(),
+      status: "starting", phase: 1, cwd: repository, repository, issueUrl: entry.issueUrl, instruction: entry.instruction, startedAt: now(), language: currentLanguage(),
       ...(entry.forced?.mode === "stacked" ? { baseBranch: entry.forced.baseBranch } : entry.baseBranch ? { ticketBaseBranch: entry.baseBranch } : {}),
     }));
-    session.activity("system", "Session created", path.basename(repository));
-    if (entry.forced?.mode === "stacked") session.activity("attention", "Stacked start", `On ${entry.forced.baseBranch}, the branch of ${ticketReference(entry.forced.onto)}: the ${forgeWords(forgeOf(entry.issueUrl)).delivery} will target this branch.`);
-    else if (entry.forced) session.activity("attention", "Forced start from the base", "The batch schedule is ignored for this ticket.");
-    if (entry.deliveries) session.activity("system", entry.deliveries.length > 1 ? "Ticket delivered in several repositories" : "Ticket delivered in another project", entry.deliveries.length > 1 ? `One ${forgeWords(forgeOf(entry.issueUrl)).delivery} in each of ${entry.deliveries.join(", ")}, one run each. None of them closes the ticket.` : `The ${forgeWords(forgeOf(entry.issueUrl)).delivery} goes to ${entry.deliveries[0]} and names the ticket by its full reference.`);
-    if (entry.forced?.mode !== "stacked" && entry.baseBranch) session.activity("system", "Base named by the watcher", `The work starts from ${entry.baseBranch} and the ${forgeWords(forgeOf(entry.issueUrl)).delivery} targets it.`);
+    const t = session.texts.serverRun;
+    const { delivery } = forgeWords(forgeOf(entry.issueUrl));
+    session.activity("system", t.sessionCreated, path.basename(repository));
+    if (entry.forced?.mode === "stacked") session.activity("attention", t.stackedStart, t.stackedStartDetail(entry.forced.baseBranch, ticketReference(entry.forced.onto), delivery));
+    else if (entry.forced) session.activity("attention", t.forcedStart, t.forcedStartDetail);
+    if (entry.deliveries) session.activity("system", entry.deliveries.length > 1 ? t.deliveredSeveral : t.deliveredOther, entry.deliveries.length > 1 ? t.deliveredSeveralDetail(delivery, entry.deliveries) : t.deliveredOtherDetail(delivery, entry.deliveries[0]!));
+    if (entry.forced?.mode !== "stacked" && entry.baseBranch) session.activity("system", t.baseNamed, t.baseNamedDetail(entry.baseBranch, delivery));
     session.publish();
     const abandon = async (message: string) => {
       await session.dispose().catch(reportFailure("Run not disposed", session.id));
@@ -556,19 +558,19 @@ export class RunRegistry {
     };
     let prepared: Awaited<ReturnType<typeof prepareRunWorktree>>;
     try {
-      prepared = await prepareRunWorktree(repository, id);
+      prepared = await prepareRunWorktree(repository, id, runLanguage(session.state));
     } catch (error) {
       // Never a silent fall back on the main checkout: the run does not start at all.
       const reason = error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : String(error);
-      throw await abandon(`The run worktree could not be created in ${repository}: ${reason}`);
+      throw await abandon(t.worktreeCreateFailed(repository, reason));
     }
     const worktree = prepared.worktree.path;
     session.state.cwd = worktree;
     session.state.worktree = prepared.worktree;
-    session.activity("system", "Worktree created", [worktree, prepared.summary].filter(Boolean).join(" · "));
-    if (prepared.warning) session.activity("attention", "Dependencies not brought into the worktree", prepared.warning);
-    if (prepared.stale) session.activity("attention", "Dependencies behind the lockfile, the workflow reinstalls them", prepared.stale.detail);
-    if (prepared.unchecked) session.activity("attention", "Dependencies not checked against the lockfile", prepared.unchecked);
+    session.activity("system", t.worktreeCreated, [worktree, prepared.summary].filter(Boolean).join(" · "));
+    if (prepared.warning) session.activity("attention", t.dependenciesNotBrought, prepared.warning);
+    if (prepared.stale) session.activity("attention", t.dependenciesStale, prepared.stale.detail);
+    if (prepared.unchecked) session.activity("attention", t.dependenciesUnchecked, prepared.unchecked);
     session.publish();
     void fetchTicketTitle(entry.issueUrl, repository).then((title) => {
       if (!title) return;
@@ -580,16 +582,16 @@ export class RunRegistry {
     session.state.factory = await factoryVersion();
     session.state.baseCommit = await headCommit(worktree).catch(() => undefined);
     await clearTaskDirectory(worktree);
-    if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", "Runtime recipe restored", "Kept from a previous run of this repository.");
+    if (await seedRuntimeRecipe(repository, worktree)) session.activity("system", t.recipeRestored, t.recipeRestoredDetail);
     const habits = await seedRecurringFindings(repository, worktree);
-    if (habits) session.activity("system", "Recurring review findings restored", `${habits} ${habits > 1 ? "kinds" : "kind"} of defect the reviews of this repository keep finding.`);
+    if (habits) session.activity("system", t.findingsRestored, t.findingsRestoredDetail(habits));
     const reviewGuide = await seedReviewGuide(worktree, session.state.startedAt ?? now());
-    if (reviewGuide) session.activity("system", "Review guide restored", `${reviewGuide} will steer this run's reviews.`);
+    if (reviewGuide) session.activity("system", t.guideRestored, t.guideRestoredDetail(reviewGuide));
     await mkdir(path.join(dataRoot, id), { recursive: true });
     await startArtifactWatcher(session);
     if (this.shuttingDown) {
       await discardRunWorktree(repository, worktree);
-      throw await abandon("The application is shutting down.");
+      throw await abandon(session.texts.serverRun.shuttingDown);
     }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
     let terminalLogFailed = false;
@@ -607,6 +609,8 @@ export class RunRegistry {
         // stays in the first and never edits the second.
         IMPL_RUN_WORKTREE: worktree,
         IMPL_SOURCE_REPOSITORY: repository,
+        // The language the run was launched in, whatever the page picks while it works.
+        IMPL_LANGUAGE: runLanguage(session.state),
         ...(sourceBranch ? { IMPL_SOURCE_BRANCH: sourceBranch } : {}),
         ...(prepared.worktree.dependencies ? { IMPL_WORKTREE_DEPENDENCIES: prepared.worktree.dependencies } : {}),
         ...(prepared.stale ? { IMPL_WORKTREE_DEPENDENCIES_STALE: prepared.stale.directories.join(",") } : {}),
@@ -632,7 +636,7 @@ export class RunRegistry {
     });
     session.state.status = "running";
     session.state.sessionActive = true;
-    session.activity("system", `${engine.label} started`, command);
+    session.activity("system", t.engineStarted(engine.label), command);
     session.publish();
     return session;
   }
@@ -659,14 +663,14 @@ export class RunRegistry {
     }
     if (inProgress) {
       session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null || Boolean(trustRefused), complete, reopened);
-      if (reopened) session.activity("attention", "Change after the final report not delivered", "The session ended before the workflow completed again.");
+      if (reopened) session.activity("attention", session.texts.serverRun.changeNotDelivered, session.texts.serverRun.changeNotDeliveredSession);
       else session.state.endedAt = now();
       if (trustRefused) session.state.error = trustRefused;
       else if (session.state.status === "failed") session.state.error = exitCode === 0
-        ? `${engine.label} ended before the workflow reached a result.`
-        : `${engine.label} stopped with code ${exitCode}.`;
+        ? session.texts.serverRun.endedBeforeResult(engine.label)
+        : session.texts.serverRun.stoppedWithCode(engine.label, exitCode);
     }
-    session.activity("system", exitReport(session.stoppedBy, exitCode, complete, Boolean(trustRefused)), `Code ${exitCode}`);
+    session.activity("system", exitReport(session.stoppedBy, exitCode, complete, Boolean(trustRefused), runLanguage(session.state)), session.texts.serverRun.exitCode(exitCode));
     closeAgentsLeftBehind(session);
     session.publish();
     // Diagnosed before the self-audit reads the run, so a lost session reaches it as an incident.
@@ -687,7 +691,7 @@ export class RunRegistry {
   /** A worktree left by a shutdown is decided at the next start, when git can be asked without racing the exit. */
   private keepWorktreeForRestart(session: RunSession) {
     const worktree = session.state.worktree;
-    if (worktree?.state === "active") session.state.worktree = { ...worktree, state: "kept", detail: worktreeKeptDetail(["console stopped before the end of the run"]) };
+    if (worktree?.state === "active") session.state.worktree = { ...worktree, state: "kept", detail: worktreeKeptDetail([session.texts.serverRun.worktreeKeptConsoleStopped], runLanguage(session.state)) };
   }
 
   /**
@@ -697,7 +701,7 @@ export class RunRegistry {
    */
   async removeWorktree(runId: string, force: boolean): Promise<WorktreeRemovalResult> {
     const session = this.readable(runId);
-    if (!session) return { outcome: "refused", message: "This run no longer exists." };
+    if (!session) return { outcome: "refused", message: currentTexts().serverRun.runGone };
     const result = await session.serializeHealth(() => removeWorktreeOnRequest(session, force));
     if (session.state.archived) {
       await session.persist();
@@ -722,7 +726,7 @@ export class RunRegistry {
       session.state.action = undefined;
       session.state.status = "stopped";
       session.state.endedAt = now();
-      session.activity("system", "Demo stopped");
+      session.activity("system", session.texts.serverRun.demoStopped);
       closeAgentsLeftBehind(session);
       session.publish();
       void this.drain();
@@ -742,14 +746,14 @@ export class RunRegistry {
    */
   async close(runId: string) {
     const session = this.expect(runId);
-    if (session.holdsRepository) throw new Error("This run still holds its session. Stop it before closing the run.");
+    if (session.holdsRepository) throw new Error(session.texts.serverRun.holdsSession);
     // Removing the run is the user closing its case: an incident left open would bring it back as an archive at the next start.
     await session.serializeHealth(async () => {
       const at = now();
       const incidents = session.state.incidents ?? [];
       if (!incidents.some((incident) => incident.status === "open")) return;
       session.state.incidents = incidents.map((incident) => incident.status === "open"
-        ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: "Run removed from the list" } }
+        ? { ...incident, status: "dismissed" as const, revision: incident.revision + 1, updatedAt: at, resolution: { at, outcome: session.texts.serverRun.runRemovedOutcome } }
         : incident);
       settleIncidentConfidence(session.state);
       await session.persist();
@@ -772,14 +776,14 @@ export class RunRegistry {
   sendInstruction(runId: string, text: string) {
     const session = this.expect(runId);
     const instruction = text.trim();
-    if (!instruction) throw new Error("The instruction is empty.");
-    if (!session.engine && !session.demo) throw new Error(`No ${engine.label} session is active.`);
+    if (!instruction) throw new Error(session.texts.serverRun.instructionEmpty);
+    if (!session.engine && !session.demo) throw new Error(session.texts.serverRun.noSession(engine.label));
     session.engine?.submit(instruction);
     // The user gave the pilot something to do: it is no longer sitting at its prompt for nothing.
     if (session.engine) pilotActs(session.signals, Date.now());
     session.markProgress();
     session.conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction, pending: session.engine !== null });
-    session.activity("system", "Instruction sent", instruction);
+    session.activity("system", session.texts.serverRun.instructionSent, instruction);
     session.publish();
     session.signal();
     if (!session.engine) acknowledgeDemoInstruction(session);
@@ -792,38 +796,39 @@ export class RunRegistry {
    */
   async incidentAction(request: IncidentActionRequest): Promise<IncidentActionResult> {
     const session = this.readable(request.runId);
-    if (!session) return { outcome: "refused", message: "This run no longer exists." };
+    if (!session) return { outcome: "refused", message: currentTexts().serverRun.runGone };
     return session.serializeHealth(async () => {
       const answered = session.answeredRequests.get(request.requestId);
       if (answered) return { outcome: "duplicate" as const, message: answered.message };
       const live = !session.state.archived && this.sessions.get(session.id) === session;
       const incident = session.state.incidents?.find((entry) => entry.id === request.incidentId);
-      const check = checkIncidentAction({ ...request, incident, live, ...(live ? { input: healthInput(session) } : {}) });
+      const check = checkIncidentAction({ ...request, incident, live, language: runLanguage(session.state), ...(live ? { input: healthInput(session) } : {}) });
       if (!check.ok) {
         if (!check.duplicate) session.answeredRequests.set(request.requestId, { outcome: "refused", message: check.message });
         return { outcome: check.duplicate ? "duplicate" as const : "refused" as const, message: check.message };
       }
       const at = now();
+      const t = session.texts.serverRun;
       const replace = (next: RunIncident) => { session.state.incidents = (session.state.incidents ?? []).map((entry) => entry.id === next.id ? next : entry); };
       let current = withDecision({ ...incident!, revision: incident!.revision + 1, updatedAt: at }, { requestId: request.requestId, action: request.action, at, outcome: "pending" });
       replace(current);
       await session.persist();
       let message: string;
       if (request.action === "dismiss") {
-        current = { ...current, status: "dismissed", resolution: { at, outcome: "Dismissed as a false positive", ...defined({ detail: request.reason?.trim() }) } };
-        session.activity("system", `Incident dismissed as a false positive: ${current.title}`, request.reason?.trim());
-        message = "Incident dismissed as a false positive.";
+        current = { ...current, status: "dismissed", resolution: { at, outcome: t.incidentDismissedOutcome, ...defined({ detail: request.reason?.trim() }) } };
+        session.activity("system", t.incidentDismissedActivity(current.title), request.reason?.trim());
+        message = t.incidentDismissed;
       } else if (request.action === "stop") {
         this.stop(session.id);
-        session.activity("system", "Stop requested from the incident", current.title);
-        message = "Stop requested.";
+        session.activity("system", t.incidentStopActivity, current.title);
+        message = t.incidentStop;
       } else {
         if (session.engine) session.engine.submit(CONTINUATION_INSTRUCTION);
         current = { ...current, continuation: { requestedAt: at, requestId: request.requestId } };
         session.conversationMessage({ id: `local-${crypto.randomUUID()}`, at, author: "user", text: CONTINUATION_INSTRUCTION, pending: session.engine !== null });
-        session.activity("system", "Continuation requested", current.title);
+        session.activity("system", t.incidentContinuationActivity, current.title);
         if (session.demo) resumeDemoAfterContinuation(session);
-        message = "Continuation requested. The incident will close when the resumption is observed.";
+        message = t.incidentContinuation;
       }
       current = withDecision(current, { requestId: request.requestId, action: request.action, at, outcome: "done", detail: message });
       replace(current);
@@ -842,7 +847,7 @@ export class RunRegistry {
 
   cancelQueued(queuedId: string) {
     const remaining = this.queue.filter((entry) => entry.id !== queuedId);
-    if (remaining.length === this.queue.length) throw new Error("This request is no longer queued.");
+    if (remaining.length === this.queue.length) throw new Error(currentTexts().serverRun.notQueued);
     this.queue = remaining;
     // What it was ahead of may no longer have anything to wait for.
     void this.drain();
@@ -850,7 +855,7 @@ export class RunRegistry {
 
   private queued(queuedId: string) {
     const entry = this.queue.find((candidate) => candidate.id === queuedId);
-    if (!entry) throw new Error("This request is no longer queued.");
+    if (!entry) throw new Error(currentTexts().serverRun.notQueued);
     return entry;
   }
 
@@ -865,11 +870,11 @@ export class RunRegistry {
     let forced: QueuedRun["forced"] = { mode: "base" };
     if (mode === "stacked") {
       const target = onto ?? this.describe().find((view) => view.id === queuedId)?.blocking?.issueUrl;
-      if (!target) throw new Error("This ticket is not waiting for any other ticket: there is no branch to stack it on.");
+      if (!target) throw new Error(currentTexts().serverRun.stackNoTarget);
       const key = runLockKey({ cwd: entry.repository, issueUrl: target });
       const branch = [...this.sessions.values()].find((session) => runLockKey(session.state) === key)?.state.branch
         ?? this.watches.find((watch) => runLockKey({ cwd: watch.repository, issueUrl: watch.issueUrl }) === key)?.branch;
-      if (!branch) throw new Error(`The branch of ${ticketReference(target)} is not known yet: a stacked start is not possible.`);
+      if (!branch) throw new Error(currentTexts().serverRun.stackNoBranch(ticketReference(target)));
       forced = { mode: "stacked", baseBranch: branch, onto: ticketIdentity(target) };
     }
     this.queue = this.queue.map((candidate) => candidate === entry ? { ...entry, forced } : candidate);
@@ -881,7 +886,7 @@ export class RunRegistry {
     const entry = this.queued(queuedId);
     const others = this.queue.filter((candidate) => candidate !== entry);
     const position = before === null ? others.length : others.findIndex((candidate) => candidate.id === before);
-    if (position < 0) throw new Error("This request is no longer queued.");
+    if (position < 0) throw new Error(currentTexts().serverRun.notQueued);
     this.queue = [...others.slice(0, position), entry, ...others.slice(position)];
     void this.drain();
   }
@@ -903,7 +908,7 @@ export class RunRegistry {
       try {
         await this.start(entry);
       } catch (error) {
-        broadcast({ type: "notice", level: "attention", title: "Queued run not started", detail: error instanceof Error ? error.message : String(error), at: now() });
+        broadcast({ type: "notice", level: "attention", title: currentTexts().serverRun.queuedRunNotStarted, detail: error instanceof Error ? error.message : String(error), at: now() });
       }
     }
     if (this.shuttingDown) return;
@@ -944,7 +949,7 @@ export class RunRegistry {
 
   private expect(runId: string) {
     const session = this.sessions.get(runId);
-    if (!session) throw new Error("This run no longer exists.");
+    if (!session) throw new Error(currentTexts().serverRun.runGone);
     return session;
   }
 
@@ -995,11 +1000,11 @@ export class RunRegistry {
       const unfinished = runInProgress(session.state.status) || session.state.status === "paused";
       if (unfinished && reopeningOpen(session.state)) {
         session.state.status = "completed";
-        session.activity("attention", "Change after the final report not delivered", "The application closed before the workflow completed again.");
+        session.activity("attention", session.texts.serverRun.changeNotDelivered, session.texts.serverRun.changeNotDeliveredClosed);
       } else if (unfinished) {
         session.state.status = "stopped";
         session.state.endedAt = now();
-        session.activity("system", "Session stopped when the application closed");
+        session.activity("system", session.texts.serverRun.sessionStoppedOnClose);
       }
       session.state.sessionActive = false;
       session.state.action = undefined;
@@ -1024,7 +1029,7 @@ function closeAgentsLeftBehind(session: RunSession) {
   const { agents, abandoned } = closeAbandonedAgents(session.state.agents, now());
   if (abandoned.length === 0) return;
   session.state.agents = agents;
-  session.activity("agent", abandoned.length === 1 ? "One agent never reported its end" : `${abandoned.length} agents never reported their end`, abandoned.map((agent) => agent.name).join(" · "));
+  session.activity("agent", abandoned.length === 1 ? session.texts.serverRun.oneAgentNeverEnded : session.texts.serverRun.agentsNeverEnded(abandoned.length), abandoned.map((agent) => agent.name).join(" · "));
 }
 
 export const registry = new RunRegistry();

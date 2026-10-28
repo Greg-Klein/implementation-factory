@@ -1,4 +1,5 @@
 import type { Question } from "./domain.js";
+import type { Language } from "../lib/i18n/index.js";
 
 export type RunStatus = "idle" | "starting" | "running" | "attention" | "paused" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
@@ -286,6 +287,8 @@ export type RunState = {
   reopenings?: Reopening[];
   /** The review tier the workflow declared, kept once a later state omits it. */
   reviewTier?: ReviewTier;
+  /** What the run writes for people, fixed at its launch. Absent on runs older than the setting. */
+  language?: Language;
   /** Absent until a reviewer of the run wrote its report. */
   confidence?: ReviewConfidence;
   /** The note as it stood when the workflow first declared its end: what happens afterwards is held against this one. */
@@ -428,7 +431,7 @@ export type TicketProposal = { issueUrl: string; title?: string; source?: string
 
 /** Everything every open page is told about, whichever run it has opened. */
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, waiting for a decision. */
-export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived: RunSummary[]; proposals: TicketProposal[] };
+export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; language: Language; archived: RunSummary[]; proposals: TicketProposal[] };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
@@ -448,6 +451,8 @@ export type ClientMessage =
   | { type: "run.stop"; runId: string }
   | { type: "run.close"; runId: string }
   | { type: "queue.cancel"; queuedId: string }
+  /** The language of the interface and of the runs launched from now on, written to `.env`. Answered by the next `factory` snapshot. */
+  | { type: "language.set"; language: string }
   /**
    * Several tickets at once, each resolved to its checkout from its URL. The
    * instruction applies to every ticket of the batch. Answered with `batch.result`.

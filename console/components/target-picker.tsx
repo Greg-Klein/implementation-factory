@@ -3,6 +3,7 @@
 import { GitBranchIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useId, useMemo, useState } from "react";
 import type { RepositoryOption } from "@/lib/types";
+import { useTexts } from "./language";
 
 /**
  * The checkouts a ticket's merge requests go to, when the ticket lives in a
@@ -17,6 +18,7 @@ export function TargetPicker({ label, hint, selected, onChange, repositories, co
   repositories: RepositoryOption[];
   compact?: boolean;
 }) {
+  const t = useTexts().launch;
   const id = useId();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -45,12 +47,12 @@ export function TargetPicker({ label, hint, selected, onChange, repositories, co
       <label htmlFor={id} className="mb-2 block text-xs font-medium">{label}</label>
       {hint && <p className="-mt-1 mb-2 text-[11px] leading-4 text-[var(--muted)]">{hint}</p>}
       {selected.length > 0 && (
-        <ul aria-label="Chosen repositories" className="mb-2 flex flex-wrap gap-1.5">
+        <ul aria-label={t.chosenRepositories} className="mb-2 flex flex-wrap gap-1.5">
           {selected.map((target) => (
             <li key={target} className="flex max-w-full items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--raised)] py-1 pl-2 pr-1 text-[11px]">
               <GitBranchIcon aria-hidden="true" size={11} className="shrink-0 text-[var(--accent)]" />
               <span className="truncate" title={target}>{projectOf(target) ?? target}</span>
-              <button type="button" onClick={() => onChange(selected.filter((other) => other !== target))} aria-label={`Remove ${projectOf(target) ?? target}`} className="grid size-4 shrink-0 place-items-center rounded text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--ink)]"><XIcon size={9} /></button>
+              <button type="button" onClick={() => onChange(selected.filter((other) => other !== target))} aria-label={t.removeTarget(projectOf(target) ?? target)} className="grid size-4 shrink-0 place-items-center rounded text-[var(--muted)] transition hover:bg-[var(--tint)] hover:text-[var(--ink)]"><XIcon size={9} /></button>
             </li>
           ))}
         </ul>
@@ -79,7 +81,7 @@ export function TargetPicker({ label, hint, selected, onChange, repositories, co
           }
           if (event.key === "Escape") setOpen(false);
         }}
-        placeholder={selected.length > 0 ? "Add another repository…" : "Search a repository or type its path…"}
+        placeholder={selected.length > 0 ? t.addAnother : t.searchRepository}
         className="field font-mono text-xs"
       />
       {listOpen && (

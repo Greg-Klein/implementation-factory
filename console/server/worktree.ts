@@ -6,6 +6,7 @@ import process from "node:process";
 import { promisify } from "node:util";
 import { pluginRoot } from "./config.js";
 import { excludeLine, isRunWorktreePath, RUN_WORKTREES_DIRECTORY, withExcludeLines, worktreeProvisioning, type WorktreeFacts } from "./domain.js";
+import { currentTexts } from "./language.js";
 
 const exec = promisify(execFile);
 
@@ -155,7 +156,7 @@ export async function mainCheckout(directory: string) {
     if (path.basename(common) === ".git") return path.dirname(common);
     return (await exec("git", ["-C", directory, "rev-parse", "--show-toplevel"])).stdout.trim();
   } catch {
-    throw new Error(`The project directory is not a git repository: ${directory}`);
+    throw new Error(currentTexts().serverRun.notGitRepository(directory));
   }
 }
 

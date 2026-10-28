@@ -1,3 +1,5 @@
+import type { Language } from "./i18n";
+
 export type Status = "idle" | "starting" | "running" | "attention" | "paused" | "completed" | "stopped" | "failed";
 /** `abandoned`: the agent was stopped, or the run ended, before it ever reported an outcome, so it has none to read. */
 export type Agent = { id: string; name: string; nickname?: string; avatar?: string; role?: string; status: "running" | "completed" | "failed" | "abandoned"; startedAt: string; endedAt?: string | undefined };
@@ -26,6 +28,8 @@ export type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
   /** The checkout the ticket was launched on; `cwd` is the worktree the session runs in. Absent on older archives. */
   repository?: string;
+  /** What the run writes for people, fixed at its launch. */
+  language?: Language;
   /** The branch a stacked run was started on. */
   baseBranch?: string;
   /** The base the watcher named for this ticket. */
@@ -108,7 +112,8 @@ export type TicketProposal = { issueUrl: string; title?: string; source?: string
 /** Mirrors UnresolvedTicket in server/types.ts: a ticket of a batch no checkout was found for. */
 export type UnresolvedTicket = { issueUrl: string; project?: string };
 /** `archived`: runs of an earlier process left with an open incident, readable but not live. `proposals`: tickets found by a watcher, not started. */
-export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; archived?: RunSummary[]; proposals?: TicketProposal[] };
+/** `language`: the interface's, which is also the one the next runs write in. */
+export type FactorySnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number; language: Language; archived?: RunSummary[]; proposals?: TicketProposal[] };
 /** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
 export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string; dismissAfterMs?: number };
 export type ServerMessage =

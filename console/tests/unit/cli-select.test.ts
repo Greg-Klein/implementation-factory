@@ -14,37 +14,37 @@ const second = run("2026-10-09T09-00-00-000Z-bbbb2222", "https://gitlab.example.
 describe("the run a reference names on the command line", () => {
   it("should find a run by its id, by the end of its id and by the start of it", () => {
     const snapshot = { runs: [first, second], archived: [] };
-    expect(resolveRun(first.id, snapshot)).toBe(first);
-    expect(resolveRun(shortId(second.id), snapshot)).toBe(second);
-    expect(resolveRun("2026-10-09T09", snapshot)).toBe(second);
+    expect(resolveRun(first.id, snapshot, "en")).toBe(first);
+    expect(resolveRun(shortId(second.id), snapshot, "en")).toBe(second);
+    expect(resolveRun("2026-10-09T09", snapshot, "en")).toBe(second);
   });
 
   it("should find a run by its ticket, written as a number or under either of its addresses", () => {
     const snapshot = { runs: [first, second], archived: [] };
-    expect(resolveRun("#13", snapshot)).toBe(second);
-    expect(resolveRun("12", snapshot)).toBe(first);
-    expect(resolveRun("https://GitLab.example.com/acme/shop/-/work_items/12?tab=notes", snapshot)).toBe(first);
+    expect(resolveRun("#13", snapshot, "en")).toBe(second);
+    expect(resolveRun("12", snapshot, "en")).toBe(first);
+    expect(resolveRun("https://GitLab.example.com/acme/shop/-/work_items/12?tab=notes", snapshot, "en")).toBe(first);
   });
 
   it("should prefer the run the console still holds over the archive of an earlier one on the same ticket", () => {
     const earlier = run("2026-10-01T08-00-00-000Z-cccc3333", first.issueUrl, { status: "failed", sessionActive: false, takesSlot: false });
-    expect(resolveRun("#12", { runs: [first], archived: [earlier] })).toBe(first);
-    expect(resolveRun("cccc3333", { runs: [first], archived: [earlier] })).toMatchObject({ id: earlier.id, archived: true });
+    expect(resolveRun("#12", { runs: [first], archived: [earlier] }, "en")).toBe(first);
+    expect(resolveRun("cccc3333", { runs: [first], archived: [earlier] }, "en")).toMatchObject({ id: earlier.id, archived: true });
   });
 
   it("should prefer the run still at work over an ended one of the same ticket", () => {
     const ended = run("2026-10-08T08-00-00-000Z-dddd4444", first.issueUrl, { status: "completed", sessionActive: false, takesSlot: false });
-    expect(resolveRun("#12", { runs: [ended, first], archived: [] })).toBe(first);
+    expect(resolveRun("#12", { runs: [ended, first], archived: [] }, "en")).toBe(first);
   });
 
   it("should refuse a reference that names several runs, with the runs it names", () => {
     const twin = run("2026-10-09T08-30-00-000Z-eeee5555", first.issueUrl);
-    expect(() => resolveRun("#12", { runs: [first, twin], archived: [] })).toThrow(/names several runs:\n {2}aaaa1111 .*\n {2}eeee5555/);
+    expect(() => resolveRun("#12", { runs: [first, twin], archived: [] }, "en")).toThrow(/names several runs:\n {2}aaaa1111 .*\n {2}eeee5555/);
   });
 
   it("should refuse a reference that names no run", () => {
-    expect(() => resolveRun("zzz", { runs: [first], archived: [] })).toThrow(CliError);
-    expect(() => resolveRun("#99", { runs: [first], archived: [] })).toThrow("No run matches");
+    expect(() => resolveRun("zzz", { runs: [first], archived: [] }, "en")).toThrow(CliError);
+    expect(() => resolveRun("#99", { runs: [first], archived: [] }, "en")).toThrow("No run matches");
   });
 });
 
@@ -53,13 +53,13 @@ describe("the queued launch a reference names", () => {
   const queued = [entry("queued-aaaa1111", first.issueUrl), entry("queued-bbbb2222", second.issueUrl)];
 
   it("should find it by its id, the end of its id or its ticket", () => {
-    expect(resolveQueued("queued-aaaa1111", queued)).toBe(queued[0]);
-    expect(resolveQueued("bbbb2222", queued)).toBe(queued[1]);
-    expect(resolveQueued("#13", queued)).toBe(queued[1]);
+    expect(resolveQueued("queued-aaaa1111", queued, "en")).toBe(queued[0]);
+    expect(resolveQueued("bbbb2222", queued, "en")).toBe(queued[1]);
+    expect(resolveQueued("#13", queued, "en")).toBe(queued[1]);
   });
 
   it("should refuse a reference that names none", () => {
-    expect(() => resolveQueued("#99", queued)).toThrow("No queued launch matches");
+    expect(() => resolveQueued("#99", queued, "en")).toThrow("No queued launch matches");
   });
 });
 
@@ -90,12 +90,24 @@ describe("an answer typed on the command line", () => {
 
   it("should answer every question of a decision by the text it asks", () => {
     const pending: PendingQuestion = { id: "q1", questions: [single, several] };
-    expect(answersFromInputs(pending, ["1", "2,3"])).toEqual({ "Which base?": "develop", "Which checks?": "tests, build" });
+    expect(answersFromInputs(pending, ["1", "2,3"], "en")).toEqual({ "Which base?": "develop", "Which checks?": "tests, build" });
   });
 
   it("should refuse a decision answered in part, or with an answer that does not read", () => {
     const pending: PendingQuestion = { id: "q1", questions: [single, several] };
-    expect(() => answersFromInputs(pending, ["1"])).toThrow("2 questions, 1 answer was given");
-    expect(() => answersFromInputs(pending, ["9", "1"])).toThrow('"9" does not answer "Which base?"');
+    expect(() => answersFromInputs(pending, ["1"], "en")).toThrow("2 questions, 1 answer was given");
+    expect(() => answersFromInputs(pending, ["9", "1"], "en")).toThrow('"9" does not answer "Which base?"');
+  });
+});
+
+describe("the refusals of the command line in French", () => {
+  it("should say that no run matches, and that a reference names several", () => {
+    expect(() => resolveRun("zzz", { runs: [first, second], archived: [] }, "fr")).toThrow("Aucun run ne correspond à « zzz »");
+    expect(() => resolveRun("2026-10-09", { runs: [first, second], archived: [] }, "fr")).toThrow("désigne plusieurs runs");
+  });
+
+  it("should say how many answers a decision takes", () => {
+    const pending: PendingQuestion = { id: "q", questions: [{ question: "A?", header: "A", multiSelect: false, options: [] }] };
+    expect(() => answersFromInputs(pending, ["a", "b"], "fr")).toThrow("Cette décision pose 1 question, 2 réponses ont été données.");
   });
 });

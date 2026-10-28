@@ -2,7 +2,7 @@
 
 Local console of the factory: it runs the `/implementation-factory:implement` command with the Claude Code executable installed on the machine, queues the tickets and shows each run. The factory does not use the Anthropic API directly and needs no API key. The [main README](../README.md#one-command-installation) covers installation and day-to-day use with `impl`.
 
-The interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
+The interface is in French or English, like what the workflow writes (reports, questions, merge request text): the `IMPL_LANGUAGE` setting decides (`fr` by default, `en` for English), and the `FR` / `EN` switch in the page header changes it for the page, the `impl` commands and the runs launched from then on. Labels and messages are quoted here in English, as they appear on screen with the language set to English.
 
 ## Requirements
 

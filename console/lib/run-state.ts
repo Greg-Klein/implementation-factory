@@ -1,3 +1,5 @@
+import type { Language } from "./i18n";
+import { texts } from "./i18n/texts";
 import { forgeOf, forgeWords, parseTicketUrl, ticketReference, withoutQuery } from "./ticket-urls";
 import type { AcceptanceCounts, ConfidenceReason, IncidentAction, QueuedRunView, RunIncident, RunState, RunWorktree, Status } from "./types";
 
@@ -67,8 +69,9 @@ export function evidenceCaptures(item: { screenshot?: unknown; attachments?: unk
   return [...new Set(paths.flatMap((entry) => (typeof entry === "string" && entry.trim() ? [entry.trim()] : [])))];
 }
 
-export function pendingAnswerLabel(count: number) {
-  return count === 1 ? "Claude is waiting for an answer" : `Claude is waiting for ${count} answers`;
+export function pendingAnswerLabel(count: number, language: Language) {
+  const text = texts(language).runState;
+  return count === 1 ? text.pendingAnswerOne : text.pendingAnswerMany(count);
 }
 
 /** How many decisions a run waits on: the questions of the workflow, or the one prompt its session opened on. */
@@ -113,11 +116,12 @@ export function sourceRepository(run: { cwd: string; repository?: string }) {
  * in it, why it is still there once the session is gone, or that it is gone.
  * The path is given from the repository, which the line above already names.
  */
-export function worktreeLabel(run: { cwd: string; repository?: string; worktree?: RunWorktree }) {
+export function worktreeLabel(run: { cwd: string; repository?: string; worktree?: RunWorktree }, language: Language) {
+  const text = texts(language).runState;
   const worktree = run.worktree;
   if (!worktree) return undefined;
-  if (worktree.state === "removed") return worktree.detail ?? "Worktree removed";
-  if (worktree.state === "kept") return worktree.detail ?? "Worktree kept";
+  if (worktree.state === "removed") return worktree.detail ?? text.worktreeRemoved;
+  if (worktree.state === "kept") return worktree.detail ?? text.worktreeKept;
   const repository = sourceRepository(run).replace(/\/+$/, "");
   return worktree.path.startsWith(`${repository}/`) ? worktree.path.slice(repository.length + 1) : worktree.path;
 }
@@ -135,35 +139,38 @@ export function mergeRequestLabel(mergeRequestUrl: string | undefined) {
 }
 
 /** The ten steps of the workflow, the eighth named after what the forge of the ticket opens. */
-export function phaseNames(issueUrl: string | undefined) {
-  return ["Read the ticket", "Clarify", "Create the branch", "Plan", "Implement", "Verify", "Review", `Open the ${forgeWords(forgeOf(issueUrl)).short}`, "Publish the review", "Finish"];
+export function phaseNames(issueUrl: string | undefined, language: Language) {
+  const text = texts(language).runState;
+  return [text.phaseRead, text.phaseClarify, text.phaseBranch, text.phasePlan, text.phaseImplement, text.phaseVerify, text.phaseReview, text.phaseOpen(forgeWords(forgeOf(issueUrl)).short), text.phasePublish, text.phaseFinish];
 }
 
 type QueueWait = Pick<QueuedRunView, "reason"> & Partial<Pick<QueuedRunView, "blocking" | "forced">>;
 
 /** Why a queued launch waits, in the few words its row has room for. */
-export function queueReason(entry: QueueWait) {
-  const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : "another ticket";
-  if (entry.reason === "ticket") return "ticket already running";
-  if (entry.reason === "analysis") return "analysis in progress";
-  if (entry.reason === "conflict") return `conflict with ${other}, which is running`;
-  if (entry.reason === "merge") return `waits for ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} to be merged (${other})`;
-  if (entry.reason === "merge_unknown") return `state of ${mergeRequestLabel(entry.blocking?.mergeRequestUrl)} unknown (${other})`;
-  if (entry.reason === "dependency") return `depends on ${other}, still queued`;
-  if (entry.reason === "order") return `goes after ${other}`;
-  if (entry.forced?.mode === "stacked") return `stacked start on ${entry.forced.baseBranch}, as soon as a slot is free`;
-  if (entry.forced) return "forced start, as soon as a slot is free";
-  return "all slots are taken";
+export function queueReason(entry: QueueWait, language: Language) {
+  const text = texts(language).runState;
+  const other = entry.blocking ? ticketReference(entry.blocking.issueUrl) : text.anotherTicket;
+  if (entry.reason === "ticket") return text.reasonTicket;
+  if (entry.reason === "analysis") return text.reasonAnalysis;
+  if (entry.reason === "conflict") return text.reasonConflict(other);
+  if (entry.reason === "merge") return text.reasonMerge(mergeRequestLabel(entry.blocking?.mergeRequestUrl), other);
+  if (entry.reason === "merge_unknown") return text.reasonMergeUnknown(mergeRequestLabel(entry.blocking?.mergeRequestUrl), other);
+  if (entry.reason === "dependency") return text.reasonDependency(other);
+  if (entry.reason === "order") return text.reasonOrder(other);
+  if (entry.forced?.mode === "stacked") return text.reasonStacked(entry.forced.baseBranch);
+  if (entry.forced) return text.reasonForced;
+  return text.reasonSlots;
 }
 
 /** The line a queued row shows: what it waits for, or that its batch is still being analysed. */
-export function queueStatus(entry: QueueWait) {
-  if (entry.reason === "analysis") return "Analysis in progress";
+export function queueStatus(entry: QueueWait, language: Language) {
+  const text = texts(language).runState;
+  if (entry.reason === "analysis") return text.statusAnalysis;
   if (entry.reason === "merge" || entry.reason === "merge_unknown" || entry.reason === "dependency" || entry.reason === "order" || entry.forced) {
-    const reason = queueReason(entry);
+    const reason = queueReason(entry, language);
     return reason.charAt(0).toUpperCase() + reason.slice(1);
   }
-  return `Waiting, ${queueReason(entry)}`;
+  return text.statusWaiting(queueReason(entry, language));
 }
 
 /** Whether the schedule holds the entry, as opposed to a slot or its own ticket: only then is there something to override. */
@@ -172,9 +179,10 @@ export function heldBySchedule(entry: Pick<QueuedRunView, "reason">) {
 }
 
 /** What a queued row says of the ticket's own prediction, when it changes how the ticket is scheduled. */
-export function scheduleMark(entry: Pick<QueuedRunView, "analysisFailure" | "confidence">) {
-  if (entry.analysisFailure) return { label: "Analysis failed", title: `Analysis failed: ${entry.analysisFailure}. This ticket runs alone on its repository.` };
-  if (entry.confidence === "low") return { label: "Unreliable prediction", title: "The ticket does not say enough about what it touches. It runs alone on its repository." };
+export function scheduleMark(entry: Pick<QueuedRunView, "analysisFailure" | "confidence">, language: Language) {
+  const text = texts(language).runState;
+  if (entry.analysisFailure) return { label: text.markAnalysisFailed, title: text.markAnalysisFailedTitle(entry.analysisFailure) };
+  if (entry.confidence === "low") return { label: text.markUnreliable, title: text.markUnreliableTitle };
   return undefined;
 }
 
@@ -259,17 +267,17 @@ export function holdsIdleSession(run: { status: Status; sessionActive?: boolean 
 }
 
 /** What the row of a run says it is doing, in two or three words. */
-export function statusLabel(status: Status) {
-  if (status === "starting") return "Starting";
-  if (status === "running") return "Running";
-  if (status === "attention") return "Your turn";
-  if (status === "paused") return "Paused";
-  if (status === "completed") return "Completed";
-  if (status === "stopped") return "Stopped";
-  if (status === "failed") return "Error";
-  return "Available";
+export function statusLabel(status: Status, language: Language) {
+  const text = texts(language).runState;
+  if (status === "starting") return text.statusStarting;
+  if (status === "running") return text.statusRunning;
+  if (status === "attention") return text.statusAttention;
+  if (status === "paused") return text.statusPaused;
+  if (status === "completed") return text.statusCompleted;
+  if (status === "stopped") return text.statusStopped;
+  if (status === "failed") return text.statusFailed;
+  return text.statusAvailable;
 }
-
 
 export type StatusBadge = { label: string; tone: "decision" | "blocked" | "error" | "stopped" | "neutral" };
 
@@ -280,17 +288,18 @@ export type StatusBadge = { label: string; tone: "decision" | "blocked" | "error
  * without implying a question was asked, and a lost session reads as an
  * interruption rather than an error of the workflow.
  */
-export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "sessionPrompt" | "health" | "incidents">): StatusBadge {
+export function runStatusBadge(run: Pick<RunState, "status" | "pendingQuestion" | "sessionPrompt" | "health" | "incidents">, language: Language): StatusBadge {
+  const text = texts(language).runState;
   const incident = run.incidents?.findLast((entry) => entry.status === "open");
-  if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: "Interrupted", tone: "error" };
+  if (incident?.kind === "lost_session" || run.health?.health === "interrupted") return { label: text.badgeInterrupted, tone: "error" };
   if (run.status === "attention") {
     const humanWait = Boolean(run.pendingQuestion) || Boolean(run.sessionPrompt) || (run.health?.health === "waiting" && (run.health.wait?.reason === "permission" || run.health.wait?.reason === "terminal_interaction"));
-    if (!humanWait && incident) return { label: "No next step", tone: "blocked" };
-    return { label: statusLabel(run.status), tone: "decision" };
+    if (!humanWait && incident) return { label: text.badgeNoNextStep, tone: "blocked" };
+    return { label: statusLabel(run.status, language), tone: "decision" };
   }
-  if (run.status === "failed") return { label: statusLabel(run.status), tone: "error" };
-  if (run.status === "stopped" || run.status === "paused") return { label: statusLabel(run.status), tone: "stopped" };
-  return { label: statusLabel(run.status), tone: "neutral" };
+  if (run.status === "failed") return { label: statusLabel(run.status, language), tone: "error" };
+  if (run.status === "stopped" || run.status === "paused") return { label: statusLabel(run.status, language), tone: "stopped" };
+  return { label: statusLabel(run.status, language), tone: "neutral" };
 }
 
 /** Where a run's documents are read from: an archived run has routes of its own, which never reach a live session. */
@@ -312,14 +321,15 @@ const SHOWN_WAITS = new Set(["permission", "terminal_interaction", "unknown"]);
  * working. An open incident wins over the health it comes with; a doubt or a
  * wait on the terminal is said without claiming anything broke.
  */
-export function healthNotice(run: Pick<RunState, "health" | "incidents" | "archived" | "sessionActive">): HealthNotice | undefined {
+export function healthNotice(run: Pick<RunState, "health" | "incidents" | "archived" | "sessionActive">, language: Language): HealthNotice | undefined {
+  const text = texts(language).runState;
   const incident = run.incidents?.findLast((entry) => entry.status === "open");
   if (incident) return { title: incident.title, detail: incident.reason, tone: incident.kind === "lost_session" ? "error" : "attention", incident, actions: [] };
   const health = run.health;
   if (!health || run.archived) return undefined;
   const actions: IncidentAction[] = ["open_terminal"];
-  if (health.health === "suspected_stall") return { title: health.title ?? "No progress observed", detail: health.detail ?? "", tone: "doubt", actions };
-  if (health.health === "waiting" && health.wait && SHOWN_WAITS.has(health.wait.reason)) return { title: health.title ?? "Claude Code asks for your attention", detail: health.detail ?? "", tone: "attention", actions };
+  if (health.health === "suspected_stall") return { title: health.title ?? text.noProgress, detail: health.detail ?? "", tone: "doubt", actions };
+  if (health.health === "waiting" && health.wait && SHOWN_WAITS.has(health.wait.reason)) return { title: health.title ?? text.attentionNeeded, detail: health.detail ?? "", tone: "attention", actions };
   return undefined;
 }
 
@@ -337,9 +347,9 @@ export function incidentActions(run: Pick<RunState, "id" | "status" | "sessionAc
 }
 
 /** The compact word a row of the side list shows for a run's health, when there is one to show. */
-export function healthBadge(run: { health?: string; incident?: { title: string } }) {
+export function healthBadge(run: { health?: string; incident?: { title: string } }, language: Language) {
   if (run.incident) return { label: run.incident.title, tone: run.health === "interrupted" ? "error" as const : "attention" as const };
-  if (run.health === "suspected_stall") return { label: "No progress observed", tone: "doubt" as const };
+  if (run.health === "suspected_stall") return { label: texts(language).runState.noProgress, tone: "doubt" as const };
   return undefined;
 }
 
@@ -351,16 +361,19 @@ export const CONFIDENCE_MAXIMUM = 5;
  * coloured by how much of the change a person still has to review. Nothing
  * before a reviewer wrote its report.
  */
-export function confidenceChip(score: number | undefined) {
+export function confidenceChip(score: number | undefined, language: Language) {
   if (score === undefined) return undefined;
+  const text = texts(language).runState;
   const tone = score <= 1 ? "error" as const : score <= 3 ? "attention" as const : score < CONFIDENCE_MAXIMUM ? "neutral" as const : "verified" as const;
-  const meaning = score === 0 ? "a person has to review everything" : score === CONFIDENCE_MAXIMUM ? "nothing observed stands against the automated review" : "see the Evidence tab for what lowered it";
-  return { label: `${score}/${CONFIDENCE_MAXIMUM}`, title: `Review confidence ${score} of ${CONFIDENCE_MAXIMUM}: ${meaning}`, tone };
+  const meaning = score === 0 ? text.confidenceMeaningNone : score === CONFIDENCE_MAXIMUM ? text.confidenceMeaningFull : text.confidenceMeaningSome;
+  return { label: `${score}/${CONFIDENCE_MAXIMUM}`, title: text.confidenceTitle(score, CONFIDENCE_MAXIMUM, meaning), tone };
 }
 
 /** One rule that lowered the note, as a line: what it did, then what was observed. */
-export function confidenceReasonLine(reason: ConfidenceReason) {
-  return `${reason.cap !== undefined ? `Held at ${reason.cap}` : `Minus ${reason.minus ?? 0}`}: ${reason.detail}`;
+export function confidenceReasonLine(reason: ConfidenceReason, language: Language) {
+  const text = texts(language).runState;
+  const effect = reason.cap !== undefined ? text.confidenceHeld(reason.cap) : text.confidenceMinus(reason.minus ?? 0);
+  return text.confidenceLine(effect, text.confidenceReason(reason.rule, reason.count, reason.detail));
 }
 
 /**
@@ -368,12 +381,13 @@ export function confidenceReasonLine(reason: ConfidenceReason) {
  * total, coloured by the worst state left, with the full count in the tooltip.
  * Nothing without a registry: a run with no criteria is not "0/0 verified".
  */
-export function acceptanceChip(counts: AcceptanceCounts | undefined) {
+export function acceptanceChip(counts: AcceptanceCounts | undefined, language: Language) {
+  const text = texts(language).runState;
   if (!counts || counts.total === 0) return undefined;
-  const parts = [`${counts.verified} of ${counts.total} criteria verified`];
-  if (counts.failed) parts.push(`${counts.failed} failed`);
-  if (counts.blocked) parts.push(`${counts.blocked} blocked`);
-  if (counts.unverified) parts.push(`${counts.unverified} unverified`);
+  const parts = [text.criteriaVerified(counts.verified, counts.total)];
+  if (counts.failed) parts.push(text.criteriaFailed(counts.failed));
+  if (counts.blocked) parts.push(text.criteriaBlocked(counts.blocked));
+  if (counts.unverified) parts.push(text.criteriaUnverified(counts.unverified));
   const tone = counts.failed ? "error" as const : counts.blocked ? "attention" as const : counts.verified === counts.total ? "verified" as const : "neutral" as const;
   return { label: `${counts.verified}/${counts.total} AC`, title: parts.join(" · "), tone };
 }

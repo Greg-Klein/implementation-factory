@@ -2,6 +2,8 @@
 
 import { WarningCircleIcon } from "@phosphor-icons/react";
 import { Component, type ReactNode } from "react";
+import { texts } from "@/lib/i18n/texts";
+import { LanguageContext } from "./language";
 
 type Props = { name: string; resetKey?: string | null | undefined; children: ReactNode };
 type State = { error?: Error | undefined; resetKey?: string | null | undefined };
@@ -13,6 +15,9 @@ type State = { error?: Error | undefined; resetKey?: string | null | undefined }
  * run on screen: what broke on one run says nothing about the next.
  */
 export class PanelBoundary extends Component<Props, State> {
+  static override contextType = LanguageContext;
+  declare context: React.ContextType<typeof LanguageContext>;
+
   override state: State = { resetKey: this.props.resetKey };
 
   static getDerivedStateFromError(error: unknown): Partial<State> {
@@ -25,15 +30,16 @@ export class PanelBoundary extends Component<Props, State> {
 
   override render() {
     const { error } = this.state;
+    const text = texts(this.context).run;
     if (!error) return this.props.children;
     return (
       <div role="alert" className="m-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-800">
         <WarningCircleIcon className="mt-0.5 shrink-0" size={14} weight="fill" aria-hidden />
         <div className="min-w-0">
-          <p className="text-xs font-medium">The {this.props.name} tab could not be displayed.</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed">The other tabs and the rest of the console still work.</p>
+          <p className="text-xs font-medium">{text.boundaryTitle(this.props.name)}</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed">{text.boundaryBody}</p>
           <p className="mt-1 break-words font-mono text-[10px]">{error.message}</p>
-          <button type="button" onClick={() => this.setState({ error: undefined })} className="mt-1 rounded-md text-[11px] font-medium underline underline-offset-2">Try again</button>
+          <button type="button" onClick={() => this.setState({ error: undefined })} className="mt-1 rounded-md text-[11px] font-medium underline underline-offset-2">{text.boundaryRetry}</button>
         </div>
       </div>
     );

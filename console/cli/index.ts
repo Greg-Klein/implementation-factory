@@ -1,4 +1,6 @@
-import { CliError, consoleUrl } from "./client";
+import { languageOf } from "../lib/i18n";
+import { texts } from "../lib/i18n/texts";
+import { CliError, consoleLanguage, consoleUrl, setClientLanguage } from "./client";
 import { COMMANDS, USAGE, usage, type Context } from "./commands";
 
 /**
@@ -9,13 +11,19 @@ import { COMMANDS, USAGE, usage, type Context } from "./commands";
 async function main(argv: string[]) {
   const program = process.env.IMPL_PROGRAM?.trim() || "impl";
   const [name, ...rest] = argv;
-  if (!name || name === "help" || name === "--help" || name === "-h") { console.log(usage(program)); return 0; }
+  const base = consoleUrl(process.env);
+  // The console decides the language; the shell's setting speaks when none answers.
+  const language = (await consoleLanguage(base)) ?? languageOf(process.env.IMPL_LANGUAGE);
+  setClientLanguage(language);
+  const text = texts(language).cli;
+  if (!name || name === "help" || name === "--help" || name === "-h") { console.log(usage(program, language)); return 0; }
   const command = COMMANDS[name];
-  if (!command) throw new CliError(`Unknown command: ${name}\n\n${usage(program)}`, USAGE);
-  if (rest.includes("--help") || rest.includes("-h")) { console.log(`Usage: ${program} ${command.usage}\n\n  ${command.summary}`); return 0; }
+  if (!command) throw new CliError(`${text.unknownCommand(name)}\n\n${usage(program, language)}`, USAGE);
+  if (rest.includes("--help") || rest.includes("-h")) { console.log(`${text.usageOne(program, command.usage)}\n\n  ${command.summary(language)}`); return 0; }
   const context: Context = {
-    base: consoleUrl(process.env),
+    base,
     program,
+    language,
     print: (text) => console.log(text),
     interactive: process.stdin.isTTY === true && process.stdout.isTTY === true,
   };

@@ -9,6 +9,7 @@ import { isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, selfImprovementAutorun, storageRoot } from "./config.js";
 import { isImprovementWorktree, mergeNeedsRestart, positiveDuration, withoutBundlerVariables } from "./domain.js";
 import { engine } from "./engine/index.js";
+import { currentTexts } from "./language.js";
 import { autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type JudgeRun, type RejectedAttempt } from "./auto-merge-policy.js";
 import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, type PromotionResult } from "./self-improvement.js";
 import { branchIsRebasedOn, changedPaths, headCommit, listWorktrees, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean, type Worktree } from "./worktree.js";
@@ -275,7 +276,7 @@ async function settleImprovements() {
     }
     if ((await worktreeCommitCount(worktree)) === 0) {
       await removeWorktree(pluginRoot, worktree);
-      notice("info", "Self-improvement finished without a change", `${worktreeName}: its report stays beside the feedback.`);
+      notice("info", currentTexts().serverOps.finishedWithoutChange, currentTexts().serverOps.finishedWithoutChangeDetail(worktreeName));
       continue;
     }
     checking = worktreeName;
@@ -294,9 +295,10 @@ async function settleImprovements() {
  */
 async function restartConsole() {
   restartPending = false;
+  const t = currentTexts().serverOps;
   const consoleDirectory = path.join(pluginRoot, "console");
   const changed = bootCommit ? await changedPaths(pluginRoot, bootCommit, "HEAD").catch(() => [] as string[]) : [];
-  notice("info", "Console restarting", "A merged improvement changes the console. It is rebuilt and restarted now that no run is working.");
+  notice("info", t.consoleRestarting, t.consoleRestartingDetail);
   const steps: [string, string[]][] = [
     ...(changed.includes("console/package-lock.json") ? [["install", ["ci", "--no-audit", "--no-fund"]] as [string, string[]]] : []),
     ["build", ["run", "build"]],
@@ -304,41 +306,43 @@ async function restartConsole() {
   for (const [name, args] of steps) {
     const check = await npm(consoleDirectory, name, args);
     if (!check.ok) {
-      notice("attention", "Console not restarted", `The ${name} of the merged code failed: fix it, then run impl restart. ${check.output.split("\n").slice(-2).join(" ")}`);
+      notice("attention", t.consoleNotRestarted, t.consoleStepFailed(name, check.output.split("\n").slice(-2).join(" ")));
       return;
     }
   }
   const child = spawn(path.join(pluginRoot, "bin", "implementation-factory"), ["restart"], {
     cwd: pluginRoot, detached: true, stdio: "ignore", env: { ...withoutBundlerVariables(process.env), IMPL_NO_OPEN: "1" },
   });
-  child.on("error", (error) => notice("attention", "Console not restarted", `${error.message}. Run impl restart by hand.`));
+  child.on("error", (error) => notice("attention", t.consoleNotRestarted, t.consoleRestartByHand(error.message)));
   child.unref();
 }
 
 /** What follows a merge that changed the console: a restart once idle, or the user's when the loop is turned off. */
 export function afterPromotion(worktreeName: string, result: Pick<PromotionResult, "restart">) {
   if (!result.restart) return;
+  const t = currentTexts().serverOps;
   if (!autoMergeOn()) {
-    notice("attention", "Improvements merged, restart needed", `${worktreeName} changes the console: run impl restart to apply it.`);
+    notice("attention", t.mergedRestartNeeded, t.mergedRestartNeededDetail(worktreeName));
     return;
   }
   restartPending = true;
-  notice("info", "Restart scheduled", `${worktreeName} changes the console: it restarts once no run is working.`);
+  notice("info", t.restartScheduled, t.restartScheduledDetail(worktreeName));
 }
 
 /** Reverts a branch merged without the user, with a merge commit of its own. */
 export async function revertAutomaticMerge(worktreeName: string) {
+  const t = currentTexts().serverOps;
   const latest = latestDecisions(decisions).get(worktreeName);
-  if (latest?.decision !== "merged" || !latest.mergeCommit) throw new Error(`${worktreeName} was not merged automatically, or is already reverted.`);
+  if (latest?.decision !== "merged" || !latest.mergeCommit) throw new Error(t.revertNotMerged(worktreeName));
   const mergeCommit = latest.mergeCommit;
   try {
     await exec("git", ["-C", pluginRoot, "revert", "-m", "1", "--no-edit", mergeCommit]);
   } catch (error) {
     await exec("git", ["-C", pluginRoot, "revert", "--abort"]).catch(reportFailure("Revert not aborted", pluginRoot));
-    throw new Error(`The revert of ${worktreeName} failed and was rolled back: ${error instanceof Error ? error.message.split("\n")[0] : error}`);
+    throw new Error(t.revertFailed(worktreeName, error instanceof Error ? error.message.split("\n")[0]! : String(error)));
   }
   await record({ worktreeName, at: now(), decision: "reverted", reasons: ["Reverted by the user."], ...(latest.branch ? { branch: latest.branch } : {}) });
-  notice("info", "Improvement reverted", worktreeName);
+  notice("info", t.improvementReverted, worktreeName);
   afterPromotion(worktreeName, { restart: mergeNeedsRestart(await changedPaths(pluginRoot, `${mergeCommit}^1`, mergeCommit)) });
   await realignPendingImprovements();
 }

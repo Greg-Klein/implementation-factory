@@ -6,7 +6,7 @@ Every example below is invented. Never copy the content of a real ticket into th
 
 ## Language
 
-`summary` and `reason` are written in the workflow language the input's `language` gives ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `fr` for French, English otherwise), with `implementation-factory:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
+`summary` and `reason` are written in the workflow language the input's `language` gives ([workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md): `en` for English, French otherwise), with `implementation-factory:unslop`. The console shows `reason` to the user in the queue. Field names, enum values, paths and `issue_url` values stay exactly as specified: the console reads them as data.
 
 ---
 

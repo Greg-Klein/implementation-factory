@@ -4,7 +4,7 @@ The factory separates the responsibilities of the agents, the reusable methods a
 
 The [agent map](https://greg-klein.github.io/implementation-factory/agent-map.html) draws a run as agents, scripts and the engineer's own steps, with the model each agent runs on. The [architecture page](https://greg-klein.github.io/implementation-factory/architecture.html) shows the console underneath: the path of a hook, the questions, the run worktree, run health, the evidence chain and what stays on disk. Both load their diagram library from a CDN.
 
-The console's interface is in English. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French). Section names and fixed phrases are quoted here. A comment or a correction written on another ticket is the exception: it follows the language that ticket is written in.
+The console's interface and what the workflow writes (reports, questions, merge request text) follow one setting, `IMPL_LANGUAGE` (`fr` by default, `en` for English), changed from the page header too. A run keeps the language it was launched in: the console passes it to the session. Section names and fixed phrases are quoted here. Two exceptions: a comment or a correction written on another ticket follows the language that ticket is written in, and a written rule of the target repository on the language of its merge requests, commits or comments wins for what it names. The pilot reads it in the repository's instruction files at the start and passes it in every delegation ([workflow language](../contracts/language.md)).
 
 ## Who owns what
 

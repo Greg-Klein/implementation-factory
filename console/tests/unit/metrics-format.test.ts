@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 
-import { formatCost, formatDuration, formatShare, formatTokens, judgeRows, judgeSummary, planSizes, reworkCount, summarize } from "../../lib/metrics";
+import { formatCost, sessionLabel, waitLabel, formatDuration, formatShare, formatTokens, judgeRows, judgeSummary, planSizes, reworkCount, summarize } from "../../lib/metrics";
 import type { RunMetrics } from "../../lib/types";
 
 const metrics = (overrides: { status?: RunMetrics["outcome"]["status"]; tokens?: number; activeMs?: number; launches?: Record<string, number>; reworkDevelopers?: number; sizes?: RunMetrics["complexity"]["sizes"]; tasks?: number } = {}) => ({
@@ -12,10 +12,10 @@ const metrics = (overrides: { status?: RunMetrics["outcome"]["status"]; tokens?:
 }) as unknown as RunMetrics;
 
 describe("metrics as the interface writes them", () => {
-  it("should write tokens in thousands, then in millions with a decimal comma", () => {
-    expect(formatTokens(950)).toBe("950");
-    expect(formatTokens(72_506)).toBe("73k");
-    expect(formatTokens(3_355_667)).toBe("3.36M");
+  it("should write tokens in thousands, then in millions with a decimal point in English", () => {
+    expect(formatTokens(950, "en")).toBe("950");
+    expect(formatTokens(72_506, "en")).toBe("73k");
+    expect(formatTokens(3_355_667, "en")).toBe("3.36M");
   });
 
   it("should write a duration in seconds, minutes, then hours", () => {
@@ -34,9 +34,10 @@ describe("metrics as the interface writes them", () => {
   });
 
   it("should write the sizes of the plan, or the number of tasks when it gave none", () => {
-    expect(planSizes(metrics({ tasks: 3, sizes: { S: 2, M: 1, L: 0 } }))).toBe("2 S · 1 M");
-    expect(planSizes(metrics({ tasks: 2 }))).toBe("2 tasks");
-    expect(planSizes(metrics())).toBe("");
+    expect(planSizes(metrics({ tasks: 3, sizes: { S: 2, M: 1, L: 0 } }), "en")).toBe("2 S · 1 M");
+    expect(planSizes(metrics({ tasks: 2 }), "en")).toBe("2 tasks");
+    expect(planSizes(metrics({ tasks: 2 }), "fr")).toBe("2 tâches");
+    expect(planSizes(metrics(), "en")).toBe("");
   });
 
   it("should give no median below three delivered runs", () => {
@@ -46,6 +47,21 @@ describe("metrics as the interface writes them", () => {
   it("should give the medians of the delivered runs, a run without tokens counted for its time only", () => {
     expect(summarize([metrics({ tokens: 1_000, activeMs: 10 }), metrics({ tokens: 3_000, activeMs: 30 }), metrics({ activeMs: 20 }), metrics({ status: "stopped", tokens: 9_000 })]))
       .toMatchObject({ runs: 3, tokens: 2_000, activeMs: 20 });
+  });
+});
+
+describe("metrics written in French", () => {
+  it("should write tokens and costs with a decimal comma", () => {
+    expect(formatTokens(3_355_667, "fr")).toBe("3,36M");
+    expect(formatTokens(72_506, "fr")).toBe("73k");
+    expect([formatCost(0.4, "fr"), formatCost(12.6, "fr")]).toEqual(["0,40 $", "13 $"]);
+  });
+
+  it("should name the sessions and the waits in the language asked", () => {
+    expect(sessionLabel("senior-reviewer", "en")).toBe("Technical review");
+    expect(sessionLabel("senior-reviewer", "fr")).toBe("Revue technique");
+    expect(sessionLabel("custom-agent", "fr")).toBe("custom-agent");
+    expect(waitLabel("session_prompt", "fr")).toBe("Confiance du dossier");
   });
 });
 
@@ -72,6 +88,6 @@ describe("the judge of the improvement loop", () => {
   });
 
   it("should write a cost in dollars, to the cent below ten", () => {
-    expect([formatCost(0.4), formatCost(12.6)]).toEqual(["$0.40", "$13"]);
+    expect([formatCost(0.4, "en"), formatCost(12.6, "en")]).toEqual(["$0.40", "$13"]);
   });
 });

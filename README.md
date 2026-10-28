@@ -6,7 +6,7 @@ The repository contains a Claude Code plugin whose `/implementation-factory:impl
 
 The interface opens in the browser with the `impl` command, which serves the compiled version of the checkout. There is no desktop application. The factory runs from its own repository, so the self-improvement loop can modify the code that is running.
 
-The console's interface is in English. Labels and messages are quoted here as they appear on screen. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
+The console speaks French or English: the page, the `impl` commands and what a run writes (reports, questions, merge request text) all follow the `IMPL_LANGUAGE` setting (`fr` by default, `en` for English), which the `FR` / `EN` switch in the page header changes. A run keeps the language it was launched in. A written rule of the target repository on the language of its merge requests, commits or comments wins over the setting for what it names. Labels and messages are quoted here in English, as they appear on screen with the language set to English.
 
 ## How agents and skills are organised
 
@@ -359,7 +359,7 @@ The available settings:
 |---|---|---|
 | `IMPL_SEARCH_ROOTS` | roots where checkouts are looked for, separated by commas | `~/workspace` |
 | `IMPL_PERMISSION_MODE` | permission mode of each run: `manual`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions` | `auto` |
-| `IMPL_LANGUAGE` | language of what a run writes for people (questions, reports, merge request or pull request text): `en` or `fr`. The interface itself is always in English | `en` |
+| `IMPL_LANGUAGE` | language of the page, of the `impl` commands and of what a run writes for people (questions, reports, merge request or pull request text): `fr` or `en`. Changed from the page header too, which writes it here; a run keeps the language it was launched in, and a rule of the target repository on the language of its merge requests wins | `fr` |
 | `IMPL_SELF_IMPROVEMENT_AUTORUN` | self-improvement session at the end of a run that proved something went wrong, and automatic merge of its branch (see [Automatic merge](#automatic-merge)); `false` turns the whole loop off | `true` |
 | `IMPL_REMOTE_CONTROL` | Remote Control on the terminal of a run | `true` |
 | `IMPL_PORT` | listening port | `3210` |

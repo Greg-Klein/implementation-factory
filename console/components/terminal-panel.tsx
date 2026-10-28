@@ -2,6 +2,7 @@
 
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import { useTexts } from "./language";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 export type TerminalHandle = { write: (data: string) => void; clear: () => void };
@@ -10,6 +11,7 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
 }>(function TerminalPanel({ onInput, onResize }, ref) {
+  const text = useTexts().conversation;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   /**
@@ -81,5 +83,5 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
     return () => { observer.disconnect(); inputDisposable.dispose(); terminal.dispose(); terminalRef.current = null; };
   }, []);
 
-  return <div ref={containerRef} className="h-[calc(100%-48px)] min-h-[492px] w-full" aria-label="Claude Code terminal" />;
+  return <div ref={containerRef} className="h-[calc(100%-48px)] min-h-[492px] w-full" aria-label={text.terminalLabel} />;
 });

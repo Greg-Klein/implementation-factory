@@ -153,7 +153,7 @@ One library: [Phosphor](https://phosphoricons.com), the `…Icon` components of 
 
 ## Tone and wording
 
-The interface is in English, like the code and its comments. The rules below apply to the text of the interface. The language of what the workflow writes (reports, questions, merge request text) is chosen by the `IMPL_LANGUAGE` setting (`en` by default, `fr` for French).
+The interface is in French or English, the `IMPL_LANGUAGE` setting deciding (`fr` by default), like what the workflow writes. Every text lives in both languages in `console/lib/i18n/` and is quoted here in English. The rules below apply to both. In French: the usual words of the trade stay (run, merge request, worktree, ticket, commit), "branch" is "branche", a space before `:` `?` `!`, no inclusive writing.
 
 - **Short, concrete sentences.** Say what is happening and what can be done. "This run no longer exists." instead of "An error occurred".
 - **Address the user as "you".** Statuses, help and error messages speak to the user directly ("Your turn", "Reload them before saving"), in the imperative for an action to take.

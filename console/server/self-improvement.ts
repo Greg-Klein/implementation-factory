@@ -6,6 +6,8 @@ import { feedbackRoot, pluginRoot, selfImprovementAutorun } from "./config.js";
 import { demoState } from "./demo.js";
 import { auditReasons, commitlessImprovementStatus, hasAuditableEvidence, improvementCause, pendingEntry, improvementReportName, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, isImprovementWorktreeName, mergeNeedsRestart, normalizeText, sourceRepository } from "./domain.js";
 import { engine } from "./engine/index.js";
+import { texts } from "../lib/i18n/texts.js";
+import { currentTexts } from "./language.js";
 import { metricsBaseline, metricsFindings } from "./run-metrics.js";
 import { recordRunMetrics, storedMetrics } from "./run-metrics-runtime.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, changedPaths, findWorktree, headCommit, listWorktrees, mergeBranch, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
@@ -23,18 +25,20 @@ export type PromotionResult = { merged: boolean; restart: boolean; mergeCommit?:
  * merge decided. Restarting the console is left to the caller.
  */
 export async function applySelfImprovementReview(worktreeName: string, merge: boolean, automatic = false): Promise<PromotionResult> {
+  // An automatic merge writes the failure into the decisions the next improvement reads: English, whatever the interface says.
+  const t = (automatic ? texts("en") : currentTexts()).serverOps;
   // Asked over the socket, where nothing else checked the name the page sends.
-  if (!isImprovementWorktreeName(worktreeName)) throw new Error("Invalid worktree name.");
+  if (!isImprovementWorktreeName(worktreeName)) throw new Error(t.invalidWorktreeName);
   if (worktreeName.startsWith("demo-")) {
     demoState.pendingImprovement = undefined;
-    notice("info", merge ? "Improvements merged (demo)" : "Improvements ignored (demo)", worktreeName);
+    notice("info", merge ? t.improvementsMergedDemo : t.improvementsIgnoredDemo, worktreeName);
     return { merged: false, restart: false };
   }
   const worktree = await findWorktree(worktreeName);
-  if (!worktree) throw new Error(`No self-improvement worktree "${worktreeName}" to process.`);
+  if (!worktree) throw new Error(t.noImprovementWorktree(worktreeName));
   let result: PromotionResult = { merged: false, restart: false };
   if (merge) {
-    if (!worktree.branch) throw new Error(`The worktree "${worktreeName}" is on no branch.`);
+    if (!worktree.branch) throw new Error(t.worktreeOnNoBranch(worktreeName));
     // The factory may have moved since the branch was cut, by an earlier promotion
     // or by hand. Replaying it here is what keeps the promise the button makes:
     // without it, a merge that conflicts is aborted and handed back to the user.
@@ -43,7 +47,7 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
     // before the checkout actually moved.
     const before = await headCommit(pluginRoot);
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
-      .catch((error) => { throw new Error(`The merge of ${worktreeName} failed and was rolled back, the worktree is kept: ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
+      .catch((error) => { throw new Error(t.mergeFailedRolledBack(worktreeName, error instanceof Error ? error.message.split("\n")[0]! : String(error))); });
     // Git brings nothing in two cases its exit code cannot tell apart: a branch
     // whose commits the factory already contains, and one that holds no commit at
     // all. The first is work landed by hand, and refusing to clean it up left no
@@ -52,10 +56,10 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
     // mid-write, so the worktree only goes when it has nothing uncommitted either.
     const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
     if (!merged && !spent)
-      throw new Error(`${worktreeName} brings no commit to merge. Nothing was merged, the worktree is kept.`);
+      throw new Error(t.nothingToMerge(worktreeName));
     // Prompts apply to the next run on their own; the console's code only after a restart.
     const restart = merged && mergeNeedsRestart(await changedPaths(pluginRoot, before, "HEAD").catch(() => []));
-    notice("info", merged ? (automatic ? "Improvements merged automatically" : "Improvements merged") : "Improvements already present", worktreeName);
+    notice("info", merged ? (automatic ? t.improvementsMergedAutomatically : t.improvementsMerged) : t.improvementsAlreadyPresent, worktreeName);
     result = { merged, restart, ...(merged ? { mergeCommit: await headCommit(pluginRoot) } : {}) };
   } else {
     // Merging already refuses to destroy a worktree with something uncommitted
@@ -63,8 +67,8 @@ export async function applySelfImprovementReview(worktreeName: string, merge: bo
     // way, or "Ignorer" becomes the one button that can erase a diagnosis the
     // validation step deliberately left uncommitted after a failed check.
     if (!(await worktreeIsClean(worktree)))
-      throw new Error(`${worktreeName} holds uncommitted changes: ignoring them would destroy them. Nothing was touched.`);
-    notice("info", "Improvements ignored", worktreeName);
+      throw new Error(t.uncommittedIgnoreRefused(worktreeName));
+    notice("info", t.improvementsIgnored, worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
   // The checkout just moved under every branch still waiting, which is exactly what
@@ -127,15 +131,16 @@ export async function listPendingImprovements(): Promise<PendingSelfImprovementR
  */
 function startConflictResolution(worktreeName: string, onto: string) {
   if (!selfImprovementAutorun()) return false;
+  const t = currentTexts().serverOps;
   const child = engine.startConflictResolution({ worktreeName, onto });
   if (!child) return false;
   // A session that could not start: without this listener the failure was an unhandled error event.
   // The close that follows it is the same failure, said once.
   let failed = false;
-  child.on("error", (error) => { failed = true; notice("attention", "Assisted rebase failed", `${worktreeName}: ${error.message}`); });
+  child.on("error", (error) => { failed = true; notice("attention", t.assistedRebaseFailed, `${worktreeName}: ${error.message}`); });
   child.on("close", (code) => {
     if (failed) return;
-    notice(code === 0 ? "info" : "attention", code === 0 ? "Assisted rebase completed" : "Assisted rebase failed", worktreeName);
+    notice(code === 0 ? "info" : "attention", code === 0 ? t.assistedRebaseCompleted : t.assistedRebaseFailed, worktreeName);
   });
   return true;
 }
@@ -156,6 +161,7 @@ function startConflictResolution(worktreeName: string, onto: string) {
  * fails, which a rebase would take away.
  */
 export async function realignPendingImprovements() {
+  const t = currentTexts().serverOps;
   const onto = await headCommit(pluginRoot);
   for (const worktree of (await listWorktrees()).filter((candidate) => isImprovementWorktree(candidate.path))) {
     const branch = worktree.branch;
@@ -166,21 +172,20 @@ export async function realignPendingImprovements() {
     if (!(await worktreeIsClean(worktree).catch(() => false))) continue;
     const name = path.basename(worktree.path);
     if (await rebaseWorktree(worktree, onto).catch(() => false)) {
-      notice("info", "Improvement rebased on the factory", name);
+      notice("info", t.improvementRebased, name);
       continue;
     }
     const delegated = startConflictResolution(name, onto);
-    notice("attention", delegated ? "Assisted rebase started" : "Rebase not possible",
-      delegated ? `${name} conflicts with the factory, an agent is taking it over in its worktree.`
-        : `${name} conflicts with the factory. The branch is intact, to be taken over by hand.`);
+    notice("attention", delegated ? t.assistedRebaseStarted : t.rebaseNotPossible, delegated ? t.conflictAgentTakingOver(name) : t.conflictByHand(name));
   }
 }
 
 export async function saveFeedback(session: RunSession, body: string) {
   const feedback = body.trim();
-  if (session.demo) throw new Error("The demo does not record self-improvement feedback.");
-  if (!feedback) throw new Error("The feedback is empty.");
-  if (feedback.length > 5_000) throw new Error("The feedback exceeds 5,000 characters.");
+  const t = session.texts.serverOps;
+  if (session.demo) throw new Error(t.feedbackDemoRefused);
+  if (!feedback) throw new Error(t.feedbackEmpty);
+  if (feedback.length > 5_000) throw new Error(t.feedbackTooLong);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
@@ -188,7 +193,7 @@ export async function saveFeedback(session: RunSession, body: string) {
     issueUrl: session.state.issueUrl, projectDirectory: sourceRepository(session.state),
   }, null, 2));
   session.state.feedbackCount = (session.state.feedbackCount ?? 0) + 1;
-  session.activity("artifact", "Feedback added to the self-improvement loop", `${id}.json`);
+  session.activity("artifact", t.feedbackAdded, `${id}.json`);
   session.publish();
 }
 
@@ -252,7 +257,7 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
     },
     ...(metrics ? { metrics, baseline: metricsBaseline(metrics, others), findings } : {}),
   }, null, 2));
-  session.activity("artifact", "Self-audit queued", `${id}.json`);
+  session.activity("artifact", session.texts.serverOps.selfAuditQueued, `${id}.json`);
   session.publish();
   return reasons;
 }
@@ -261,11 +266,11 @@ async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
 async function improveOnEvidence(session: RunSession, reasons: string[]) {
   const cause = improvementCause(session.id, reasons, await pendingEntries());
   if (!cause) {
-    session.activity("system", "Self-improvement not needed", "Nothing went wrong in this run and no feedback is waiting. Its self-audit is kept for comparison with later runs.");
+    session.activity("system", session.texts.serverOps.selfImprovementNotNeeded, session.texts.serverOps.selfImprovementNotNeededDetail);
     session.publish();
     return;
   }
-  session.activity("system", "Self-improvement justified", cause);
+  session.activity("system", session.texts.serverOps.selfImprovementJustified, cause);
   session.publish();
   await startAutonomousImprovement(session);
 }
@@ -277,7 +282,7 @@ function startAutonomousImprovement(session: RunSession) {
     void listWorktrees().catch(() => []).then((worktrees) => {
       const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
       if (inFlight) {
-        notice("info", "Self-improvement waiting", `${path.basename(inFlight)} has not been decided yet: the loop resumes once it is merged or rejected.`);
+        notice("info", currentTexts().serverOps.selfImprovementWaiting, currentTexts().serverOps.selfImprovementWaitingDetail(path.basename(inFlight)));
         return resolve();
       }
       const worktreeName = improvementWorktreeName(session.id);
@@ -293,8 +298,8 @@ function startAutonomousImprovement(session: RunSession) {
       child.stderr.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
       child.on("error", (error) => { launchError = error; });
       child.on("close", (code) => {
-        if (code === 0 && !launchError) notice("info", "Self-improvement started in the background", worktreeName);
-        else notice("attention", "Self-improvement not started", normalizeText(launchError?.message ?? output));
+        if (code === 0 && !launchError) notice("info", currentTexts().serverOps.selfImprovementStarted, worktreeName);
+        else notice("attention", currentTexts().serverOps.selfImprovementNotStarted, normalizeText(launchError?.message ?? output));
         resolve();
       });
     });
@@ -334,14 +339,14 @@ export function scheduleAutonomousReview(session: RunSession) {
   auditedRuns.add(session.id);
   const snapshot = structuredClone(session.archivedState());
   if (!hasAuditableEvidence(snapshot)) {
-    session.activity("system", "Self-audit not needed", "This run produced no agent, no document and no failure to analyse.");
+    session.activity("system", session.texts.serverOps.selfAuditNotNeeded, session.texts.serverOps.selfAuditNotNeededDetail);
     session.publish();
     return;
   }
   auditQueue.push(() => queueAutonomousReview(session, snapshot)
     .then((reasons) => improveOnEvidence(session, reasons))
     .catch((error) => {
-      session.activity("attention", "Self-audit not possible", normalizeText(error instanceof Error ? error.message : error));
+      session.activity("attention", session.texts.serverOps.selfAuditNotPossible, normalizeText(error instanceof Error ? error.message : error));
       session.publish();
     }));
   void drainAudits();

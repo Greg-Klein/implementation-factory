@@ -1,0 +1,105 @@
+import { defineTexts } from "./index";
+
+const plural = (count: number, one: string, many: string) => (count > 1 ? many : one);
+
+export const rail = defineTexts({
+  asideLabel: { en: "Factory runs", fr: "Runs de la factory" },
+  heading: { en: "Runs", fr: "Runs" },
+  slotsTitle: {
+    en: (holding: number, max: number) => `${holding} working run${plural(holding, "", "s")} of ${max} slots`,
+    fr: (holding: number, max: number) => `${holding} run${plural(holding, "", "s")} en cours sur ${max} slots`,
+  },
+  slots: { en: "slots", fr: "slots" },
+  metricsLabel: { en: "Run metrics", fr: "Métriques des runs" },
+  metricsTitle: { en: "Tokens, durations and rework of each run", fr: "Tokens, durées et reprises de chaque run" },
+  newRunLabel: { en: "New run", fr: "Nouveau run" },
+  newRunTitle: { en: "Start a new run", fr: "Lancer un nouveau run" },
+  emptyTitle: { en: "No run", fr: "Aucun run" },
+  emptyBody: {
+    en: (max: number) => `Paste one or more ticket URLs. The factory runs ${max} at a time.`,
+    fr: (max: number) => `Collez une ou plusieurs URLs de ticket. La factory en traite ${max} à la fois.`,
+  },
+  interruptedGroup: { en: "Interrupted runs", fr: "Runs interrompus" },
+  interrupted: { en: "Interrupted", fr: "Interrompus" },
+  interruptedTitle: {
+    en: "Runs from a previous session, left with an open incident. Read-only.",
+    fr: "Runs d'une session précédente, laissés avec un incident ouvert. Lecture seule.",
+  },
+  worktreesKeptGroup: { en: "Worktrees kept", fr: "Worktrees conservés" },
+  worktreesKeptTitle: {
+    en: "Runs without a session whose worktree is still on disk. Open them to remove it.",
+    fr: "Runs sans session dont le worktree est encore sur le disque. Ouvrez-les pour le supprimer.",
+  },
+  sessionOpen: { en: "Session open", fr: "Session ouverte" },
+  sessionInterrupted: { en: "Session interrupted", fr: "Session interrompue" },
+  worktreeKept: { en: "Worktree kept", fr: "Worktree conservé" },
+  openRun: { en: (label: string) => `Open run ${label}`, fr: (label: string) => `Ouvrir le run ${label}` },
+  removeRun: { en: (label: string) => `Remove run ${label}`, fr: (label: string) => `Retirer le run ${label}` },
+  removeRunTitle: {
+    en: "Remove this run from the list. Its documents stay archived on disk.",
+    fr: "Retirer ce run de la liste. Ses documents restent archivés sur le disque.",
+  },
+  viewArchive: { en: (label: string) => `View the archive of run ${label}`, fr: (label: string) => `Voir l'archive du run ${label}` },
+  pendingDecisions: {
+    en: (count: number) => `${count} pending decision${plural(count, "", "s")}`,
+    fr: (count: number) => `${count} décision${plural(count, "", "s")} en attente`,
+  },
+  tokensTitle: { en: (tokens: string) => `${tokens} tokens used, cache included`, fr: (tokens: string) => `${tokens} tokens utilisés, cache inclus` },
+  tokensLabel: { en: (tokens: string) => `${tokens} tokens used`, fr: (tokens: string) => `${tokens} tokens utilisés` },
+  confidence: { en: "conf", fr: "conf" },
+
+  queuedGroup: { en: "Queued runs", fr: "Runs en file" },
+  queued: { en: "Queued", fr: "En file" },
+  batch: { en: "Batch", fr: "Batch" },
+  batchOf: { en: (time: string) => ` of ${time}`, fr: (time: string) => ` de ${time}` },
+  batchTickets: {
+    en: (count: number) => `${count} ticket${plural(count, "", "s")} queued`,
+    fr: (count: number) => `${count} ticket${plural(count, "", "s")} en file`,
+  },
+  whyItWaits: { en: "Why it waits", fr: "Pourquoi il attend" },
+  thisTicket: { en: (summary: string) => `This ticket: ${summary}`, fr: (summary: string) => `Ce ticket : ${summary}` },
+  analysisCompare: {
+    en: "The tickets of the batch are compared to find which can run at the same time.",
+    fr: "Les tickets du batch sont comparés pour trouver ceux qui peuvent tourner en même temps.",
+  },
+  mergeUnknown: {
+    en: (name: string, delivery: string) => `${name} does not answer: the ticket keeps waiting until the state of the ${delivery} is known.`,
+    fr: (name: string, delivery: string) => `${name} ne répond pas : le ticket reste en attente tant que l'état de la ${delivery} n'est pas connu.`,
+  },
+  startFromBase: { en: "Start from the base", fr: "Démarrer depuis la base" },
+  startFromBaseLabel: { en: (label: string) => `Start ${label} from the base`, fr: (label: string) => `Démarrer ${label} depuis la base` },
+  startWithoutWaiting: {
+    en: (other: string, delivery: string) => `Starts without waiting for ${other}. Both tickets touch the same code: the second ${delivery} will probably have to be reworked by hand.`,
+    fr: (other: string, delivery: string) => `Démarre sans attendre ${other}. Les deux tickets touchent le même code : la seconde ${delivery} devra probablement être reprise à la main.`,
+  },
+  startWithoutAnalysis: {
+    en: "Starts without waiting for the analysis to end. Nothing says yet whether it touches the same code as another ticket.",
+    fr: "Démarre sans attendre la fin de l'analyse. Rien n'indique encore s'il touche le même code qu'un autre ticket.",
+  },
+  stackOn: { en: "Stack on", fr: "Empiler sur" },
+  stackOnLabel: { en: (label: string, branch: string) => `Stack ${label} on ${branch}`, fr: (label: string, branch: string) => `Empiler ${label} sur ${branch}` },
+  stackExplain: {
+    en: (other: string, delivery: string) => `Starts from the branch of ${other} and opens its ${delivery} against that branch. It can only be merged after the one of ${other}.`,
+    fr: (other: string, delivery: string) => `Part de la branche de ${other} et ouvre sa ${delivery} contre cette branche. Elle ne peut être mergée qu'après celle de ${other}.`,
+  },
+  dragToReorder: { en: "Drag to reorder", fr: "Glisser pour réordonner" },
+  moveUp: { en: (label: string) => `Move ${label} up in the queue`, fr: (label: string) => `Monter ${label} dans la file` },
+  moveDown: { en: (label: string) => `Move ${label} down in the queue`, fr: (label: string) => `Descendre ${label} dans la file` },
+  removeFromQueue: { en: (label: string) => `Remove ${label} from the queue`, fr: (label: string) => `Retirer ${label} de la file` },
+  blockedBy: { en: (run: string) => `Blocked by run ${run}`, fr: (run: string) => `Bloqué par le run ${run}` },
+
+  watcherGroup: { en: "Tickets from the watcher", fr: "Tickets du watcher" },
+  watcher: { en: "From the watcher", fr: "Du watcher" },
+  watcherTitle: { en: "Tickets found by the watcher that are not queued.", fr: "Tickets trouvés par le watcher qui ne sont pas en file." },
+  startsFrom: { en: (branch: string) => `Starts from ${branch}`, fr: (branch: string) => `Part de ${branch}` },
+  from: { en: "from", fr: "depuis" },
+  notStarted: { en: (reason: string) => `Not started: ${reason}`, fr: (reason: string) => `Non démarré : ${reason}` },
+  starting: { en: "Starting…", fr: "Démarrage…" },
+  cancel: { en: "Cancel", fr: "Annuler" },
+  chooseRepositories: { en: "Choose repositories", fr: "Choisir les dépôts" },
+  dismiss: { en: (label: string) => `Dismiss ${label}`, fr: (label: string) => `Écarter ${label}` },
+  dismissTitle: { en: "Stop listing this ticket", fr: "Ne plus lister ce ticket" },
+  mergeRequestRepositories: { en: "Merge request repositories", fr: "Dépôts des merge requests" },
+  start: { en: "Start", fr: "Lancer" },
+  startIn: { en: (count: number) => `Start in ${count} repositories`, fr: (count: number) => `Lancer dans ${count} dépôts` },
+});

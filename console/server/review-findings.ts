@@ -1,7 +1,8 @@
 import { mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { storageRoot } from "./config.js";
-import { type KeptFinding, REVIEW_GUIDE_FILE, guideIgnoresFile, mergeReviewFindings, readReviewFindings, RECURRING_FINDINGS_FILE, recurringFindings, renderRecurringFindings, reviewFindingsStore, reviewGuideIgnoredPaths, sourceRepository, suppressRecurring } from "./domain.js";
+import type { Language } from "../lib/i18n/index.js";
+import { type KeptFinding, findingCategoryLabel, REVIEW_GUIDE_FILE, guideIgnoresFile, mergeReviewFindings, readReviewFindings, RECURRING_FINDINGS_FILE, recurringFindings, renderRecurringFindings, reviewFindingsStore, reviewGuideIgnoredPaths, sourceRepository, suppressRecurring } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { forgetFindingFixes, readFindingFixViews, settledFindingCategories, syncFindingFixes } from "./finding-fixes.js";
 import type { RunSession } from "./run-session.js";
@@ -35,7 +36,7 @@ export async function keepReviewFindings(session: RunSession, source: string) {
   if (!size || size > MAX_FINDINGS_BYTES) return;
   const incoming = readReviewFindings(await readFile(source, "utf8").catch(() => ""));
   if (!incoming) {
-    session.activity("attention", "Review findings not kept", "senior-findings.json does not follow its contract.");
+    session.activity("attention", session.texts.serverRun.findingsNotKept, session.texts.serverRun.findingsContract);
     return;
   }
   // The review confidence of this run reads them too, whatever the store then keeps.
@@ -58,20 +59,20 @@ export async function keepReviewFindings(session: RunSession, source: string) {
       return findings;
     });
   } catch (error) {
-    session.activity("attention", "Review findings not kept", error instanceof Error ? error.message : String(error));
+    session.activity("attention", session.texts.serverRun.findingsNotKept, error instanceof Error ? error.message : String(error));
     return;
   }
-  if (dropped) session.activity("artifact", "Review guide excluded findings", `${dropped} under an ignored path, not kept for the next runs.`);
-  if (counted.length) session.activity("artifact", "Review findings kept", `${counted.length} for the next runs of this repository.`);
+  if (dropped) session.activity("artifact", session.texts.serverRun.findingsGuideExcluded, session.texts.serverRun.findingsGuideExcludedDetail(dropped));
+  if (counted.length) session.activity("artifact", session.texts.serverRun.findingsKept, session.texts.serverRun.findingsKeptDetail(counted.length));
   try {
     const proposed = await syncFindingFixes(repository, merged);
     if (proposed.length) {
-      const detail = `${proposed.map((proposal) => proposal.category).join(", ")} came back on enough runs to fix at the source. Open the runtime recipe to accept or dismiss it. Nothing was changed in the repository.`;
-      session.activity("system", "Source fix proposed", detail);
-      broadcast({ type: "notice", level: "info", title: "Source fix proposed", detail: `${path.basename(repository)}: ${detail}`, at: now() });
+      const detail = session.texts.serverRun.sourceFixProposedDetail(proposed.map((proposal) => proposal.category));
+      session.activity("system", session.texts.serverRun.sourceFixProposed, detail);
+      broadcast({ type: "notice", level: "info", title: session.texts.serverRun.sourceFixProposed, detail: `${path.basename(repository)}: ${detail}`, at: now() });
     }
   } catch (error) {
-    session.activity("attention", "Source fix not proposed", error instanceof Error ? error.message : String(error));
+    session.activity("attention", session.texts.serverRun.sourceFixNotProposed, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -110,12 +111,12 @@ export async function seedRecurringFindings(repository: string, worktree: string
 }
 
 /** What is kept for a repository, for the person who wants to read it: how much, and the kinds its next run will be told about. */
-export async function readReviewFindingsSummary(repository: string, now = Date.now()) {
+export async function readReviewFindingsSummary(repository: string, language: Language, now = Date.now()) {
   const kept = await keptFindings(reviewFindingsStore(storageRoot, repository));
   return {
     kept: kept.length,
     tickets: new Set(kept.map((finding) => finding.ticket)).size,
-    recurring: recurringFindings(kept, now).map(({ examples, ...group }) => ({ ...group, examples: examples.map(({ severity, file, summary }) => ({ severity, file, summary })) })),
+    recurring: recurringFindings(kept, now).map(({ examples, ...group }) => ({ ...group, label: findingCategoryLabel(group.category, group.label, language), examples: examples.map(({ severity, file, summary }) => ({ severity, file, summary })) })),
     fixes: await readFindingFixViews(repository),
   };
 }

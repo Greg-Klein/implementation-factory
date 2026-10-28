@@ -2,7 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { acceptanceCountsKey, renderAcceptanceSummary } from "./acceptance.js";
 import { readSnapshotLog, takeCodeSnapshot } from "./code-snapshot.js";
-import { dataRoot, workflowLanguage } from "./config.js";
+import { dataRoot } from "./config.js";
+import { runLanguage } from "./language.js";
 import { deliveredCodeSettled } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { acceptanceInputKind, atomicWrite, SUMMARY_FILES, SYNC_ACK_FILE } from "./evidence-archive.js";
@@ -44,12 +45,13 @@ async function identifyCode(session: RunSession, force: boolean) {
 }
 
 /**
- * The summary goes into the merge request, so it is written in the workflow
- * language, from a view derived in that language: the interface keeps its own,
- * in English, out of the same evidence.
+ * The summary goes into the merge request, so it is written in the language the
+ * run was launched in, from a view derived in that language: the interface
+ * derives its own, in its current language, out of the same evidence.
  */
 function workflowSummary(session: RunSession, view: AcceptanceView) {
-  return renderAcceptanceSummary(workflowLanguage === "en" ? view : session.evidence.view(workflowLanguage), workflowLanguage, session.state.confidence);
+  const language = runLanguage(session.state);
+  return renderAcceptanceSummary(language === "en" ? view : session.evidence.view(language), language, session.state.confidence);
 }
 
 async function writeSummary(session: RunSession, view: AcceptanceView) {
@@ -185,6 +187,6 @@ export async function confirmArchiveSync(session: RunSession, requestPath: strin
   await atomicWrite(path.join(taskRoot, SYNC_ACK_FILE), `${JSON.stringify(acknowledgement, null, 2)}\n`);
   // What the removal of the worktree waits for: from here on, nothing it holds is the only copy.
   session.state.archiveSyncedAt = acknowledgement.archivedAt;
-  session.activity("artifact", "Evidence archive confirmed", `${acknowledgement.versions} versions kept`);
+  session.activity("artifact", session.texts.serverRun.archiveConfirmed, session.texts.serverRun.archiveConfirmedDetail(acknowledgement.versions));
   session.publish();
 }

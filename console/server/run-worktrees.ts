@@ -1,4 +1,7 @@
 import { defined } from "../lib/defined.js";
+import type { Language } from "../lib/i18n/index.js";
+import { texts } from "../lib/i18n/texts.js";
+import { runLanguage } from "./language.js";
 import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ARCHIVED_ACTIVITIES, isMissingFile, now, reportFailure } from "./context.js";
@@ -18,8 +21,6 @@ import type { RunState, RunWorktree } from "./types.js";
 
 export type WorktreeRemovalResult = { outcome: "removed" | "confirm" | "refused"; message: string; risks?: string[] };
 
-const REMOVED = "Worktree removed";
-
 /**
  * Creates the worktree and fills it. A failure to create it is the caller's
  * to report, and the run must not start; a failure to bring the dependencies
@@ -27,20 +28,21 @@ const REMOVED = "Worktree removed";
  * back as `warning`. Dependencies behind their lockfile come back as `stale`,
  * and a check that could not read them as `unchecked`.
  */
-export async function prepareRunWorktree(repository: string, runId: string): Promise<{ worktree: RunWorktree; summary: string; warning?: string; stale?: StaleDependencies; unchecked?: string }> {
+export async function prepareRunWorktree(repository: string, runId: string, language: Language = "en"): Promise<{ worktree: RunWorktree; summary: string; warning?: string; stale?: StaleDependencies; unchecked?: string }> {
   const worktreePath = runWorktreePath(repository, runId);
   await createRunWorktree(repository, worktreePath);
   try {
     const provisioned = await provisionWorktree(repository, worktreePath, { dependencyDirectories: worktreeDependencyDirectories, copyFiles: worktreeCopyFiles });
-    const checked = await staleDependencies(worktreePath, [...provisioned.cloned, ...provisioned.linked]).then(
+    const t = texts(language).serverRun;
+    const checked = await staleDependencies(worktreePath, [...provisioned.cloned, ...provisioned.linked], language).then(
       (stale) => (stale.directories.length > 0 ? { stale } : {}),
       (error: unknown) => defined({ unchecked: error instanceof Error ? error.message.split("\n")[0] : String(error) }),
     );
     const parts = [
-      provisioned.cloned.length > 0 ? `${provisioned.cloned.length} dependency ${provisioned.cloned.length > 1 ? "directories" : "directory"} cloned` : "",
-      provisioned.linked.length > 0 ? `${provisioned.linked.length} linked by symlink` : "",
-      provisioned.copied.length > 0 ? `${provisioned.copied.length} configuration file${provisioned.copied.length > 1 ? "s" : ""} copied` : "",
-      provisioned.hooks.length > 0 ? `git hooks copied (${provisioned.hooks.join(", ")})` : "",
+      provisioned.cloned.length > 0 ? t.worktreeCloned(provisioned.cloned.length) : "",
+      provisioned.linked.length > 0 ? t.worktreeLinked(provisioned.linked.length) : "",
+      provisioned.copied.length > 0 ? t.worktreeCopied(provisioned.copied.length) : "",
+      provisioned.hooks.length > 0 ? t.worktreeHooks(provisioned.hooks) : "",
     ].filter(Boolean);
     return { worktree: { path: worktreePath, state: "active", ...(provisioned.dependencies ? { dependencies: provisioned.dependencies } : {}) }, summary: parts.join(", "), ...checked };
   } catch (error) {
@@ -57,7 +59,8 @@ export type StaleDependencies = { directories: string[]; detail: string };
  * than the repository's. Only npm's `package-lock.json` is read; a directory
  * with no lockfile beside it, or another package manager, is not judged.
  */
-export async function staleDependencies(worktreePath: string, directories: string[]): Promise<StaleDependencies> {
+export async function staleDependencies(worktreePath: string, directories: string[], language: Language = "en"): Promise<StaleDependencies> {
+  const t = texts(language).serverRun;
   const stale: string[] = [];
   const details: string[] = [];
   for (const relative of directories.filter((directory) => path.basename(directory) === "node_modules").sort()) {
@@ -68,8 +71,8 @@ export async function staleDependencies(worktreePath: string, directories: strin
     const drift = dependencyDrift(locked, manifests.map(installedVersion));
     if (drift.length === 0) continue;
     stale.push(relative);
-    const examples = drift.slice(0, 3).map((entry) => (entry.installed === undefined ? `${entry.name} missing` : `${entry.name} ${entry.installed} instead of ${entry.version}`));
-    details.push(`${relative}: ${drift.length} package${drift.length > 1 ? "s" : ""} differ from package-lock.json (${examples.join(", ")}${drift.length > 3 ? ", ..." : ""})`);
+    const examples = drift.slice(0, 3).map((entry) => (entry.installed === undefined ? t.staleMissing(entry.name) : t.staleInstead(entry.name, entry.installed, entry.version)));
+    details.push(t.staleDetail(relative, drift.length, examples.join(", "), drift.length > 3));
   }
   return { directories: stale, detail: details.join("; ") };
 }
@@ -108,18 +111,20 @@ async function settle(state: RunState): Promise<RunWorktree | undefined> {
   const worktree = state.worktree;
   if (!worktree || worktree.state === "removed" || runHoldsRepository(state)) return undefined;
   const repository = sourceRepository(state);
+  const language = runLanguage(state);
+  const t = texts(language).serverRun;
   const facts = await worktreeFacts(worktree.path);
   if (!facts.exists) {
     await pruneWorktrees(repository).catch(() => undefined);
-    return { ...worktree, state: "removed", detail: "Worktree not found on disk" };
+    return { ...worktree, state: "removed", detail: t.worktreeNotOnDisk };
   }
-  const decision = worktreeRemoval(state, facts);
+  const decision = worktreeRemoval(state, facts, language);
   if (decision.automatic && isRunWorktreePath(repository, worktree.path)) {
     const removed = await removeRunWorktree(repository, worktree.path).then(() => true, () => false);
-    if (removed) return { ...worktree, state: "removed", detail: REMOVED };
-    return { ...worktree, state: "kept", detail: worktreeKeptDetail(["git refused the removal"]) };
+    if (removed) return { ...worktree, state: "removed", detail: t.worktreeRemoved };
+    return { ...worktree, state: "kept", detail: worktreeKeptDetail([t.worktreeKeptRefusal], language) };
   }
-  return { ...worktree, state: "kept", detail: worktreeKeptDetail(decision.reasons) };
+  return { ...worktree, state: "kept", detail: worktreeKeptDetail(decision.reasons, language) };
 }
 
 /**
@@ -134,7 +139,8 @@ export async function settleRunWorktree(session: RunSession) {
   if (settled.state === before?.state && settled.detail === before.detail) return;
   if (settled.state === "removed") await session.artifactWatcher?.close().catch(() => undefined);
   session.state.worktree = settled;
-  session.activity("system", settled.state === "removed" ? REMOVED : "Worktree kept", settled.state === "removed" ? settled.path : settled.detail);
+  const t = session.texts.serverRun;
+  session.activity("system", settled.state === "removed" ? t.worktreeRemoved : t.worktreeKept, settled.state === "removed" ? settled.path : settled.detail);
   session.publish();
 }
 
@@ -145,11 +151,13 @@ export async function settleRunWorktree(session: RunSession) {
  */
 export async function removeWorktreeOnRequest(session: RunSession, force: boolean): Promise<WorktreeRemovalResult> {
   const worktree = session.state.worktree;
-  if (!worktree) return { outcome: "refused", message: "This run has no worktree." };
-  if (worktree.state === "removed") return { outcome: "removed", message: REMOVED };
-  if (runHoldsRepository(session.state)) return { outcome: "refused", message: "This run still holds its session. Stop it before removing its worktree." };
+  const language = runLanguage(session.state);
+  const t = session.texts.serverRun;
+  if (!worktree) return { outcome: "refused", message: t.worktreeNone };
+  if (worktree.state === "removed") return { outcome: "removed", message: t.worktreeRemoved };
+  if (runHoldsRepository(session.state)) return { outcome: "refused", message: t.worktreeSessionHeld };
   const repository = sourceRepository(session.state);
-  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: "This path is not a worktree created by the factory. Nothing was removed." };
+  if (!isRunWorktreePath(repository, worktree.path)) return { outcome: "refused", message: t.worktreeNotFactory };
   const facts = await worktreeFacts(worktree.path);
   const applied = (next: RunWorktree, title: string) => {
     session.state.worktree = next;
@@ -158,21 +166,21 @@ export async function removeWorktreeOnRequest(session: RunSession, force: boolea
   };
   if (!facts.exists) {
     await pruneWorktrees(repository).catch(() => undefined);
-    applied({ ...worktree, state: "removed", detail: "Worktree not found on disk" }, "Worktree already gone from disk");
-    return { outcome: "removed", message: "This worktree was no longer on disk." };
+    applied({ ...worktree, state: "removed", detail: t.worktreeNotOnDisk }, t.worktreeGoneTitle);
+    return { outcome: "removed", message: t.worktreeGone };
   }
-  const { risks } = worktreeRemoval(session.state, facts);
+  const { risks } = worktreeRemoval(session.state, facts, language);
   if (risks.length > 0 && !force) {
-    return { outcome: "confirm", risks, message: `This worktree holds ${risks.join(" and ")}. Removing it loses what is not committed; the branch and its commits stay in the repository.` };
+    return { outcome: "confirm", risks, message: t.worktreeConfirm(risks) };
   }
   try {
     await session.artifactWatcher?.close().catch(() => undefined);
     await removeRunWorktree(repository, worktree.path, { force: !facts.clean });
   } catch (error) {
-    return { outcome: "refused", message: `git refused the removal: ${error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : error}` };
+    return { outcome: "refused", message: t.worktreeGitRefused(String(error instanceof Error ? error.message.split("\n").filter(Boolean).pop() : error)) };
   }
-  applied({ ...worktree, state: "removed", detail: REMOVED }, risks.length > 0 ? "Worktree removed despite unsaved work" : REMOVED);
-  return { outcome: "removed", message: "Worktree removed. The branch is kept." };
+  applied({ ...worktree, state: "removed", detail: t.worktreeRemoved }, risks.length > 0 ? t.worktreeRemovedDespite : t.worktreeRemoved);
+  return { outcome: "removed", message: t.worktreeRemovedMessage };
 }
 
 /**
@@ -194,7 +202,8 @@ export async function reconcileRunWorktrees(runsDirectory: string) {
       if (!state?.worktree || state.worktree.state === "removed") continue;
       const settled = await settle(state);
       if (!settled || (settled.state === state.worktree.state && settled.detail === state.worktree.detail)) continue;
-      const title = settled.state === "removed" ? (settled.detail ?? REMOVED) : "Worktree kept";
+      const t = texts(runLanguage(state)).serverRun;
+      const title = settled.state === "removed" ? (settled.detail ?? t.worktreeRemoved) : t.worktreeKept;
       const activities = [{ id: crypto.randomUUID(), at: now(), kind: "system" as const, title, detail: settled.state === "removed" ? settled.path : settled.detail }, ...(Array.isArray(raw.activities) ? raw.activities : [])].slice(0, ARCHIVED_ACTIVITIES);
       const temporary = `${runFile}.worktree.tmp`;
       await writeFile(temporary, JSON.stringify({ ...raw, worktree: settled, activities }, null, 2));

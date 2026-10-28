@@ -2,6 +2,7 @@ import { deliveryProjects, parseTicketUrls, ticketIdentity, ticketProjectPath } 
 import { checkoutOfProject, checkoutProject, resolveProjectDirectory } from "./repository.js";
 import { mainCheckout } from "./worktree.js";
 import type { ResolvedTicket, TicketProposal, UnresolvedTicket } from "./types.js";
+import { currentTexts } from "./language.js";
 
 /**
  * Where a batch comes from: a list of URLs pasted in the launch form, or the
@@ -16,8 +17,8 @@ import type { ResolvedTicket, TicketProposal, UnresolvedTicket } from "./types.j
  */
 export async function resolvePastedTickets(issueUrls: string[], targets: Record<string, string[]> = {}): Promise<{ resolved: ResolvedTicket[]; unresolved: UnresolvedTicket[] }> {
   const parsed = parseTicketUrls(issueUrls.join("\n"));
-  if (parsed.invalid.length > 0) throw new Error(`Ticket URL not recognised: ${parsed.invalid.map((entry) => entry.text).join(", ")}`);
-  if (parsed.tickets.length === 0) throw new Error("No ticket in the batch.");
+  if (parsed.invalid.length > 0) throw new Error(currentTexts().serverRun.ticketUrlsInvalid(parsed.invalid.map((entry) => entry.text)));
+  if (parsed.tickets.length === 0) throw new Error(currentTexts().serverRun.noTicketInBatch);
   const chosen = new Map(Object.entries(targets).map(([issueUrl, paths]) => [ticketIdentity(issueUrl), paths]));
   const resolved: ResolvedTicket[] = [];
   const unresolved: UnresolvedTicket[] = [];

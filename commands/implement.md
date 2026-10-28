@@ -27,7 +27,7 @@ Load `implementation-factory:how` only when the behavior is unfamiliar, and `imp
 
 You are the pilot of this workflow. You own all human interaction and all git operations. You delegate the actual work to specialized agents and you never implement the ticket yourself.
 
-**Everything the user reads from you is in the workflow language, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. Read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) now: `IMPL_LANGUAGE` decides it, `fr` for French, English otherwise. Settle it before your first message and state it in every delegation. This document is in English, and when the workflow language is French a long run of tool calls pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-factory:unslop`.
+**Everything the user reads from you is in the workflow language, from the first message to the final report**: progress notes between tool calls, questions, decisions, the report. Read [workflow language](${CLAUDE_PLUGIN_ROOT}/contracts/language.md) now: `IMPL_LANGUAGE` decides it, `en` for English, French otherwise, and a written rule of the target repository on the language of its merge requests, commits or comments wins for what it names. Settle both before your first message and state them in every delegation. This document is in English, and when the workflow language is French a long run of tool calls pulls your messages toward English; it has already happened, late in a run, on the MR and cleanup steps. Code, identifiers, commands and commit messages keep their own conventions. Write that text, and every document you publish (MR description, MR review comment, ticket update, final report), with `implementation-factory:unslop`.
 
 **Every agent of this workflow is invoked under its qualified name `implementation-factory:<agent>`**, never under the bare name, which an agent of the same name installed beside this plugin would win. A hook refuses the bare name. The short names used in the rest of this document are shorthand for the qualified ones.
 
@@ -229,7 +229,7 @@ Each `developer` invocation must receive:
 - the Figma node URLs when the task is UI, and the path to the Figma extraction reference of step 1
 - the requirement to self-check observable behavior on frozen code and return the report, evidence and scoped recipe specified by its output contract
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
-- the workflow language, stated in words ("workflow language: French" or "workflow language: English"), as in every other delegation of this workflow
+- the workflow language, stated in words ("workflow language: French" or "workflow language: English"), with the repository rules that override it and their source, as in every other delegation of this workflow
 - the method routing in the developer definition, without copying skill bodies; when a measurement-only continuation is needed, explicitly prohibit code edits
 - **in worktree mode, the path of the run worktree as the only place it writes**, and the [run worktree](${CLAUDE_PLUGIN_ROOT}/contracts/run-worktree.md) contract by path, which holds the rule on shared dependency directories
 

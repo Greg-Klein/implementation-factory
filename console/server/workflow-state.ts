@@ -1,5 +1,7 @@
 import { forgeWords, normalizeText, parseDeliveryUrl, parseTicketUrl } from "./domain.js";
 import type { WorkflowState, WorkflowStateName } from "./types.js";
+import type { Language } from "../lib/i18n/index.js";
+import { texts } from "../lib/i18n/texts.js";
 
 /**
  * `workflow-state.json`: what the pilot says it is doing and what comes next,
@@ -81,12 +83,12 @@ export function parseWorkflowState(content: string, receivedAt: string): Workflo
  * unable to end. The console did not see it open, so this is as far as the
  * declaration is checked; the merge watch then asks the forge about it.
  */
-export function declaredDelivery(workflow: WorkflowState | undefined, issueUrl: string): { url?: string; refused?: string } {
+export function declaredDelivery(workflow: WorkflowState | undefined, issueUrl: string, language: Language = "en"): { url?: string; refused?: string } {
   const url = workflow?.result?.mergeRequestUrl;
   const delivery = url ? parseDeliveryUrl(url) : undefined;
   if (!url || !delivery) return {};
   const ticket = parseTicketUrl(issueUrl);
-  if (ticket && ticket.forge !== delivery.forge) return { refused: `${url} is not on ${forgeWords(ticket.forge).name}, where the ticket is.` };
+  if (ticket && ticket.forge !== delivery.forge) return { refused: texts(language).serverRun.declaredDeliveryRefusal(url, forgeWords(ticket.forge).name) };
   return { url };
 }
 

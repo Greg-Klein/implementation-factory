@@ -1,6 +1,33 @@
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import { languageOf, type Language } from "../lib/i18n";
+import { texts } from "../lib/i18n/texts";
 import type { ClientMessage, FactorySnapshot, ServerMessage } from "../server/types.js";
+
+/**
+ * What the command line says its errors in. The console decides the language,
+ * known once its snapshot is read; until then, and when no console answers, the
+ * setting of the shell decides.
+ */
+let language: Language = languageOf(process.env.IMPL_LANGUAGE);
+
+export function setClientLanguage(next: Language) {
+  language = next;
+}
+
+const say = () => texts(language).cli;
+
+/** The language the console speaks, or undefined when it does not answer. */
+export async function consoleLanguage(base: string): Promise<Language | undefined> {
+  try {
+    const response = await fetch(`${base}/api/runs`, { signal: AbortSignal.timeout(2_000) });
+    const body = await response.json() as { language?: unknown };
+    return response.ok && typeof body.language === "string" ? languageOf(body.language) : undefined;
+  } catch {
+    // No console, or one that does not answer like it: the command that follows says so itself.
+    return undefined;
+  }
+}
 
 /** A failure the command line says in one sentence, with the exit code it ends on. */
 export class CliError extends Error {
@@ -18,13 +45,13 @@ export function consoleUrl(env: Record<string, string | undefined>) {
   const given = env.IMPL_CONSOLE_URL?.trim();
   const url = given || `http://${env.IMPL_HOST?.trim() || "127.0.0.1"}:${env.IMPL_PORT?.trim() || "3210"}`;
   let parsed: URL;
-  try { parsed = new URL(url); } catch { throw new CliError(`IMPL_CONSOLE_URL is not an address: ${url}`); }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new CliError(`IMPL_CONSOLE_URL is not an http address: ${url}`);
+  try { parsed = new URL(url); } catch { throw new CliError(say().consoleUrlNotAddress(url)); }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new CliError(say().consoleUrlNotHttp(url));
   return parsed.origin;
 }
 
 function notRunning(base: string) {
-  return new CliError(`No Implementation Factory console answers at ${base}. Start it: impl start`, NOT_RUNNING);
+  return new CliError(say().notRunning(base), NOT_RUNNING);
 }
 
 /** One reading of the HTTP API. A refusal carries the sentence the console gave for it. */
@@ -32,7 +59,7 @@ export async function getJson(base: string, route: string): Promise<unknown> {
   let response: Response;
   try { response = await fetch(`${base}${route}`); } catch { throw notRunning(base); }
   let body: unknown;
-  try { body = await response.json(); } catch { throw new CliError(`${base}${route} did not answer like the console (HTTP ${response.status}).`); }
+  try { body = await response.json(); } catch { throw new CliError(say().notConsoleAnswer(base, route, response.status)); }
   if (!response.ok) {
     const reason = body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string" ? (body as { error: string }).error : `HTTP ${response.status}`;
     throw new CliError(reason);
@@ -89,7 +116,7 @@ export function connect(base: string): Promise<Link> {
         const ackId = randomUUID();
         const timer = setTimeout(() => {
           pending.delete(ackId);
-          refuse(new CliError("The console did not answer in time. The action may still have been applied: check with impl runs."));
+          refuse(new CliError(say().noAnswerInTime));
         }, REQUEST_TIMEOUT_MS);
         pending.set(ackId, { received: [], resolve: done, reject: refuse, timer });
         socket.send(JSON.stringify({ ...message, ackId }));
@@ -119,12 +146,12 @@ export function connect(base: string): Promise<Link> {
     });
     socket.on("unexpected-response", (_request, response) => {
       reject(new CliError(response.statusCode === 403
-        ? `The console at ${base} refused the connection: it only answers to the address it listens on. Reach it under that address, through a tunnel on the same port for a remote machine.`
-        : `The console at ${base} refused the connection (HTTP ${response.statusCode}).`));
+        ? say().refusedHost(base)
+        : say().refusedHttp(base, response.statusCode)));
     });
     socket.on("error", () => { if (!opened) reject(notRunning(base)); });
     socket.on("close", () => {
-      for (const waiting of pending.values()) { clearTimeout(waiting.timer); waiting.reject(new CliError("The console closed the connection before it answered.")); }
+      for (const waiting of pending.values()) { clearTimeout(waiting.timer); waiting.reject(new CliError(say().closedBeforeAnswer)); }
       pending.clear();
       if (!opened) reject(notRunning(base));
       release();

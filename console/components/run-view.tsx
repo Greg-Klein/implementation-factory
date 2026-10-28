@@ -2,6 +2,7 @@
 
 import { ChatCircleDotsIcon, FolderDashedIcon, KanbanIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
+import { useTexts } from "./language";
 import { canRemoveWorktree, holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
 import type { IncidentAction, IncidentResult, RunIncident, RunState, WorktreeResult } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
@@ -49,6 +50,7 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
   worktreeResult?: WorktreeResult | undefined;
   refusedFeedback?: RefusedFeedback | undefined;
 }) {
+  const text = useTexts().run;
   const [tab, setTab] = useState<Tab>("conversation");
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
   const tabButtonRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
@@ -67,8 +69,8 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
    * is not news to them.
    */
   const unread: Partial<Record<Tab, string | undefined>> = {
-    conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? "pending decision" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "new message" : undefined,
-    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "new evidence" : undefined,
+    conversation: tab === "conversation" ? undefined : run.pendingQuestion || run.sessionPrompt ? text.unreadDecision : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? text.unreadMessage : undefined,
+    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? text.unreadEvidence : undefined,
   };
 
   // Switching run switches subject: what had been read in the previous one says
@@ -117,14 +119,14 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
       <PhaseRail run={run} onOpenRecipe={actions.openRecipe} />
       <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
         <div className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2">
-          <div ref={setTabList} role="tablist" aria-label="Session view" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">
+          <div ref={setTabList} role="tablist" aria-label={text.sessionView} className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[var(--sunken)] p-0.5">
             {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--tab-selected)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
-            {([["conversation", "Conversation"], ["suivi", "Tracking"], ["terminal", "Terminal"], ["preuves", "Evidence"]] as const).map(([value, label]) => {
+            {([["conversation", text.tabConversation], ["suivi", text.tabTracking], ["terminal", text.tabTerminal], ["preuves", text.tabEvidence]] as const).map(([value, label]) => {
               const fresh = unread[value];
               return (
                 <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-[var(--on-tab-selected)]" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
                   {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "suivi" ? <KanbanIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                  {fresh && <span role="img" aria-label={fresh} title={`${fresh.charAt(0).toUpperCase()}${fresh.slice(1)} since your last visit to this tab`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                  {fresh && <span role="img" aria-label={fresh} title={text.unreadTitle(fresh)} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                 </button>
               );
             })}
@@ -137,29 +139,29 @@ export function RunView({ run, visible = true, connected, writing, terminalRef, 
               to keep or to give up, hence an action of its own, named for what
               it frees rather than for what it stops.
             */}
-            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="The run is finished and takes no slot. Its session stays open on the ticket and closes on its own if a queued run waits for that ticket." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Close the session</button>}
-            {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Stop</button>}
-            {run.archived && <span title="Run from a previous session, read back from its archive: it has no session any more and takes no instruction." className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">Archive</span>}
-            {canRemoveWorktree(run) && <button type="button" disabled={!connected} onClick={() => actions.removeWorktree(false)} title="Removes the working directory of this run. The branch and its commits stay in the repository. A confirmation is asked if some work is neither committed nor pushed." className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><FolderDashedIcon size={12} className="shrink-0" /> Remove the worktree</button>}
-            {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title="Remove this run from the list. Its documents stay archived on disk." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Close</button>}
+            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title={text.closeSessionHint} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> {text.closeSession}</button>}
+            {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-[var(--raised)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> {text.stop}</button>}
+            {run.archived && <span title={text.archiveHint} className="rounded-full bg-[var(--line)] px-2 py-1 text-[10px] font-semibold text-[var(--muted)]">{text.archive}</span>}
+            {canRemoveWorktree(run) && <button type="button" disabled={!connected} onClick={() => actions.removeWorktree(false)} title={text.removeWorktreeHint} className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><FolderDashedIcon size={12} className="shrink-0" /> {text.removeWorktree}</button>}
+            {isClosable(run) && !run.archived && <button type="button" disabled={!connected} onClick={actions.close} title={text.closeHint} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-[var(--raised)] hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> {text.close}</button>}
           </div>
         </div>
         <WorktreePanel result={worktreeResult && worktreeResult.runId === run.id && canRemoveWorktree(run) ? worktreeResult : undefined} connected={connected} onConfirm={() => actions.removeWorktree(true)} onDismiss={actions.dismissWorktreeResult} />
         <IncidentPanel key={run.id} run={run} connected={connected} result={incidentResult} onAction={actions.incident} onOpenTerminal={() => setTab("terminal")} onOpenConversation={() => setTab("conversation")} />
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <PanelBoundary name="Conversation" resetKey={run.id}>
+          <PanelBoundary name={text.panelConversation} resetKey={run.id}>
           <ConversationPanel key={run.id} messages={run.messages} pendingQuestion={run.pendingQuestion} sessionPrompt={run.sessionPrompt} connected={connected} onAnswerPrompt={actions.answerPrompt} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} live={!run.archived && sessionAlive(run.status, run.sessionActive)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={visible && tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
           </PanelBoundary>
         </div>
         <div className={tab === "suivi" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <PanelBoundary name="Tracking" resetKey={run.id}><TrackingPanel key={run.id} run={run} /></PanelBoundary>
+          <PanelBoundary name={text.panelTracking} resetKey={run.id}><TrackingPanel key={run.id} run={run} /></PanelBoundary>
         </div>
         <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
           {/* No key: the terminal holds what the run printed, and is cleared and replayed by the page on a switch. */}
-          <PanelBoundary name="Terminal" resetKey={run.id}><TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} /></PanelBoundary>
+          <PanelBoundary name={text.panelTerminal} resetKey={run.id}><TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} /></PanelBoundary>
         </div>
         <div className={tab === "preuves" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <PanelBoundary name="Evidence" resetKey={run.id}><EvidencePanel key={run.id} run={run} /></PanelBoundary>
+          <PanelBoundary name={text.panelEvidence} resetKey={run.id}><EvidencePanel key={run.id} run={run} /></PanelBoundary>
         </div>
       </section>
       <ActivityPanel key={run.id} run={run} onFeedback={actions.feedback} refusedFeedback={refusedFeedback?.runId === run.id ? refusedFeedback : undefined} onShowQuestion={() => setTab("conversation")} />

@@ -1,6 +1,8 @@
 "use client";
 
+import { useLanguage, useTexts } from "./language";
 import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningCircleIcon, WarningIcon } from "@phosphor-icons/react";
+import { formatNumber } from "@/lib/i18n";
 import { formatTokens } from "@/lib/metrics";
 import { elapsedLabel, phaseNames, runInProgress, runStatusBadge, sourceRepository, worktreeLabel, type StatusBadge } from "@/lib/run-state";
 import { forgeOf, forgeWords, withoutQuery } from "@/lib/ticket-urls";
@@ -36,18 +38,20 @@ function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; labe
 }
 
 export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?: () => void }) {
+  const language = useLanguage();
+  const text = useTexts().run;
   // A run reopened after its final report keeps its first end while it works again.
   const endedAt = runInProgress(run.status) ? undefined : run.endedAt ?? undefined;
   const now = useNow(Boolean(run.startedAt) && !endedAt);
   const finished = run.status === "completed";
-  const badge = runStatusBadge(run);
+  const badge = runStatusBadge(run, language);
   const repository = sourceRepository(run);
-  const worktree = worktreeLabel(run);
-  const phases = phaseNames(run.issueUrl);
+  const worktree = worktreeLabel(run, language);
+  const phases = phaseNames(run.issueUrl, language);
 
   return (
-    <aside aria-label="Run progress" className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
-      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">Progress</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}>{(badge.tone === "decision" || badge.tone === "blocked") && <WarningIcon size={10} weight="fill" />}{badge.tone === "error" && <WarningCircleIcon size={10} weight="fill" />}{badge.label}</span></div>
+    <aside aria-label={text.progressLabel} className="scrollbar-thin block min-h-0 border-b border-[var(--line)] p-4 lg:hidden xl:block xl:overflow-y-auto xl:border-b-0">
+      <div className="mb-5 flex items-center justify-between"><span className="text-xs font-semibold">{text.progress}</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${BADGE_TONE[badge.tone]}`}>{(badge.tone === "decision" || badge.tone === "blocked") && <WarningIcon size={10} weight="fill" />}{badge.tone === "error" && <WarningCircleIcon size={10} weight="fill" />}{badge.label}</span></div>
       <ol>{phases.map((phase, index) => {
         // The last step is only ticked when the run itself is over, never just
         // because the workflow reached it.
@@ -60,7 +64,7 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
       })}</ol>
       {(run.issueUrl || run.branch || run.mergeRequestUrl) && (
         <div className="mt-6 border-t border-[var(--line)] pt-4">
-          <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">Deliverable</p>
+          <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">{text.deliverable}</p>
           {run.issueUrl && <Deliverable icon={<TicketIcon size={12} />} label={reference(run.issueUrl, "#")} title={run.issueUrl} href={externalHref(run.issueUrl)} />}
           {run.branch && <Deliverable icon={<GitBranchIcon size={12} />} label={run.branch} title={run.branch} />}
           {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, forgeWords(forgeOf(run.mergeRequestUrl)).sigil)} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
@@ -69,37 +73,37 @@ export function PhaseRail({ run, onOpenRecipe }: { run: RunState; onOpenRecipe?:
       <div className="mt-6 border-t border-[var(--line)] pt-4">
         <dl className="space-y-2">
           <div>
-            <dt className="text-[10px] font-semibold text-[var(--muted)]">Repository</dt>
+            <dt className="text-[10px] font-semibold text-[var(--muted)]">{text.repository}</dt>
             <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={repository}>{repository}</dd>
             {/* A recipe belongs to a real checkout: the demonstration has none. */}
-            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title="What the factory keeps to start the application of this repository" className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">Runtime recipe</button></dd>}
+            {onOpenRecipe && repository.startsWith("/") && <dd className="mt-0.5"><button type="button" onClick={onOpenRecipe} title={text.recipeHint} className="text-[10px] text-[var(--muted)] underline decoration-[var(--line)] underline-offset-2 transition hover:text-[var(--ink)]">{text.recipe}</button></dd>}
           </div>
           {run.baseBranch && (
             <div>
-              <dt className="text-[10px] font-semibold text-[var(--muted)]">Stacked on</dt>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">{text.stackedOn}</dt>
               <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.baseBranch}>{run.baseBranch}</dd>
             </div>
           )}
           {!run.baseBranch && run.ticketBaseBranch && (
             <div>
-              <dt className="text-[10px] font-semibold text-[var(--muted)]">Base branch</dt>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">{text.baseBranch}</dt>
               <dd className="truncate font-mono text-[10px] text-[var(--ink)]" title={run.ticketBaseBranch}>{run.ticketBaseBranch}</dd>
             </div>
           )}
           {worktree && run.worktree && (
             <div>
-              <dt className="text-[10px] font-semibold text-[var(--muted)]">Worktree</dt>
+              <dt className="text-[10px] font-semibold text-[var(--muted)]">{text.worktree}</dt>
               <dd className={`font-mono text-[10px] ${run.worktree.state === "active" ? "truncate text-[var(--ink)]" : "leading-4 text-[var(--muted)]"}`} title={run.worktree.path}>{worktree}</dd>
-              {run.worktree.state === "active" && run.worktree.dependencies === "symlink" && <dd className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Dependencies linked to the main checkout</dd>}
+              {run.worktree.state === "active" && run.worktree.dependencies === "symlink" && <dd className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">{text.dependenciesLinked}</dd>}
             </div>
           )}
         </dl>
         {run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, endedAt, now)}</p>}
         {run.usage && (
           <div className="mt-3">
-            <p className="text-[10px] font-semibold text-[var(--muted)]">Tokens</p>
-            <p className="font-mono text-[10px] text-[var(--ink)]" title={`${run.usage.total.toLocaleString("en-US")} tokens read and written, cache included`}>{formatTokens(run.usage.total)}</p>
-            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Pilot {formatTokens(run.usage.pilot)} in {run.usage.pilotCalls} calls{run.usage.agents > 0 ? `, ${run.usage.agents} agent${run.usage.agents > 1 ? "s" : ""}` : ""}</p>
+            <p className="text-[10px] font-semibold text-[var(--muted)]">{text.tokens}</p>
+            <p className="font-mono text-[10px] text-[var(--ink)]" title={text.tokensTitle(formatNumber(language, run.usage.total))}>{formatTokens(run.usage.total, language)}</p>
+            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">{text.tokensPilot(formatTokens(run.usage.pilot, language), run.usage.pilotCalls, run.usage.agents)}</p>
           </div>
         )}
       </div>

@@ -450,7 +450,7 @@ flowchart LR
   <div class="canvas"><pre class="mermaid" data-tips="run">
 flowchart TD
   p1["<b>Pilot</b> · Opus<br/>1. reads the ticket, Figma,<br/>attachments, lists the gaps"]:::agent
-  swe2("<b>Software Engineer</b><br/>picks the base branch,<br/>answers the blocking questions"):::swe
+  swe2("<b>Software Engineer</b><br/>answers the questions the run<br/>could not settle, if any"):::swe
   p3["<b>Pilot</b> · Opus<br/>2-3. writes the acceptance criteria,<br/>creates the ticket branch"]:::agent
   planner["<b>Planner</b><br/>Opus"]:::agent
   p4["<b>Pilot</b> · Opus<br/>writes a one-task plan<br/>itself"]:::agent
@@ -840,7 +840,7 @@ flowchart LR
       pilot: ["Pilot", "Opus", "The main session, which drives the ticket to its merge request."],
     },
     run: {
-      p1: ["Pilot", "Opus", "Reads the ticket, the designs and the attachments, then lists what the ticket does not say."],
+      p1: ["Pilot", "Opus", "Reads the ticket, the designs, the attachments, the linked tickets and the repository, settles what it can find, deduce or decide as an engineer, and keeps as questions only the product decisions nobody wrote down."],
       p3: ["Pilot", "Opus", "Writes the list of acceptance criteria, the reference for the whole run, and creates the branch. The base branch goes into workflow-state.json, where the guard reads it."],
       planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size, and decides the integration and end-to-end tests (test_strategy.integration_policy and e2e_policy). Without that decision the guard refuses a Dev."],
       p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself, integration and end-to-end decisions included, since the guard refuses a Dev without it."],

@@ -2,7 +2,7 @@
 
 Implementation Factory is a local software factory built on Claude Code: tickets go in, merge requests come out. You paste the URL of a GitLab ticket or a GitHub issue, the factory finds the matching checkout, creates a git worktree for the run, opens a Claude Code terminal in it and shows the progress, the agents, the tools and the deliverables. You can also paste several tickets at once: the factory queues them and holds back the ones that would touch the same code. You stay at the gates: it asks its questions before it plans, and the merge request waits for your review.
 
-The repository contains a Claude Code plugin whose `/implementation-factory:implement` command orchestrates the work: reading the ticket, clarification questions, planning, implementation, tests, specialised reviews and preparing the merge request. The console is what runs that command and makes it visible. It uses the Claude Code login already present on the machine and makes no direct call to the Anthropic API.
+The repository contains a Claude Code plugin whose `/implementation-factory:implement` command orchestrates the work: reading the ticket, clarification questions only when the ticket, the linked work and the repository leave a product decision open, planning, implementation, tests, specialised reviews and preparing the merge request. The console is what runs that command and makes it visible. It uses the Claude Code login already present on the machine and makes no direct call to the Anthropic API.
 
 The interface opens in the browser with the `impl` command, which serves the compiled version of the checkout. There is no desktop application. The factory runs from its own repository, so the self-improvement loop can modify the code that is running.
 

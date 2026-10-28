@@ -838,7 +838,7 @@ flowchart LR
       spool: ["hooks-spool.jsonl", "File", "Events the server did not take, replayed before the next hook and on every monitor tick."],
     },
     questions: {
-      pilot: ["Pilot", "Claude Code", "Asks the engineer through AskUserQuestion, the only interactive step of the workflow."],
+      pilot: ["Pilot", "Claude Code", "Asks the engineer through AskUserQuestion, the only interactive step of the workflow, and only what the run could not find, deduce or decide itself. Most runs skip it."],
       hook: ["PreToolUse hook", "Hook", "Holds the call until the console returns the answer, up to an hour."],
       run: ["RunSession", "Server", "Keeps the pending question with the time it was asked, so a wait on the engineer is never read as a stall."],
       pty: ["Folder trust dialog", "Claude Code", "Drawn before any hook or transcript, so no hook can report it."],

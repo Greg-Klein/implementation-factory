@@ -184,6 +184,8 @@ export type Engine = {
   conversationLine(line: string): ConversationMessage | undefined;
   /** What the sessions of a run consumed so far, the pilot's and each subagent's. Empty when the agent keeps no such record. */
   sessionUsage(source: UsageSource): Promise<SessionUsage[]>;
+  /** Whether a subagent of the session that keeps this transcript ended its turn on handing its report back. Undefined when the agent cannot tell. */
+  agentHandedBack(sessionTranscript: string, agentId: string): boolean | undefined;
   event(payload: Record<string, unknown>): EngineEvent | undefined;
   /** What the agent expects back once the user has answered a question. */
   questionAnswer(input: Record<string, unknown>, answers: Record<string, string>): unknown;

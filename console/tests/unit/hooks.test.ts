@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -59,6 +59,31 @@ describe("workflow signals from Claude Code hooks", () => {
       hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
       lastCall("SubagentHandback");
       hook(stop);
+      hook({ hook_event_name: "Stop" });
+      expect(session.state).toMatchObject({ status: "completed", phase: 10 });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("should close an agent whose transcript ends on its hand-back though its stop never came, so the run can end", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "hooks-lost-stop-"));
+    const subagents = path.join(directory, "s1", "subagents");
+    const lastCall = (agentId: string, tool: string) => writeFileSync(path.join(subagents, `agent-${agentId}.jsonl`), `${JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: tool, input: {} }] } })}\n`);
+    try {
+      mkdirSync(subagents, { recursive: true });
+      session.state.phase = 9;
+      session.state.transcriptPath = path.join(directory, "s1.jsonl");
+      hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a1" });
+      hook({ hook_event_name: "SubagentStart", agent_type: "implementation-factory:developer", agent_id: "a2" });
+      lastCall("a1", "SubagentHandback");
+      lastCall("a2", "Bash");
+      hook({ hook_event_name: "Stop" });
+      expect(session.state.agents.find((agent) => agent.id === "a1")).toMatchObject({ status: "completed" });
+      expect(session.state.agents.find((agent) => agent.id === "a2")).toMatchObject({ status: "running" });
+      expect(session.state.status).toBe("running");
+
+      lastCall("a2", "SubagentHandback");
       hook({ hook_event_name: "Stop" });
       expect(session.state).toMatchObject({ status: "completed", phase: 10 });
     } finally {

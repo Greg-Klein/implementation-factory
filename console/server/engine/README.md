@@ -50,6 +50,7 @@ The boundary has known leaks, to count in when a second engine is written:
 | `transcriptPath(payload)` | the file the dialogue is read from | named by the agent in its own events |
 | `conversationLine(line)` | one line of that file | JSONL format specific to the agent |
 | `sessionUsage(source)` | the tokens used by the pilot and each subagent | `usage` field of the transcript, one file per subagent |
+| `agentHandedBack(sessionTranscript, agentId)` | whether a subagent ended its turn on handing its report back | last assistant call of `<session>/subagents/agent-<id>.jsonl` |
 | `event(payload)` | translates a raw event into an `EngineEvent` | the whole hook vocabulary |
 | `questionAnswer(input, answers)` | what the agent expects back from a question | `updatedInput` for Claude Code |
 | `startSchedule(options)` | starts the headless session that compares the tickets of a batch, returns `{ finished, kill }`; `finished` carries `usage` (tokens per kind, models, turns, cost) read from the end report of `--output-format json`, absent when the session was killed | arguments, allowed tools, environment |

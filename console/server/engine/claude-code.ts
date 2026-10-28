@@ -180,6 +180,11 @@ function handedBack(payload: Record<string, unknown>) {
       ? path.join(path.dirname(payload.transcript_path), sessionId, "subagents", `agent-${agentId}.jsonl`)
       : undefined);
   if (!transcript) return undefined;
+  return transcriptHandedBack(transcript);
+}
+
+/** Whether a subagent transcript ends on its SubagentHandback call. Undefined when it cannot be read. */
+function transcriptHandedBack(transcript: string) {
   let text: string;
   try {
     const file = openSync(transcript, "r");
@@ -439,6 +444,8 @@ export const claudeCode: Engine = {
   },
   conversationLine,
   sessionUsage: readSessionUsage,
+  agentHandedBack: (sessionTranscript, agentId) => transcriptHandedBack(
+    path.join(path.dirname(sessionTranscript), path.basename(sessionTranscript, ".jsonl"), "subagents", `agent-${agentId}.jsonl`)),
   event,
   questionAnswer: (input, answers): HookOutput => ({
     hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", updatedInput: { ...input, answers } },

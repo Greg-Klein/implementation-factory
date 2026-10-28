@@ -212,6 +212,7 @@ function apply(session: RunSession, event: EngineEvent) {
   // The turn ends every time the agent hands back, including while it waits for
   // a background agent: the workflow is only over when nothing is still running.
   session.state.action = undefined;
+  settleHandedBackAgents(session);
   if (session.state.agents.some((agent) => agent.status === "running")) {
     session.state.status = "running";
     session.activity("agent", session.texts.serverRun.turnEndedBackground);
@@ -223,6 +224,24 @@ function apply(session: RunSession, event: EngineEvent) {
   // after a grace period, with an incident when nothing is going to happen.
   session.state.status = "running";
   session.activity("system", session.texts.serverRun.handedBack(engine.label));
+}
+
+/**
+ * An agent still counted running whose transcript ends on the report it handed
+ * back has ended, though its stop never reached the console: the stop gate can
+ * read the transcript before the hand-back is written to it, send the agent
+ * back and withhold the stop, and an agent that delivered never resumes. Left
+ * running, it holds the run open past its declared end. Read when the pilot's
+ * turn ends, by which time the pilot has the report.
+ */
+function settleHandedBackAgents(session: RunSession) {
+  const transcript = session.state.transcriptPath;
+  if (!transcript) return;
+  for (const agent of session.state.agents) {
+    if (agent.status === "running" && engine.agentHandedBack(transcript, agent.id) === true) {
+      apply(session, { kind: "agent.stop", agentId: agent.id, agentName: agent.name, handedBack: true });
+    }
+  }
 }
 
 /**

@@ -45,11 +45,12 @@ describe("the hook guard", () => {
     expect(refusal("Agent", { subagent_type: "implementation-factory:developer", model: "haiku" }, {})).toBeUndefined();
   });
 
-  describe("on the end-to-end decision of the plan", () => {
+  describe("on the integration and end-to-end decisions of the plan", () => {
     const DEVELOPER = { subagent_type: "implementation-factory:developer" };
-    const plan = (policy: unknown, steps: string[] = []) => writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({
+    const none = { expected: false, sources: [], command: "", reason: "No such suite in the repository." };
+    const plan = (policy: unknown, steps: string[] = [], integration: unknown = none) => writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({
       tasks: [{ id: "T1", verification_steps: steps }],
-      test_strategy: policy === undefined ? {} : { e2e_policy: policy },
+      test_strategy: { ...(integration === null ? {} : { integration_policy: integration }), ...(policy === undefined ? {} : { e2e_policy: policy }) },
     }));
     const expected = { expected: true, sources: ["CONTRIBUTING.md#Tests"], command: "npx playwright test", reason: "Every page has a spec." };
 
@@ -86,6 +87,24 @@ describe("the hook guard", () => {
       expect(refusal("Agent", DEVELOPER)).toBeUndefined();
     });
 
+    it("should refuse a developer while the integration decision is missing or expects specs no task runs", () => {
+      const integration = { expected: true, sources: ["integration/chat.spec.ts"], command: "npm run test:integration --", reason: "Every flow has a mocked spec." };
+      plan(none, [], null);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/has no test_strategy\.integration_policy/);
+      plan(none, ["npm test"], integration);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/expects integration tests but no task's verification_steps run integration_policy\.command/);
+      plan(none, ["npm run test:integration -- integration/chat.spec.ts"], integration);
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+    });
+
+    it("should check both suites on their own commands", () => {
+      const integration = { expected: true, sources: ["integration/chat.spec.ts"], command: "npm run test:integration --", reason: "Mocked spec per flow." };
+      plan(expected, ["npm run test:integration -- integration/chat.spec.ts"], integration);
+      expect(refusal("Agent", DEVELOPER)).toMatch(/expects end-to-end tests but no task's verification_steps run e2e_policy\.command/);
+      plan(expected, ["npm run test:integration -- integration/chat.spec.ts", "npx playwright test e2e/chat.spec.ts"], integration);
+      expect(refusal("Agent", DEVELOPER)).toBeUndefined();
+    });
+
     it("should leave a reviewer and a session outside a run alone", () => {
       plan(undefined);
       expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer" })).toMatch(/T1 of planner-output\.json has no/);
@@ -94,16 +113,18 @@ describe("the hook guard", () => {
 
     it("should check the fields the planner contract writes", () => {
       const contract = readFileSync(path.resolve(process.cwd(), "..", "contracts", "planner.md"), "utf8");
-      const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(contract)?.[1] ?? "null") as { test_strategy: { e2e_policy: object } };
+      const example = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(contract)?.[1] ?? "null") as { test_strategy: { integration_policy: object; e2e_policy: object } };
       const guard = path.resolve(process.cwd(), "..", "hooks", "guard.mjs");
       const { stdout } = spawnSync(process.execPath, ["--input-type=module", "-e", `const { E2E_POLICY_FIELDS } = await import(${JSON.stringify(guard)}); console.log(JSON.stringify(E2E_POLICY_FIELDS));`], { encoding: "utf8" });
+      expect(Object.keys(example.test_strategy.integration_policy)).toEqual(JSON.parse(stdout));
       expect(Object.keys(example.test_strategy.e2e_policy)).toEqual(JSON.parse(stdout));
     });
   });
 
   it("should refuse a reviewer while a planned task has no report, naming the task", () => {
     const e2e_policy = { expected: false, sources: [], command: "", reason: "No e2e tooling." };
-    writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }], test_strategy: { e2e_policy } }));
+    const integration_policy = e2e_policy;
+    writeFileSync(path.join(tasks, "planner-output.json"), JSON.stringify({ tasks: [{ id: "T1" }, { id: "T2" }, { id: "T10" }], test_strategy: { integration_policy, e2e_policy } }));
     writeFileSync(path.join(tasks, "developer-report-T1.md"), "# Rapport");
     writeFileSync(path.join(tasks, "developer-report-T10.md"), "# Rapport");
     expect(refusal("Agent", { subagent_type: "implementation-factory:qa-reviewer" })).toMatch(/T2 of planner-output\.json has no/);

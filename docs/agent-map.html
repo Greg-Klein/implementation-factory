@@ -541,7 +541,7 @@ flowchart TD
 flowchart LR
   session["<b>Pilot and its agents</b><br/>a tool call,<br/>an agent stop"]:::agent
   emit{"<b>emit.mjs</b><br/>receives every hook,<br/>sends it to the console"}:::script
-  guard{"<b>guard.mjs</b><br/>refuses eight kinds of call: bare agent name, wrong Dev model,<br/>no end-to-end decision, review too early or under the tier floor,<br/>session trailer, published secret, destructive git"}:::script
+  guard{"<b>guard.mjs</b><br/>refuses eight kinds of call: bare agent name, wrong Dev model,<br/>no integration or end-to-end decision, review too early or under the tier floor,<br/>session trailer, published secret, destructive git"}:::script
   gate{"<b>gate.mjs</b><br/>typecheck, lint, tests<br/>when Dev and Senior stop"}:::script
   bridge{"<b>hook-bridge.ts<br/>hooks.ts</b><br/>applies the event<br/>to the run state"}:::script
   monitor{"<b>run-monitor.ts<br/>run-health.ts</b><br/>detects a stalled run,<br/>opens an incident"}:::script
@@ -660,13 +660,13 @@ flowchart LR
     },
     {
       name: "Planner", short: "Opus", kind: "Agent · ticket-planner", models: ["Opus"],
-      does: "It turns the ticket and the current code into an executable plan: atomic tasks with their files, their dependencies, their risks and the acceptance criteria they serve. It also surfaces the ambiguities only a reading of the code reveals, and decides whether the change gets end-to-end tests (test_strategy.e2e_policy, from the repository's instructions and existing specs).",
-      facts: [["Started by", "the pilot, on complex tickets only"], ["Writes", "planner-output.json"], ["Guard", "a Dev is refused while the plan has no complete end-to-end decision; on a simple ticket the pilot writes it in its one-task plan"]],
+      does: "It turns the ticket and the current code into an executable plan: atomic tasks with their files, their dependencies, their risks and the acceptance criteria they serve. It also surfaces the ambiguities only a reading of the code reveals, and decides whether the change gets integration tests (backend mocked) and end-to-end tests (real backend), in test_strategy.integration_policy and e2e_policy, from the repository's instructions and existing specs.",
+      facts: [["Started by", "the pilot, on complex tickets only"], ["Writes", "planner-output.json"], ["Guard", "a Dev is refused while the plan lacks a complete integration or end-to-end decision; on a simple ticket the pilot writes it in its one-task plan"]],
     },
     {
       name: "Dev", short: "Sonnet / Opus", kind: "Agent · developer", models: ["Sonnet", "Opus on L tasks"],
       does: "It implements one task of the plan, or a rework the review asked for, within the files assigned to it. It checks its own change and returns versioned evidence. Several Devs run in parallel when their files are disjoint.",
-      facts: [["Started by", "the pilot, or the orchestrator for a rework"], ["Writes", "the code, developer-report-<task>.md and dev-evidence-<task>.json, and a short .webm for a criterion that is a sequence of states"], ["Reads", "recurring-findings.md when the repository has one, never review-guide.md"], ["Guard", "a hook refuses any model other than Sonnet or Opus, and a Dev started before the plan carries its end-to-end decision"]],
+      facts: [["Started by", "the pilot, or the orchestrator for a rework"], ["Writes", "the code, developer-report-<task>.md and dev-evidence-<task>.json, and a short .webm for a criterion that is a sequence of states"], ["Reads", "recurring-findings.md when the repository has one, never review-guide.md"], ["Guard", "a hook refuses any model other than Sonnet or Opus, and a Dev started before the plan carries its integration and end-to-end decisions"]],
     },
     {
       name: "Review orchestrator", short: "Sonnet", kind: "Agent · review-orchestrator", models: ["Sonnet"],
@@ -805,7 +805,7 @@ flowchart LR
       oVigie: ["vigie", "Script", "Watches the forge and proposes the tickets that match its filter. The console queues them with no click."],
       oConsole: ["registry.ts", "Script", "Holds the queue. Decides when a ticket may start, then creates its worktree and opens the session."],
       oSched: ["Ticket scheduler", "Sonnet", "Predicts the files each ticket would touch, so two tickets that step on each other never start together."],
-      oGuard: ["guard.mjs", "Script", "Checks every tool call of a run before it runs and refuses eight kinds: a bare agent name, a wrong Dev model, a Dev without an end-to-end decision, a review started too early or below the tier floor, a session trailer, a published secret, destructive git. The headless judge and scheduling sessions have narrower rules of their own."],
+      oGuard: ["guard.mjs", "Script", "Checks every tool call of a run before it runs and refuses eight kinds: a bare agent name, a wrong Dev model, a Dev without an integration or end-to-end decision, a review started too early or below the tier floor, a session trailer, a published secret, destructive git. The headless judge and scheduling sessions have narrower rules of their own."],
       oPilot: ["Pilot", "Opus", "Conducts the ticket. Reads, asks, delegates, commits and opens the merge request. Never writes the code itself."],
       oPlanner: ["Planner", "Opus", "Splits the ticket into precise tasks, with their files and their dependencies."],
       oDev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the large tasks of the plan, which run on Opus."],
@@ -842,8 +842,8 @@ flowchart LR
     run: {
       p1: ["Pilot", "Opus", "Reads the ticket, the designs and the attachments, then lists what the ticket does not say."],
       p3: ["Pilot", "Opus", "Writes the list of acceptance criteria, the reference for the whole run, and creates the branch. The base branch goes into workflow-state.json, where the guard reads it."],
-      planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size, and decides the end-to-end tests (test_strategy.e2e_policy). Without that decision the guard refuses a Dev."],
-      p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself, end-to-end decision included, since the guard refuses a Dev without it."],
+      planner: ["Planner", "Opus", "Splits a complex ticket into precise tasks, with their files, their dependencies and their size, and decides the integration and end-to-end tests (test_strategy.integration_policy and e2e_policy). Without that decision the guard refuses a Dev."],
+      p4: ["Pilot", "Opus", "On a simple ticket, it skips the Planner and writes a single-task plan itself, integration and end-to-end decisions included, since the guard refuses a Dev without it."],
       dev: ["Dev", "Sonnet or Opus", "Writes the code of one task and checks its own work. On Sonnet, except the tasks sized L, which run on Opus."],
       gate: ["gate.mjs", "Script", "When an agent stops, runs the typecheck, the lint and the tests of what it edited. On a failure, the agent goes back once."],
       p5: ["Pilot", "Opus", "Reads the verdict of the checks, runs the repository-wide ones and makes one commit per task."],
@@ -870,7 +870,7 @@ flowchart LR
     live: {
       session: ["Pilot and its agents", "Opus and Sonnet", "Every action of an agent goes through a tool. That passage is what the hooks observe."],
       emit: ["emit.mjs", "Script", "The entry point of every hook. It calls the guard, then forwards the event to the console."],
-      guard: ["guard.mjs", "Script", "Blocks eight kinds of call during a run: a workflow agent under its bare name; a Dev model other than Sonnet or Opus; a Dev while the plan lacks its end-to-end decision; a reviewer while a task has no Dev report; a reviewer or the merge request below the review tier floor; a commit or publication carrying a session trailer or link; a published secret; destructive git. The headless judge and scheduling sessions have narrower rules of their own. A rule is decided here, never by a sentence in a prompt."],
+      guard: ["guard.mjs", "Script", "Blocks eight kinds of call during a run: a workflow agent under its bare name; a Dev model other than Sonnet or Opus; a Dev while the plan lacks its integration or end-to-end decision; a reviewer while a task has no Dev report; a reviewer or the merge request below the review tier floor; a commit or publication carrying a session trailer or link; a published secret; destructive git. The headless judge and scheduling sessions have narrower rules of their own. A rule is decided here, never by a sentence in a prompt."],
       gate: ["gate.mjs", "Script", "When the Dev or the Senior stops, runs the typecheck, the lint and the related tests of what it edited. Each verdict is a line of gate-log.jsonl: pass, fail, inconclusive, skipped or none. A fail sends the agent back once; the second stop always goes through. It fails open, and IMPL_STOP_GATE=off disables it."],
       bridge: ["hook-bridge.ts, hooks.ts", "Script", "Receives the event on the console side and updates the state of the run it names."],
       monitor: ["run-monitor.ts, run-health.ts", "Script", "Spots a run that stopped moving or a lost session, and opens an incident."],

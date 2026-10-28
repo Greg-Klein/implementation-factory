@@ -100,6 +100,17 @@ describe("the stop gate", () => {
     expect(argumentsOf("jest")).toEqual([`--findRelatedTests --passWithNoTests ${path.join(cwd, "src/cart.ts")}`]);
   });
 
+  it("should keep a Playwright spec outside an end-to-end folder away from the unit runner", () => {
+    mkdirSync(path.join(cwd, "integration"));
+    writeFileSync(path.join(cwd, "integration/chat.spec.ts"), "import { test, expect } from '@playwright/test';\n");
+    writeFileSync(path.join(cwd, "integration/cart.test.ts"), "import { cart } from '../src/cart';\n");
+    start("a1");
+    for (const file of ["integration/chat.spec.ts", "integration/cart.test.ts"]) edit("a1", file);
+    stop("a1");
+    expect(argumentsOf("eslint")[0]).toContain(path.join(cwd, "integration/chat.spec.ts"));
+    expect(argumentsOf("jest")).toEqual([`--findRelatedTests --passWithNoTests ${path.join(cwd, "integration/cart.test.ts")}`]);
+  });
+
   it("should run no related tests when the agent edited only end-to-end specs", () => {
     mkdirSync(path.join(cwd, "e2e"));
     writeFileSync(path.join(cwd, "e2e/cart.spec.ts"), "");

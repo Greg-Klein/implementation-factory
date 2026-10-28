@@ -29,9 +29,11 @@ Vérifiée le <date ISO> sur <commit court>, par le run du ticket <référence>.
 
 - Par fonctionnalité déjà pilotée : route, étapes, sélecteurs stables, état final observable
 
-## Tests de bout en bout
+## Tests d'intégration et de bout en bout
 
-- Ce que le dépôt exige (fichier et section qui le disent), commande qui lance une spec, ce qu'elle démarre elle-même, où vivent les specs et leurs helpers, et comment le backend y est mocké (interception, handlers, fixtures)
+- Par suite (intégration, backend mocké ; bout en bout, vrai backend) : ce que le dépôt exige (fichier et section qui le disent), commande qui lance une spec, ce qu'elle démarre elle-même, où vivent les specs et leurs helpers
+- Intégration : comment le backend y est mocké (serveur de mock, interception, handlers, fixtures)
+- Bout en bout : l'environnement visé, les comptes et la variable qui porte chacun, jamais leur valeur
 
 ## Pièges
 

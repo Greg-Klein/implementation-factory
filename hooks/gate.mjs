@@ -263,8 +263,8 @@ export function gateSteps(root, top, files) {
   if (!sources.length) return steps;
   const eslint = binary("eslint");
   if (eslint && (findUpward(root, top, ESLINT_CONFIGS) || "eslintConfig" in manifest)) steps.push({ step: "lint", command: [eslint, ...sources] });
-  // An end-to-end spec run by the unit runner fails for its framework, not for the agent's edit.
-  const units = sources.filter((file) => !isEndToEndSpec(path.relative(root, file)));
+  // A browser spec run by the unit runner fails for its framework, not for the agent's edit.
+  const units = sources.filter((file) => !isEndToEndSpec(path.relative(root, file)) && !drivesBrowser(file));
   if (!units.length) return steps;
   const vitest = binary("vitest");
   const jest = binary("jest");
@@ -280,6 +280,17 @@ export function isEndToEndSpec(relativePath) {
   const parts = relativePath.split(/[\\/]/);
   const name = parts.pop() ?? "";
   return parts.some((part) => /^(?:e2e|e2e-tests|cypress|playwright)$/i.test(part)) || /\.(?:e2e|cy)\.[cm]?[jt]sx?$/i.test(name);
+}
+
+/**
+ * A spec of a browser suite wherever it lives, read from what it imports: an
+ * `integration/` folder holds Playwright specs in one repository and Jest
+ * tests in another, so its name alone decides nothing.
+ */
+export function drivesBrowser(file) {
+  let source;
+  try { source = readFileSync(file, "utf8"); } catch { return false; }
+  return /\bfrom\s+["'](?:@playwright\/test|cypress)["']|\brequire\(\s*["'](?:@playwright\/test|cypress)["']\s*\)/.test(source);
 }
 
 /**

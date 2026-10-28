@@ -54,6 +54,7 @@ const QA_STATUS_STYLE: Record<string, { label: string; className: string; icon: 
 const SOURCE_LABEL: Record<EvidenceView["source"], string> = { qa: "QA", design: "Design", developer: "Developer" };
 const METHOD_LABEL: Record<string, string> = { test: "test", browser: "browser", static_analysis: "static analysis", manual: "manual" };
 const IMAGE = /\.(?:png|jpe?g)$/i;
+const VIDEO = /\.(?:webm|mp4)$/i;
 
 /** Whether the run on screen is read back from its archive, whose documents have routes of their own. */
 const ArchivedRun = createContext(false);
@@ -113,6 +114,12 @@ function Screenshot({ runId, path, label = path }: { runId: string; path: string
       {enlarged && <Lightbox image={image} label={label} onClose={() => setEnlarged(false)} />}
     </>
   );
+}
+
+/** Played from the artifacts address itself, which answers a video with its bytes rather than a JSON preview. */
+function Video({ runId, path, label = path }: { runId: string; path: string; label?: string }) {
+  const archived = useContext(ArchivedRun);
+  return <video controls preload="metadata" aria-label={`Video ${label}`} src={artifactUrl({ id: runId, archived }, path)} className="mt-1.5 block max-h-56 max-w-full rounded-md border border-[var(--line)]" />;
 }
 
 function Pill({ label, className, icon: Icon }: { label: string; className: string; icon: typeof CheckCircleIcon }) {
@@ -178,6 +185,8 @@ function EvidenceCard({ runId, view }: { runId: string; view: EvidenceView }) {
       {view.supersededBy && <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">replaced by {view.supersededBy}</p>}
       {view.attachments.map((attachment) => attachment.path && IMAGE.test(attachment.source)
         ? <Screenshot key={attachment.source} runId={runId} path={attachment.path} label={attachment.source} />
+        : attachment.path && VIDEO.test(attachment.source)
+        ? <Video key={attachment.source} runId={runId} path={attachment.path} label={attachment.source} />
         : <p key={attachment.source} className="mt-1 font-mono text-[10px] text-[var(--muted)]">{attachment.source}{attachment.archived ? "" : " · not archived yet"}</p>)}
     </li>
   );
@@ -267,6 +276,7 @@ function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
       {item.command && <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{item.command}</p>}
       {item.note && <p className="mt-1 text-[10px] text-[var(--muted)]">{item.note}</p>}
       {evidenceCaptures(item).filter((capture) => IMAGE.test(capture)).map((capture) => <Screenshot key={capture} runId={runId} path={capture} />)}
+      {evidenceCaptures(item).filter((capture) => VIDEO.test(capture)).map((capture) => <Video key={capture} runId={runId} path={capture} />)}
     </li>
   );
 }

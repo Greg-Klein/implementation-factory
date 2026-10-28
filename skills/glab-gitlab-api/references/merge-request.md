@@ -121,7 +121,7 @@ glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
   --field "body=@.claude/tasks/mr-review-comment.md"
 ```
 
-**A screenshot that backs a claim travels with the comment, not just in words.** `.claude/tasks/assets/` is only a path on this machine; nobody reading the merge request can open it, so a verification described in prose with no image reachable from there is unverifiable to that reader, whatever proof sat in the run's evidence. Before posting, upload every screenshot that backs a claim in the report (skip a debug capture nobody cites) to the project, one call per file:
+**A capture that backs a claim travels with the comment, not just in words.** `.claude/tasks/assets/` is only a path on this machine; nobody reading the merge request can open it, so a verification described in prose with no image reachable from there is unverifiable to that reader, whatever proof sat in the run's evidence. Before posting, upload every screenshot and every video (`.webm`) that backs a claim in the report (skip a debug capture nobody cites) to the project, one call per file:
 
 ```bash
 if [ "$(glab config get is_oauth2 --host <host>)" = "true" ]; then
@@ -139,7 +139,7 @@ The header depends on how `glab` is logged in. A token obtained through the OAut
 
 `<host>` is the GitLab host of the ticket URL, `gitlab.com` in the normal case. **This is the one call in the workflow that `glab api` cannot make.** `POST /uploads` only accepts `multipart/form-data`, while `--field` and `--raw-field` only ever build a JSON body: `glab api --method POST .../uploads --field "file=@<path>"` sends the bytes of the PNG as a JSON string and GitLab answers `400 Bad Request`, on every project and every file. Reaching for `glab mr note` instead does not help either, because the image has to exist on the project before any comment can link to it.
 
-The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
+The response's `markdown` field is already a ready-to-embed link, and GitLab plays a `.webm` linked that way as a video in the comment. Paste each one under `### Captures`, with a one-line caption naming what it proves; a video's caption names the flow it shows. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
 
 Use [the comment format](${CLAUDE_PLUGIN_ROOT}/contracts/review-comments.md) for each finding, exactly like `/implementation-factory:review`: it gives the labels, the decorations and the label a `P0`, `P1` or `P2` takes.
 
@@ -200,5 +200,5 @@ Rules for this comment:
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - `### Validation` gives project commands and their results, never how this machine had to run them (see the machine rule above)
 - One single comment, not one per finding
-- Every screenshot cited as evidence is uploaded and embedded, never left as a local path GitLab cannot resolve; omit the `### Captures` section entirely when no browser evidence exists to back it
+- Every screenshot or video cited as evidence is uploaded and embedded, never left as a local path GitLab cannot resolve; omit the `### Captures` section entirely when no browser evidence exists to back it
 - If the API call fails, fall back to `glab mr note <mr_iid> --message "$(cat .claude/tasks/mr-review-comment.md)"` and report the fallback

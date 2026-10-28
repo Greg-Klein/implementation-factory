@@ -20,37 +20,55 @@ import type { RunSession } from "./run-session.js";
 import { reportFailure } from "./context.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
+const VIDEO_CONTENT_TYPES: Record<string, string> = { ".webm": "video/webm", ".mp4": "video/mp4" };
+const PREVIEW_LIMIT = 2_000_000;
+/** The evidence archive copies no attachment above 15 MB, so no archived video is ever larger. */
+const VIDEO_LIMIT = 15_000_000;
 
-/** A version kept by the evidence archive: served only when the archive itself wrote that path. */
-async function readArchivedEvidence(session: RunSession, archivePath: string) {
-  const buffer = await session.evidence.read(archivePath);
-  if (!buffer) throw new Error("Document not found for this run.");
-  if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
-  const contentType = IMAGE_CONTENT_TYPES[path.extname(archivePath).toLowerCase()];
-  if (contentType) return { path: archivePath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
-  return { path: archivePath, content: buffer.toString("utf8") };
+export function videoContentType(artifactPath: string): string | undefined {
+  return VIDEO_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
+}
+
+async function artifactBytes(session: RunSession, artifactPath: string): Promise<Buffer> {
+  if (artifactPath.startsWith("evidence/")) {
+    const buffer = await session.evidence.read(artifactPath);
+    if (!buffer) throw new Error("Document not found for this run.");
+    return buffer;
+  }
+  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
+  const root = path.resolve(dataRoot, session.id, "artifacts");
+  // The lexical check refuses `..`; the real path refuses a symbolic link
+  // planted in the archive that points outside it.
+  const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
+  if (!target) throw new Error("Invalid document path.");
+  return readFile(target);
 }
 
 export async function readArtifact(session: RunSession, artifactPath: string) {
-  if (artifactPath.startsWith("evidence/")) return readArchivedEvidence(session, artifactPath);
-  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
-  if (session.demo) {
+  if (videoContentType(artifactPath)) throw new Error("A video is played from its own address, not previewed as a document.");
+  if (session.demo && !artifactPath.startsWith("evidence/")) {
+    if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document not found for this run.");
     const content = demoArtifactContents[artifactPath];
     if (content === undefined) throw new Error("Demo document not found.");
     const demoContentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
     if (demoContentType) return { path: artifactPath, content, encoding: "base64" as const, contentType: demoContentType };
     return { path: artifactPath, content };
   }
-  const root = path.resolve(dataRoot, session.id, "artifacts");
-  // The lexical check refuses `..`; the real path refuses a symbolic link
-  // planted in the archive that points outside it.
-  const target = resolveArtifactPath(root, artifactPath) ? await confinedPath(root, artifactPath) : undefined;
-  if (!target) throw new Error("Invalid document path.");
-  const buffer = await readFile(target);
-  if (buffer.byteLength > 2_000_000) throw new Error("This document exceeds the 2 MB preview limit.");
-  const contentType = IMAGE_CONTENT_TYPES[path.extname(target).toLowerCase()];
+  const buffer = await artifactBytes(session, artifactPath);
+  if (buffer.byteLength > PREVIEW_LIMIT) throw new Error("This document exceeds the 2 MB preview limit.");
+  const contentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
   if (contentType) return { path: artifactPath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: artifactPath, content: buffer.toString("utf8") };
+}
+
+/** A video capture, as bytes the page's player reads from its address. */
+export async function readVideo(session: RunSession, artifactPath: string): Promise<{ content: Buffer; contentType: string }> {
+  const contentType = videoContentType(artifactPath);
+  if (!contentType) throw new Error("This document is not a video.");
+  if (session.demo && !artifactPath.startsWith("evidence/")) throw new Error("Demo document not found.");
+  const content = await artifactBytes(session, artifactPath);
+  if (content.byteLength > VIDEO_LIMIT) throw new Error("This video exceeds the 15 MB limit.");
+  return { content, contentType };
 }
 
 /**

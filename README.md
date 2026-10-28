@@ -580,9 +580,11 @@ install-remote.sh  clone or update from the curl command
 
 A typical run opens several browser sessions: the developer agent measures its own work, then the design review and QA go over it again. Declaring the Playwright MCP server with `--headless` keeps a Chrome window from taking the foreground each time. It also rules out a measurement error: in windowed mode, the browser silently clips a requested viewport wider than the screen, and the measurement is reported against the requested width instead of the width obtained.
 
+`--caps=devtools` adds the video tools (`browser_start_video`, `browser_stop_video`, `browser_video_chapter`). When a criterion is a flow rather than a state (a path over several screens, a transition, a drag, a loading state turning into a result), the agent that observes it records a short `.webm` beside the screenshot of the end state. The video is archived with the evidence, played in the "Evidence" tab and uploaded to the merge request comment, where GitLab plays it inline. Without the flag the agents take one screenshot per step and say the video is missing.
+
 ```json
 "playwright": { "type": "stdio", "command": "npx",
-                "args": ["@playwright/mcp@latest", "--headless"] }
+                "args": ["@playwright/mcp@latest", "--headless", "--caps=devtools"] }
 ```
 
 The only case that needs the opposite is a journey where the user has to act in the browser, typically a login done by hand. Removing `--headless` brings the window back.

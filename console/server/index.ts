@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, reportFailure, send } from "./context.js";
 import { hostname, port, dev, dataRoot, consoleRoot, setListeningPort, hookToken, givenHostNames, allowedMacs } from "./config.js";
 import { deviceAllowed } from "./device-access.js";
-import { readArtifact } from "./artifacts.js";
+import { readArtifact, readVideo, videoContentType } from "./artifacts.js";
 import { acceptFindingFix, dismissFindingFix } from "./finding-fixes.js";
 import { forgetReviewFindings, readReviewFindingsSummary } from "./review-findings.js";
 import { forgetRuntimeRecipe, readRuntimeRecipe } from "./runtime-recipe.js";
@@ -49,6 +49,16 @@ function readBody(request: IncomingMessage) {
 
 function respond(response: ServerResponse, status: number, body: object) {
   response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(body));
+}
+
+/** A video is sent as its bytes for the page's player; every other document as the JSON preview. */
+async function respondWithArtifact(response: ServerResponse, session: Parameters<typeof readArtifact>[0], artifactPath: string) {
+  try {
+    if (!videoContentType(artifactPath)) { respond(response, 200, await readArtifact(session, artifactPath)); return; }
+    const video = await readVideo(session, artifactPath);
+    response.writeHead(200, { "content-type": video.contentType, "content-length": video.content.byteLength, "cache-control": "no-store" });
+    response.end(video.content);
+  } catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
 }
 
 /** The checkouts chosen per ticket, as a page sent them: anything that is not a list of paths is dropped. */
@@ -334,16 +344,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     const requestUrl = new URL(request.url ?? "", `http://${hostname}:${port}`);
     const archived = registry.archive.get(requestUrl.searchParams.get("runId") ?? undefined);
     if (!archived) { respond(response, 404, { error: "This archived run does not exist." }); return; }
-    try { respond(response, 200, await readArtifact(archived, requestUrl.searchParams.get("path") ?? "")); }
-    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
+    await respondWithArtifact(response, archived, requestUrl.searchParams.get("path") ?? "");
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const session = registry.get(requestUrl.searchParams.get("runId") ?? undefined);
     if (!session) { respond(response, 404, { error: "This run no longer exists." }); return; }
-    try { respond(response, 200, await readArtifact(session, requestUrl.searchParams.get("path") ?? "")); }
-    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document not found." }); }
+    await respondWithArtifact(response, session, requestUrl.searchParams.get("path") ?? "");
     return;
   }
   if (request.method === "GET" && request.url?.startsWith("/api/self-improvement/diff")) {

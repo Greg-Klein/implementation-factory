@@ -10,10 +10,11 @@ const storage = mkdtempSync(path.join(os.tmpdir(), "factory-artifacts-"));
 process.env.IMPL_DATA_DIR = storage;
 
 let readArtifact: typeof import("../../server/artifacts").readArtifact;
+let readVideo: typeof import("../../server/artifacts").readVideo;
 let RunSession: typeof import("../../server/run-session").RunSession;
 
 beforeAll(async () => {
-  ({ readArtifact } = await import("../../server/artifacts"));
+  ({ readArtifact, readVideo } = await import("../../server/artifacts"));
   ({ RunSession } = await import("../../server/run-session"));
 });
 afterAll(() => rmSync(storage, { recursive: true, force: true }));
@@ -48,5 +49,37 @@ describe("a document asked of a run", () => {
     const { session, archive } = runListing("run-linked", ["notes.md"]);
     symlinkSync(path.join(storage, "runs", "run-linked", "run.json"), path.join(archive, "notes.md"));
     await expect(readArtifact(session, "notes.md")).rejects.toThrow("Invalid document path.");
+  });
+});
+
+describe("a video capture asked of a run", () => {
+  it("should serve an archived video as bytes with its type", async () => {
+    const { session, archive } = runListing("run-video", ["assets/QA-R1-1-checkout.webm"]);
+    mkdirSync(path.join(archive, "assets"), { recursive: true });
+    writeFileSync(path.join(archive, "assets", "QA-R1-1-checkout.webm"), Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+    const video = await readVideo(session, "assets/QA-R1-1-checkout.webm");
+    expect(video.contentType).toBe("video/webm");
+    expect([...video.content]).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
+  });
+
+  it("should refuse to preview a video as a document", async () => {
+    const { session } = runListing("run-video-preview", ["assets/flow.mp4"]);
+    await expect(readArtifact(session, "assets/flow.mp4")).rejects.toThrow("A video is played from its own address");
+  });
+
+  it("should refuse a document that is not a video", async () => {
+    const { session } = runListing("run-video-type", ["qa-report.md"]);
+    await expect(readVideo(session, "qa-report.md")).rejects.toThrow("This document is not a video.");
+  });
+
+  it("should refuse a video link planted in the archive that points outside it", async () => {
+    const { session, archive } = runListing("run-video-linked", ["flow.webm"]);
+    symlinkSync(path.join(storage, "runs", "run-video-linked", "run.json"), path.join(archive, "flow.webm"));
+    await expect(readVideo(session, "flow.webm")).rejects.toThrow("Invalid document path.");
+  });
+
+  it("should refuse a video the run does not list", async () => {
+    const { session } = runListing("run-video-unlisted", []);
+    await expect(readVideo(session, "assets/flow.webm")).rejects.toThrow("Document not found for this run.");
   });
 });

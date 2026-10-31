@@ -212,7 +212,7 @@ A run you ask to wait for something outside its session, such as the merge of an
 
 The notifications, the tab title and the tab icon cover every run at once, because the run that needs an answer is rarely the one you are looking at. Messages that concern no run in particular (a request put in the queue, an improvement rebased) show in a banner under the header.
 
-The **Tracking** tab shows the tasks of the plan (`planner-output.json`) in three columns, To Do, In Progress and Done. A task moves to in progress when the orchestrator gives it to a `developer` agent, and to done when its report `developer-report-<id>.md` is written. Each agent of a run gets a first name and a photo, in the order it starts, and the card shows the agent that holds the task, as "Tom · Dev". The same name appears in the agents panel.
+The **Tracking** tab shows the tasks of the plan (`planner-output.json`) in three columns, To Do, In Progress and Done. A task moves to in progress when the orchestrator gives it to a `developer` agent, and to done when its report `developer-report-<id>.md` is written. Each agent of a run gets a first name and a pixel art robot picture, in the order it starts, and the card shows the agent that holds the task, as "Tom · Dev". The same name appears in the agents panel.
 
 The **Generated documents** button opens a built-in reader for the ticket context, the plans, the test reports, the reviews and the MR descriptions kept during the run.
 

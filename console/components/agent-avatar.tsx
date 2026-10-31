@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 
-/** The picture bound to an agent's first name, or its initial when there is no picture or it fails to load. */
+/** The picture bound to an agent's first name, or its initial when there is no picture or it fails to load.
+ * The pictures have a transparent background, so the circle behind them follows the theme. */
 export function AgentAvatar({ nickname, avatar, size = 32 }: { nickname: string; avatar?: string | undefined; size?: number }) {
   const [failed, setFailed] = useState(false);
   const style = { width: size, height: size };
   if (avatar && !failed) {
-    return <img src={avatar} alt={nickname} width={size} height={size} onError={() => setFailed(true)} className="shrink-0 rounded-full bg-[var(--line)] object-cover shadow-[inset_0_0_0_1px_var(--line)]" style={style} />;
+    return <img src={avatar} alt={nickname} width={size} height={size} onError={() => setFailed(true)} className="shrink-0 rounded-full bg-[var(--raised)] object-cover shadow-[inset_0_0_0_1px_var(--line)]" style={style} />;
   }
   return <span role="img" aria-label={nickname} className="grid shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] text-[10px] font-semibold text-[var(--accent)]" style={style}>{nickname.charAt(0).toUpperCase()}</span>;
 }

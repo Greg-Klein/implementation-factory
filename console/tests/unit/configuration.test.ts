@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { issueEndpoint, ticketProjectPath, gitRemoteProjects, listSetting, permissionMode, positiveDuration } from "../../server/domain";
+import { issueEndpoint, ticketProjectPath, gitRemoteHosts, gitRemoteProjects, listSetting, permissionMode, positiveDuration, runForgeHosts } from "../../server/domain";
 
 describe("factory configuration", () => {
   it("should use positive durations and reject invalid overrides", () => {
@@ -54,6 +54,22 @@ describe("factory configuration", () => {
       "\turl = ssh://git@gitlab.com/group/third",
     ].join("\n");
     expect(gitRemoteProjects(config)).toEqual(["group/platform/repo", "group/other", "group/third"]);
+  });
+
+  it("should read the host of every remote address, push addresses and rewrite bases included, and none for a local path", () => {
+    const config = [
+      '[remote "origin"]', "\turl = git@gitlab.com:group/app.git", "\tpushurl = ssh://git@gitlab.example.org:2222/group/app.git",
+      '[remote "mirror"]', "\turl = https://user@GitHub.com/org/app", '[remote "local"]', "\turl = /srv/git/app.git", '[remote "file"]', "\turl = file:///srv/git/app.git",
+      '[url "https://proxy.example.net/"]', "\tinsteadOf = git@gitlab.com:",
+    ].join("\n");
+    expect(gitRemoteHosts(config)).toEqual(["gitlab.com", "gitlab.example.org", "github.com", "proxy.example.net"]);
+  });
+
+  it("should allow a run the ticket's host, GitHub's API beside a GitHub ticket, and the hosts of its checkout's remotes", () => {
+    expect(runForgeHosts("https://gitlab.com/group/app/-/issues/3", '[remote "origin"]\n\turl = git@gitlab.com:group/app.git\n')).toEqual(["gitlab.com"]);
+    expect(runForgeHosts("https://github.com/org/app/issues/3", '[remote "origin"]\n\turl = https://github.com/org/app.git\n')).toEqual(["github.com", "api.github.com"]);
+    expect(runForgeHosts("https://gitlab.com/group/tickets/-/issues/3", '[remote "origin"]\n\turl = git@git.example.org:group/app.git\n')).toEqual(["gitlab.com", "git.example.org"]);
+    expect(runForgeHosts("https://gitlab.com/group/app/-/issues/3", undefined)).toEqual(["gitlab.com"]);
   });
 
   it("should ignore a git config without any usable remote", () => {

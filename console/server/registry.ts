@@ -4,7 +4,7 @@ import path from "node:path";
 import { broadcast, broadcastToViewers, isMissingFile, now, reportFailure } from "./context.js";
 import { dataRoot, demoStepDuration, healthPolicy, hookToken, hostname, maxConcurrentRuns, mergePollMs, pluginRoot, port, proposalsFile, proposalsHandledFile, proposalsPollMs, queueFile } from "./config.js";
 import { currentLanguage, currentTexts, runLanguage } from "./language.js";
-import { admitBatch, carriesInterrupt, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitFollowsInterrupt, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
+import { admitBatch, carriesInterrupt, closeAbandonedAgents, conflictingEntries, deliveryProjects, describeQueue, linkEdges, overlayEdges, exitFollowsInterrupt, exitReport, forgeOf, forgeWords, heldWatches, isSimulatedTicket, mergeWatchStep, pruneSchedule, restoreQueueFile, reopeningOpen, runInProgress, runLockKey, runTakesSlot, runForgeHosts, sessionsToReleaseForQueue, sourceRepository, startableEntries, storedQueue, terminalExitStatus, ticketIdentity, ticketReference, worktreeKeptDetail, type KnownTicket, type MergeRequestStatus, type ScheduleContext } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { seedRecurringFindings } from "./review-findings.js";
@@ -81,6 +81,18 @@ function runIdentifier() {
  * of the first is merged. The registry does not know where a batch came from:
  * `enqueueBatch` takes tickets already resolved to their checkout.
  */
+
+/** The checkout's git configuration, read once at launch; undefined, and reported unless absent, when it cannot be read. */
+async function readCheckoutConfig(repository: string) {
+  const file = path.join(repository, ".git", "config");
+  try {
+    return await readFile(file, "utf8");
+  } catch (error) {
+    if (!isMissingFile(error)) reportFailure("Checkout git configuration not read", file)(error);
+    return undefined;
+  }
+}
+
 export class RunRegistry {
   private readonly sessions = new Map<string, RunSession>();
   private queue: QueuedRun[] = [];
@@ -594,6 +606,7 @@ export class RunRegistry {
       throw await abandon(session.texts.serverRun.shuttingDown);
     }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
+    const forgeHosts = runForgeHosts(session.state.issueUrl, await readCheckoutConfig(repository));
     let terminalLogFailed = false;
     session.engine = engine.start({
       cwd: worktree, sessionLabel: path.basename(repository), runId: id, command, pluginDir: pluginRoot,
@@ -621,6 +634,8 @@ export class RunRegistry {
         // The projects that get a merge request for this ticket when it is not only its own: the reference and the closing keyword depend on it.
         ...(entry.deliveries ? { IMPL_DELIVERY_PROJECTS: entry.deliveries.join(",") } : {}),
         ...reviewGuideEnvironment(reviewGuide),
+        // The hosts its git, glab and gh commands may reach, decided here before any agent can change a remote.
+        ...(forgeHosts.length > 0 ? { IMPL_FORGE_HOSTS: forgeHosts.join(",") } : {}),
       },
       onData: (data) => {
         session.appendTerminal(data);

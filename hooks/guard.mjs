@@ -168,12 +168,163 @@ function gitInvocation(words) {
   if (index < 0) return undefined;
   index += 1;
   let directory;
+  /** @type {string[]} */
+  const configs = [];
   while (index < words.length && words[index].startsWith("-")) {
     if (words[index] === "-C" && index + 1 < words.length) directory = directory ? path.resolve(directory, words[index + 1]) : words[index + 1];
+    if ((words[index] === "-c" || words[index] === "--config-env") && index + 1 < words.length) configs.push(words[index + 1]);
+    else if (/^(?:-c.|--config-env=)/.test(words[index])) configs.push(words[index].replace(/^(?:-c|--config-env=)/, ""));
     index += GIT_OPTIONS_WITH_VALUE.includes(words[index]) ? 2 : 1;
   }
   const args = words.slice(index + 1).map((arg) => arg.replace(/\d*[<>].*$/, "")).filter(Boolean);
-  return index < words.length ? { subcommand: words[index], args, ...(directory ? { directory } : {}) } : undefined;
+  return index < words.length ? { subcommand: words[index], args, configs, ...(directory ? { directory } : {}) } : undefined;
+}
+
+/** The git commands that reach a remote, and so can carry a secret out in the address they reach. */
+const GIT_NETWORK = ["fetch", "pull", "push", "ls-remote", "clone"];
+/** Settings that change where, or through what, git connects: a remote's address, a rewrite of it, the ssh or proxy command. */
+const GIT_ROUTING_KEY = /^(?:url\..*\.(?:insteadof|pushinsteadof)|remote\..*\.(?:url|pushurl|proxy|uploadpack|receivepack)|core\.(?:sshcommand|gitproxy)|https?\..*proxy|ssh\.variant)$/i;
+/** Environment variables that do the same, set in front of a command or exported before it. */
+const GIT_ROUTING_ENV = /^(?:export\s+)?(GIT_SSH|GIT_SSH_COMMAND|GIT_PROXY_COMMAND|GIT_CONFIG_[A-Z0-9_]+|GIT_EXEC_PATH)=/;
+/** The variables that name the host glab and gh talk to. */
+const FORGE_HOST_ENV = /^(GITLAB_HOST|GITLAB_URI|GL_HOST|GH_HOST)=(.*)$/;
+/** The options of glab and gh whose value is free text, where an address is something the text mentions, not a host the command reaches. */
+const FORGE_TEXT_OPTIONS = ["-b", "--body", "-d", "--description", "-m", "--message", "-t", "--title", "-f", "--field", "-F", "--raw-field", "--jq", "-q", "--template", "-l", "--label"];
+
+/** The hosts the console allows the run's forge commands to reach, or undefined when it named none (an older console): the host checks then let everything through. */
+function forgeHosts(env) {
+  const hosts = String(env.IMPL_FORGE_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
+  return hosts.length > 0 ? hosts : undefined;
+}
+
+/**
+ * The host a git or forge address reaches: `scheme://[user@]host[:port]/...`
+ * or scp-like `[user@]host:path`. Undefined for a remote's name, a local path
+ * or a `file://` address, which reach no host.
+ */
+function addressHost(value) {
+  const text = String(value).trim();
+  const url = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/?#]+)/i.exec(text);
+  if (url) return url[1].toLowerCase() === "file" ? undefined : url[2].toLowerCase();
+  const scp = /^(?:[^@/:]+@)?([^/:\s]+):(?!\/\/)/.exec(text);
+  return scp && !/^[a-z]$/i.test(scp[1]) ? scp[1].toLowerCase() : undefined;
+}
+
+/** The URLs a configured remote fetches from and pushes to, its rewrites applied; undefined when git cannot say. */
+function remoteUrls(cwd, name) {
+  const urls = [];
+  for (const push of [[], ["--push"]]) {
+    const result = spawnSync("git", ["-C", cwd, "remote", "get-url", ...push, "--all", name], { encoding: "utf8", timeout: 10_000 });
+    if (result.status !== 0) return undefined;
+    urls.push(...result.stdout.split("\n").map((line) => line.trim()).filter(Boolean));
+  }
+  return urls;
+}
+
+/** Every configured remote, or undefined when git cannot list them. */
+function remoteNames(cwd) {
+  const result = spawnSync("git", ["-C", cwd, "remote"], { encoding: "utf8", timeout: 10_000 });
+  return result.status === 0 ? result.stdout.split("\n").map((line) => line.trim()).filter(Boolean) : undefined;
+}
+
+const outsideForge = (host, hosts) => `This run talks to its forge and nothing else (${hosts.join(", ")}): \`${host}\` is not one of its hosts, and an address is enough to carry a secret out. Use the run's own remote or ticket.`;
+
+/**
+ * Why a git command is refused for where it would connect. The commands that
+ * reach a remote may name only a host of the run's forge, directly or through a
+ * configured remote, and nothing on the line may reroute them (a `-c` setting,
+ * an ssh or proxy command in the environment, a pack program of their own). A
+ * remote is not pointed elsewhere either, typed or through `git config`.
+ * @param {{ subcommand: string; args: string[]; configs: string[]; directory?: string }} invocation
+ * @param {{ cwd?: string; env: Record<string, string | undefined> }} context
+ */
+function gitRoutingRefusal({ subcommand, args, configs, directory }, { cwd, env }) {
+  const where = path.resolve(cwd || ".", directory ?? ".");
+  const hosts = forgeHosts(env);
+  const network = GIT_NETWORK.includes(subcommand);
+  if (network || subcommand === "remote" || subcommand === "config") {
+    const rerouting = configs.find((entry) => GIT_ROUTING_KEY.test(entry.split("=")[0]));
+    if (rerouting && network) return `\`-c ${rerouting.split("=")[0]}\` changes where git connects. Reach the run's remote as it is configured.`;
+  }
+  if (network) {
+    if (args.some((arg) => /^--(?:upload-pack|receive-pack|exec)(?:=|$)/.test(arg))) return "A git command of this run never names the program the remote side runs: drop `--upload-pack`, `--receive-pack` or `--exec`.";
+    if (!hosts) return undefined;
+    const valued = ["-o", "--push-option", "--receive-pack", "--upload-pack", "--exec", "--depth", "--shallow-since", "--shallow-exclude", "-j", "--jobs", "--recurse-submodules-default", "--negotiation-tip", "--server-option", "-b", "--branch", "--origin", "--reference", "--separate-git-dir", "--filter", "--sort"];
+    const positional = [];
+    let target;
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (arg.startsWith("--repo=")) target = arg.slice(7);
+      else if (arg === "--repo") { target = args[index + 1]; index += 1; }
+      else if (valued.includes(arg)) index += 1;
+      else if (!arg.startsWith("-")) positional.push(arg);
+    }
+    target ??= positional[0];
+    if (target === undefined) {
+      if (subcommand === "clone") return undefined;
+      // No remote named: git picks the branch's upstream or origin, so every configured remote has to stay on the forge.
+      for (const name of remoteNames(where) ?? []) {
+        const stray = (remoteUrls(where, name) ?? []).map(addressHost).find((host) => host && !hosts.includes(host));
+        if (stray) return `${outsideForge(stray, hosts)} The remote \`${name}\` points there.`;
+      }
+      return undefined;
+    }
+    const direct = addressHost(target);
+    if (direct) return hosts.includes(direct) ? undefined : outsideForge(direct, hosts);
+    if (subcommand === "clone") return undefined;
+    const stray = (remoteUrls(where, target) ?? []).map(addressHost).find((host) => host && !hosts.includes(host));
+    return stray ? `${outsideForge(stray, hosts)} The remote \`${target}\` points there.` : undefined;
+  }
+  if (subcommand === "remote" && ["add", "set-url"].includes(args[0])) {
+    const address = args.slice(1).filter((arg) => !arg.startsWith("-")).map(addressHost).find(Boolean);
+    if (hosts && address && !hosts.includes(address)) return outsideForge(address, hosts);
+    return undefined;
+  }
+  if (subcommand === "config") {
+    const reading = args.some((arg) => ["--get", "--get-all", "--get-regexp", "--list", "-l", "--get-urlmatch", "--show-origin", "get", "list"].includes(arg));
+    const key = args.find((arg) => !arg.startsWith("-") && !["set", "unset", "get", "list"].includes(arg) && GIT_ROUTING_KEY.test(arg));
+    if (key && !reading) return `\`git config ${key}\` changes where git connects. A run never points a remote, or a rewrite of its address, anywhere new.`;
+  }
+  return undefined;
+}
+
+/**
+ * Why a glab or gh command is refused for the host it would reach: one named
+ * by \`--hostname\`, by a \`-R host/owner/repo\`, by an address given as an
+ * argument or by a host variable in front of it. An address inside a free-text
+ * option (a description, a body, a field) is only text and is not read. Their
+ * configuration and their login stay as the user set them.
+ */
+function forgeCliRefusal(words, { env }) {
+  const index = words.findIndex((word) => !/^\w+=/.test(word) && (["glab", "gh"].includes(word) || /\/(?:glab|gh)$/.test(word)));
+  if (index < 0) return undefined;
+  const tool = path.basename(words[index]);
+  const args = words.slice(index + 1);
+  if ((args[0] === "config" && args[1] === "set") || (args[0] === "auth" && args[1] === "login")) return `\`${tool} ${args[0]} ${args[1]}\` is never run by the workflow: the forge's login and host stay as the user set them.`;
+  const hosts = forgeHosts(env);
+  if (!hosts) return undefined;
+  /** @type {string[]} */
+  const named = [];
+  for (const word of words.slice(0, index)) {
+    const variable = FORGE_HOST_ENV.exec(word);
+    if (variable) named.push(addressHost(variable[2]) ?? variable[2].toLowerCase());
+  }
+  for (let position = 0; position < args.length; position += 1) {
+    const arg = args[position];
+    if (arg === "--hostname") { named.push(String(args[position + 1] ?? "").toLowerCase()); position += 1; continue; }
+    if (arg.startsWith("--hostname=")) { named.push(arg.slice(11).toLowerCase()); continue; }
+    const repository = arg === "-R" || arg === "--repo" ? args[position + 1] : arg.startsWith("--repo=") ? arg.slice(7) : undefined;
+    if (repository !== undefined) {
+      if (!arg.startsWith("--repo=")) position += 1;
+      const host = addressHost(repository) ?? (repository.split("/").length >= 3 && repository.split("/")[0].includes(".") ? repository.split("/")[0].toLowerCase() : undefined);
+      if (host) named.push(host);
+      continue;
+    }
+    if (FORGE_TEXT_OPTIONS.includes(arg)) { position += 1; continue; }
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(arg)) { const host = addressHost(arg); if (host) named.push(host); }
+  }
+  const stray = named.find((host) => !hosts.includes(host));
+  return stray !== undefined ? outsideForge(stray || "(empty)", hosts) : undefined;
 }
 
 /** The options of `git push` that take the next word as their value. */
@@ -494,6 +645,12 @@ export function guardDecision(payload, env = process.env) {
     return undefined;
   }
 
+  if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(payload.tool_name)) {
+    const file = typeof input.file_path === "string" ? input.file_path.split(path.sep).join("/") : "";
+    if (/(?:^|\/)\.git\/(?:worktrees\/[^/]+\/)?config(?:\.worktree)?$/.test(file)) return "A run never edits a git configuration: the remotes, and where they point, stay as the console provisioned them.";
+    return undefined;
+  }
+
   if (payload.tool_name === "Bash") {
     const command = typeof input.command === "string" ? input.command : "";
     if (PUBLISHING.test(command) && SESSION_LINK.test(command)) {
@@ -505,10 +662,15 @@ export function guardDecision(payload, env = process.env) {
     }
     const context = { cwd: payload.cwd, env, linked: inLinkedWorktree(payload.cwd, env) };
     const commands = shellCommands(command);
-    for (const words of commands) {
-      const git = gitInvocation(words);
-      const refused = git && gitRefusal(git, context);
+    const invocations = commands.map((words) => gitInvocation(words));
+    const rerouted = commands.flat().map((word) => GIT_ROUTING_ENV.exec(word)?.[1]).find(Boolean);
+    if (rerouted && invocations.some((git) => git && GIT_NETWORK.includes(git.subcommand))) return `\`${rerouted}\` changes how git connects. Reach the run's remote as it is configured.`;
+    for (const [index, words] of commands.entries()) {
+      const git = invocations[index];
+      const refused = git && (gitRefusal(git, context) || gitRoutingRefusal(git, context));
       if (refused) return refused;
+      const forge = forgeCliRefusal(words, context);
+      if (forge) return forge;
       const secret = git?.subcommand === "push" && pushedSecret(git, payload.cwd);
       if (secret) return secret;
     }

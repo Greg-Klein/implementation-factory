@@ -603,6 +603,41 @@ export function gitRemoteProjects(config: string): string[] {
   return [...projects];
 }
 
+/**
+ * The hosts a git configuration reaches: those of every remote's `url` and
+ * `pushurl`, scp-like or not, and the base of every `url.<base>.insteadOf`
+ * rewrite. A local path or a `file://` address reaches none.
+ */
+export function gitRemoteHosts(config: string): string[] {
+  const hosts = new Set<string>();
+  const host = (value: string) => {
+    const text = value.trim().replace(/^"|"$/g, "");
+    const url = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/?#]+)/i.exec(text);
+    if (url) return url[1]!.toLowerCase() === "file" ? undefined : url[2]!.toLowerCase();
+    const scp = /^(?:[^@/:]+@)?([^/:\s]+):(?!\/\/)/.exec(text);
+    return scp && !/^[a-z]$/i.test(scp[1]!) ? scp[1]!.toLowerCase() : undefined;
+  };
+  for (const [, value = ""] of config.matchAll(/^\s*(?:url|pushurl)\s*=\s*(.+)$/gim)) { const found = host(value); if (found) hosts.add(found); }
+  for (const [, base = ""] of config.matchAll(/^\s*\[url\s+"([^"]+)"\]\s*$/gim)) { const found = host(base); if (found) hosts.add(found); }
+  return [...hosts];
+}
+
+/**
+ * The hosts a run's git, glab and gh commands may reach, handed to the guard
+ * as `IMPL_FORGE_HOSTS`: the ticket's host (and GitHub's API host beside it),
+ * then those of the checkout's remotes, read at launch before any agent runs.
+ */
+export function runForgeHosts(issueUrl: string, checkoutConfig: string | undefined): string[] {
+  const ticket = parseTicketUrl(issueUrl);
+  const hosts = new Set<string>();
+  if (ticket) {
+    hosts.add(ticket.hostname.toLowerCase());
+    if (ticket.forge === "github") hosts.add(`api.${ticket.hostname.toLowerCase()}`);
+  }
+  for (const host of gitRemoteHosts(checkoutConfig ?? "")) hosts.add(host);
+  return [...hosts];
+}
+
 /** The project the `origin` remote of a checkout points at, else the one of its first remote. */
 export function originProject(config: string): string | undefined {
   let section = "";

@@ -183,7 +183,12 @@ function handedBack(payload: Record<string, unknown>) {
   return transcriptHandedBack(transcript);
 }
 
-/** Whether a subagent transcript ends on its SubagentHandback call. Undefined when it cannot be read. */
+/**
+ * Whether a subagent transcript ends on its SubagentHandback call. A message
+ * written to the agent after that call (the pilot resuming it, a task
+ * notification) means it works again, whatever its last call was. Tool
+ * results are not messages. Undefined when it cannot be read.
+ */
 function transcriptHandedBack(transcript: string) {
   let text: string;
   try {
@@ -203,12 +208,20 @@ function transcriptHandedBack(transcript: string) {
   for (const line of text.trim().split("\n").reverse()) {
     let entry: { type?: unknown; message?: { content?: unknown } };
     try { entry = JSON.parse(line); } catch { continue; }
+    const content = entry?.message?.content;
+    if (entry?.type === "user" && isMessageToAgent(content)) return false;
     if (entry?.type !== "assistant") continue;
-    const content = entry.message?.content;
     const last = Array.isArray(content) ? content[content.length - 1] as { type?: unknown; name?: unknown } | undefined : undefined;
     return last?.type === "tool_use" && last.name === "SubagentHandback";
   }
   return undefined;
+}
+
+/** A user line that is not only tool results: text the agent is given to act on. */
+function isMessageToAgent(content: unknown) {
+  if (typeof content === "string") return content.trim().length > 0;
+  return Array.isArray(content)
+    && content.some((item) => (item as { type?: unknown } | null)?.type !== "tool_result");
 }
 
 function event(payload: Record<string, unknown>): EngineEvent | undefined {

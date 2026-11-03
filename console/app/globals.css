@@ -121,6 +121,29 @@ button { cursor: pointer; }
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* A robot avatar powers on when it appears (a small hop with a flicker),
+   then floats a pixel up and down while its agent is working. */
+@keyframes robot-boot {
+  0% { opacity: 0; transform: translateY(5px) scale(.7); filter: brightness(1.8); }
+  45% { opacity: 1; transform: translateY(-2px) scale(1.06); filter: brightness(1.35); }
+  60% { filter: brightness(.85); }
+  75% { transform: translateY(0) scale(.98); filter: brightness(1.15); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
+@keyframes robot-idle {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-1.5px) rotate(-2deg); }
+  65% { transform: translateY(.5px) rotate(1.5deg); }
+}
 .status-breathe { animation: breathe 2.2s cubic-bezier(.16, 1, .3, 1) infinite; }
 .reveal { animation: reveal .45s cubic-bezier(.16, 1, .3, 1) both; }
-@media (prefers-reduced-motion: reduce) { .status-breathe, .reveal { animation: none; } }
+.robot-boot { animation: robot-boot .6s cubic-bezier(.34, 1.4, .64, 1) both; }
+/* The closed-eyes twin shows for about 150ms per cycle; each robot sets its own duration and delay. */
+@keyframes robot-blink {
+  0%, 96.4% { opacity: 0; }
+  96.5%, 99.4% { opacity: 1; }
+  99.5%, 100% { opacity: 0; }
+}
+.robot-idle { animation: robot-idle 3.2s ease-in-out infinite; }
+.robot-blink { opacity: 0; animation: robot-blink 5s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .status-breathe, .reveal, .robot-boot, .robot-idle, .robot-blink { animation: none; } }

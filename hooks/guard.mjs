@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { noteReviewAgent, reviewTierRefusal } from "./review-tier.mjs";
@@ -166,9 +167,63 @@ function gitInvocation(words) {
   let index = words.findIndex((word) => !/^\w+=/.test(word) && (word === "git" || word.endsWith("/git")));
   if (index < 0) return undefined;
   index += 1;
-  while (index < words.length && words[index].startsWith("-")) index += GIT_OPTIONS_WITH_VALUE.includes(words[index]) ? 2 : 1;
+  let directory;
+  while (index < words.length && words[index].startsWith("-")) {
+    if (words[index] === "-C" && index + 1 < words.length) directory = directory ? path.resolve(directory, words[index + 1]) : words[index + 1];
+    index += GIT_OPTIONS_WITH_VALUE.includes(words[index]) ? 2 : 1;
+  }
   const args = words.slice(index + 1).map((arg) => arg.replace(/\d*[<>].*$/, "")).filter(Boolean);
-  return index < words.length ? { subcommand: words[index], args } : undefined;
+  return index < words.length ? { subcommand: words[index], args, ...(directory ? { directory } : {}) } : undefined;
+}
+
+/** The options of `git push` that take the next word as their value. */
+const PUSH_OPTIONS_WITH_VALUE = ["-o", "--push-option", "--repo", "--receive-pack", "--exec"];
+const MAX_PUSHED_BYTES = 16 * 1024 * 1024;
+
+/**
+ * What a `git push` sends, as revisions for `git log`: the source side of each
+ * refspec, every branch for `--all` or `--mirror`, the current branch when it
+ * names none. A refspec that only deletes sends nothing. No word starting with
+ * a dash is kept, so none reaches `git log` as an option.
+ */
+function pushedRevisions(args) {
+  const positional = [];
+  let all = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (PUSH_OPTIONS_WITH_VALUE.includes(arg)) { index += 1; continue; }
+    if (arg === "--all" || arg === "--mirror" || arg === "--branches") { all = true; continue; }
+    if (arg.startsWith("-")) continue;
+    positional.push(arg);
+  }
+  if (all) return ["--branches"];
+  const sources = positional.slice(1).map((refspec) => refspec.replace(/^\+/, "").split(":")[0]).filter(Boolean);
+  return sources.length > 0 ? sources : ["HEAD"];
+}
+
+/**
+ * Why a push is refused for a credential it would send: one added by a commit
+ * the remote does not have yet (reachable from what is pushed, from no
+ * remote-tracking ref). A commit that deletes it later leaves it in the
+ * history, so the whole range is read, added lines only. A history git cannot
+ * read, or one too large to read in time, lets the push through.
+ * @param {{ args: string[]; directory?: string }} invocation
+ * @param {string | undefined} cwd
+ */
+function pushedSecret({ args, directory }, cwd) {
+  const where = path.resolve(cwd || ".", directory ?? ".");
+  const result = spawnSync("git", ["-C", where, "log", "-p", "--no-color", "--no-ext-diff", "--no-textconv", "--format=commit %h", ...pushedRevisions(args), "--not", "--remotes", "--"], { encoding: "utf8", timeout: 20_000, maxBuffer: MAX_PUSHED_BYTES });
+  if (result.status !== 0 || typeof result.stdout !== "string") return undefined;
+  let commit = "";
+  let file = "";
+  for (const line of result.stdout.split("\n")) {
+    if (line.startsWith("commit ")) { commit = line.slice(7); continue; }
+    if (line.startsWith("+++ ")) { file = line.startsWith("+++ b/") ? line.slice(6) : ""; continue; }
+    if (!line.startsWith("+")) continue;
+    const found = secretIn(line.slice(1));
+    if (found) return `This push sends what looks like ${found.kind}, added to ${file || "a file"} by commit ${commit}. Take it out of that commit (amend it, or replay the branch without it) and push again: a later commit that deletes it leaves it in the history the remote receives.`;
+  }
+  return undefined;
 }
 
 /** Whether a path given to git covers the whole tree: the directory the command runs in, one above it, or a pattern that matches everything. */
@@ -454,6 +509,8 @@ export function guardDecision(payload, env = process.env) {
       const git = gitInvocation(words);
       const refused = git && gitRefusal(git, context);
       if (refused) return refused;
+      const secret = git?.subcommand === "push" && pushedSecret(git, payload.cwd);
+      if (secret) return secret;
     }
     const deliveries = tasks ? commands.map((words) => deliveryCommand(words)).filter(Boolean) : [];
     if (deliveries.length > 0) {

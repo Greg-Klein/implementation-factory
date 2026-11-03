@@ -195,6 +195,89 @@ describe("the hook guard", () => {
     expect(refusal("Bash", { command: "glab api --method POST projects/1/merge_requests/2/notes --field \"body=@.claude/tasks/notes.md\"" })).toContain("a GitLab token");
   });
 
+  describe("on what a push sends", () => {
+    const token = `glpat-${"Zq9".repeat(8)}`;
+
+    function git(args: string[], directory = cwd) {
+      const result = spawnSync("git", args, {
+        cwd: directory, encoding: "utf8",
+        env: { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.com", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.com" },
+      });
+      expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+      return result.stdout.trim();
+    }
+
+    function commit(file: string, content: string, message: string) {
+      writeFileSync(path.join(cwd, file), content);
+      git(["add", "--", file]);
+      git(["commit", "-m", message]);
+    }
+
+    /** A repository whose `main` the remote has, and a `feature` branch it does not. */
+    function pushedRepository() {
+      git(["init", "-b", "main"]);
+      commit("README.md", "base\n", "base");
+      git(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+      git(["checkout", "-b", "feature"]);
+    }
+
+    it("should refuse a push whose commits add a credential, and name the file and the commit without quoting it", () => {
+      pushedRepository();
+      commit("config.ts", `export const token = "${token}";\n`, "feat: config");
+      const sha = git(["rev-parse", "--short", "HEAD"]);
+      for (const command of ["git push -u origin feature", "git push", "cd . && git push origin HEAD:refs/heads/feature", "/usr/bin/git push origin feature -o merge_request.create"]) {
+        const reason = refusal("Bash", { command });
+        expect(reason).toContain(`a GitLab token, added to config.ts by commit ${sha}`);
+        expect(reason).not.toContain(token);
+      }
+    });
+
+    it("should refuse a credential a later commit deleted, which the history still sends", () => {
+      pushedRepository();
+      commit("config.ts", `const key = "${token}";\n`, "feat: config");
+      commit("config.ts", "const key = process.env.KEY;\n", "fix: read the key from the environment");
+      expect(refusal("Bash", { command: "git push origin feature" })).toContain("a GitLab token, added to config.ts");
+    });
+
+    it("should read the branch the refspec names and the directory -C names, not the one checked out", () => {
+      pushedRepository();
+      commit("config.ts", `const key = "${token}";\n`, "feat: config");
+      git(["checkout", "main"]);
+      expect(refusal("Bash", { command: "git push origin feature" })).toContain("a GitLab token");
+      expect(refusal("Bash", { command: "git push origin +feature:feature-2" })).toBeDefined();
+      const outside = cwd;
+      cwd = mkdtempSync(path.join(os.tmpdir(), "hook-guard-elsewhere-"));
+      mkdirSync(path.join(cwd, ".claude", "tasks"), { recursive: true });
+      try {
+        expect(refusal("Bash", { command: `git -C ${outside} push origin feature` })).toContain("a GitLab token");
+      } finally {
+        rmSync(cwd, { recursive: true, force: true });
+        cwd = outside;
+      }
+    });
+
+    it("should let a push through when the credential is already on the remote, only talked about, or only deleted", () => {
+      pushedRepository();
+      commit("docs.md", "Set `GITLAB_TOKEN` (glpat-...) in your environment.\n", "docs: token");
+      expect(refusal("Bash", { command: "git push -u origin feature" })).toBeUndefined();
+      git(["checkout", "main"]);
+      commit("config.ts", `const key = "${token}";\n`, "feat: config");
+      git(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+      git(["checkout", "-b", "cleanup"]);
+      commit("config.ts", "const key = process.env.KEY;\n", "fix: drop the key");
+      expect(refusal("Bash", { command: "git push -u origin cleanup" })).toBeUndefined();
+      expect(refusal("Bash", { command: "git push origin --delete feature" })).toBeUndefined();
+    });
+
+    it("should let a push through outside a run, and when git cannot read the history", () => {
+      pushedRepository();
+      commit("config.ts", `const key = "${token}";\n`, "feat: config");
+      rmSync(tasks, { recursive: true, force: true });
+      expect(refusal("Bash", { command: "git push origin feature" }, {})).toBeUndefined();
+      expect(refusal("Bash", { command: "git push origin no-such-branch" })).toBeUndefined();
+    });
+  });
+
   it("should refuse the git commands that destroy work, wherever they sit on the line", () => {
     for (const command of [
       "git reset --hard",

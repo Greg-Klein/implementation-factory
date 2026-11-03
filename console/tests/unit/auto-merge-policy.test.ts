@@ -1,14 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, MAX_REJECTED_ATTEMPTS, rejectedEntry, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
+import { addedLines, autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, MAX_REJECTED_ATTEMPTS, promptFiles, PROMPT_PATHS, rejectedEntry, PROTECTED_PATHS, recentAutoMerges, type ChangedFile } from "../../server/auto-merge-policy";
 
 const repoRoot = path.resolve(process.cwd(), "..");
 const file = (changed: Partial<ChangedFile> & { path: string }): ChangedFile => ({ status: "M", added: 3, removed: 1, ...changed });
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
 describe("what keeps a branch from merging without the user", () => {
-  it("should let a small change of an agent prompt through", () => {
+  it("should not count a small change of an agent prompt as a blocker, the prompt rule being a hold and not a rejection", () => {
     expect(autoMergeBlockers([file({ path: "agents/developer.md" })], "")).toEqual([]);
   });
 
@@ -72,6 +72,25 @@ describe("what keeps a branch from merging without the user", () => {
   });
 });
 
+describe("what leaves a branch to the user", () => {
+  it("should name every prompt a branch changes, whatever directory of the runtime prompts it sits in", () => {
+    const files = [file({ path: "commands/implement.md" }), file({ path: "agents/developer.md" }), file({ path: "skills/self-check/SKILL.md" }), file({ path: "contracts/evidence.md" }), file({ path: "principles/engineering.md" }), file({ path: "console/server/domain.ts" })];
+    expect(promptFiles(files)).toEqual(["commands/implement.md", "agents/developer.md", "skills/self-check/SKILL.md", "contracts/evidence.md", "principles/engineering.md"]);
+  });
+
+  it("should hold a prompt renamed out of the prompt directories under its old path", () => {
+    expect(promptFiles([file({ status: "R", oldPath: "agents/developer.md", path: "docs/developer.md" })])).toEqual(["agents/developer.md"]);
+  });
+
+  it("should leave a branch that changes no prompt to the automatic merge", () => {
+    expect(promptFiles([file({ path: "console/server/domain.ts" }), file({ path: "docs/engineering-workflow.md" }), file({ path: "console/agents/notes.md" })])).toEqual([]);
+  });
+
+  it("should name directories that exist in the repository", () => {
+    for (const entry of PROMPT_PATHS) expect(existsSync(path.join(repoRoot, entry))).toBe(true);
+  });
+});
+
 describe("reading git's view of a branch", () => {
   it("should pair each file with its line counts, renames by their new path", () => {
     const nameStatus = "M\tagents/developer.md\nR087\tdocs/old.md\tdocs/new.md\nD\tconsole/tests/unit/a.test.ts\nA\tcover.webp\n";
@@ -115,6 +134,28 @@ describe("the decisions file", () => {
     expect(autoMergeDecision({ worktreeName: "../main", at: "2026-10-09T08:00:00.000Z", decision: "rejected", reasons: [] })).toBeUndefined();
   });
 
+  it("should read a branch held for the user with the prompts it changes, and drop a held line whose prompts are not paths", () => {
+    const held = { worktreeName: "self-improvement-1", at: "2026-10-09T08:00:00.000Z", decision: "held", reasons: ["It changes the factory's prompts: agents/developer.md."], prompts: ["agents/developer.md"] };
+    expect(autoMergeDecision(held)).toEqual(held);
+    expect(autoMergeDecision({ ...held, prompts: [3] })).toBeUndefined();
+  });
+
+  it("should read the user's decision on a held branch, and drop a line whose mark is not true", () => {
+    const merged = { worktreeName: "self-improvement-1", at: "2026-10-09T09:00:00.000Z", decision: "merged", reasons: ["Merged by the user."], byUser: true, mergeCommit: COMMIT };
+    expect(autoMergeDecision(merged)?.byUser).toBe(true);
+    expect(autoMergeDecision({ ...merged, byUser: "yes" })).toBeUndefined();
+  });
+
+  it("should not offer the user's own merges as automatic ones to revert", () => {
+    const now = Date.parse("2026-10-09T12:00:00.000Z");
+    const decisions = [
+      { worktreeName: "self-improvement-a", at: "2026-10-09T08:00:00.000Z", decision: "held" as const, reasons: [] },
+      { worktreeName: "self-improvement-a", at: "2026-10-09T09:00:00.000Z", decision: "merged" as const, byUser: true as const, reasons: [], mergeCommit: COMMIT },
+      { worktreeName: "self-improvement-b", at: "2026-10-09T10:00:00.000Z", decision: "merged" as const, reasons: [], mergeCommit: COMMIT },
+    ];
+    expect(recentAutoMerges(decisions, now).map((decision) => decision.worktreeName)).toEqual(["self-improvement-b"]);
+  });
+
   it("should offer to revert the merges of the last day not reverted since", () => {
     const now = Date.parse("2026-10-09T12:00:00.000Z");
     const merged = (worktreeName: string, at: string) => ({ worktreeName, at, decision: "merged" as const, reasons: [], mergeCommit: COMMIT });
@@ -152,6 +193,12 @@ describe("the judge figures of a decision", () => {
     const metrics = improvementJudgeMetrics([merged, ruled, judged, reverted]);
     expect([metrics.merged, metrics.rejected, metrics.rejectedByJudge, metrics.reverted]).toEqual([1, 2, 1, 1]);
     expect(metrics.judged.map((entry) => [entry.worktreeName, entry.judgements.length])).toEqual([["self-improvement-c", 2], ["self-improvement-a", 1]]);
+  });
+
+  it("should not count the user's dismissal of a held branch as a rejection by the judge", () => {
+    const dismissed = { worktreeName: "self-improvement-d", at: "2026-10-09T13:00:00.000Z", decision: "rejected" as const, byUser: true as const, reasons: ["Dismissed by the user."], judgements: [pass] };
+    const metrics = improvementJudgeMetrics([dismissed]);
+    expect([metrics.rejected, metrics.rejectedByJudge]).toEqual([1, 0]);
   });
 });
 

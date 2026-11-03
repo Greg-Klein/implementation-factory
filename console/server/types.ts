@@ -22,8 +22,8 @@ export type SessionPrompt = { id: string; kind: "folder_trust"; directory: strin
  * after the automatic replay, which means a conflict git cannot resolve on its own:
  * the promotion is not one click.
  */
-/** `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } };
+/** `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button; or holds it for the user (`held`) because it changes the factory's prompts: the buttons show. */
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } | { state: "held"; prompts: string[] } };
 /** A branch merged without the user in the last day, which the page offers to revert. */
 export type AutomaticMerge = { worktreeName: string; at: string; reasons: string[] };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };

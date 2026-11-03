@@ -39,12 +39,25 @@ export const PROTECTED_PATHS = [
   ".github/",
 ];
 
+/**
+ * What the agents of a run read as instructions. A branch that passes every
+ * rule, check and the judge but changes one of these waits for the user rather
+ * than merging: text a run read from a ticket or a target repository can reach
+ * a feedback, then a branch, and would otherwise settle in every later run.
+ */
+export const PROMPT_PATHS = ["commands/", "agents/", "skills/", "contracts/", "principles/"];
+
 export const AUTO_MERGE_LIMITS = { files: 15, lines: 400 };
 
 export type ChangedFile = { status: string; path: string; oldPath?: string; added: number; removed: number };
 
 export function isProtectedPath(file: string) {
   return PROTECTED_PATHS.some((entry) => entry.endsWith("/") ? file.startsWith(entry) : file === entry);
+}
+
+/** The prompt files a branch changes, renamed ones under their old path too: empty when it may merge without the user. */
+export function promptFiles(files: ChangedFile[]) {
+  return [...new Set(files.flatMap((file) => [file.path, file.oldPath]).filter((file): file is string => Boolean(file)).filter((file) => PROMPT_PATHS.some((entry) => file.startsWith(entry))))];
 }
 
 export function isTestFile(file: string) {
@@ -115,12 +128,19 @@ export function judgeVerdict(raw: unknown): { verdict: JudgeVerdict } | { error:
   return { verdict: { decision, expected: expected.trim().slice(0, 2_000), reasons: reasons.map((reason: string) => reason.trim().slice(0, 600)) } };
 }
 
-/** One line of the decisions file: what the console decided for a branch, on its own or on the user's revert. */
+/**
+ * One line of the decisions file: what the console decided for a branch, on
+ * its own or on the user's word. `held` is a branch left to the user, and
+ * `byUser` marks the merge or rejection the user then made of it.
+ */
 export type AutoMergeDecision = {
   worktreeName: string;
   at: string;
-  decision: "merged" | "rejected" | "reverted";
+  decision: "merged" | "rejected" | "reverted" | "held";
   reasons: string[];
+  byUser?: true;
+  /** The prompt files a held branch changes. */
+  prompts?: string[];
   branch?: string;
   mergeCommit?: string;
   /** Every pass of the judge on the branch before this decision, one more each time the factory or the branch moved under it. */
@@ -168,14 +188,18 @@ export function judgeRun(raw: unknown): JudgeRun | undefined {
 
 export function autoMergeDecision(raw: unknown): AutoMergeDecision | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
-  const { worktreeName, at, decision, reasons, branch, mergeCommit, judgements } = raw as Record<string, unknown>;
+  const { worktreeName, at, decision, reasons, byUser, prompts, branch, mergeCommit, judgements } = raw as Record<string, unknown>;
   if (typeof worktreeName !== "string" || !/^[a-z0-9-]+$/i.test(worktreeName)) return undefined;
   if (typeof at !== "string" || Number.isNaN(Date.parse(at))) return undefined;
-  if (decision !== "merged" && decision !== "rejected" && decision !== "reverted") return undefined;
+  if (decision !== "merged" && decision !== "rejected" && decision !== "reverted" && decision !== "held") return undefined;
+  if (byUser !== undefined && byUser !== true) return undefined;
+  if (prompts !== undefined && !(Array.isArray(prompts) && prompts.every((file) => typeof file === "string"))) return undefined;
   if (!Array.isArray(reasons) || !reasons.every((reason) => typeof reason === "string")) return undefined;
   if (decision === "merged" && (typeof mergeCommit !== "string" || !/^[0-9a-f]{40}$/.test(mergeCommit))) return undefined;
   return {
     worktreeName, at, decision, reasons: reasons as string[],
+    ...(byUser ? { byUser } : {}),
+    ...(prompts !== undefined ? { prompts: prompts as string[] } : {}),
     ...(typeof branch === "string" ? { branch } : {}),
     ...(typeof mergeCommit === "string" ? { mergeCommit } : {}),
     ...(Array.isArray(judgements) ? { judgements: judgements.flatMap((judgement) => judgeRun(judgement) ?? []) } : {}),
@@ -194,7 +218,7 @@ export const RECENT_MERGE_MS = 24 * 60 * 60 * 1000;
 /** The branches merged without the user in the last day and not reverted since, newest first. */
 export function recentAutoMerges(decisions: AutoMergeDecision[], now: number) {
   return [...latestDecisions(decisions).values()]
-    .filter((decision) => decision.decision === "merged" && now - Date.parse(decision.at) < RECENT_MERGE_MS)
+    .filter((decision) => decision.decision === "merged" && !decision.byUser && now - Date.parse(decision.at) < RECENT_MERGE_MS)
     .sort((left, right) => Date.parse(right.at) - Date.parse(left.at));
 }
 
@@ -208,7 +232,7 @@ export function improvementJudgeMetrics(decisions: AutoMergeDecision[]) {
   return {
     merged: count("merged"),
     rejected: count("rejected"),
-    rejectedByJudge: decisions.filter((entry) => entry.decision === "rejected" && (entry.judgements?.length ?? 0) > 0).length,
+    rejectedByJudge: decisions.filter((entry) => entry.decision === "rejected" && !entry.byUser && (entry.judgements?.length ?? 0) > 0).length,
     reverted: count("reverted"),
     judged: decisions
       .filter((entry) => (entry.judgements?.length ?? 0) > 0)

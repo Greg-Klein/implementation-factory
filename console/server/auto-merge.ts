@@ -10,7 +10,7 @@ import { dataRoot, feedbackRoot, pluginRoot, scheduleRoot, selfImprovementAutoru
 import { isImprovementWorktree, mergeNeedsRestart, positiveDuration, withoutBundlerVariables } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { currentTexts } from "./language.js";
-import { autoMergeBlockers, autoMergeDecision, changedFiles, improvementJudgeMetrics, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type JudgeRun, type RejectedAttempt } from "./auto-merge-policy.js";
+import { autoMergeBlockers, autoMergeDecision, changedFiles, promptFiles, improvementJudgeMetrics, judgeVerdict, latestDecisions, recentAutoMerges, rejectedEntry, type AutoMergeDecision, type JudgeRun, type RejectedAttempt } from "./auto-merge-policy.js";
 import { applySelfImprovementReview, notice, readImprovementReport, realignPendingImprovements, type PromotionResult } from "./self-improvement.js";
 import { branchIsRebasedOn, changedPaths, headCommit, listWorktrees, rebaseWorktree, removeWorktree, worktreeCommitCount, worktreeIsClean, type Worktree } from "./worktree.js";
 import { improvementReportName } from "./domain.js";
@@ -18,8 +18,9 @@ import { improvementReportName } from "./domain.js";
 const exec = promisify(execFile);
 
 /**
- * Every finished branch is decided here, never left to a review: the user only
- * sees what was merged, and can revert it. Off with the rest of the loop
+ * Every finished branch is decided here: the user sees what was merged, and
+ * can revert it. One that would merge but changes a prompt is held for the
+ * user instead, the only branch left to a review. Off with the rest of the loop
  * when IMPL_SELF_IMPROVEMENT_AUTORUN is false, since the judge is a session the
  * console starts on its own.
  */
@@ -42,10 +43,31 @@ let restartPending = false;
 let bootCommit: string | undefined;
 let isIdle: () => boolean = () => false;
 
-/** What the page shows of a branch with commits: the console decides it, nobody else. */
+/** The branch's decision when it is one left to the user. */
+function heldDecision(worktreeName: string) {
+  const latest = latestDecisions(decisions).get(worktreeName);
+  return latest?.decision === "held" ? latest : undefined;
+}
+
+/** What the page shows of a branch with commits: the console decides it, or holds it for the user with the prompts it changes. */
 export function autoMergeView(worktreeName: string) {
   if (!autoMergeOn()) return undefined;
+  const held = heldDecision(worktreeName);
+  if (held) return { state: "held" as const, prompts: held.prompts ?? [] };
   return { state: checking === worktreeName ? "checking" as const : "waiting" as const };
+}
+
+/**
+ * Records what the user made of a branch held for them, after the merge or the
+ * dismissal went through. Nothing for any other branch: the user's buttons do
+ * not show on those while the automatic merge is on.
+ */
+export async function settleHeldImprovement(worktreeName: string, result: Pick<PromotionResult, "merged" | "mergeCommit"> | undefined) {
+  const held = heldDecision(worktreeName);
+  if (!held) return;
+  const branch = held.branch ? { branch: held.branch } : {};
+  if (result?.merged && result.mergeCommit) await record({ worktreeName, at: now(), decision: "merged", byUser: true, reasons: ["Merged by the user."], ...branch, mergeCommit: result.mergeCommit });
+  else await record({ worktreeName, at: now(), decision: "rejected", byUser: true, reasons: [result ? "Already present in the factory." : "Dismissed by the user."], ...branch });
 }
 
 /** How many branches were merged and rejected, and what each judge pass cost. Read from memory: undefined when the loop is off. */
@@ -88,11 +110,12 @@ async function readDecisions() {
 }
 
 async function record(decision: AutoMergeDecision) {
-  const judgements = decision.decision === "reverted" ? undefined : judged.get(decision.worktreeName);
+  // A held branch is not decided yet: its judge passes go with the user's decision.
+  const judgements = decision.decision === "reverted" || decision.decision === "held" ? undefined : judged.get(decision.worktreeName);
   const line: AutoMergeDecision = judgements ? { ...decision, judgements } : decision;
   await mkdir(path.dirname(decisionsFile), { recursive: true });
   await appendFile(decisionsFile, `${JSON.stringify(line)}\n`);
-  judged.delete(decision.worktreeName);
+  if (decision.decision !== "held") judged.delete(decision.worktreeName);
   decisions.push(line);
 }
 
@@ -252,6 +275,13 @@ async function decide(worktree: Worktree, worktreeName: string) {
   const verdict = await judge({ ...worktree, branch }, worktreeName, onto, patch, files, checks);
   if (verdict.decision !== "merge") return reject(worktree, worktreeName, verdict.reasons);
   if ((await headCommit(pluginRoot)) !== onto || (await git(pluginRoot, ["rev-parse", branch])).trim() !== branchHead) return;
+  const prompts = promptFiles(files);
+  if (prompts.length > 0) {
+    await record({ worktreeName, at: now(), decision: "held", reasons: [`It changes the factory's prompts: ${prompts.join(", ")}.`, ...verdict.reasons], prompts, branch });
+    const t = currentTexts().serverOps;
+    notice("attention", t.improvementHeld, t.improvementHeldDetail(worktreeName));
+    return;
+  }
   let result: PromotionResult;
   try {
     result = await applySelfImprovementReview(worktreeName, true, true);
@@ -267,6 +297,8 @@ async function decide(worktree: Worktree, worktreeName: string) {
 async function settleImprovements() {
   for (const worktree of (await listWorktrees()).filter((candidate) => isImprovementWorktree(candidate.path))) {
     const worktreeName = path.basename(worktree.path);
+    // Left to the user, who merges or dismisses it with the page's buttons.
+    if (heldDecision(worktreeName)) continue;
     // The report is what the improvement session writes last: without it, the agent is still at work.
     if ((await readImprovementReport(worktreeName)) === undefined) continue;
     // Uncommitted work is what a failed validation leaves behind: never merged.

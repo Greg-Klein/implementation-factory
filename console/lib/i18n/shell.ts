@@ -64,6 +64,11 @@ export const shell = defineTexts({
   revert: { en: "Revert", fr: "Annuler" },
   close: { en: "Close", fr: "Fermer" },
   improvementsReady: { en: "Improvements ready", fr: "Améliorations prêtes" },
+  improvementsHeld: { en: "Improvements awaiting your approval", fr: "Améliorations en attente de votre validation" },
+  heldPrompts: {
+    en: (files: string[]) => `Checked and accepted by the judge, but they change the factory's prompts, which are never merged without you: ${files.join(", ")}`,
+    fr: (files: string[]) => `Vérifiées et acceptées par le juge, mais elles modifient les prompts de la factory, jamais mergés sans vous : ${files.join(", ")}`,
+  },
   realConflict: {
     en: "The automatic rebase on the factory was not enough: this branch has a real conflict. To be reworked by hand.",
     fr: "Le rebase automatique sur la factory n'a pas suffi : cette branche a un vrai conflit. À reprendre à la main.",

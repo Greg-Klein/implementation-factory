@@ -130,13 +130,15 @@ function MergedRow({ merge, onRevert, onViewReport, onDismiss }: { merge: Automa
 
 function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
   const t = useTexts().shell;
+  const held = review.autoMerge?.state === "held" ? review.autoMerge : undefined;
   return (
     <Strip tone="accent">
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex min-w-0 items-center gap-2 text-[11px]">
-          <span className="font-semibold text-[var(--accent)]">{t.improvementsReady}</span>
+          <span className="font-semibold text-[var(--accent)]">{held ? t.improvementsHeld : t.improvementsReady}</span>
           <Name>{review.worktreeName} · {t.commits(review.commits)}</Name>
         </p>
+        {held && <p className="text-[10px] leading-4 text-[var(--muted)]">{t.heldPrompts(held.prompts)}</p>}
 
         {review.mergesCleanly === false && (
           <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
@@ -189,7 +191,7 @@ export function SelfImprovementReviewPanel({ reviews, merged = [], onApprove, on
       {shownMerges.map((merge) => <MergedRow key={`merged-${merge.worktreeName}`} merge={merge} onRevert={() => onRevert(merge.worktreeName)} onDismiss={() => dismiss(merge.worktreeName)} onViewReport={() => setShown({ worktreeName: merge.worktreeName, kind: "report" })} />)}
       {reviews.map((review) => review.status === "analyzing"
         ? <AnalyzingRow key={review.worktreeName} review={review} />
-        : review.status === "ready" && review.autoMerge
+        : review.status === "ready" && review.autoMerge && review.autoMerge.state !== "held"
         ? <CheckingRow key={review.worktreeName} review={review} />
         : review.status === "finished"
         ? <FinishedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} onViewReport={() => setShown({ worktreeName: review.worktreeName, kind: "report" })} />

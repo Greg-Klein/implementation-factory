@@ -22,7 +22,7 @@ import { isLanguage } from "../lib/i18n/index.js";
 import { allowedHosts, hostAllowed, isLoopbackHost, originAllowed, tokenMatches } from "./access.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { applySelfImprovementReview, listPendingImprovements, readImprovementReport, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
-import { afterPromotion, autoMergeView, improvementMetrics, recentAutomaticMerges, revertAutomaticMerge, startAutoMerge } from "./auto-merge.js";
+import { afterPromotion, autoMergeView, improvementMetrics, recentAutomaticMerges, revertAutomaticMerge, settleHeldImprovement, startAutoMerge } from "./auto-merge.js";
 import { detectProjectDirectory, discoverRepositories } from "./repository.js";
 import { isImprovementWorktreeName, runTakesSlot } from "./domain.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
@@ -219,8 +219,17 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
     send(socket, { type: "incident.result", runId: message.runId, incidentId: message.incidentId, requestId: message.requestId, ...result });
     return;
   }
-  if (message.type === "selfImprovement.approve") { afterPromotion(message.worktreeName, await applySelfImprovementReview(message.worktreeName, true)); return; }
-  if (message.type === "selfImprovement.reject") { await applySelfImprovementReview(message.worktreeName, false); return; }
+  if (message.type === "selfImprovement.approve") {
+    const result = await applySelfImprovementReview(message.worktreeName, true);
+    await settleHeldImprovement(message.worktreeName, result);
+    afterPromotion(message.worktreeName, result);
+    return;
+  }
+  if (message.type === "selfImprovement.reject") {
+    await applySelfImprovementReview(message.worktreeName, false);
+    await settleHeldImprovement(message.worktreeName, undefined);
+    return;
+  }
   if (message.type === "selfImprovement.revert") {
     if (!isImprovementWorktreeName(message.worktreeName)) throw new Error(currentTexts().serverRun.invalidWorktreeName);
     await revertAutomaticMerge(message.worktreeName);

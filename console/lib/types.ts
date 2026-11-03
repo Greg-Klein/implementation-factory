@@ -9,8 +9,8 @@ export type PendingQuestion = { id: string; questions: { question: string; heade
 /** Mirrors SessionPrompt in server/types.ts: the folder trust dialog of the agent, waiting for the user. */
 export type SessionPrompt = { id: string; kind: "folder_trust"; directory: string; since: string };
 /** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle.
- * `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } };
+ * `autoMerge`: the automatic merge is deciding the branch (`checking`) or will once its report is written (`waiting`): no button; or holds it for the user (`held`) because it changes the factory's prompts: the buttons show. */
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "finished"; autoMerge?: { state: "checking" | "waiting" } | { state: "held"; prompts: string[] } };
 /** A branch merged without the user in the last day, which the page offers to revert. */
 export type AutomaticMerge = { worktreeName: string; at: string; reasons: string[] };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };

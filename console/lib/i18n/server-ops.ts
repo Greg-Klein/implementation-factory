@@ -210,6 +210,11 @@ export const serverOps = defineTexts({
     fr: (name: string) => `${name} contient des changements non commités : les ignorer les détruirait. Rien n'a été touché.`,
   },
   improvementsMergedAutomatically: { en: "Improvements merged automatically", fr: "Améliorations mergées automatiquement" },
+  improvementHeld: { en: "Improvements awaiting your approval", fr: "Améliorations en attente de votre validation" },
+  improvementHeldDetail: {
+    en: (name: string) => `${name} changes the factory's prompts: it passed the checks and the judge, and waits for you to merge or dismiss it.`,
+    fr: (name: string) => `${name} modifie les prompts de la factory : la branche a passé les checks et le juge, et attend que vous la mergiez ou l'écartiez.`,
+  },
   improvementsMerged: { en: "Improvements merged", fr: "Améliorations mergées" },
   improvementsAlreadyPresent: { en: "Improvements already present", fr: "Améliorations déjà présentes" },
   improvementsIgnored: { en: "Improvements ignored", fr: "Améliorations ignorées" },

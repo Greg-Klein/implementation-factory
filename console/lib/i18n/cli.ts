@@ -170,7 +170,10 @@ export const cli = defineTexts({
   ticketQueued: { en: (command: string) => `Ticket queued. See the queue: ${command}`, fr: (command: string) => `Ticket mis en file. Voir la file : ${command}` },
   unknownProposalsAction: { en: (action: string) => `Unknown proposals action: ${action}. Choose dismiss or launch.`, fr: (action: string) => `Action de propositions inconnue : ${action}. Choisissez dismiss ou launch.` },
   improvementsHeader: { en: (index: number) => ["BRANCH", "STATUS", "COMMITS", "MERGE"][index] ?? "", fr: (index: number) => ["BRANCHE", "STATUT", "COMMITS", "MERGE"][index] ?? "" },
-  improvementStatus: { en: (status: string, state: string) => `${status}, automatic merge ${state}`, fr: (status: string, state: string) => `${status}, merge automatique ${state}` },
+  improvementStatus: {
+    en: (status: string, state: string) => state === "held" ? `${status}, awaiting your approval (prompts)` : `${status}, automatic merge ${state}`,
+    fr: (status: string, state: string) => state === "held" ? `${status}, en attente de votre validation (prompts)` : `${status}, merge automatique ${state}`,
+  },
   mergeConflict: { en: "conflict", fr: "conflit" },
   mergeClean: { en: "clean", fr: "propre" },
   noImprovement: { en: "No improvement branch is waiting.", fr: "Aucune branche d'amélioration n'attend." },

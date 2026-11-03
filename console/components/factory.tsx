@@ -7,7 +7,7 @@ import { DEFAULT_LANGUAGE, LANGUAGES, type Language } from "@/lib/i18n";
 import { texts } from "@/lib/i18n/texts";
 import { launchAnswer } from "@/lib/launch";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
-import { isWriting, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
+import { isWriting, noticeDismissDelay, noticeIsStale, sessionAlive, sourceRepository } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import { appendTerminalOutput } from "@/lib/terminal-output";
 import { parseTicketUrl, parseTicketUrls } from "@/lib/ticket-urls";
@@ -235,8 +235,9 @@ export function Factory() {
   }, [snapshot.queued, notice]);
 
   useEffect(() => {
-    if (notice?.dismissAfterMs === undefined) return;
-    const timer = window.setTimeout(() => setNotice((current) => (current === notice ? undefined : current)), notice.dismissAfterMs);
+    const delay = noticeDismissDelay(notice);
+    if (delay === undefined) return;
+    const timer = window.setTimeout(() => setNotice((current) => (current === notice ? undefined : current)), delay);
     return () => window.clearTimeout(timer);
   }, [notice]);
 

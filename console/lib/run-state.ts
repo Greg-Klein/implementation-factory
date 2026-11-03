@@ -261,6 +261,20 @@ export function noticeIsStale(notice: { queuedId?: string } | undefined, queued:
   return notice?.queuedId !== undefined && !queued.some((entry) => entry.id === notice.queuedId);
 }
 
+/** How long an information message stays on screen before closing on its own. */
+export const INFO_NOTICE_MS = 10_000;
+
+/**
+ * When a message closes on its own: after the delay its sender set, else after
+ * `INFO_NOTICE_MS` for an information message. A message asking for attention
+ * stays until the user closes it.
+ */
+export function noticeDismissDelay(notice: { level: "info" | "attention"; dismissAfterMs?: number } | undefined) {
+  if (!notice) return undefined;
+  if (notice.dismissAfterMs !== undefined) return notice.dismissAfterMs;
+  return notice.level === "info" ? INFO_NOTICE_MS : undefined;
+}
+
 /** A run whose workflow is over but whose agent session is still up, holding its slot and its ticket against the queue. */
 export function holdsIdleSession(run: { status: Status; sessionActive?: boolean }) {
   return !runInProgress(run.status) && run.sessionActive === true;

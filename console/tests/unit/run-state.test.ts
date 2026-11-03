@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { acceptanceChip, activeAgents, pendingAnswerLabel, statusLabel, confidenceChip, confidenceReasonLine, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
+import { acceptanceChip, activeAgents, pendingAnswerLabel, statusLabel, confidenceChip, confidenceReasonLine, canRemoveWorktree, elapsedLabel, evidenceCaptures, heldBySchedule, mergeRequestLabel, phaseNames, queueDragScope, queueDropTarget, queueGroups, queueMoveTarget, queueReason, queueStatus, scheduleMark, runLabel, worktreeLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, INFO_NOTICE_MS, noticeDismissDelay, noticeIsStale, pendingDecisions, runStatusBadge, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 import { attachmentPaths } from "../../server/acceptance";
 
@@ -110,6 +110,23 @@ describe("the message announcing a queued launch", () => {
   it("should leave every other message alone, however long the queue stays empty", () => {
     expect(noticeIsStale({}, [])).toBe(false);
     expect(noticeIsStale(undefined, [])).toBe(false);
+  });
+});
+
+describe("when a message closes on its own", () => {
+  it("should close an information message after ten seconds", () => {
+    expect(INFO_NOTICE_MS).toBe(10_000);
+    expect(noticeDismissDelay({ level: "info" })).toBe(10_000);
+  });
+
+  it("should keep the delay its sender set", () => {
+    expect(noticeDismissDelay({ level: "info", dismissAfterMs: 5_000 })).toBe(5_000);
+    expect(noticeDismissDelay({ level: "attention", dismissAfterMs: 5_000 })).toBe(5_000);
+  });
+
+  it("should leave a message asking for attention until the user closes it", () => {
+    expect(noticeDismissDelay({ level: "attention" })).toBeUndefined();
+    expect(noticeDismissDelay(undefined)).toBeUndefined();
   });
 });
 

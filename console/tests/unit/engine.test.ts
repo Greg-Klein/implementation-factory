@@ -199,6 +199,11 @@ describe("the pilot's session", () => {
   it("should replace the user's output style with the concise one", () => {
     expect(JSON.parse(valueOf("--settings"))).toEqual({ outputStyle: "Concise" });
   });
+
+  it("should deny the web tools, a way out for a secret, as one argument followed by an option", () => {
+    expect(valueOf("--disallowedTools")).toBe("WebFetch,WebSearch");
+    expect(args[args.indexOf("--disallowedTools") + 2]).toMatch(/^--/);
+  });
 });
 
 describe("a session that works on the factory", () => {
@@ -214,8 +219,9 @@ describe("a session that works on the factory", () => {
     expect(args.at(-1)).toBe("/implementation-factory:rebase abc123");
   });
 
-  it("should deny the question tool, which nobody would answer", () => {
-    expect(valueOf("--disallowedTools")).toBe("AskUserQuestion");
+  it("should deny the question tool, which nobody would answer, and the web tools", () => {
+    expect(valueOf("--disallowedTools")).toBe("AskUserQuestion,WebFetch,WebSearch");
+    expect(args[args.indexOf("--disallowedTools") + 2]).toMatch(/^--/);
   });
 });
 

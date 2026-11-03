@@ -281,16 +281,25 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
 }
 
 /**
+ * Tools denied to every session that reads text the factory did not write (a
+ * ticket, a target repository, a run's documents). A fetched URL is enough to
+ * send a secret out, and the workflow reads the forge through its CLI, so
+ * nothing needs them. The prompts saying so is not a rule: this flag is.
+ */
+export const DENIED_WEB_TOOLS = ["WebFetch", "WebSearch"];
+
+/**
  * The pilot's command line. The user's settings stay in, since they hold the
  * permissions, the MCP servers and plugins the reviews use, but not their output
  * style: an explanatory style adds prose to every turn of the pilot, which the
- * run then rereads on every call.
+ * run then rereads on every call. `--disallowedTools` is variadic, so the list
+ * goes as one argument followed by another option, never by the command.
  */
 export function sessionArguments({ pluginDir, sessionName, command }: { pluginDir: string; sessionName: string; command: string }) {
   // --remote-control takes an optional name, so leaving it empty would let the
   // parser swallow the prompt that follows as that name.
   const remote = remoteControl ? ["--remote-control", sessionName] : [];
-  return ["--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--settings", JSON.stringify({ outputStyle: "Concise" }), "--name", sessionName, ...remote, command];
+  return ["--disallowedTools", DENIED_WEB_TOOLS.join(","), "--plugin-dir", pluginDir, "--permission-mode", sessionPermissionMode, "--model", "opus", "--settings", JSON.stringify({ outputStyle: "Concise" }), "--name", sessionName, ...remote, command];
 }
 
 /**
@@ -298,12 +307,13 @@ export function sessionArguments({ pluginDir, sessionName, command }: { pluginDi
  * a worktree of its own. Each names its model, so the user's default one never
  * decides: Opus to diagnose a run and rewrite what drives the next ones, Sonnet
  * to replay a branch. No page shows a detached session, so a question it asked
- * would hold it blocked with nobody to answer: the tool is denied.
+ * would hold it blocked with nobody to answer: the tool is denied, and so are
+ * the web tools, since the improvement session reads what runs wrote.
  */
 export function backgroundArguments({ pluginDir, worktreeName, sessionName, model, command }: { pluginDir: string; worktreeName: string; sessionName: string; model: "opus" | "sonnet"; command: string }) {
   return [
     "--background", "--worktree", worktreeName,
-    "--disallowedTools", "AskUserQuestion",
+    "--disallowedTools", ["AskUserQuestion", ...DENIED_WEB_TOOLS].join(","),
     "--add-dir", pluginDir,
     "--plugin-dir", pluginDir,
     "--model", model,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { backgroundArguments, claudeCode, END_REPORTED_TOOLS, scheduleArguments, scheduleEnvironment, sessionArguments } from "../../server/engine/claude-code";
@@ -51,6 +51,29 @@ describe("engine event translation", () => {
       expect(stop(transcript("delivered.jsonl", "SubagentHandback"))).toMatchObject({ kind: "agent.stop", handedBack: true });
       expect(stop(transcript("waiting.jsonl", "Monitor"))).toMatchObject({ kind: "agent.stop", handedBack: false });
       expect(stop(path.join(directory, "absent.jsonl"))).not.toHaveProperty("handedBack");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("should not read an agent resumed after its hand-back as handed back", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "engine-resumed-"));
+    const session = path.join(directory, "s1.jsonl");
+    const subagents = path.join(directory, "s1", "subagents");
+    const assistant = (tool: string) => JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: tool, input: {} }] } });
+    const toolResult = JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "ok" }] } });
+    const resumed = JSON.stringify({ type: "user", message: { content: "The coordinator sent a message while you were working:\nContinue." } });
+    const write = (agentId: string, lines: string[]) => writeFileSync(path.join(subagents, `agent-${agentId}.jsonl`), `${lines.join("\n")}\n`);
+    try {
+      mkdirSync(subagents, { recursive: true });
+      write("delivered", [assistant("Bash"), assistant("SubagentHandback"), toolResult, toolResult]);
+      write("resumed", [assistant("SubagentHandback"), toolResult, resumed]);
+      write("resumedThenWorking", [assistant("SubagentHandback"), toolResult, resumed, assistant("Bash"), toolResult]);
+      write("deliveredAgain", [assistant("SubagentHandback"), toolResult, resumed, assistant("Bash"), toolResult, assistant("SubagentHandback"), toolResult]);
+      expect(claudeCode.agentHandedBack(session, "delivered")).toBe(true);
+      expect(claudeCode.agentHandedBack(session, "resumed")).toBe(false);
+      expect(claudeCode.agentHandedBack(session, "resumedThenWorking")).toBe(false);
+      expect(claudeCode.agentHandedBack(session, "deliveredAgain")).toBe(true);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
